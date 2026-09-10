@@ -1138,7 +1138,14 @@
         + 'sofort heraus, auch mitten im Spiel. Aufheben lässt sich das im '
         + 'Admin-Menü unter Leute.', 'Sperren', true).then(function (ok) {
           if (!ok) return;
-          A.bannSetzen(z.ziel, 'Antrag ' + (m.von || 'BND') + ': ' + m.text, A.aktuell.name);
+          /* Auch ein angenommener Antrag kommt an einen Admin oder den
+             Owner nicht heran - sonst waere der Schutz ueber die
+             Lagezentrale auszuhebeln. */
+          if (!A.bannSetzen(z.ziel, 'Antrag ' + (m.von || 'BND') + ': ' + m.text,
+            A.aktuell.name)) {
+            UI.toast(A.schutzGrund(z.ziel), 'bad', 5000);
+            return;
+          }
           Rel.befehlSenden(z.ziel, 'bann', 'Zugang gesperrt');
           fertig();
           SG.protokoll.schreiben('bann',
