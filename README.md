@@ -359,7 +359,7 @@ Tycoons zu überschreiben.
 | Erster Admin-Code | steht bei jedem `node build.mjs` in der Ausgabe |
 | Speicher | `hgh:u:<CODE>:…` je Person, `hgh:…` gemeinsam |
 | Vorrat | rund 100 gültige Codes von 10 000 (steht in der Bauausgabe) |
-| Falscher Code | zehn Sekunden Bild aus `src/assets/falschercode.*` |
+| Falscher Code | zehn Sekunden lang verdreht sich der Gehstock, gezeichnet |
 
 Gültig ist ein Code, wenn sein Streuwert durch `RASTER` teilbar ist; daraus
 ergibt sich auch die Rolle. Es gibt also keine Liste, die verteilt werden

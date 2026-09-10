@@ -43,6 +43,7 @@ const CORE_ORDER = [
   'core/settings.js',
   'core/audio.js',
   'core/gfx.js',
+  'core/kulisse.js',
   'core/canvas.js',
   'core/loop.js',
   'core/input.js',
