@@ -43,7 +43,10 @@
       { icon: '?', label: 'Anleitung', onClick: function () { help(true); } },
     ]);
 
-    var GRAV = 1250, JUMP = -600, MOVE = 480;
+    /* Der Absprung gibt einen Tick mehr her als frueher (-600): zwischen
+       zwei Plattformen liegen hoechstens 96 Pixel, mit -640 bleibt
+       darueber immer etwas Luft. */
+    var GRAV = 1250, JUMP = -640, MOVE = 480;
 
     function reset() {
       st.x = W / 2; st.y = H - 140; st.vx = 0; st.vy = JUMP;
@@ -193,6 +196,9 @@
           if (feet > p.y - 4 && feet < p.y + 14 &&
             st.x + 12 > p.x && st.x - 12 < p.x + p.w) {
             if (p.type === P_BREAK) {
+              /* Die braune Plattform bricht weg, traegt den Absprung aber
+                 noch mit: einmal geht sie, ein zweites Mal nicht. */
+              bounce(JUMP);
               p.broken = 0.001;
               host.sfx('thud');
               parts.burst(p.x + p.w / 2, p.y, 8, {
@@ -429,7 +435,7 @@
           body: [
             { ic: '👆', text: 'Finger <b>links oder rechts</b> auf dem Bildschirm halten — je weiter außen, desto schneller.' },
             { ic: '⤒', text: 'Gesprungen wird von selbst, sobald du auf einer Plattform landest.' },
-            { ic: '🟫', text: '<b>Braune</b> Plattformen brechen weg, <b>blaue</b> wandern hin und her.' },
+            { ic: '🟫', text: '<b>Braune</b> Plattformen tragen einen Absprung und brechen dann weg, <b>blaue</b> wandern hin und her.' },
             { ic: '🚀', text: '<b>Sprungfeder</b> und <b>Rakete</b> bringen dich richtig hoch.' },
             { ic: '👾', text: 'Lila Gegner: von oben drauf oder mit Rakete durch — sonst ist Schluss.' },
           ],
