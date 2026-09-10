@@ -860,6 +860,7 @@
     }
     syncBar();
     draw();
+    loop.start();
 
     if (SG.storage.volatile && !(SG.selftest && SG.selftest.active)) {
       UI.toast('Dieses Gerät speichert nicht dauerhaft — Spielstand-Code nutzen.',
