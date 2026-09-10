@@ -14,7 +14,7 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
-import { buildNoJs } from './tools/nojs.mjs';
+import { buildNoJs, NOJS_ANZAHL } from './tools/nojs.mjs';
 import { abziehen, pruefen } from './tools/kleiner.mjs';
 import { buildSync } from 'esbuild';
 
@@ -400,7 +400,7 @@ function build() {
     .replace('<!--NOJS-->', '')
     .replace('<!--STYLES-->', '<link rel="stylesheet" href="assets/' + cssName + '">')
     .replace('<!--SCRIPTS-->',
-      '<script>window.SG_BUILD={offline:false,version:"' + version + '",' +
+      '<script>window.SG_BUILD={offline:false,nojs:' + NOJS_ANZAHL + ',version:"' + version + '",' +
       'offlineFile:"offline/' + OFFLINE_FILE + '"};</script>\n' +
       '  <script src="assets/' + jsName + '" defer></script>\n' +
       // Nur im Online-Build: macht "Zum Home-Bildschirm" offlinefaehig.
@@ -416,7 +416,7 @@ function build() {
     .replace('<!--NOJS-->', buildNoJs())
     .replace('<!--STYLES-->', '<style>\n' + css + '\n</style>')
     .replace('<!--SCRIPTS-->',
-      '<script>window.SG_BUILD={offline:true,version:"' + version + '",offlineFile:null};</script>\n' +
+      '<script>window.SG_BUILD={offline:true,nojs:' + NOJS_ANZAHL + ',version:"' + version + '",offlineFile:null};</script>\n' +
       '<script>\n' + js + '\n</script>');
   const problems = checkOffline(offline);
   if (problems.length) {

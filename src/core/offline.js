@@ -130,7 +130,7 @@
           UI.el('div', null, [
             UI.el('h3', { text: 'Als einzelne Datei herunterladen' }),
             UI.el('div.way-sub', {
-              text: ios ? '15 Spiele schon beim Antippen in der Dateien-App'
+              text: ios ? SG.nojsSpiele + ' Spiele schon beim Antippen in der Dateien-App'
                 : 'Eine Datei, alle Spiele, kein Netz',
             }),
           ]),
@@ -148,10 +148,11 @@
 
         ios
           ? UI.el('div.notice.good', {
-            html: '<b>Antippen genügt für 15 Spiele.</b> Die Vorschau der Dateien-App '
-              + 'führt keine Skripte aus — deshalb steckt in der Datei ein zweiter, '
-              + 'skriptfreier Teil: ein Hideout-Tycoon, ein Abenteuer, Minensucher, '
-              + 'Nonogramm, Sudoku, Memory, Labyrinth, Drei gewinnt und Quiz laufen dort '
+            html: '<b>Antippen genügt für ' + SG.nojsSpiele + ' Spiele.</b> Die Vorschau '
+              + 'der Dateien-App führt keine Skripte aus — deshalb steckt in der Datei '
+              + 'ein zweiter, skriptfreier Teil: Hideout-Tycoon, Keller-Abenteuer, '
+              + 'Minensucher, Nonogramm, Sudoku, Memory, Labyrinth, Drei gewinnt, Quiz, '
+              + 'Schiffe versenken, Wortgitter, Wortraten und Kopfrechnen laufen dort '
               + 'über reines HTML und CSS.',
           })
           : UI.el('div.notice.good', {
@@ -160,7 +161,7 @@
               + 'auch ohne Verbindung.',
           }),
 
-        /* Fuer die vollen 27 Spiele braucht es einen Betrachter, der Skripte
+        /* Fuer die volle Sammlung braucht es einen Betrachter, der Skripte
            ausfuehrt. Das steht hier ehrlich, statt es zu verschweigen. */
         ios ? UI.el('div.steps', { style: { marginTop: '4px' } }, [
           UI.el('div.step', null, [
@@ -169,18 +170,22 @@
               UI.el('b', { text: 'Herunterladen und in der Dateien-App antippen' }),
               UI.el('span', {
                 text: fileName + ' liegt danach im Ordner „Downloads". '
-                  + 'Ein Tipp genügt — das Spielemenü erscheint sofort, ohne Netz.',
+                  + 'Ein Tipp genügt — das Menü mit ' + SG.nojsSpiele + ' Spielen '
+                  + 'erscheint sofort, ohne Netz.',
               }),
             ]),
           ]),
           UI.el('div.step', null, [
             UI.el('div.n'),
             UI.el('div.t', null, [
-              UI.el('b', { text: 'Für alle 27 Spiele: gedrückt halten → „Öffnen mit"' }),
+              UI.el('b', {
+                text: 'Für alle ' + SG.list().length + ' Spiele: gedrückt halten '
+                  + '→ „Öffnen mit"',
+              }),
               UI.el('span', {
                 text: 'Dafür einmal eine HTML-Viewer-App aus dem App Store (nach '
                   + '„HTML Viewer" suchen, es gibt mehrere kostenlose). Dann laufen auch '
-                  + 'Tetris, 2048 und beide Tycoons aus der Datei heraus.',
+                  + 'Tetris, 2048 und alle Tycoons aus der Datei heraus.',
               }),
             ]),
           ]),

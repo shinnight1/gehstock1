@@ -42,6 +42,17 @@ const esc = (s) => String(s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;');
 
+/* Zaehlerstand unter dem Spielfeld.
+
+   Er muss dort stehen und nicht oben in der Leiste: ein CSS-Zaehler
+   sieht nur, was im Dokument vor ihm liegt. Oben blieb er deshalb
+   immer leer - der Stand stand da, wurde aber nie hochgezaehlt. */
+function zaehler(label, gesamt) {
+  return '<div class="jbar jfoot"><div class="cnt">' + label
+    + ': <b class="flags"></b>' + (gesamt === undefined ? '' : ' / ' + gesamt)
+    + '</div></div>';
+}
+
 /* Sammelt HTML und CSS eines Spiels ein. */
 function Part() {
   return { html: [], css: [], h(s) { this.html.push(s); return this; },
@@ -96,7 +107,6 @@ function mineGame(key, title, sub, board) {
   p.h('<div class="jbar">'
     + '<label for="' + P + 'F" class="tg"><span class="jon">🚩 Flaggen-Modus</span>'
     + '<span class="joff">⛏ Aufdecken</span></label>'
-    + '<div class="cnt">🚩 <b class="flags"></b> / ' + board.mines + '</div>'
     + '<button type="reset" class="rs">Neu</button></div>');
 
   p.h('<div class="mine" style="--w:' + w + '">');
@@ -110,6 +120,7 @@ function mineGame(key, title, sub, board) {
   }
   p.h('</div>');
 
+  p.h(zaehler('🚩 Flaggen', board.mines));
   p.h('<div class="ov lose"><b>Bumm.</b><br>Da lag eine Mine.'
     + '<button type="reset" class="rs jbig">Nochmal</button></div>');
   p.h('<div class="ov win"><b>Geschafft!</b><br>Alle sicheren Felder gefunden.'
@@ -171,8 +182,8 @@ function memoryGame(seed, pairs) {
   }
   p.h('<div class="hd"><div class="ti">Memory</div>'
     + '<div class="su">' + pairs + ' Paare — decke zwei gleiche Tiere auf</div></div>');
-  p.h('<div class="jbar"><div class="cnt">Aufgedeckt: <b class="flags"></b> / '
-    + cards.length + '</div><button type="reset" class="rs">Neu mischen</button></div>');
+  p.h('<div class="jbar">'
+    + '<button type="reset" class="rs">Neu mischen</button></div>');
 
   p.h('<div class="mem">');
   for (let i = 0; i < cards.length; i++) {
@@ -180,6 +191,7 @@ function memoryGame(seed, pairs) {
       + '<span class="bk">?</span><span class="fr">' + MEM_SYMBOLS[cards[i]] + '</span></label>');
   }
   p.h('</div>');
+  p.h(zaehler('Aufgedeckt', cards.length));
   p.h('<div class="ov win"><b>Alle Paare gefunden!</b><br>Gut gemerkt.'
     + '<button type="reset" class="rs jbig">Nochmal</button></div>');
   p.h('<label for="nav-menu" class="jback">‹ Zurück zum Menü</label>');
@@ -285,8 +297,7 @@ function quizGame(seed) {
   });
   p.h('<div class="hd"><div class="ti">Quiz</div>'
     + '<div class="su">' + QUIZ.length + ' Fragen — richtig wird grün, falsch rot</div></div>');
-  p.h('<div class="jbar"><div class="cnt">Richtig: <b class="flags"></b> / '
-    + QUIZ.length + '</div><button type="reset" class="rs">Neu</button></div>');
+  p.h('<div class="jbar"><button type="reset" class="rs">Neu</button></div>');
 
   p.h('<div class="quiz">');
   QUIZ.forEach((it, i) => {
@@ -300,6 +311,7 @@ function quizGame(seed) {
     p.h('</div>');
   });
   p.h('</div>');
+  p.h(zaehler('Richtig', QUIZ.length));
   p.h('<div class="ov win"><b>Alles richtig!</b><br>Alle ' + QUIZ.length + ' Fragen gelöst.'
     + '<button type="reset" class="rs jbig">Nochmal</button></div>');
   p.h('<label for="nav-menu" class="jback">‹ Zurück zum Menü</label>');
@@ -994,6 +1006,341 @@ function tycoonGame() {
   return p;
 }
 
+/* ------------------------------------------------------------------ Schiffe versenken */
+
+/* Flotte setzen, ohne dass sich zwei Schiffe beruehren - sonst waere
+   aus einem Treffer nicht mehr abzulesen, wo das naechste liegen kann. */
+function shipBoard(seed, w, h, sizes) {
+  const r = rng(seed);
+  const ship = new Uint8Array(w * h);
+  const belegt = (x, y) => (x < 0 || y < 0 || x >= w || y >= h ? 0 : ship[y * w + x]);
+
+  sizes.forEach((len) => {
+    for (let versuch = 0; versuch < 800; versuch++) {
+      const waag = r() < 0.5;
+      const x0 = r.int(w - (waag ? len - 1 : 0));
+      const y0 = r.int(h - (waag ? 0 : len - 1));
+      let frei = true;
+      for (let i = 0; i < len && frei; i++) {
+        const x = x0 + (waag ? i : 0);
+        const y = y0 + (waag ? 0 : i);
+        for (let dy = -1; dy <= 1 && frei; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (belegt(x + dx, y + dy)) { frei = false; break; }
+          }
+        }
+      }
+      if (!frei) continue;
+      for (let i = 0; i < len; i++) {
+        ship[(y0 + (waag ? 0 : i)) * w + (x0 + (waag ? i : 0))] = 1;
+      }
+      break;
+    }
+  });
+
+  const treffer = [];
+  for (let i = 0; i < w * h; i++) if (ship[i]) treffer.push(i);
+  return { w, h, ship, treffer, sizes };
+}
+
+function shipGame(key, title, sub, board) {
+  const p = Part();
+  const { w, h, ship, treffer, sizes } = board;
+  const P = key;
+
+  p.h('<form class="ng" id="g-' + P + '">');
+  for (let i = 0; i < w * h; i++) {
+    p.h('<input type="checkbox" id="' + P + 's' + i + '" class="i">');
+  }
+
+  p.h('<div class="hd"><div class="ti">' + esc(title) + '</div>'
+    + '<div class="su">' + esc(sub) + '</div></div>');
+  p.h('<div class="jbar"><div class="cnt">Flotte: ' + sizes.join(' · ')
+    + '</div><button type="reset" class="rs">Neu</button></div>');
+
+  p.h('<div class="mine" style="--w:' + w + '">');
+  for (let i = 0; i < w * h; i++) {
+    p.h('<span class="cl c' + i + '">'
+      + '<label for="' + P + 's' + i + '" class="la"></label>'
+      + '<span class="mk">' + (ship[i] ? '💥' : '·') + '</span></span>');
+  }
+  p.h('</div>');
+
+  p.h(zaehler('Treffer', treffer.length));
+  p.h('<div class="ov win"><b>Versenkt!</b><br>Die ganze Flotte liegt auf dem Grund.'
+    + '<button type="reset" class="rs jbig">Nochmal</button></div>');
+  p.h('<label for="nav-menu" class="jback">‹ Zurück zum Menü</label>');
+  p.h('</form>');
+
+  for (let i = 0; i < w * h; i++) {
+    p.c('#' + P + 's' + i + ':checked~.mine .c' + i
+      + '{background:var(--n-open);pointer-events:none}');
+    p.c('#' + P + 's' + i + ':checked~.mine .c' + i + ' .mk{opacity:1}');
+    if (ship[i]) {
+      p.c('#' + P + 's' + i + ':checked~.mine .c' + i
+        + '{background:var(--n-redbg);box-shadow:inset 0 0 0 1px var(--n-red);'
+        + 'counter-increment:fl}');
+    }
+  }
+  p.c(treffer.map((i) => '#' + P + 's' + i + ':checked').join('~') + '~.win{display:block}');
+
+  return p;
+}
+
+/* ------------------------------------------------------------------ Wortraten */
+
+/* Buchstaben antippen, das Wort fuellt sich. Ein Zaehlerstand laesst
+   sich ohne Skripte nicht abfragen, es gibt also keine Niederlage -
+   die Fehlversuche stehen aber daneben, und genau darum geht es. */
+function wortGame(key, wort, hinweis) {
+  const p = Part();
+  const P = key;
+  const W = wort.toUpperCase();
+  const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+  const drin = ALPHABET.filter((b) => W.indexOf(b) >= 0);
+
+  p.h('<form class="ng" id="g-' + P + '">');
+  ALPHABET.forEach((b) => {
+    p.h('<input type="checkbox" id="' + P + '_' + b + '" class="i">');
+  });
+
+  p.h('<div class="hd"><div class="ti">Wortraten</div>'
+    + '<div class="su">' + esc(hinweis) + ' — ' + W.length + ' Buchstaben</div></div>');
+  p.h('<div class="jbar"><button type="reset" class="rs">Neu</button></div>');
+
+  p.h('<div class="wort">');
+  for (let i = 0; i < W.length; i++) {
+    p.h('<span class="wl l' + i + '"><span class="ch">' + esc(W[i]) + '</span></span>');
+  }
+  p.h('</div>');
+
+  p.h('<div class="kbd">');
+  ALPHABET.forEach((b) => {
+    p.h('<label for="' + P + '_' + b + '" class="kb k' + b + '">' + b + '</label>');
+  });
+  p.h('</div>');
+
+  p.h(zaehler('Danebengetippt'));
+  p.h('<div class="ov win"><b>Erraten!</b><br>Das Wort war ' + esc(W)
+    + '.<button type="reset" class="rs jbig">Nochmal</button></div>');
+  p.h('<label for="nav-menu" class="jback">‹ Zurück zum Menü</label>');
+  p.h('</form>');
+
+  ALPHABET.forEach((b) => {
+    const sel = '#' + P + '_' + b + ':checked~';
+    if (W.indexOf(b) >= 0) {
+      for (let i = 0; i < W.length; i++) {
+        if (W[i] === b) p.c(sel + '.wort .l' + i + ' .ch{opacity:1}');
+      }
+      p.c(sel + '.kbd .k' + b
+        + '{background:var(--n-greenbg);border-color:var(--n-green);'
+        + 'color:var(--n-greenfg);pointer-events:none}');
+    } else {
+      p.c(sel + '.kbd .k' + b
+        + '{background:var(--n-redbg);border-color:var(--n-red);color:var(--n-redfg);'
+        + 'pointer-events:none;text-decoration:line-through;counter-increment:fl}');
+    }
+  });
+  const alleDrin = drin.map((b) => '#' + P + '_' + b + ':checked').join('~');
+  p.c(alleDrin + '~.win{display:block}');
+  p.c(alleDrin + '~.kbd{pointer-events:none}');
+
+  return p;
+}
+
+/* ------------------------------------------------------------------ Kopfrechnen */
+
+function rechnenAufgaben(seed, n, stufe) {
+  const r = rng(seed);
+  const out = [];
+  const gesehen = {};
+  while (out.length < n) {
+    let a, b, op, erg;
+    if (stufe === 1) {
+      op = r() < 0.5 ? '+' : '−';
+      a = 3 + r.int(40); b = 2 + r.int(30);
+      if (op === '−' && b > a) { const t = a; a = b; b = t; }
+      erg = op === '+' ? a + b : a - b;
+    } else {
+      const w = r();
+      if (w < 0.45) {
+        op = '×'; a = 3 + r.int(12); b = 3 + r.int(12); erg = a * b;
+      } else if (w < 0.7) {
+        op = ':'; b = 2 + r.int(11); erg = 2 + r.int(12); a = b * erg;
+      } else {
+        op = r() < 0.5 ? '+' : '−';
+        a = 40 + r.int(160); b = 15 + r.int(120);
+        if (op === '−' && b > a) { const t = a; a = b; b = t; }
+        erg = op === '+' ? a + b : a - b;
+      }
+    }
+    const frage = a + ' ' + op + ' ' + b;
+    if (gesehen[frage]) continue;
+    gesehen[frage] = 1;
+
+    /* Zwei falsche Antworten, die knapp danebenliegen - weit daneben
+       waere ohne Rechnen auszuschliessen. */
+    const falsch = [];
+    while (falsch.length < 2) {
+      const d = (r() < 0.5 ? -1 : 1) * (1 + r.int(stufe === 1 ? 5 : 9));
+      const v = erg + d;
+      if (v === erg || v < 0 || falsch.indexOf(v) >= 0) continue;
+      falsch.push(v);
+    }
+    out.push({ q: frage, a: [erg].concat(falsch), r: 0 });
+  }
+  return out;
+}
+
+function rechnenGame(key, titel, sub, aufgaben, seed) {
+  const p = Part();
+  const P = key;
+  const r = rng(seed);
+
+  p.h('<form class="ng" id="g-' + P + '">');
+  aufgaben.forEach((it, i) => {
+    it.a.forEach((_, j) => {
+      p.h('<input type="radio" name="' + P + i + '" id="' + P + i + '_' + j + '" class="i">');
+    });
+  });
+  p.h('<div class="hd"><div class="ti">' + esc(titel) + '</div>'
+    + '<div class="su">' + esc(sub) + '</div></div>');
+  p.h('<div class="jbar"><button type="reset" class="rs">Neu</button></div>');
+
+  p.h('<div class="quiz">');
+  aufgaben.forEach((it, i) => {
+    const order = r.shuffle(it.a.map((_, j) => j));
+    p.h('<div class="qq"><div class="qt">' + esc(it.q) + ' = ?</div><div class="rrow">');
+    order.forEach((j) => {
+      p.h('<label for="' + P + i + '_' + j + '" class="qa ra a' + i + '_' + j + '">'
+        + it.a[j] + '</label>');
+    });
+    p.h('</div></div>');
+  });
+  p.h('</div>');
+  p.h(zaehler('Richtig', aufgaben.length));
+  p.h('<div class="ov win"><b>Alles richtig!</b><br>Alle ' + aufgaben.length
+    + ' Aufgaben gelöst.<button type="reset" class="rs jbig">Nochmal</button></div>');
+  p.h('<label for="nav-menu" class="jback">‹ Zurück zum Menü</label>');
+  p.h('</form>');
+
+  aufgaben.forEach((it, i) => {
+    it.a.forEach((_, j) => {
+      const ok = j === it.r;
+      p.c('#' + P + i + '_' + j + ':checked~.quiz .a' + i + '_' + j
+        + '{background:' + (ok
+          ? 'var(--n-greenbg);border-color:var(--n-green);color:var(--n-greenfg)'
+          : 'var(--n-redbg);border-color:var(--n-red);color:var(--n-redfg)') + '}');
+      if (ok) {
+        p.c('#' + P + i + '_' + j + ':checked~.quiz .a' + i + '_' + j + '{counter-increment:fl}');
+        p.c('#' + P + i + '_' + j + ':checked~.quiz .qq:nth-child(' + (i + 1) + ')'
+          + '{pointer-events:none}');
+      }
+    });
+  });
+  p.c(aufgaben.map((it, i) => '#' + P + i + '_' + it.r + ':checked').join('~')
+    + '~.win{display:block}');
+
+  return p;
+}
+
+/* ------------------------------------------------------------------ Wortgitter */
+
+/* Woerter waagerecht oder senkrecht ins Raster legen, den Rest mit
+   Buchstaben auffuellen. Gefunden ist ein Wort, wenn alle seine Felder
+   angetippt sind - ein Feld daneben faellt rot auf und laesst sich
+   wieder abwaehlen. */
+function gitterBauen(seed, size, woerter) {
+  const r = rng(seed);
+  const g = new Array(size * size).fill('');
+  const treffer = [];
+  const gelegt = [];
+
+  woerter.forEach((wort) => {
+    const W = wort.toUpperCase();
+    if (W.length > size) return;
+    for (let versuch = 0; versuch < 400; versuch++) {
+      const waag = r() < 0.5;
+      const x0 = r.int(size - (waag ? W.length - 1 : 0));
+      const y0 = r.int(size - (waag ? 0 : W.length - 1));
+      let passt = true;
+      for (let i = 0; i < W.length; i++) {
+        const idx = (y0 + (waag ? 0 : i)) * size + (x0 + (waag ? i : 0));
+        if (g[idx] && g[idx] !== W[i]) { passt = false; break; }
+      }
+      if (!passt) continue;
+      const felder = [];
+      for (let i = 0; i < W.length; i++) {
+        const idx = (y0 + (waag ? 0 : i)) * size + (x0 + (waag ? i : 0));
+        g[idx] = W[i];
+        felder.push(idx);
+      }
+      gelegt.push({ wort: W, felder });
+      felder.forEach((f) => { if (treffer.indexOf(f) < 0) treffer.push(f); });
+      break;
+    }
+  });
+
+  const ABC = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  for (let i = 0; i < g.length; i++) if (!g[i]) g[i] = ABC[r.int(26)];
+
+  /* Aufsteigend sortieren, und zwar zwingend: der Geschwisterselektor
+     der Siegbedingung liest die Felder in Dokumentreihenfolge. Stehen
+     sie in Wortreihenfolge, greift die Regel nie. */
+  treffer.sort((a, b) => a - b);
+  return { size, g, gelegt, treffer };
+}
+
+function gitterGame(key, titel, sub, puzzle) {
+  const p = Part();
+  const P = key;
+  const { size, g, gelegt, treffer } = puzzle;
+
+  p.h('<form class="ng" id="g-' + P + '">');
+  for (let i = 0; i < size * size; i++) {
+    p.h('<input type="checkbox" id="' + P + 'g' + i + '" class="i">');
+  }
+
+  p.h('<div class="hd"><div class="ti">' + esc(titel) + '</div>'
+    + '<div class="su">' + esc(sub) + '</div></div>');
+  p.h('<div class="jbar"><button type="reset" class="rs">Neu</button></div>');
+
+  p.h('<div class="gitter" style="--w:' + size + '">');
+  for (let i = 0; i < size * size; i++) {
+    p.h('<span class="gc c' + i + '">'
+      + '<label for="' + P + 'g' + i + '" class="ga">' + esc(g[i]) + '</label></span>');
+  }
+  p.h('</div>');
+
+  p.h('<div class="wliste">');
+  gelegt.forEach((it, i) => {
+    p.h('<span class="wchip w' + i + '">' + esc(it.wort) + '</span>');
+  });
+  p.h('</div>');
+
+  p.h(zaehler('Felder', treffer.length));
+  p.h('<div class="ov win"><b>Alle gefunden!</b><br>' + gelegt.length
+    + ' Wörter im Gitter.<button type="reset" class="rs jbig">Nochmal</button></div>');
+  p.h('<label for="nav-menu" class="jback">‹ Zurück zum Menü</label>');
+  p.h('</form>');
+
+  for (let i = 0; i < size * size; i++) {
+    const gut = treffer.indexOf(i) >= 0;
+    p.c('#' + P + 'g' + i + ':checked~.gitter .c' + i + '{background:'
+      + (gut ? 'var(--n-greenbg);color:var(--n-greenfg)'
+        : 'var(--n-redbg);color:var(--n-redfg)') + '}');
+    if (gut) p.c('#' + P + 'g' + i + ':checked~.gitter .c' + i + '{counter-increment:fl}');
+  }
+  gelegt.forEach((it, i) => {
+    p.c(it.felder.map((f) => '#' + P + 'g' + f + ':checked').join('~')
+      + '~.wliste .w' + i + '{background:var(--n-greenbg);border-color:var(--n-green);'
+      + 'color:var(--n-greenfg);text-decoration:line-through}');
+  });
+  p.c(treffer.map((f) => '#' + P + 'g' + f + ':checked').join('~') + '~.win{display:block}');
+
+  return p;
+}
+
 /* ------------------------------------------------------------------ Zusammenbau */
 
 const GAMES = [
@@ -1012,7 +1359,20 @@ const GAMES = [
   { id: 'la2', icon: '🌀', name: 'Labyrinth', desc: 'groß' },
   { id: 'tt', icon: '⭕', name: 'Drei gewinnt', desc: 'zu zweit' },
   { id: 'qz', icon: '❓', name: 'Quiz', desc: '10 Fragen' },
+  { id: 'su3', icon: '🔢', name: 'Sudoku', desc: '9×9' },
+  { id: 'sv1', icon: '🚢', name: 'Schiffe versenken', desc: '8×8 · 6 Schiffe' },
+  { id: 'sv2', icon: '🚢', name: 'Schiffe versenken', desc: '10×10 · 8 Schiffe' },
+  { id: 'wg1', icon: '🔎', name: 'Wortgitter', desc: '9×9 · 7 Wörter' },
+  { id: 'wg2', icon: '🔎', name: 'Wortgitter', desc: '12×12 · 10 Wörter' },
+  { id: 'wr1', icon: '🔤', name: 'Wortraten', desc: 'leicht' },
+  { id: 'wr2', icon: '🔤', name: 'Wortraten', desc: 'schwer' },
+  { id: 'kr1', icon: '➗', name: 'Kopfrechnen', desc: 'plus und minus' },
+  { id: 'kr2', icon: '➗', name: 'Kopfrechnen', desc: 'mal und geteilt' },
 ];
+
+/* Wie viele Eintraege der Dateien-Modus mitbringt. Steht hier, damit
+   kein Text im Hideout die Zahl noch einmal von Hand behauptet. */
+export const NOJS_ANZAHL = GAMES.length;
 
 export function buildNoJs() {
   const parts = [
@@ -1031,6 +1391,24 @@ export function buildNoJs() {
     mazeGame('la2', 'Labyrinth', 'groß — 12×12 Zellen', mazeGen(6202, 12, 12)),
     tttGame(),
     quizGame(3001),
+    sudokuGame('su3', 'Sudoku 9×9', sudokuGen(5303, 9, 3, 3, 40)),
+    shipGame('sv1', 'Schiffe versenken', '8×8 — Flotte 4·3·3·2·2·2',
+      shipBoard(7101, 8, 8, [4, 3, 3, 2, 2, 2])),
+    shipGame('sv2', 'Schiffe versenken', '10×10 — Flotte 5·4·3·3·2·2·2·2',
+      shipBoard(7202, 10, 10, [5, 4, 3, 3, 2, 2, 2, 2])),
+    gitterGame('wg1', 'Wortgitter', '9×9 — sieben Wörter aus dem Hideout',
+      gitterBauen(9101, 9, ['HAFEN', 'TYCOON', 'ARENA', 'SNAKE', 'TETRIS',
+        'QUIZ', 'MEMORY'])),
+    gitterGame('wg2', 'Wortgitter', '12×12 — zehn Wörter aus dem Hideout',
+      gitterBauen(9202, 12, ['GEHSTOCK', 'HIDEOUT', 'LABYRINTH', 'NONOGRAMM',
+        'MINENSUCHER', 'SUDOKU', 'ASTEROIDS', 'SOLITAER', 'DOPPELKOPF',
+        'KRISENSTAB'])),
+    wortGame('wr1', 'GEHSTOCK', 'Das Zeichen über der Tür'),
+    wortGame('wr2', 'LEUCHTTURM', 'Steht am Hafen und blinkt'),
+    rechnenGame('kr1', 'Kopfrechnen', 'Plus und minus — zwölf Aufgaben',
+      rechnenAufgaben(8101, 12, 1), 8101),
+    rechnenGame('kr2', 'Kopfrechnen', 'Mal, geteilt und größere Zahlen — zwölf Aufgaben',
+      rechnenAufgaben(8202, 12, 2), 8202),
   ];
 
   let html = '<div id="sg-nojs">\n';
@@ -1141,6 +1519,7 @@ html.js #sg-nojs{animation:none}
   border:1px solid var(--n-line);border-radius:999px;padding:7px 14px}
 #sg-nojs .cnt b{color:var(--n-gold2)}
 #sg-nojs .flags::before{content:counter(fl)}
+#sg-nojs .jfoot{justify-content:center;margin:14px 0 0}
 #sg-nojs .tg{background:var(--n-pan);border:1px solid var(--n-line);border-radius:999px;
   padding:7px 14px;font-size:13.5px;font-weight:650;-webkit-user-select:none;user-select:none;
   cursor:pointer}
@@ -1314,4 +1693,34 @@ html.js #sg-nojs{animation:none}
   border-radius:10px;padding:11px 13px;margin-bottom:7px;cursor:pointer;
   -webkit-user-select:none;user-select:none;font-size:14.5px}
 #sg-nojs .qa:last-child{margin-bottom:0}
+
+/* --- Kopfrechnen --- */
+#sg-nojs .rrow{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+#sg-nojs .qa.ra{margin-bottom:0;text-align:center;font-weight:650;font-size:16px}
+
+/* --- Wortraten --- */
+#sg-nojs .wort{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;
+  margin:0 auto 18px;max-width:560px}
+#sg-nojs .wl{width:32px;height:42px;border-bottom:3px solid var(--n-line);
+  display:grid;place-items:center;font-size:21px;font-weight:700;color:var(--n-gold2)}
+#sg-nojs .wl .ch{opacity:0}
+#sg-nojs .kbd{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;
+  max-width:min(100%,420px);margin:0 auto}
+#sg-nojs .kb{background:var(--n-pan2);border:1px solid var(--n-line);border-radius:8px;
+  padding:11px 0;text-align:center;font-weight:650;cursor:pointer;
+  -webkit-user-select:none;user-select:none}
+#sg-nojs .kb:active{background:var(--n-line)}
+
+/* --- Wortgitter --- */
+#sg-nojs .gitter{display:grid;grid-template-columns:repeat(var(--w),1fr);gap:3px;
+  max-width:min(100%,460px);margin:0 auto}
+#sg-nojs .gc{position:relative;aspect-ratio:1;background:var(--n-pan2);
+  border-radius:5px;display:grid;place-items:center}
+#sg-nojs .gc .ga{position:absolute;inset:0;display:grid;place-items:center;
+  cursor:pointer;font-size:min(4vw,16px);font-weight:650;
+  -webkit-user-select:none;user-select:none}
+#sg-nojs .wliste{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;
+  margin-top:14px}
+#sg-nojs .wchip{background:var(--n-pan);border:1px solid var(--n-line);
+  border-radius:999px;padding:6px 12px;font-size:13px;color:var(--n-tx2)}
 `;

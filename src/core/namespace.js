@@ -5,13 +5,18 @@
    ------------------------------------------------------------------ */
 
 (function (w) {
-  var build = w.SG_BUILD || { offline: false, version: 'dev', offlineFile: null };
+  var build = w.SG_BUILD
+    || { offline: false, version: 'dev', offlineFile: null, nojs: 0 };
 
   var SG = w.SG = {
     name: 'Herr Gehstocks Hideout',
     version: build.version,
     offline: !!build.offline,
     offlineFile: build.offlineFile,
+
+    /* Wie viele Spiele der Dateien-Modus mitbringt. Die Zahl kommt aus
+       dem Bau, damit kein Text sie noch einmal behaupten muss. */
+    nojsSpiele: build.nojs || 0,
 
     games: {},          // id -> Spieldefinition
     order: [],          // Reihenfolge der Registrierung

@@ -174,7 +174,7 @@ Auf **Mac, PC und Android** einfach im Browser öffnen (Doppelklick oder
 Rechtsklick → *Öffnen mit*) — läuft sofort.
 
 Auf dem **iPad** genügt ein Tipp in der Dateien-App: es erscheint der
-**Dateien-Modus** mit 15 Spielen (siehe unten). Für alle 28 Spiele die Datei
+**Dateien-Modus** mit 24 Spielen (siehe unten). Für die ganze Sammlung die Datei
 stattdessen **gedrückt halten → „Öffnen mit" → HTML-Viewer**; eine solche App
 gibt es kostenlos im App Store (nach *HTML Viewer* suchen).
 
@@ -202,6 +202,14 @@ Start wieder aus dem Dokument entfernt.
 | Labyrinth | 8×8 und 12×12 · echtes Laufen, kein Springen |
 | Drei gewinnt | zu zweit, mit Siegerkennung |
 | Quiz | 10 Fragen mit Auswertung |
+| Schiffe versenken | 8×8 und 10×10 · Flotte liegt berührungsfrei |
+| Wortgitter | 9×9 und 12×12 · Wörter waagerecht und senkrecht |
+| Wortraten | zwei Wörter · Buchstaben antippen, Fehler werden gezählt |
+| Kopfrechnen | plus/minus und mal/geteilt · je zwölf Aufgaben |
+
+Die Zahl steht nirgends doppelt: `tools/nojs.mjs` gibt sie als
+`NOJS_ANZAHL` aus, der Build reicht sie über `SG_BUILD` weiter und der
+Offline-Bildschirm liest sie aus `SG.nojsSpiele`.
 
 Wie das geht — alles reines CSS:
 
@@ -212,7 +220,10 @@ Wie das geht — alles reines CSS:
   die lange Positivkette)
 - **Werkzeugwechsel** (Aufdecken/Flagge, Zahlen-Stift) läuft über gestapelte
   Labels, von denen jeweils nur eines `pointer-events` bekommt
-- **Zähler** sind CSS-Counter, **Neustart** ist `<button type="reset">`
+- **Zähler** sind CSS-Counter, **Neustart** ist `<button type="reset">`.
+  Der Zählerstand steht **unter** dem Spielfeld, und das ist keine
+  Geschmacksfrage: ein CSS-Counter kennt nur, was im Dokument vor ihm
+  liegt. Über dem Feld blieb er immer auf null stehen
 - Der **Tycoon** kommt ohne Rechnerei aus: CSS kann Geld nicht vergleichen,
   aber zählen und verzweigen. Die Wirtschaft steckt deshalb in der Struktur —
   was gebaut werden darf, hängt an dem, was schon steht. Besucher, Einnahmen,
