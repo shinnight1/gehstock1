@@ -57,6 +57,218 @@
 }
 .arena-wurzel .a-zurueck:active { background: #1c2740; color: #e8eef7; }
 
+/* ---------------------------- Hauptmenue --------------------------- */
+
+/* Untergrund mit Struktur statt einer flachen Flaeche. Zwei
+   gekreuzte Streifenverlaeufe ergeben ein Rautenmuster - das kostet
+   kein Bild und keine Datei, und es steht still: animiert wuerde ein
+   Muster dieser Groesse auf dem iPad Fuellrate fressen. */
+.arena-wurzel .a-menu {
+  background:
+    repeating-linear-gradient(45deg,
+      rgba(255, 255, 255, 0.022) 0 2px, transparent 2px 26px),
+    repeating-linear-gradient(-45deg,
+      rgba(255, 255, 255, 0.022) 0 2px, transparent 2px 26px),
+    radial-gradient(120% 80% at 50% 0%, #1b3358 0%, #101a2c 55%, #0a0f18 100%);
+  padding: 0;
+}
+
+/* Hochkant gedacht: ueber die ganze Breite gezogen sieht das Menue auf
+   einem Rechner leer aus. Die Breite haengt an dieser einen Spalte und
+   nicht an einer Regel fuer alle Kinder - die truege nur so weit, bis
+   ein Kind seinen eigenen Rand setzt. */
+.arena-wurzel .a-menu-spalte {
+  width: min(540px, 100%);
+  margin: 0 auto;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+/* Die Fussleiste sitzt am unteren Ende, auch wenn darueber wenig steht. */
+.arena-wurzel .a-menu-spalte > .a-leiste { margin-top: auto; }
+
+.arena-wurzel .a-oben {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: calc(env(safe-area-inset-top) + 12px) 14px 10px;
+  box-sizing: border-box;
+}
+.arena-wurzel .a-oben .a-zurueck { margin-right: auto; }
+
+.arena-wurzel .a-plakette {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px 5px 8px;
+  border-radius: 999px;
+  background: #0d1626;
+  border: 1px solid #26364f;
+  /* Statischer Schatten, nie animiert - siehe Kopf dieser Datei. */
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+.arena-wurzel .a-plakette.voll { border-color: #7c3aed; background: #1a1030; }
+.arena-wurzel .a-p-wert { font-weight: 800; font-size: 15px; line-height: 1.1; }
+.arena-wurzel .a-p-wofuer { font-size: 10px; color: #8fa0ba; line-height: 1.1; }
+
+.arena-wurzel .a-symbol { width: 20px; height: 20px; flex: none; }
+.arena-wurzel .a-symbol svg { width: 100%; height: 100%; fill: #9fb0c9; }
+.arena-wurzel .a-symbol.gold svg { fill: #f5c542; }
+.arena-wurzel .a-symbol.violett svg { fill: #c084fc; }
+
+/* ------------------------------ Buehne ----------------------------- */
+
+/* Der Blickfang. Gerahmt wie ein Schaukasten, damit das Feld nicht
+   im Hintergrund ausfranst, sondern als Gegenstand dasteht. */
+.arena-wurzel .a-schaukasten {
+  position: relative;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #0a1220;
+  border: 1px solid #2b3d5a;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08),
+              0 10px 26px rgba(0, 0, 0, 0.45);
+}
+.arena-wurzel .a-schaukasten-feld {
+  display: block;
+  /* Das Feld fuellt die Breite; wie viel davon zu sehen ist, haengt
+     allein an diesem Verhaeltnis. Hoeher heisst mehr Feld - bei 5/4
+     stehen Fluss und beide Bruecken im Bild. */
+  aspect-ratio: 5 / 4;
+  width: 100%;
+  /* Auf einem flachen Fenster - iPad im Querformat, kleiner Browser -
+     schoebe der Kasten sonst den Kampfknopf aus dem Bild. Gedeckelt
+     zeigt er einfach weniger Feld; die Szene zeichnet sich bei jeder
+     Groessenaenderung neu. */
+  max-height: min(56vh, 430px);
+}
+.arena-wurzel .a-szene { display: block; width: 100%; height: 100%; }
+
+/* Weiche Oberkante: das Feld ist oben angeschnitten, und eine harte
+   Kante saehe nach Fehler aus statt nach Ausschnitt. */
+.arena-wurzel .a-schaukasten::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 46px;
+  background: linear-gradient(to bottom, #0d1929 10%, rgba(13, 25, 41, 0));
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Schild ueber dem unteren Rand der Szene - der Fortschritt gehoert
+   zur Arena, also steht er auf ihr. */
+.arena-wurzel .a-schaukasten-schild {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 22px 14px 10px;
+  background: linear-gradient(to top, rgba(6, 10, 18, 0.92) 40%, transparent);
+}
+.arena-wurzel .a-arena-name {
+  font-weight: 800;
+  font-size: 17px;
+  letter-spacing: 0.02em;
+}
+.arena-wurzel .a-arena-rest { font-size: 11px; color: #9aa8bd; margin-top: 5px; }
+
+/* Der Fortschrittsbalken im Schaukasten: eingelassen, damit er als
+   Anzeige gelesen wird und nicht als Trennstrich. */
+.arena-wurzel .a-schaukasten-schild .a-balken {
+  height: 9px;
+  margin-top: 6px;
+  border-radius: 999px;
+  background: #17263c;
+  border: 1px solid #35507a;
+  overflow: hidden;
+}
+.arena-wurzel .a-schaukasten-schild .a-balken-fuell {
+  background: linear-gradient(#7dd3fc, #3b82f6);
+}
+
+/* ---------------------------- Kampftafeln --------------------------- */
+
+.arena-wurzel .a-knopfreihe {
+  display: flex;
+  gap: 10px;
+  padding: 14px;
+  box-sizing: border-box;
+}
+
+/* Plastisch statt flach: eine dicke Unterkante gibt dem Knopf Hoehe.
+   Beim Druecken faehrt er in seinen eigenen Schatten - bewegt wird
+   dabei nur transform, nie der Schatten selbst. */
+.arena-wurzel .a-tafel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 13px 10px 15px;
+  border-radius: 14px;
+  background: linear-gradient(#f0a832, #d8811a);
+  color: #2a1704;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.45), 0 5px 0 #9c5b0e;
+  transition: transform 0.06s;
+}
+.arena-wurzel .a-tafel:active { transform: translateY(4px); }
+.arena-wurzel .a-tafel.zweit {
+  flex: 0 0 34%;
+  background: linear-gradient(#4a90f0, #2c6ed0);
+  color: #06182f;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.4), 0 5px 0 #1c4b91;
+}
+.arena-wurzel .a-tafel.warnt {
+  background: linear-gradient(#8b97ab, #6a778c);
+  color: #10161f;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.3), 0 5px 0 #47525f;
+}
+.arena-wurzel .a-tafel-gross {
+  font-weight: 800;
+  font-size: 21px;
+  letter-spacing: 0.01em;
+}
+.arena-wurzel .a-tafel-klein { font-size: 11px; opacity: 0.75; }
+
+/* ---------------------------- Fussleiste ---------------------------- */
+
+.arena-wurzel .a-leiste {
+  /* Klebt am unteren Rand, auch wenn darueber gescrollt wird. Auf
+     einem flachen Fenster waere sie sonst weg - und mit ihr der Weg
+     in Sammlung, Deck und Optionen. */
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  margin-top: 14px;
+  padding: 6px 6px calc(env(safe-area-inset-bottom) + 8px);
+  background: #0a1220;
+  border-top: 1px solid #22334c;
+  box-sizing: border-box;
+}
+.arena-wurzel .a-l-knopf {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 6px 2px;
+  border-radius: 12px;
+  transition: transform 0.06s;
+}
+.arena-wurzel .a-l-knopf:active { transform: scale(0.94); }
+.arena-wurzel .a-l-knopf.hervor { background: #221040; }
+.arena-wurzel .a-l-knopf.hervor .a-symbol svg { fill: #c084fc; }
+.arena-wurzel .a-l-knopf.warnt .a-symbol svg { fill: #fbbf24; }
+.arena-wurzel .a-l-titel { font-size: 12px; font-weight: 700; }
+.arena-wurzel .a-l-unter { font-size: 10px; color: #8090a8; }
+
 .arena-wurzel .a-marke {
   flex: 1;
   font-weight: 800;
@@ -152,6 +364,8 @@
 .arena-wurzel .a-kachel-unter { color: #9aa8bd; font-size: 12px; }
 
 .arena-wurzel .a-statistik {
+  padding: 0 14px;
+  box-sizing: border-box;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 8px;
@@ -161,7 +375,13 @@
 .arena-wurzel .a-stat-wert { font-weight: 700; font-size: 18px; }
 .arena-wurzel .a-stat-wofuer { color: #9aa8bd; font-size: 11px; }
 
-.arena-wurzel .a-historie { display: flex; gap: 4px; flex-wrap: wrap; }
+.arena-wurzel .a-historie {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 0 14px 4px;
+  box-sizing: border-box;
+}
 .arena-wurzel .a-h-punkt {
   width: 12px;
   height: 12px;
@@ -171,7 +391,13 @@
 .arena-wurzel .a-h-punkt.sieg { background: #22c55e; }
 .arena-wurzel .a-h-punkt.nieder { background: #ef4444; }
 .arena-wurzel .a-h-punkt.remis { background: #64748b; }
-.arena-wurzel .a-historie-leer { color: #6b7a91; font-size: 13px; }
+.arena-wurzel .a-historie-leer {
+  color: #6b7a91;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 0 14px;
+  box-sizing: border-box;
+}
 
 /* ---------------------- Karten und Raster ------------------------- */
 
