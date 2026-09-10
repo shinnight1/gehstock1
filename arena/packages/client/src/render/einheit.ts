@@ -184,17 +184,31 @@ function fussring(
 
 /**
  * Figur-Grafik fuer eine Einheit oder ein Gebaeude abrufen.
- * Prueft zuerst assets/units/<id>.png, danach .webp.
+ *
+ * Erst assets/units/<id>.webp, dann .png. WebP zuerst, weil das die
+ * ausgelieferte Form ist - die Vorlagen liegen als PNG in
+ * bildquellen/ und werden mit tools/bilder-wandeln.mjs umgerechnet.
+ * Der PNG-Pfad bleibt als Ausweg, um eine einzelne Grafik ohne
+ * Umweg nachzureichen.
+ *
  * Bei Treffer weiss aufgeblitzt; fuer die gegnerische Partei mit deren
- * Farbe dezent eingefaerbt.
+ * Farbe eingefaerbt - aber nur leicht.
+ *
+ * Die Staerke war urspruenglich fuer das Koenigsfoto gedacht, wo es
+ * allein darum geht, die Seite zu erkennen. Bei gezeichneten Figuren
+ * frisst sie die Vorlage auf: aus einem Frostkoloss wird ein roter
+ * Klumpen. Ein Fuenftel reicht - die Seite steht ohnehin im Fussring
+ * unter der Figur, und der ist selbst bei zwanzig Pixeln noch klar.
  */
+const GEGNER_TOENUNG = 0.2;
+
 function einheitenFigur(
   kartenId: string, spieler: Spieler, getroffen: boolean,
 ): HTMLCanvasElement | HTMLImageElement | null {
   const farbe = getroffen ? '#ffffff' : (spieler === 1 ? FARBE.seite[1] : undefined);
-  const staerke = getroffen ? 0.75 : 0.45;
-  return figurJetzt('units/' + kartenId + '.png', farbe, staerke)
-    ?? figurJetzt('units/' + kartenId + '.webp', farbe, staerke);
+  const staerke = getroffen ? 0.75 : GEGNER_TOENUNG;
+  return figurJetzt('units/' + kartenId + '.webp', farbe, staerke)
+    ?? figurJetzt('units/' + kartenId + '.png', farbe, staerke);
 }
 
 function gebaeudeZeichnen(

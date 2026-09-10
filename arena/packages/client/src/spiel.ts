@@ -160,10 +160,27 @@ export function spielStarten(wurzel: HTMLElement, optionen: SpielOptionen = {}):
 
   void bildLaden('king.png');
 
-  /* Die acht Kartenbilder der eigenen Hand vorladen. Ohne das zeigt
-     die Leiste in den ersten Sekunden vier Farbfelder - genau in dem
-     Moment, in dem man zum ersten Mal auf sie tippt. */
-  for (const id of optionen.deck ?? []) void bildLaden('cards/' + id + '.webp');
+  /* Bilder vorladen, bevor sie gebraucht werden.
+
+     Ohne das zeigt die Kartenleiste in den ersten Sekunden vier
+     Farbfelder - genau in dem Moment, in dem man zum ersten Mal auf
+     sie tippt - und die ersten Einheiten auf dem Feld erscheinen als
+     Kapseln, weil ihre Figur noch unterwegs ist. Beides faellt genau
+     dann auf, wenn das Match anfaengt.
+
+     Beide Decks, nicht nur das eigene: die Einheiten des Gegners
+     stehen genauso schnell auf dem Feld. Das Spawner-Gebaeude bringt
+     seine eigene Einheit mit, die in keinem Deck steht. */
+  const vorladen = new Set<string>([
+    ...(optionen.deck ?? []),
+    ...(optionen.gegnerDeck ?? optionen.deck ?? []),
+  ]);
+  for (const id of vorladen) {
+    void bildLaden('cards/' + id + '.webp');
+    void bildLaden('units/' + id + '.webp');
+    const karte = karteVon(id);
+    if (karte?.spawnKarte) void bildLaden('units/' + karte.spawnKarte + '.webp');
+  }
 
   /* Hinter ?debug=1 haengt der Zustand am Fenster. Das ist kein
      Hintertuerchen: ohne Debug-Flag passiert es nicht, und wer die
