@@ -1,0 +1,27 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "hideout",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "tools/serve.mjs"
+      ],
+      "port": 8787,
+      "autoPort": true
+    },
+    {
+      "name": "arena",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "arena/node_modules/vite/bin/vite.js",
+        "arena/packages/client",
+        "--host",
+        "--port",
+        "5173"
+      ],
+      "port": 5173,
+      "autoPort": true
+    }
+  ]
+}

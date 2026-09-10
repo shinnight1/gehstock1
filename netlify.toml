@@ -1,0 +1,53 @@
+[build]
+  command = "npm ci --prefix arena && node tools/deploy-bauen.mjs"
+  publish = "dist"
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
+
+# Die Offline-Einzeldatei soll immer heruntergeladen und nie angezeigt werden.
+[[headers]]
+  for = "/offline/*"
+  [headers.values]
+    Content-Disposition = "attachment"
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+# Gehashte Bundles duerfen ewig im Cache bleiben.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Die Arena liegt als eigener Build daneben und bringt eigene
+# gehashte Bundles mit - dieselbe Regel wie fuer /assets/.
+[[headers]]
+  for = "/games/arena/bundle/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer"
+
+[[redirects]]
+  from = "/api/room"
+  to = "/.netlify/functions/room"
+  status = 200
+
+[[redirects]]
+  from = "/api/gehstockmon"
+  to = "/.netlify/functions/gehstockmon"
+  status = 200

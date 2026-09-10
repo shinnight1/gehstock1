@@ -1,0 +1,18 @@
+{
+  "name": "herr-gehstocks-hideout",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Herr Gehstocks Hideout - Offline-faehige Spielesammlung fuer iPad",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node tools/serve.mjs",
+    "test": "node tools/test.mjs"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^11.0.3"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.9",
+    "three": "^0.180.0"
+  }
+}

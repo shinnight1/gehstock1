@@ -1,0 +1,411 @@
+/* ------------------------------------------------------------------
+   GehstockMon - Oberflaeche.
+
+   Drei Ansichten in einem Blatt: Karte, Plan, Kampf. Kein Canvas -
+   das Spiel besteht aus Text, Listen und Knoepfen, und dafuer ist DOM
+   das richtige Werkzeug.
+
+   Der Planeditor blaettert beim Antippen zur naechsten Moeglichkeit
+   weiter, statt ein Auswahlmenue zu oeffnen. Auf dem iPad verdeckt
+   jedes Menue den halben Bildschirm; Weiterblaettern ist die
+   verlaesslichste Geste, die Touch hergibt.
+   ------------------------------------------------------------------ */
+
+(function (SG) {
+  var UI = SG.ui;
+  var G  = SG.gfx;
+  var R  = SG.gehstockmon;
+  var D  = R.daten;
+
+  function text(liste, id) {
+    for (var i = 0; i < liste.length; i++) if (liste[i].id === id) return liste[i].text;
+    return liste[0].text;
+  }
+  function bedText(id) { return text(D.BEDINGUNGEN, id); }
+  function aktText(id) { return text(D.AKTIONEN, id); }
+
+  function naechster(liste, id) {
+    for (var i = 0; i < liste.length; i++) {
+      if (liste[i].id === id) return liste[(i + 1) % liste.length].id;
+    }
+    return liste[0].id;
+  }
+
+  function feldVon(id) {
+    for (var i = 0; i < D.FELDER.length; i++) if (D.FELDER[i].id === id) return D.FELDER[i];
+    return null;
+  }
+
+  /* Einen Plan als lesbare Zeilen - genauso, wie er beim Gegner steht. */
+  function planZeilen(plan) {
+    var aktiv = [], i;
+    for (i = 0; i < (plan || []).length; i++) if (plan[i][0] !== 'aus') aktiv.push(plan[i]);
+    if (!aktiv.length) return [UI.el('div.gm-zeile', { text: 'ohne Plan — greift immer den vordersten an' })];
+    var out = [];
+    for (i = 0; i < aktiv.length; i++) {
+      out.push(UI.el('div.gm-zeile', {
+        text: (i + 1) + '. wenn ' + bedText(aktiv[i][0]) + ' → ' + aktText(aktiv[i][1])
+      }));
+    }
+    return out;
+  }
+
+  /* ---------------------------------------------------------- Aufbau */
+
+  function mount(host) {
+    var st = {
+      ansicht: 'karte',        /* 'karte' | 'plan' | 'kampf' */
+      feldId: null,
+      plaene: JSON.parse(JSON.stringify(D.START_PLAN)),
+      geschafft: [],
+      kampf: null,             /* Ergebnis von K.kaempfe waehrend der Wiedergabe */
+      schritt: 0
+    };
+
+    var gespeichert = host.store.get('stand', null);
+    if (gespeichert && gespeichert.plaene) {
+      st.plaene = gespeichert.plaene;
+      st.geschafft = gespeichert.geschafft || [];
+    }
+    function sichere() {
+      host.store.set('stand', { plaene: st.plaene, geschafft: st.geschafft });
+    }
+
+    var blatt = host.sheet('gehstockmon');
+
+    function offen(feld) {
+      if (feld.id === 1) return true;
+      return st.geschafft.indexOf(feld.id - 1) >= 0;
+    }
+
+    function zeige(ansicht) {
+      st.ansicht = ansicht;
+      UI.clear(blatt);
+      if (ansicht === 'karte') zeichneKarte();
+      else if (ansicht === 'plan') zeichnePlan();
+      else zeichneKampf();
+      blatt.scrollTop = 0;
+    }
+
+    /* ---------------------------------------------------------- Karte */
+
+    function zeichneKarte() {
+      host.setTitle('GehstockMon');
+
+      UI.add(blatt, [
+        UI.el('p.gm-intro', {
+          text: 'Deine vier Kreaturen kämpfen nach Regeln, die du vorher festlegst. '
+            + 'Du greifst im Kampf nicht ein — du schreibst nur den Plan und schaust zu, ob er hält.'
+        })
+      ]);
+
+      var liste = UI.el('div.gm-felder');
+      D.FELDER.forEach(function (f) {
+        var frei = offen(f);
+        var fertig = st.geschafft.indexOf(f.id) >= 0;
+        var cls = 'button.gm-feld' + (fertig ? '.geschafft' : (frei ? '.offen' : ''));
+        liste.appendChild(UI.el(cls, {
+          disabled: !frei,
+          on: { click: function () {
+            if (!frei) return;
+            host.sfx('click');
+            st.feldId = f.id;
+            zeige('plan');
+          } }
+        }, [
+          UI.el('span.gm-nr', { text: fertig ? '✓' : String(f.id) }),
+          UI.el('span.gm-feldtxt', null, [
+            UI.el('span.gm-feldname', { text: f.name }),
+            UI.el('span.gm-lehre', { text: frei ? f.lehre : 'Erst das Feld davor.' })
+          ]),
+          UI.el('span.gm-status', {
+            text: fertig ? 'gehalten' : (frei ? String(f.feinde.length) + ' Gegner' : 'zu')
+          })
+        ]));
+      });
+      UI.add(blatt, liste);
+
+      if (st.geschafft.length >= D.FELDER.length) {
+        UI.add(blatt, UI.el('div.gm-ende', {
+          text: 'Alle fünf Felder gehalten. Das war der Ausschnitt — mehr gibt es noch nicht.'
+        }));
+      }
+    }
+
+    /* ----------------------------------------------------------- Plan */
+
+    function zeichnePlan() {
+      var f = feldVon(st.feldId);
+      host.setTitle(f.name);
+
+      UI.add(blatt, UI.el('p.gm-intro', { text: f.lehre }));
+
+      /* Gegnerseite. Ihr Plan liegt offen - das ist der Kern des Spiels. */
+      UI.add(blatt, UI.el('h3.gm-titel', { text: 'Was dich erwartet' }));
+      var feindliste = UI.el('div.gm-gegner');
+      f.feinde.forEach(function (e) {
+        feindliste.appendChild(UI.el('div.gm-karte.feind', null, [
+          UI.el('div.gm-kopf', null, [
+            UI.el('span.gm-mono', { text: e.mono }),
+            UI.el('span.gm-meta', null, [
+              UI.el('span.gm-name', { text: e.name }),
+              UI.el('span.gm-rolle', { text: D.FAEHIGKEITEN[e.faeh].name })
+            ]),
+            UI.el('span.gm-werte', {
+              text: '❤ ' + e.hp + '   ⚔ ' + e.ang + '   ⚡ ' + e.tempo
+            })
+          ]),
+          UI.el('div.gm-plan', null, planZeilen(e.plan))
+        ]));
+      });
+      UI.add(blatt, feindliste);
+
+      /* Eigene Truppe mit Editor. */
+      UI.add(blatt, UI.el('h3.gm-titel', { text: 'Dein Plan' }));
+      var truppe = UI.el('div.gm-truppe');
+      D.KREATUREN.forEach(function (k) {
+        truppe.appendChild(kreaturKarte(k));
+      });
+      UI.add(blatt, truppe);
+
+      UI.add(blatt, UI.el('p.gm-hinweis', {
+        text: 'Die Regeln werden von oben nach unten geprüft. Die erste, die zutrifft, '
+          + 'wird ausgeführt — der Rest wird übersprungen. Antippen blättert weiter. '
+          + 'Eine Fähigkeit braucht nach dem Einsatz eine Runde Pause; solange sie nicht '
+          + 'bereit ist, greift die Kreatur stattdessen an.'
+      }));
+
+      UI.add(blatt, UI.el('div.gm-knoepfe', null, [
+        UI.btn('Angriff', function () { starteKampf(); }, 'primary'),
+        UI.btn('Zurück zur Karte', function () { zeige('karte'); })
+      ]));
+    }
+
+    function kreaturKarte(k) {
+      var fa = D.FAEHIGKEITEN[k.faeh];
+      var regeln = UI.el('div.gm-regeln');
+
+      st.plaene[k.id].forEach(function (regel, i) {
+        var wenn = UI.el('button.gm-tok.wenn', null, [
+          UI.el('span.gm-label', { text: 'wenn' }),
+          UI.el('span.gm-wert', { text: bedText(regel[0]) })
+        ]);
+        var dann = UI.el('button.gm-tok.dann', null, [
+          UI.el('span.gm-label', { text: 'dann' }),
+          UI.el('span.gm-wert', { text: aktText(regel[1]) })
+        ]);
+        wenn.addEventListener('click', function () {
+          host.sfx('click');
+          regel[0] = naechster(D.BEDINGUNGEN, regel[0]);
+          wenn.lastChild.textContent = bedText(regel[0]);
+          zeileAus(regel, wenn, dann);
+          sichere();
+        });
+        dann.addEventListener('click', function () {
+          host.sfx('click');
+          regel[1] = naechster(D.AKTIONEN, regel[1]);
+          dann.lastChild.textContent = aktText(regel[1]);
+          sichere();
+        });
+        zeileAus(regel, wenn, dann);
+        regeln.appendChild(UI.el('div.gm-regel', null, [
+          UI.el('span.gm-regelnr', { text: String(i + 1) }), wenn, dann
+        ]));
+      });
+
+      return UI.el('div.gm-karte', null, [
+        UI.el('div.gm-kopf', null, [
+          UI.el('span.gm-mono', { text: k.mono }),
+          UI.el('span.gm-meta', null, [
+            UI.el('span.gm-name', { text: k.name }),
+            UI.el('span.gm-rolle', { text: k.rolle })
+          ]),
+          UI.el('span.gm-werte', { text: '❤ ' + k.hp + '   ⚔ ' + k.ang + '   ⚡ ' + k.tempo })
+        ]),
+        UI.el('div.gm-faehig', { text: fa.name + ': ' + fa.text }),
+        regeln
+      ]);
+    }
+
+    /* Eine abgeschaltete Regel wird sichtbar blass, damit man beim
+       Ueberfliegen sofort sieht, welche Zeilen ueberhaupt zaehlen. */
+    function zeileAus(regel, wenn, dann) {
+      var aus = regel[0] === 'aus';
+      wenn.classList.toggle('aus', aus);
+      dann.classList.toggle('aus', aus);
+    }
+
+    /* ---------------------------------------------------------- Kampf */
+
+    var zeilen = {};        /* uid -> {balken, zahl, kasten} */
+
+    function starteKampf() {
+      var f = feldVon(st.feldId);
+      st.kampf = SG.rules.gehstockmon.kaempfe(D.KREATUREN, st.plaene, f.feinde);
+      st.schritt = 0;
+      zeige('kampf');
+    }
+
+    function zeichneKampf() {
+      var f = feldVon(st.feldId);
+      host.setTitle(f.name);
+      zeilen = {};
+
+      var links = UI.el('div.gm-seite', null, [UI.el('div.gm-seitentitel', { text: 'Deine Truppe' })]);
+      var rechts = UI.el('div.gm-seite', null, [UI.el('div.gm-seitentitel', { text: 'Gegner' })]);
+
+      st.kampf.einheiten.forEach(function (e) {
+        var zahl   = UI.el('span.gm-hp', { text: e.hp + ' / ' + e.maxHp });
+        var balken = UI.el('i');
+        var kasten = UI.el('div.gm-kaempfer' + (e.seite === 'sie' ? '.feind' : ''), null, [
+          UI.el('div.gm-kopf2', null, [
+            UI.el('span.gm-mono2', { text: e.mono }),
+            UI.el('span.gm-name2', { text: e.name }),
+            zahl
+          ]),
+          UI.el('div.gm-balken', null, [balken])
+        ]);
+        zeilen[e.uid] = { balken: balken, zahl: zahl, kasten: kasten, maxHp: e.maxHp };
+        (e.seite === 'wir' ? links : rechts).appendChild(kasten);
+      });
+
+      UI.add(blatt, UI.el('div.gm-seiten', null, [links, rechts]));
+
+      var protokoll = UI.el('div.gm-protokoll');
+      UI.add(blatt, protokoll);
+
+      var fussleiste = UI.el('div.gm-knoepfe');
+      UI.add(blatt, fussleiste);
+
+      spuleAb(protokoll, fussleiste);
+    }
+
+    /* Die Schritte laufen mit fester Taktung durch. 420 ms sind lang
+       genug zum Mitlesen und kurz genug, dass ein Kampf unter einer
+       halben Minute bleibt. Beim Selbsttest laeuft alles sofort ab,
+       sonst wartet der Test auf Zeitgeber. */
+    function spuleAb(protokoll, fussleiste) {
+      var schritte = st.kampf.schritte;
+      var sofort = !!(SG.selftest && SG.selftest.active);
+      var letzteRunde = 0;
+
+      function einen() {
+        if (st.schritt >= schritte.length) { schluss(fussleiste); return; }
+        var s = schritte[st.schritt++];
+
+        if (s.runde !== letzteRunde) {
+          letzteRunde = s.runde;
+          protokoll.appendChild(UI.el('div.gm-runde', { text: 'Runde ' + s.runde }));
+        }
+        protokoll.appendChild(UI.el('div.' + (s.seite === 'wir' ? 'wir' : 'sie'), { text: s.text }));
+        protokoll.scrollTop = protokoll.scrollHeight;
+
+        s.zustand.forEach(function (z) {
+          var zeile = zeilen[z.uid];
+          if (!zeile) return;
+          zeile.balken.style.width = Math.round((z.hp / zeile.maxHp) * 100) + '%';
+          zeile.zahl.textContent = z.hp + ' / ' + zeile.maxHp;
+          if (z.hp <= 0) zeile.kasten.classList.add('tot');
+        });
+
+        if (sofort) einen();
+        else host.after(einen, 420);
+      }
+      einen();
+    }
+
+    function schluss(fussleiste) {
+      var sieg = st.kampf.sieger === 'wir';
+      var f = feldVon(st.feldId);
+
+      if (sieg && st.geschafft.indexOf(f.id) < 0) {
+        st.geschafft.push(f.id);
+        sichere();
+      }
+      host.sfx(sieg ? 'win' : 'error');
+
+      var satz;
+      if (sieg) satz = 'Dein Plan hat gehalten.';
+      else if (st.kampf.sieger === 'patt') satz = 'Nach zwölf Runden steht es noch. Zu wenig Druck — irgendwo fehlt Schaden.';
+      else satz = 'Dein Plan hat nicht gehalten. Der Kampf war nicht unfair, er war vorhersehbar: dieselben Regeln, dasselbe Ergebnis. Ändere eine Zeile.';
+
+      /* Vor die Knopfleiste, nicht dahinter: erst das Ergebnis lesen,
+         dann entscheiden, was man damit macht. */
+      blatt.insertBefore(UI.el('div.gm-ergebnis.' + (sieg ? 'sieg' : 'niederlage'), null, [
+        UI.el('h2', { text: sieg ? 'Feld gehalten' : 'Verloren' }),
+        UI.el('p', { text: satz })
+      ]), fussleiste);
+
+      UI.clear(fussleiste);
+      UI.add(fussleiste, [
+        UI.btn(sieg ? 'Weiter zur Karte' : 'Plan ändern', function () {
+          zeige(sieg ? 'karte' : 'plan');
+        }, 'primary'),
+        UI.btn('Nochmal ansehen', function () { starteKampf(); })
+      ]);
+    }
+
+    zeige('karte');
+
+    /* ------------------------------------------------------- Selbsttest
+       Rechnet jedes Feld einmal durch. Das prueft die Kampfmaschine auf
+       Ausnahmen, Endlosschleifen und NaN, ohne dass jemand tippen muss. */
+    function selftest() {
+      D.FELDER.forEach(function (f) {
+        var e = SG.rules.gehstockmon.kaempfe(D.KREATUREN, st.plaene, f.feinde);
+        if (!e.schritte.length) throw new Error('GehstockMon: Feld ' + f.id + ' ohne Schritte');
+        e.einheiten.forEach(function (u) {
+          if (typeof u.hp !== 'number' || u.hp !== u.hp) {
+            throw new Error('GehstockMon: NaN bei ' + u.name);
+          }
+        });
+      });
+    }
+
+    return {
+      state: st,
+      selftest: selftest,
+      destroy: function () { zeilen = {}; }
+    };
+  }
+
+  /* ------------------------------------------------------- Anmeldung */
+
+  SG.register({
+    id: 'gehstockmon',
+    name: 'GehstockMon',
+    category: 'tycoon',
+    desc: 'Vier Kreaturen, ein Regelwerk — du kämpfst nicht, du planst',
+    tags: ['kreaturen', 'sammeln', 'taktik', 'plan', 'regeln', 'monster', 'revier'],
+    heavy: false,
+    scoreLabel: function (bests, stats) {
+      if (!stats || !stats.geschafft) return null;
+      return stats.geschafft.length + ' / ' + D.FELDER.length + ' Felder';
+    },
+    preview: function (c, w, h) {
+      c.fillStyle = '#0d1117';
+      c.fillRect(0, 0, w, h);
+
+      /* Drei Regelzeilen als Balkenpaare - das ist das Bild des Spiels:
+         nicht ein Kampf, sondern eine Liste von Wenn-Dann. */
+      var bx = Math.round(w * 0.12), bw = Math.round(w * 0.76);
+      var bh = Math.max(4, Math.round(h * 0.09));
+      var luecke = Math.round(bh * 0.55);
+      var oy = Math.round(h * 0.30);
+      for (var i = 0; i < 3; i++) {
+        var y = oy + i * (bh + luecke);
+        G.fillRound(c, bx, y, Math.round(bw * 0.44), bh, 2, '#2b3440');
+        G.fillRound(c, bx + Math.round(bw * 0.48), y, Math.round(bw * 0.52), bh, 2,
+          i === 0 ? '#e9a13a' : '#3b4654');
+      }
+      G.text(c, '🛡 ⚔ ✚ 👁', w * 0.5, h * 0.72, {
+        font: G.font(Math.round(h * 0.16)), align: 'center', baseline: 'middle',
+      });
+      G.text(c, 'WENN / DANN', w * 0.5, h * 0.17, {
+        font: G.font(Math.round(h * 0.1), 600),
+        fill: '#7c8794', align: 'center', baseline: 'middle',
+      });
+    },
+    mount: mount
+  });
+})(SG);

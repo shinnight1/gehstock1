@@ -1,0 +1,67 @@
+KRISENSTAB 03:12
+================
+
+Ein deterministisches Krisenentscheidungs-Spiel. Lagezentrum, 03:12 Uhr, 28
+Minuten bis zum Einschlag. Kein Sprachmodell, kein Netzwerkzugriff, keine
+Kosten — Berater und Gegenseite folgen festen Regeln und vorgeschriebenen
+Texten. Jeder Durchlauf ist über seinen Seed reproduzierbar.
+
+
+SPIELEN
+-------
+index.html im Browser öffnen. Mehr braucht es nicht. Die Datei enthält alles:
+Bild, Ton, Regeln, Texte. Nachgeladen werden nur React, Babel und Tailwind
+von öffentlichen CDNs — dafür ist beim ersten Start eine Verbindung nötig.
+
+Ton beginnt erst mit dem Klick auf "Lagezentrum betreten"; Browser lassen
+Audio nicht ohne Nutzeraktion zu.
+
+Der Fortschritt (gesehene Ausgänge, Bestwerte) liegt im localStorage des
+Browsers, in dem gespielt wird.
+
+
+WAS DRIN IST
+------------
+index.html          Das fertige Spiel, direkt spielbar.
+Krisenstab.jsx      Dieselbe Sache als eine React-Komponente mit
+                    Default-Export, ohne erforderliche Props.
+quelltext/          Die Einzelteile, aus denen beides gebaut wird.
+
+
+NEU BAUEN
+---------
+Im Ordner quelltext:
+
+    ./bauen.sh      fügt die Teile zu Krisenstab.jsx zusammen und
+                    erzeugt daraus index.html
+    ./pruefen.sh    baut eine Prüfseite, die nur die Regelschicht lädt
+                    und im Browser Verteilungen, Erreichbarkeit der Enden
+                    und Bestimmtheit nachrechnet
+
+Beide Skripte brauchen eine POSIX-Shell (unter Windows z. B. Git Bash).
+Zum Spielen braucht man sie nicht.
+
+
+AUFBAU
+------
+Regeln, Texte und Darstellung sind getrennt. Sämtliche Zahlen — Zeitkosten,
+Schwellenwerte, Gewichte — stehen im Objekt BALANCE am Anfang von
+_teil1_inhalt.jsx. Wer dort etwas verstellt, muss die Oberfläche nicht
+anfassen.
+
+    _teil1*      Inhalt: Balance, Szenarien, Berater, Aktionen, Texte,
+                 Bild und Ton als data-URI
+    _teil2*      Regeln: reiner Reducer, Gegnermodell, Auswertung
+    _teil3*      Darstellung: Raum, Fenster, Notizblock, Klang, Nachspann
+
+
+ZUM INHALT
+----------
+Neun Lagen, und in keiner ist "echt oder Fehlalarm" die richtige Frage.
+Getrennt offen sind immer zwei Dinge: wer geschossen hat, und was darauf
+sitzt. Zu jeder Lage gehört genau ein Weg, der sie aufklärt. In vieren ist
+das der heiße Draht — und der schließt sich, sobald man sichtbar eskaliert.
+
+Alle Personen und Verläufe sind erfunden. Die historischen Hinweise im
+Nachspann (Petrow 1983, Able Archer 1983, norwegische Forschungsrakete 1995)
+sind es nicht.

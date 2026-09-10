@@ -1,0 +1,18 @@
+Bilder für das Hideout
+======================
+
+Was hier liegt, wird beim Bauen als Daten-URI in den Code eingebettet
+und ist danach unter SG.assets.<dateiname ohne Endung> erreichbar.
+Damit bleibt auch die Offline-Einzeldatei ohne einen einzigen externen
+Verweis.
+
+Erkannt werden .png, .jpg, .jpeg, .webp und .gif.
+
+Gebraucht wird zurzeit:
+
+  falschercode.jpg    Wird zehn Sekunden lang gezeigt, wenn jemand einen
+                      falschen Zugangscode eingibt. Fehlt die Datei,
+                      zeichnet das Hideout einen schlichten Ersatz.
+
+Bitte an die Größe denken: alles hier landet in der Offline-Datei und
+zählt gegen das Budget von 2048 kB. Ein Bild unter 150 kB ist gut.

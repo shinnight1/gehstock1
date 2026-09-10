@@ -1,0 +1,15 @@
+Hier liegen die nachreichbaren Grafiken.
+
+  king.png            Foto fuer den Koenig-Turm beider Seiten.
+                      Freigestellt, transparenter Hintergrund, hochkant.
+                      Die gegnerische Seite wird im Spiel rot getoent -
+                      es braucht nur diese eine Datei.
+                      Empfohlen: etwa 512 x 512 px, PNG mit Alpha.
+
+  cards/<id>.png      Optionale Grafik pro Karte. <id> ist die id aus
+                      packages/sim/src/data/cards.ts, zum Beispiel
+                      cards/steinwaechter.png.
+
+Fehlt eine Datei, zeichnet das Spiel eine Ersatzform aus Canvas-
+Primitiven. Nichts bricht, es sieht nur schlichter aus. Dateien lassen
+sich jederzeit nachlegen; ein Neustart des Dev-Servers genuegt.

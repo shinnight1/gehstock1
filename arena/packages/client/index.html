@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, maximum-scale=1">
+  <meta name="theme-color" content="#0b0f17">
+  <meta name="color-scheme" content="dark">
+
+  <!-- Vom Homescreen aus im Vollbild, ohne Safari-Leisten. -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Arena">
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png">
+
+  <!-- Alle Pfade relativ: die Seite soll unter /games/arena/ genauso
+       laufen wie unter / - der Build weiss nichts ueber die Domain.
+       Bewusst ohne Service Worker: das Spiel laeuft aus dem Speicher
+       und braucht keinen Cache, und ein veralteter Worker waere ein
+       Fehler, den man nur schwer wieder loswird. Fuers Ablegen auf
+       dem Homescreen reicht das Manifest. -->
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icon-192.png" type="image/png">
+
+  <title>Arena</title>
+  <link rel="stylesheet" href="./src/style.css">
+</head>
+<body>
+  <div id="arena-wurzel" class="arena-wurzel"></div>
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>

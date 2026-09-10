@@ -1,0 +1,163 @@
+/* ------------------------------------------------------------------
+   GehstockMon
+
+   Das Spiel besteht aus Text und Listen, nicht aus Bildern. Deshalb
+   traegt hier die Typografie: enge Zeilen, viel Ruhe, und genau eine
+   laute Farbe (Gold) fuer den Teil einer Regel, der handelt.
+   ------------------------------------------------------------------ */
+
+.sheet.gehstockmon { max-width: 780px; margin: 0 auto; }
+
+.gm-intro {
+  margin: 2px 0 16px;
+  font-size: 14px; line-height: 1.55; color: var(--text-2);
+}
+
+.gm-titel {
+  margin: 22px 0 10px;
+  font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--dim); font-weight: 600;
+}
+
+/* ------------------------------------------------------------ Karte */
+
+.gm-felder { display: grid; gap: 10px; }
+
+.gm-feld {
+  display: flex; align-items: center; gap: 14px;
+  width: 100%; min-height: var(--tap); padding: 13px 15px;
+  background: var(--panel); border: 1px solid var(--line-soft);
+  border-radius: var(--r-md); color: var(--text);
+  font: inherit; text-align: left; cursor: pointer;
+  transition: border-color .18s ease, transform .12s ease;
+}
+.gm-feld:active { transform: scale(.995); }
+.gm-feld.offen { border-color: var(--line); }
+.gm-feld.geschafft { border-color: var(--green-dim); }
+.gm-feld[disabled] { opacity: .42; cursor: default; }
+
+.gm-nr {
+  flex: none; width: 30px; height: 30px; border-radius: 50%;
+  display: grid; place-items: center;
+  border: 1px solid var(--line); color: var(--muted);
+  font-family: var(--mono); font-size: 12px;
+}
+.gm-feld.geschafft .gm-nr { border-color: var(--green); color: var(--green); }
+
+.gm-feldtxt { flex: 1; min-width: 0; display: block; }
+.gm-feldname { display: block; font-size: 15px; font-weight: 600; }
+.gm-lehre { display: block; margin-top: 2px; font-size: 12px; line-height: 1.4; color: var(--dim); }
+.gm-status { flex: none; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+.gm-feld.geschafft .gm-status { color: var(--green); }
+
+.gm-ende {
+  margin-top: 18px; padding: 14px; border-radius: var(--r-md);
+  background: var(--panel); border: 1px solid var(--green-dim);
+  font-size: 13px; line-height: 1.55; color: var(--text-2); text-align: center;
+}
+
+/* ------------------------------------------------- Kreatur und Gegner */
+
+.gm-gegner, .gm-truppe { display: grid; gap: 10px; }
+
+.gm-karte {
+  padding: 12px 13px; border-radius: var(--r-md);
+  background: var(--panel); border: 1px solid var(--line-soft);
+}
+.gm-karte.feind { border-color: var(--red-dim); }
+
+.gm-kopf { display: flex; align-items: center; gap: 11px; }
+.gm-mono {
+  flex: none; width: 40px; height: 40px; border-radius: var(--r-sm);
+  display: grid; place-items: center; font-size: 20px;
+  background: var(--panel-2); border: 1px solid var(--line);
+}
+.gm-meta { flex: 1; min-width: 0; display: block; }
+.gm-name { display: block; font-size: 15px; font-weight: 600; }
+.gm-rolle { display: block; margin-top: 1px; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+.gm-werte { flex: none; font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: pre; }
+
+.gm-faehig { margin-top: 9px; font-size: 12px; line-height: 1.45; color: var(--blue); }
+
+.gm-plan { margin-top: 8px; display: grid; gap: 3px; }
+.gm-zeile { font-family: var(--mono); font-size: 11px; line-height: 1.5; color: var(--text-2); }
+
+/* --------------------------------------------------------- Planeditor
+   Eine Regel ist eine Zeile aus zwei Knoepfen. Antippen blaettert weiter,
+   statt ein Menue zu oeffnen - auf dem iPad verdeckt jedes Menue den
+   halben Bildschirm. */
+
+.gm-regeln { margin-top: 10px; display: grid; gap: 6px; }
+.gm-regel { display: flex; align-items: stretch; gap: 6px; }
+.gm-regelnr {
+  flex: none; width: 14px; display: grid; place-items: center;
+  font-family: var(--mono); font-size: 10px; color: var(--dim);
+}
+
+.gm-tok {
+  flex: 1; min-width: 0; min-height: 42px; padding: 5px 9px;
+  background: var(--panel-2); border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm); color: var(--text);
+  font: inherit; font-size: 12px; line-height: 1.25; text-align: left;
+  cursor: pointer; transition: border-color .12s ease;
+}
+.gm-tok:active { border-color: var(--line); }
+.gm-tok.wenn { flex: 1.15; }
+.gm-label {
+  display: block; font-size: 9px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--dim); margin-bottom: 1px;
+}
+.gm-wert { display: block; }
+.gm-tok.dann .gm-wert { color: var(--gold); }
+.gm-tok.aus { opacity: .45; }
+.gm-tok.aus .gm-wert { color: var(--dim); }
+
+.gm-hinweis { margin-top: 12px; font-size: 11px; line-height: 1.55; color: var(--dim); }
+.gm-knoepfe { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+
+/* ------------------------------------------------------------ Kampf */
+
+.gm-seiten { display: grid; gap: 14px; grid-template-columns: 1fr 1fr; }
+@media (max-width: 600px) { .gm-seiten { grid-template-columns: 1fr; } }
+
+.gm-seitentitel {
+  margin-bottom: 8px; font-size: 10px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--dim);
+}
+
+.gm-kaempfer {
+  margin-bottom: 6px; padding: 8px 10px; border-radius: var(--r-sm);
+  background: var(--panel); border: 1px solid var(--line-soft);
+  transition: opacity .25s ease;
+}
+.gm-kaempfer.tot { opacity: .3; }
+.gm-kopf2 { display: flex; align-items: baseline; gap: 8px; }
+.gm-mono2 { font-size: 15px; }
+.gm-name2 { font-size: 13px; }
+.gm-hp { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+.gm-balken { margin-top: 6px; height: 3px; border-radius: 2px; background: var(--line-soft); overflow: hidden; }
+.gm-balken i { display: block; height: 100%; width: 100%; background: var(--green); transition: width .3s ease; }
+.gm-kaempfer.feind .gm-balken i { background: var(--red); }
+
+.gm-protokoll {
+  margin-top: 16px; padding: 12px 13px; max-height: 300px; overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--bg-2); border: 1px solid var(--line-soft); border-radius: var(--r-md);
+  font-family: var(--mono); font-size: 12px; line-height: 1.7; color: var(--text-2);
+}
+.gm-protokoll .gm-runde { margin-top: 11px; color: var(--dim); letter-spacing: .1em; }
+.gm-protokoll .gm-runde:first-child { margin-top: 0; }
+.gm-protokoll .wir { color: var(--blue); }
+.gm-protokoll .sie { color: var(--red); }
+
+.gm-ergebnis {
+  margin-top: 16px; padding: 16px; text-align: center;
+  border-radius: var(--r-md); background: var(--panel); border: 1px solid var(--line-soft);
+}
+.gm-ergebnis h2 { margin: 0 0 8px; font-size: 15px; letter-spacing: .12em; text-transform: uppercase; }
+.gm-ergebnis.sieg { border-color: var(--green-dim); }
+.gm-ergebnis.sieg h2 { color: var(--green); }
+.gm-ergebnis.niederlage { border-color: var(--red-dim); }
+.gm-ergebnis.niederlage h2 { color: var(--red); }
+.gm-ergebnis p { margin: 0; font-size: 13px; line-height: 1.6; color: var(--text-2); }

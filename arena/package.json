@@ -1,0 +1,28 @@
+{
+  "name": "arena-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Echtzeit-Arena-Kartenspiel - Lane-Pusher mit Deck und Elixir",
+  "workspaces": [
+    "packages/sim",
+    "packages/meta",
+    "packages/netz",
+    "packages/client",
+    "packages/server"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @arena/client",
+    "dev:server": "npm run build --workspace @arena/server && npm run start --workspace @arena/server",
+    "build": "npm run build --workspace @arena/sim && npm run build --workspace @arena/client",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -b packages/sim packages/meta packages/netz packages/client packages/server",
+    "ip": "node tools/ip.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2",
+    "vitest": "^5.0.0"
+  }
+}

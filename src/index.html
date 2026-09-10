@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Hideout">
+  <meta name="theme-color" content="#0d1017">
+  <meta name="color-scheme" content="dark">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="description" content="Herr Gehstocks Hideout - Spielesammlung mit Tycoons, auch komplett offline spielbar.">
+  <title>Herr Gehstocks Hideout</title>
+  <!--HEAD-EXTRA-->
+  <!--STYLES-->
+</head>
+<body>
+  <div id="app" aria-live="polite"></div>
+  <div id="sg-boot">
+    <div class="sg-boot-inner">
+      <div class="sg-boot-cane" aria-hidden="true"></div>
+      <div class="sg-boot-name">Herr Gehstocks Hideout</div>
+      <div class="sg-boot-hint">wird geladen&hellip;</div>
+    </div>
+
+    <!-- Notfall-Anleitung. Laeuft das Bundle, ist der ganze Startbildschirm
+         nach Millisekunden weg und man sieht davon nie etwas. Steht er nach
+         drei Sekunden immer noch da, fuehrt der Betrachter keine Skripte aus
+         (iPadOS-Dateivorschau) - dann muss hier stehen, was zu tun ist.
+         Das <noscript> weiter unten blendet sie sofort ein statt erst nach
+         der Wartezeit. -->
+    <div class="sg-help">
+      <div class="sg-help-card">
+        <div class="sg-help-ic" aria-hidden="true">!</div>
+        <h1>Diese Ansicht startet keine Spiele</h1>
+
+        <p class="sg-only-offline">
+          Die Datei liegt in der <b>Vorschau</b> der Dateien-App, und die f&uuml;hrt keine
+          Skripte aus. Der skriptfreie Teil des Hideouts sollte hier eigentlich
+          erscheinen &mdash; tut er das nicht, helfen diese zwei Wege:
+        </p>
+        <p class="sg-only-online">
+          Dieser Browser f&uuml;hrt gerade kein JavaScript aus. Ohne das kann keines
+          der Spiele starten.
+        </p>
+
+        <div class="sg-help-steps sg-only-offline">
+          <div class="sg-help-h">Weg 1 &mdash; in der Dateien-App bleiben</div>
+          <ol>
+            <li>Im App Store einmal eine <b>HTML-Viewer-App</b> holen (nach
+              &bdquo;HTML Viewer&ldquo; suchen, es gibt mehrere kostenlose).</li>
+            <li>In der Dateien-App diese Datei <b>gedr&uuml;ckt halten</b> &mdash; nicht antippen.</li>
+            <li><b>&bdquo;&Ouml;ffnen mit&ldquo;</b> w&auml;hlen und den HTML-Viewer nehmen.</li>
+            <li>Alle Spiele laufen, ohne Internet, direkt aus der Datei.</li>
+          </ol>
+        </div>
+        <div class="sg-help-steps sg-only-offline">
+          <div class="sg-help-h">Weg 2 &mdash; ohne Zusatz-App</div>
+          <ol>
+            <li>Die Webseite <b>einmal in Safari</b> &ouml;ffnen, solange du Internet hast.</li>
+            <li>Unten auf <b>Teilen</b> tippen &mdash; das Rechteck mit dem Pfeil nach oben.</li>
+            <li><b>Zum Home-Bildschirm</b> w&auml;hlen und mit <b>Hinzuf&uuml;gen</b> best&auml;tigen.</li>
+            <li>Ab jetzt &uuml;ber das neue Symbol starten: l&auml;uft <b>ohne Internet</b>
+              und speichert deine Spielst&auml;nde dauerhaft.</li>
+          </ol>
+        </div>
+        <div class="sg-help-steps sg-only-online">
+          <div class="sg-help-h">Was hilft</div>
+          <ol>
+            <li>In den Browser-Einstellungen <b>JavaScript aktivieren</b>.</li>
+            <li>Die Seite neu laden.</li>
+          </ol>
+        </div>
+
+        <p class="sg-help-alt sg-only-offline">
+          Am Mac, PC oder Android-Tablet l&auml;uft diese Datei sofort: dort einfach im
+          Browser &ouml;ffnen (Rechtsklick &rarr; <b>&Ouml;ffnen mit</b> &rarr; Safari, Chrome, Edge).
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!--NOJS-->
+  <noscript><style>#sg-boot .sg-help,#sg-nojs{animation:none;opacity:1;visibility:visible}#sg-boot .sg-boot-inner{display:none}</style></noscript>
+  <!--SCRIPTS-->
+</body>
+</html>

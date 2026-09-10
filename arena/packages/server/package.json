@@ -1,0 +1,21 @@
+{
+  "name": "@arena/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "bauen": "vite build",
+    "dev": "vite build --watch",
+    "start": "node bau/index.js",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@arena/sim": "*",
+    "@arena/netz": "*",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.13",
+    "@types/node": "^22.9.0"
+  }
+}
