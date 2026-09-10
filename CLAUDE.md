@@ -14,12 +14,14 @@ An diesem Projekt arbeiten zwei Personen parallel, jede mit einer eigenen Claude
 ## Arbeitsweise
 
 - Dateien punktuell ändern statt komplett neu schreiben. Neu geschriebene Dateien erzeugen unnötige Konflikte mit den Änderungen des Partners.
-- Zuständigkeiten hier eintragen, damit klar ist, wer welche Dateien anfasst:
+- **Keine Aufteilung nach Dateien.** Beide arbeiten am gesamten Projekt, jeder darf
+  jede Datei anfassen. Das ist so gewollt.
 
 | Datei | zuständig |
 |---|---|
-| src/ (Website, Spiele, Styles) | Louis |
-| build.mjs, tools/ | Louis |
-| netlify/, netlify.toml | Louis |
-| arena/ (eigenes Vite-Projekt) | (ergänzen) |
-| art/, docs/ | (ergänzen) |
+| alles | Louis und der Partner gemeinsam |
+
+Weil die Aufteilung fehlt, ist der Schutz vor Konflikten allein der Ablauf: vor jeder
+Bearbeitung `git pull`, nach jeder fertigen Änderung sofort `git push`, und Dateien
+punktuell ändern statt komplett neu schreiben. Wer länger als nötig ungepusht
+arbeitet, produziert Konflikte.
