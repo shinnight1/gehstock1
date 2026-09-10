@@ -3,6 +3,10 @@
   publish = "dist"
   functions = "netlify/functions"
 
+[build.environment]
+  # Das Projekt braucht Node 22.12 oder neuer.
+  NODE_VERSION = "22"
+
 [functions]
   node_bundler = "esbuild"
 
