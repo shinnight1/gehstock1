@@ -92,10 +92,10 @@ src/
                        wache.js      setzt Sperren und Befehle durch
                        verhoer.js    Fehlversuche an der Tür, Verhöre
                        meeting.js    Besprechungen, Route, Stundenplan
-                       flix.js       Gehstockflix samt Vorspann
+                       flix.js       Gehstockflix: Vorspann, Regal, Abspieler
                        dev.js        Entwicklerkonsole
                        invariants.js Spielregeln als Prüfbedingungen
-  data/                Wortlisten für Wörtle
+  data/                Wortlisten für Wörtle, Videoregal für Gehstockflix
   games/               25 Spiele plus die Kachel für Krisenstab
   tycoon/port/         Hafen-Tycoon
   tycoon/spy/          Geheimagenten-Tycoon
@@ -792,8 +792,7 @@ ungefähr genauso lang noch einmal.
 
 ## Gehstockflix
 
-Der Knopf und der Vorspann stehen, **Videos noch keine** — das kommt als
-Nächstes.
+Ein kleines Videoregal für die Pause: Vorspann, Kacheln, Abspieler.
 
 Der Vorspann ist der bekannte Buchstabenaufbau, nur mit einem **G**: ein
 Lichtblitz, dann fächern sich zweiundvierzig senkrechte Streifen auf, fahren
@@ -806,8 +805,22 @@ Streifen werden mit `destination-in` durch diese Maske gezeichnet — deshalb
 sehen sie am Ende exakt wie das G aus. Antippen überspringt, und pro Sitzung
 läuft er nur einmal.
 
-Dahinter liegt ein Regal mit drei leeren Reihen, damit man sieht, wie es
-aussehen wird.
+Dahinter liegt das Regal. Ganz oben ein Top-Titel mit großem Bild, darunter
+eine Reihe je Kategorie. Eine Kachel antippen öffnet die Infokarte, der
+**▶** darauf spielt sofort ab — der Abspieler legt sich über den ganzen
+Bildschirm und geht mit *‹ Zurück* oder Esc wieder zu.
+
+Die Videos liegen bei YouTube; gespeichert ist in `src/data/videos.js` nur
+die Kennung je Video. Vorschaubild und Abspieladresse rechnet `flix.js`
+sich daraus zusammen — ein neues Video eintragen heißt also: eine Zeile in
+die passende Reihe schreiben, sonst nichts.
+
+> **Gehstockflix braucht die Website.** Aus der Offline-Einzeldatei heraus
+> läuft die Seite unter `file://` und hat damit keinen Ursprung, den YouTube
+> gelten lässt — eingebettet bliebe der Abspieler schwarz. Er sagt das dann
+> auch und bietet den Weg zu YouTube an. Auf dem iPad heißt das: die Seite
+> über Netlify aufrufen und auf den Home-Bildschirm legen, nicht die
+> Offline-Datei aus der Dateien-App öffnen.
 
 ---
 
