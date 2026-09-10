@@ -69,6 +69,38 @@ if (!fs.existsSync(vite)) {
     entfernt++;
   }
   if (entfernt) console.log('  ' + entfernt + ' Quellkarte(n) entfernt');
+
+  schritt('Arena in den Offline-Vorrat des Service Workers legen');
+  arenaInSw();
+}
+
+/* Die Arena wird nach dem Hideout gebaut - build.mjs kann ihre Dateien
+   also noch gar nicht kennen und laesst in sw.js eine leere Liste stehen.
+   Hier wird sie gefuellt. Ohne das laege die Arena zwar auf dem Server,
+   waere auf dem Home-Bildschirm ohne Netz aber nicht da - und gegen den
+   Bot spielt sie ja gerade dann, wenn niemand online ist. */
+function arenaInSw() {
+  const swDatei = path.join(DIST, 'sw.js');
+  if (!fs.existsSync(swDatei)) return;
+
+  const dateien = [];
+  (function sammeln(ordner, praefix) {
+    for (const e of fs.readdirSync(ordner, { withFileTypes: true })) {
+      const pfad = path.join(ordner, e.name);
+      if (e.isDirectory()) sammeln(pfad, praefix + e.name + '/');
+      else dateien.push(praefix + e.name);
+    }
+  })(ARENA_ZIEL, 'games/arena/');
+
+  const sw = fs.readFileSync(swDatei, 'utf8');
+  const marke = 'const EXTRAS = [];';
+  if (sw.indexOf(marke) < 0) {
+    console.log('  [33mkeine EXTRAS-Zeile in sw.js gefunden[0m');
+    return;
+  }
+  fs.writeFileSync(swDatei,
+    sw.replace(marke, 'const EXTRAS = ' + JSON.stringify(dateien) + ';'));
+  console.log('  ' + dateien.length + ' Dateien');
 }
 
 /* ---------------------------- Bericht ----------------------------- */

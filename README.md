@@ -164,11 +164,21 @@ Das läuft im Flugmodus, startet ohne Safari-Leiste und — der wichtige Punkt �
 **speichert Bestwerte und Tycoon-Stände dauerhaft**. Möglich macht das der
 Service-Worker aus dem Online-Build.
 
+Er legt beim Installieren zwei Listen an. `ASSETS` ist der Kern — Seite,
+Bundle, Manifest, Symbole — und muss vollständig durchgehen, sonst wäre die
+Seite offline kaputt. `EXTRAS` sind eigene Seiten, die *nach* dem Hideout
+gebaut werden und die `build.mjs` deshalb noch nicht kennen kann; sie werden
+einzeln und nachsichtig geholt, damit eine fehlende Datei nicht die ganze
+Installation umwirft. `tools/deploy-bauen.mjs` trägt dort die Arena ein —
+ohne das läge sie zwar auf dem Server, wäre auf dem Home-Bildschirm ohne
+Netz aber nicht da. Und **gegen den Bot** spielt man sie ja gerade dann.
+
 ### Als Einzeldatei
 
 Auf der Webseite oben rechts auf **Offline spielen** → **Datei herunterladen**.
-Sie enthält alle 28 eingebauten Spiele, lädt nichts nach und braucht kein Netz.
-(Krisenstab liegt als eigene Seite daneben und ist deshalb nicht enthalten.)
+Sie enthält die eingebauten Spiele, lädt nichts nach und braucht kein Netz.
+(Krisenstab und Arena liegen als eigene Seiten daneben und sind deshalb nicht
+enthalten — die Arena offline gibt es über den Home-Bildschirm.)
 
 Auf **Mac, PC und Android** einfach im Browser öffnen (Doppelklick oder
 Rechtsklick → *Öffnen mit*) — läuft sofort.

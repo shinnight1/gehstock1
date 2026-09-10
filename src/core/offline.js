@@ -85,8 +85,9 @@
             UI.el('div.t', null, [
               UI.el('b', { text: 'Über das neue Symbol starten' }),
               UI.el('span', {
-                text: 'Alle ' + SG.list().length + ' Spiele laufen dann auch im Flugmodus — '
-                  + 'und die Spielstände bleiben erhalten.',
+                text: 'Die Spiele laufen dann auch im Flugmodus — die Arena gegen '
+                  + 'den Bot eingeschlossen. Netz brauchen nur noch GehstockMon und '
+                  + 'der Mehrspieler über Raum-Codes. Die Spielstände bleiben erhalten.',
               }),
             ]),
           ]),
