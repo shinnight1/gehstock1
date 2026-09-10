@@ -1,8 +1,10 @@
 /* ------------------------------------------------------------------
    Gehstockflix.
 
-   Noch ohne Videos - das kommt spaeter. Was schon steht: der Knopf und
-   der Vorspann.
+   Der Knopf im Hub, der Vorspann und das Regal. Was im Regal steht,
+   kommt aus src/data/videos.js - dort liegt zu jedem Video nur die
+   YouTube-Kennung, Bild und Abspieladresse rechnet sich diese Datei
+   daraus zusammen.
 
    Der Vorspann ist der bekannte Buchstabenaufbau, nur mit einem G:
    erst ein Lichtblitz, dann faechern sich senkrechte Streifen auf,
@@ -42,7 +44,11 @@
       UI.el('div.flix-g', { text: 'G' }),
       UI.el('div.flix-text', null, [
         UI.el('div.fx-t', { text: 'GEHSTOCKFLIX' }),
-        UI.el('div.fx-d', { text: 'Videos für die Pause · noch leer' }),
+        UI.el('div.fx-d', {
+          text: F.anzahl && F.anzahl()
+            ? 'Videos für die Pause · ' + F.anzahl() + ' Titel'
+            : 'Videos für die Pause · noch leer',
+        }),
       ]),
       UI.el('div.flix-pfeil', { text: '▶' }),
     ]);
@@ -56,6 +62,7 @@
     UI.clear(app);
     var lebt = true;
     var vorspann = null;
+    var spieler = null;
 
     /* Einmal je Sitzung reicht - sonst nervt er beim dritten Mal. */
     if (!F.gesehen) {
@@ -94,27 +101,232 @@
       schirm.appendChild(wrap);
       app.appendChild(schirm);
 
-      /* Ein Regal, damit man sieht, wie es aussehen wird - die Faecher
-         sind absichtlich leer. */
-      ['Zuletzt hinzugefügt', 'Aus der Pause', 'Meine Liste'].forEach(function (titel) {
+      /* Leeres Regal - falls jemand den Katalog leerraeumt, soll der
+         Bildschirm trotzdem etwas Vernuenftiges zeigen. */
+      if (!F.KATALOG || !F.KATALOG.length || !F.anzahl()) {
+        ['Zuletzt hinzugefügt', 'Aus der Pause', 'Meine Liste'].forEach(function (titel) {
+          wrap.appendChild(UI.el('div.flix-reihe', null, [
+            UI.el('div.flix-reihe-titel', { text: titel }),
+            UI.el('div.flix-regal', null, [0, 1, 2, 3, 4, 5].map(function () {
+              return UI.el('div.flix-platz');
+            })),
+          ]));
+        });
+        wrap.appendChild(UI.el('div.notice', {
+          style: { marginTop: '18px' },
+          html: '<b>Noch keine Videos.</b><br>Das Regal steht — '
+            + 'eintragen lassen sie sich in <code>src/data/videos.js</code>.',
+        }));
+        return;
+      }
+
+      /* Der Titel oben im Kopf */
+      var top = F.topVideo();
+      if (top) wrap.appendChild(kopf(top));
+
+      /* Ein Regal je Reihe */
+      F.KATALOG.forEach(function (reihe) {
+        if (!reihe.videos || !reihe.videos.length) return;
         wrap.appendChild(UI.el('div.flix-reihe', null, [
-          UI.el('div.flix-reihe-titel', { text: titel }),
-          UI.el('div.flix-regal', null, [0, 1, 2, 3, 4, 5].map(function () {
-            return UI.el('div.flix-platz');
-          })),
+          UI.el('div.flix-reihe-titel', { text: reihe.titel }),
+          UI.el('div.flix-regal', null, reihe.videos.map(kachel)),
         ]));
       });
 
-      wrap.appendChild(UI.el('div.notice', {
-        style: { marginTop: '18px' },
-        html: '<b>Noch keine Videos.</b><br>Der Vorspann und das Regal stehen — '
-          + 'was hineinkommt und woher, machen wir als Nächstes.',
-      }));
+      if (SG.offline) {
+        wrap.appendChild(UI.el('div.notice.warn', {
+          style: { marginTop: '4px' },
+          html: '<b>Aus der Offline-Datei heraus läuft Gehstockflix nicht.</b><br>'
+            + 'Die Videos liegen bei YouTube: ohne Netz fehlen schon die '
+            + 'Vorschaubilder, und einbetten lässt YouTube sich von hier '
+            + 'grundsätzlich nicht. Über die Website klappt es — auf dem iPad, '
+            + 'wenn du sie auf den Home-Bildschirm legst.',
+        }));
+      }
+    }
+
+    /* ---------------------------------------------------------- Kopf */
+
+    /* Grosses Bild, Name, Beschreibung, zwei Knoepfe. Welches Video hier
+       steht, entscheidet F.topVideo() - ohne feste Vorgabe ist es bei
+       jedem Besuch ein anderes. */
+    function kopf(v) {
+      var bild = vorschau(v, true, 'flix-kopf-bild');
+      return UI.el('div.flix-kopf', null, [
+        bild,
+        UI.el('div.flix-kopf-schleier'),
+        UI.el('div.flix-kopf-text', null, [
+          UI.el('div.flix-kopf-marke', { text: 'TOP-TITEL' }),
+          UI.el('div.flix-kopf-titel', { text: v.titel }),
+          UI.el('div.flix-kopf-kanal', { text: v.kanal }),
+          UI.el('div.flix-kopf-d', { text: v.text }),
+          UI.el('div.flix-kopf-knoepfe', null, [
+            UI.el('button.btn.primary.flix-start', {
+              html: '<span class="ico">▶</span><span class="lbl">Abspielen</span>',
+              on: { click: function () { abspielen(v); } },
+            }),
+            UI.el('button.btn.sm.ghost', {
+              html: '<span class="ico">ⓘ</span><span class="lbl">Infos</span>',
+              on: { click: function () { infoKarte(v); } },
+            }),
+          ]),
+        ]),
+      ]);
+    }
+
+    /* ---------------------------------------------------------- Kacheln */
+
+    /* Die Kachel selbst oeffnet die Infokarte, der Knopf darauf spielt
+       sofort ab. Zwei Ziele auf einer Kachel gehen auf dem iPad nur,
+       wenn der Knopf gross genug ist - deshalb die 38 Pixel im CSS. */
+    function kachel(v) {
+      var play = UI.el('button.flix-kachel-play', {
+        html: '▶',
+        'aria-label': v.titel + ' abspielen',
+        on: {
+          click: function (e) {
+            e.stopPropagation();
+            abspielen(v);
+          },
+        },
+      });
+
+      return UI.el('button.flix-kachel', {
+        'aria-label': v.titel + ' — Infos',
+        on: { click: function () { infoKarte(v); } },
+      }, [
+        UI.el('div.flix-kachel-bild', null, [vorschau(v, false), play]),
+        UI.el('div.flix-kachel-titel', { text: v.titel }),
+        UI.el('div.flix-kachel-kanal', { text: v.kanal }),
+      ]);
+    }
+
+    /* Vorschaubild mit Rueckfallebene: maxresdefault fehlt bei aelteren
+       Videos, hqdefault gibt es immer. */
+    function vorschau(v, gross, cls) {
+      var img = UI.el('img' + (cls ? '.' + cls : ''), {
+        src: F.bild(v.id, gross),
+        alt: '',
+        /* Das grosse Bild steht sofort im Blick und wird gleich geholt;
+           die Kacheln im Regal erst, wenn jemand dorthin scrollt. */
+        loading: gross ? 'eager' : 'lazy',
+        decoding: 'async',
+      });
+      img.addEventListener('error', function () {
+        if (img.dataset.ersatz) return;      // nur einmal nachfassen
+        img.dataset.ersatz = '1';
+        img.src = F.ersatzBild(v.id);
+      });
+      return img;
+    }
+
+    /* ---------------------------------------------------------- Infokarte */
+
+    function infoKarte(v) {
+      SG.audio.play('select');
+      UI.modal({
+        title: v.titel,
+        body: UI.el('div.flix-info', null, [
+          vorschau(v, true, 'flix-info-bild'),
+          UI.el('div.flix-info-kanal', { text: v.kanal }),
+          UI.el('div.flix-info-d', { text: v.text }),
+        ]),
+        actions: [
+          { label: '▶ Abspielen', cls: 'primary', onClick: function () { abspielen(v); } },
+          { label: 'Schliessen' },
+        ],
+      });
+    }
+
+    /* ---------------------------------------------------------- Abspieler */
+
+    function abspielen(v) {
+      abspielerZu();
+      SG.audio.play('select');
+
+      /* Die Offline-Einzeldatei liegt unter file:// und hat damit keinen
+         Ursprung, den YouTube gelten laesst - eingebettet bliebe der
+         Abspieler einfach schwarz. Auf dem iPad ist das genau der Weg
+         ueber die Dateien-App. Statt eines schwarzen Kastens sagen wir
+         dann, woran es liegt, und bieten den Weg an, der funktioniert. */
+      var eingebettet = location.protocol !== 'file:';
+
+      /* referrerpolicy muss hier stehen: die Seite schickt sonst laut
+         netlify.toml gar keinen Referrer, und YouTube verweigert dann
+         die Einbettung ("Fehler 153"). "origin" ist das sparsamste,
+         das noch funktioniert - YouTube erfaehrt den Hostnamen, aber
+         nicht, auf welcher Unterseite jemand war. */
+      var buehne;
+      if (eingebettet) {
+        var rahmen = UI.el('iframe.flix-rahmen', {
+          src: F.einbetten(v.id),
+          title: v.titel,
+          allow: 'autoplay; encrypted-media; picture-in-picture; fullscreen',
+          referrerpolicy: 'origin',
+        });
+        rahmen.allowFullscreen = true;
+        buehne = rahmen;
+      } else {
+        buehne = ausweich(v);
+      }
+
+      spieler = UI.el('div.flix-spieler', null, [
+        UI.el('div.flix-spieler-kopf', null, [
+          UI.el('button.btn.sm.ghost', {
+            html: '‹ Zurück',
+            on: { click: abspielerZu },
+          }),
+          UI.el('div.flix-spieler-titel', { text: v.titel }),
+          UI.el('div.spacer'),
+          UI.el('a.flix-extern', {
+            href: F.beiYoutube(v.id),
+            target: '_blank',
+            rel: 'noopener noreferrer',
+            text: 'YouTube ↗',
+          }),
+        ]),
+        UI.el('div.flix-buehne', null, [buehne]),
+      ]);
+
+      document.body.appendChild(spieler);
+      document.addEventListener('keydown', aufTaste);
+    }
+
+    /* Ohne Einbettung: erklaeren und einmal gross auf YouTube zeigen. */
+    function ausweich(v) {
+      return UI.el('div.flix-ausweich', null, [
+        UI.el('div.flix-ausweich-titel', { text: 'Hier läuft das Video nicht' }),
+        UI.el('div.flix-ausweich-d', {
+          text: 'Das Hideout läuft gerade aus der Offline-Datei. YouTube lässt '
+            + 'sich von dort nicht einbetten. Über die Website klappt es — auch '
+            + 'auf dem iPad, wenn du sie dort auf den Home-Bildschirm legst.',
+        }),
+        UI.el('a.btn.primary.flix-ausweich-knopf', {
+          href: F.beiYoutube(v.id),
+          target: '_blank',
+          rel: 'noopener noreferrer',
+          text: 'Bei YouTube ansehen ↗',
+        }),
+      ]);
+    }
+
+    /* Der Rahmen wird entfernt, nicht versteckt - sonst laeuft der Ton
+       hinter dem geschlossenen Abspieler weiter. */
+    function abspielerZu() {
+      if (!spieler) return;
+      document.removeEventListener('keydown', aufTaste);
+      UI.remove(spieler);
+      spieler = null;
+    }
+
+    function aufTaste(e) {
+      if (e.key === 'Escape') abspielerZu();
     }
 
     return {
       destroy: function () {
         lebt = false;
+        abspielerZu();
         if (vorspann && vorspann.destroy) vorspann.destroy();
       },
     };
