@@ -26,3 +26,6 @@ export * from './data/cards.js';
 export * from './data/konter.js';
 export * from './bot/profil.js';
 export * from './bot/bot.js';
+/* Nur fuer das Messwerkzeug. Der Client importiert nichts davon; was
+   ungenutzt bleibt, wirft der Bundler beim Bauen weg. */
+export * from './turnier.js';

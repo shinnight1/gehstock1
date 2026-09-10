@@ -215,6 +215,10 @@ arena/
     ip.mjs     Zeigt die LAN-Adressen für den iPad-Test.
     icons.mjs  Erzeugt die App-Icons. Schreibt PNG von Hand, damit
                das Projekt kein Bildwerkzeug braucht.
+    turnier.ts Misst die Balance: Bot gegen Bot, Siegquote je Karte.
+    bilder-wandeln.mjs
+               Rechnet die Vorlagen aus bildquellen/ in auslieferbare
+               WebP-Dateien um, im Browser mangels Bildwerkzeug.
 ```
 
 Warum die Simulation streng getrennt liegt, steht in
@@ -300,10 +304,10 @@ Konter-Matrix und die Zugprüfung des Servers.
   Zurück-Knopf, kein Zugriff auf `document.body` der Elternseite
 
 **Was fehlt**
-- Feldsprites: `render/einheit.ts` zeichnet noch Kapselformen, die
-  Bildvorlagen dafür stehen in `feld-sprites.md`. Sobald PNGs unter
-  `public/assets/units/<id>.png` liegen, nimmt der Renderer sie von
-  selbst.
+- Kein Tutorial: das Spiel erklärt seine Regeln nirgends.
+- Kein Rematch im selben Raum — nach jeder Online-Partie muss ein
+  neuer Code her.
+- Der Client ist kaum getestet: 40 Quelldateien, 3 Testdateien.
 
 ## Leistung: gemessen, nicht geraten
 
@@ -325,14 +329,55 @@ andere. Fällt der Schnitt dort drei Sekunden unter 50 FPS, senkt
 `debug/leistung.ts` die Auflösung automatisch um eine Stufe; in der
 Debug-Anzeige sinkt dann der Wert bei `dichte`.
 
-## Balancing: offener Punkt
+## Balancing: gemessen
 
-Die Konter greifen einzeln, jeder ist als Test abgesichert. Ganze Decks
-gegeneinander lassen sich dagegen noch nicht sinnvoll beurteilen: der
-Testbot spielt stur die erste bezahlbare Karte an eine feste Stelle und
-reagiert auf nichts. Damit gewinnt zuverlässig, wer die billigeren
-Karten hat — das misst die Dummheit des Testbots, nicht die Stärke der
-Decks. Echte Deck-Balance wird erst nach Meilenstein 8 messbar.
+Bis Meilenstein 10 war die Balance eine Vermutung. Die einzelnen
+Konter sind je durch einen Test abgesichert, aber ob ein ganzes Deck
+gegen ein anderes fair steht, wusste niemand.
+
+```bash
+npm run turnier                       # Siegquote je Karte, 400 Partien
+npm run turnier -- karten 2000        # genauer
+npm run turnier -- karten 2000 300    # mit schwachem Bot
+npm run turnier -- duell guenstig teuer
+npm run turnier -- alle               # jedes benannte Deck gegen jedes
+npm run turnier -- spiegel            # bevorzugt das Spiel eine Seite?
+```
+
+Gespielt wird Bot gegen Bot, beide mit demselben Profil — sonst misst
+der Vergleich den Spieler und nicht die Karten. Eine volle Partie
+braucht ohne Zeichnen rund 20 ms, zweitausend also gut vierzig
+Sekunden.
+
+**Zu jeder Quote gehört ihr Vertrauensband.** Ohne das verleitet die
+Zahl zum Fehlschluss: 54 Prozent aus hundert Partien sind kein
+Ungleichgewicht, sondern Rauschen. Das Werkzeug schreibt deshalb hinter
+jede Zeile, ob der Abstand zu fünfzig überhaupt etwas bedeutet.
+
+### Zwei Verzerrungen, die herausgerechnet sind
+
+**Die Seite.** Spieler 0 greift von unten an, Spieler 1 von oben.
+**Die Zugreihenfolge.** Handelt Bot 0 vor Bot 1, darf Bot 1 auf dessen
+Zug bereits antworten.
+
+Beides hebt sich auf, weil jedes Deck die Hälfte seiner Partien auf
+jeder Seite spielt — und zwar mit demselben Startwert, sodass exakt
+dasselbe Match einmal aus jeder Sitzordnung gerechnet wird. Der
+Spiegelmodus prüft mit unabhängigen Startwerten nach, ob das Spiel
+selbst eine Seite bevorzugt. Tut es nicht: alle vier Beispieldecks
+liegen zwischen 49 und 52 Prozent.
+
+### Was die Zahlen nicht sagen
+
+Der Bot ist kein Mensch. Er hält kein Elixir für den nächsten Zyklus
+zurück, baut keinen Doppelpush auf und blufft nicht. Ein Deck, das auf
+solche Züge ausgelegt ist, sieht schlechter aus, als es ist.
+
+Die Gegenprobe dafür ist der Trophäenwert: verschiebt sich die
+Rangfolge zwischen einem schwachen und einem starken Bot, misst man den
+Bot. Bleibt sie stehen, sind es die Karten. Über 1200 Partien je Stufe
+bleiben die Ausreißer an beiden Enden stabil — nur Hammergarde (43 →
+48) und Krypta (54 → 50) hängen sichtbar an der Botstärke.
 
 ### Wie die Optik gebaut ist
 
