@@ -73,6 +73,15 @@ export interface TurnierOptionen {
    */
   trophaeen?: number;
   /**
+   * Botstaerke fuer Deck B, falls sie sich unterscheiden soll.
+   *
+   * Fuer den Deckvergleich muessen beide gleich sein - sonst misst
+   * man den Bot. Genau umgekehrt ist es, wenn man wissen will, wie
+   * viel eine Stufe ueberhaupt ausmacht: dann laesst man dasselbe
+   * Deck von zwei verschieden starken Bots spielen.
+   */
+  trophaeenB?: number;
+  /**
    * Hin- und Rueckrunde mit demselben Startwert spielen.
    *
    * Voreingestellt an, und das ist der bessere Weg: dasselbe Match
@@ -98,7 +107,7 @@ export interface TurnierOptionen {
  */
 export function partie(
   deck0: readonly string[], deck1: readonly string[],
-  seed: number, profil: BotProfil,
+  seed: number, profil0: BotProfil, profil1: BotProfil = profil0,
 ): PartieErgebnis {
   const aufbau: MatchAufbau = {
     seed,
@@ -106,8 +115,8 @@ export function partie(
     einheitlicheLevel: true,
   };
   const s = matchAnlegen(aufbau);
-  const bot0 = botAnlegen(0, profil);
-  const bot1 = botAnlegen(1, profil);
+  const bot0 = botAnlegen(0, profil0);
+  const bot1 = botAnlegen(1, profil1);
 
   while (!s.ausgang && s.tick < MAX_TICKS) {
     botTick(s, bot0);
@@ -148,7 +157,8 @@ export function duell(
   deckA: readonly string[], deckB: readonly string[], o: TurnierOptionen = {},
 ): DuellErgebnis {
   const partien = Math.max(2, (o.partien ?? 200) & ~1);
-  const profil = botProfil(o.trophaeen ?? 2000);
+  const profilA = botProfil(o.trophaeen ?? 2000);
+  const profilB = botProfil(o.trophaeenB ?? o.trophaeen ?? 2000);
   const basis = o.seed ?? 1;
   const paarweise = o.paarweise !== false;
 
@@ -165,7 +175,9 @@ export function duell(
       aLinks ? deckA : deckB,
       aLinks ? deckB : deckA,
       basis * 7919 + (paarweise ? i >> 1 : i),
-      profil,
+      // Das Profil wandert mit dem Deck auf die andere Seite.
+      aLinks ? profilA : profilB,
+      aLinks ? profilB : profilA,
     );
 
     const aTuerme = aLinks ? e.tuerme[0] : e.tuerme[1];
@@ -242,6 +254,7 @@ export function kartenWertung(
   const groesse = o.deckGroesse ?? DECK.groesse;
   const profil = botProfil(o.trophaeen ?? 2000);
   const wuerfel: RngState = rngAusSeed(o.seed ?? 1);
+
 
   const gespielt = new Map<string, number>();
   const gewonnen = new Map<string, number>();

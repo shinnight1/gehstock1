@@ -375,9 +375,49 @@ solche Züge ausgelegt ist, sieht schlechter aus, als es ist.
 
 Die Gegenprobe dafür ist der Trophäenwert: verschiebt sich die
 Rangfolge zwischen einem schwachen und einem starken Bot, misst man den
-Bot. Bleibt sie stehen, sind es die Karten. Über 1200 Partien je Stufe
-bleiben die Ausreißer an beiden Enden stabil — nur Hammergarde (43 →
-48) und Krypta (54 → 50) hängen sichtbar an der Botstärke.
+Bot. Bleibt sie stehen, sind es die Karten.
+
+### Drei Dinge, die die erste Messung ergeben hat
+
+**Werte bewegen sich in Stufen, nicht stufenlos.** Ein Seitenturm macht
+90 Schaden je Schuss. Eine Ratte mit 110 wie mit 80 HP überlebt auf
+Stufe 3 den ersten Schuss und lebt damit doppelt so lange — gemessen
+sind beide Werte praktisch gleich stark, erst unter 78,6 kippt es.
+Ebenso bei den Speerwerferinnen: 100 Schaden gegen 200 HP heißt zwei
+Schuss, 95 hieße drei. Balancieren heißt hier, die Schwelle zu finden,
+nicht Prozente zu drehen.
+
+**Kartenlevel verschieben diese Schwellen.** Dieselbe Ratte hat auf
+Stufe 5 wieder 94 HP und überlebt den Turmschuss erneut. Eine Stufe ist
+also kein gleichmäßiges Plus, sondern kann eine Karte qualitativ
+ändern. Gemessen wird auf Stufe 3; für Stufe 5 gilt das Ergebnis nicht
+unbesehen.
+
+**Die Werte sind gekoppelt.** Als die Rattenschar schwächer wurde,
+stieg die Quote der Speerwerferinnen von 60 auf 62, ohne dass sich an
+ihnen etwas geändert hätte. Man kann Karten nicht einzeln festnageln —
+nach jeder Änderung muss neu gemessen werden.
+
+### Stand nach der ersten Runde
+
+Drei Werte geändert, jeder mit der Messung begründet und im Katalog
+kommentiert: Speerwerferinnen von 3 auf 4 Elixir und Reichweite 5000 →
+4200, Rattenschar 110 → 72 HP.
+
+| | vorher | nachher |
+| --- | --- | --- |
+| stärkste Karte | Speerwerferinnen 63,3 % | Hundemeute 56,3 % |
+| schwächste Karte | Frostschleier 43,1 % | Frostschleier 41,8 % |
+| Spanne | 20,2 Punkte | 14,5 Punkte |
+
+Der einzelne Ausreißer ist weg; oben steht jetzt ein Feld um 55 statt
+einer Karte bei 63. Die **mittlere** Abweichung hat sich dagegen kaum
+bewegt (3,5 → 3,3 Punkte) — die Spreizung ist enger, aber nicht eng.
+
+Offen und bewusst nicht angefasst: **Frostschleier** bei 42 Prozent.
+Ein reiner Verlangsamungszauber ist das, was ein Bot am schlechtesten
+spielt — hier traue ich der Zahl am wenigsten und würde erst nach
+echten Partien drehen.
 
 ### Wie die Optik gebaut ist
 

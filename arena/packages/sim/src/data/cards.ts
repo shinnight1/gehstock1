@@ -111,7 +111,31 @@ export const KARTEN: readonly Karte[] = [
   /* ----------------------------- Schwaerme --------------------------- */
   karte({
     id: 'rattenschar', name: 'Rattenschar', seltenheit: 'gewoehnlich', elixir: 2,
-    hp: 110, dmg: 45, angriffsTakt: sekunden(0.7), tempo: 130,
+    /* Sechs Koerper fuer zwei Elixir waren mit 59 Prozent Siegquote
+       der zweithoechste Wert im Spiel.
+
+       Am Schaden zu drehen brachte messbar nichts: 45 auf 38 verschob
+       die Quote um weniger als das Rauschen. Der Wert der Karte liegt
+       nicht darin, was sie austeilt, sondern darin, dass sechs Ziele
+       auf dem Feld stehen und einzeln erschlagen werden muessen.
+
+       Die Zaehigkeit ist der Hebel - aber nicht stufenlos. Ein
+       Seitenturm macht 90 Schaden je Schuss. Mit 110 wie mit 80 HP
+       ueberlebt eine Ratte auf Stufe 3 den ersten Schuss (80 mal 1,145
+       sind 91,6) und lebt damit doppelt so lange unter Turmfeuer;
+       gemessen sind beide Werte deshalb praktisch gleich stark. Erst
+       unterhalb von 78,6 kippt es.
+
+       Deshalb 72: auf Stufe 3 sind das 82,4, also ein Schuss, mit
+       genug Abstand zur Kante. Das trifft auch, was auf der Karte
+       steht - einzeln nichts wert.
+
+       Nebenbefund, der fuer alle Karten gilt: Kartenlevel verschieben
+       solche Schwellen. Auf Stufe 5 hat dieselbe Ratte 94,4 und
+       ueberlebt den Schuss wieder. Eine Stufe ist hier also kein
+       gleichmaessiges Plus, sondern kann eine Karte qualitativ
+       aendern. */
+    hp: 72, dmg: 45, angriffsTakt: sekunden(0.7), tempo: 130,
     reichweite: 650, zieltAuf: 'boden', anzahl: 6, radius: 260,
     deployZeit: sekunden(0.8),
     text: 'Sechs Stück, schnell und billig. Einzeln nichts wert.',
@@ -127,8 +151,30 @@ export const KARTEN: readonly Karte[] = [
   }),
   karte({
     id: 'speerwerferinnen', name: 'Speerwerferinnen', seltenheit: 'gewoehnlich',
-    elixir: 3, hp: 210, dmg: 100, angriffsTakt: sekunden(1), tempo: 80,
-    reichweite: 5000, zieltAuf: 'beides', anzahl: 3, radius: 300,
+    /* Die staerkste Karte im Spiel, mit Abstand: 62 Prozent
+       Siegquote ueber zweitausend Partien, stabil bei schwachem wie
+       starkem Bot. Drei Koerper, die auf Entfernung Boden und Luft
+       treffen - fuer drei Elixir war das die Antwort auf alles.
+
+       Durchgemessen wurden vier Hebel:
+
+         Schaden senken   Geht nicht. 100 gegen 200 HP heisst zwei
+                          Schuss, 95 hiesse drei - genau daran haengt,
+                          ob sie Sturmfalken herunterholen, und das
+                          sollen sie laut Konter-Matrix.
+         Reichweite       Bringt fast nichts: 5000 auf 3200 senkt die
+                          Quote nur von 62 auf 60.
+         Ein Koerper weg  Wirkt (52,5), aendert aber, was die Karte ist.
+         Ein Elixir mehr  Wirkt genauso (52,5) und laesst sie voellig
+                          unveraendert spielen.
+
+       Also der Preis. Die HP gehen zusaetzlich auf ihren Wert vor der
+       damaligen Erhoehung zurueck; sie waren nachweislich folgenlos
+       fuer das Duell, das die Erhoehung begruendet hatte. Die
+       Reichweite bleibt bei 4200 - auf Hoehe des Flammenspeiers und
+       damit eine Fernwaffe, die man stellen muss. */
+    elixir: 4, hp: 190, dmg: 100, angriffsTakt: sekunden(1), tempo: 80,
+    reichweite: 4200, zieltAuf: 'beides', anzahl: 3, radius: 300,
     text: 'Drei Werferinnen, treffen auch Fliegendes.',
     farbe: '#b8935e',
   }),

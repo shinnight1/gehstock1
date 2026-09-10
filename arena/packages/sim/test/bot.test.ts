@@ -12,55 +12,19 @@ import { botAnlegen, botTick, botDeck } from '../src/bot/bot.js';
 import { botProfil } from '../src/bot/profil.js';
 import { KARTEN_IDS } from '../src/data/cards.js';
 import { DECK } from '../src/data/balance.js';
+import { duell } from '../src/turnier.js';
 import type { MatchState } from '../src/state.js';
 
-/** Ein volles Match zwischen zwei Bots. Gibt den Ausgang zurueck. */
-function botDuell(
-  trophaeenA: number, trophaeenB: number, seed: number,
-): 'sieg0' | 'sieg1' | 'unentschieden' {
-  const profilA = botProfil(trophaeenA);
-  const profilB = botProfil(trophaeenB);
+/** Ein festes Deck fuer die Stufenmessung - beide Seiten spielen es. */
+const DECK_TEST = [
+  'rattenschar', 'hundemeute', 'bogenschuetzin', 'steinwaechter',
+  'funkenregen', 'speerwerferinnen', 'hammergarde', 'bollwerk',
+];
 
-  // Decks aus einem Vorlauf-Zustand, damit beide aus demselben RNG kommen.
-  const vorlauf = matchAnlegen({ seed, decks: [[], []] });
-  const deckA = botDeck(vorlauf, KARTEN_IDS, profilA.deckQualitaet, DECK.groesse);
-  const deckB = botDeck(vorlauf, KARTEN_IDS, profilB.deckQualitaet, DECK.groesse);
-
-  const s: MatchState = matchAnlegen({
-    seed, decks: [deckA, deckB], einheitlicheLevel: true,
-  });
-  const a = botAnlegen(0, profilA);
-  const b = botAnlegen(1, profilB);
-
-  while (s.phase !== 'ende' && s.tick < 8000) {
-    botTick(s, a);
-    botTick(s, b);
-    tick(s);
-  }
-  return s.ausgang ?? 'unentschieden';
-}
-
-function serie(
-  trophaeenA: number, trophaeenB: number, partien: number,
-): { siegeA: number; siegeB: number; remis: number } {
-  let siegeA = 0;
-  let siegeB = 0;
-  let remis = 0;
-  for (let i = 0; i < partien; i++) {
-    /* Jede Paarung zweimal, mit getauschten Seiten. So kann ein
-       Seitenvorteil das Ergebnis nicht faelschen. */
-    const hin = botDuell(trophaeenA, trophaeenB, 1000 + i);
-    if (hin === 'sieg0') siegeA++;
-    else if (hin === 'sieg1') siegeB++;
-    else remis++;
-
-    const rueck = botDuell(trophaeenB, trophaeenA, 1000 + i);
-    if (rueck === 'sieg1') siegeA++;
-    else if (rueck === 'sieg0') siegeB++;
-    else remis++;
-  }
-  return { siegeA, siegeB, remis };
-}
+/* Die frueheren Helfer botDuell und serie sind entfallen: dieselbe
+   Aufgabe erledigt jetzt duell() aus turnier.ts, und zwar mit
+   ausgewiesenem Vertrauensband statt mit dreissig Partien und
+   Daumenwerten. */
 
 describe('Botprofil', () => {
   it('waechst in allen Werten mit den Trophaeen', () => {
@@ -125,24 +89,32 @@ describe('Botdeck', () => {
 
 describe('Schwierigkeitsskalierung', () => {
   it('laesst Stufe 2500 gegen Stufe 300 deutlich haeufiger gewinnen', () => {
-    const { siegeA, siegeB, remis } = serie(2500, 300, 15);
-    const entschieden = siegeA + siegeB;
-    expect(entschieden).toBeGreaterThan(15);
-    // Deutlich heisst hier: mindestens zwei von drei entschiedenen Partien.
-    expect(siegeA / entschieden).toBeGreaterThan(0.66);
-    expect(siegeA).toBeGreaterThan(siegeB);
-    expect(remis).toBeLessThan(siegeA);
-  });
+    /* Gemessen mit dem Turnierwerkzeug, damit die Stichprobe reicht.
+       Die frueherer Fassung urteilte aus dreissig Partien - bei einem
+       Vertrauensband von siebzehn Prozentpunkten war das Glueckssache,
+       und sie fiel prompt um, als sich Kartenwerte aenderten, die mit
+       der Botstaerke nichts zu tun haben.
 
-  it('endet zwischen gleich starken Bots ungefaehr ausgeglichen', () => {
-    const { siegeA, siegeB } = serie(1200, 1200, 12);
-    const entschieden = siegeA + siegeB;
-    if (entschieden === 0) return;
-    const anteil = siegeA / entschieden;
-    // Grosszuegig: es geht nur darum, dass kein systematischer Vorteil bleibt.
-    expect(anteil).toBeGreaterThan(0.25);
-    expect(anteil).toBeLessThan(0.75);
-  });
+       Beide Seiten spielen dasselbe Deck: gemessen werden soll die
+       Stufe, nicht die Karten. */
+    const e = duell(DECK_TEST, DECK_TEST, {
+      partien: 200, seed: 17, trophaeen: 2500, trophaeenB: 300,
+    });
+    // Deutlich heisst: der Abstand ist ein Vielfaches des Rauschens.
+    expect(e.quote - 0.5).toBeGreaterThan(e.unsicherheit / 100 * 3);
+    expect(e.quote).toBeGreaterThan(0.62);
+  }, 120_000);
+
+  it('endet zwischen gleich starken Bots ausgeglichen', () => {
+    /* Die Gegenprobe zur Zeile darueber: ohne Stufenunterschied darf
+       kein Unterschied uebrigbleiben. Ginge das hier schief, laege der
+       Vorteil oben nicht an der Stufe, sondern am Aufbau. */
+    const e = duell(DECK_TEST, DECK_TEST, {
+      partien: 200, seed: 21, trophaeen: 1200, paarweise: false,
+    });
+    expect(e.quote).toBeGreaterThan(0.4);
+    expect(e.quote).toBeLessThan(0.6);
+  }, 120_000);
 
   it('spielt ueberhaupt Karten', () => {
     const profil = botProfil(1500);
