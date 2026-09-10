@@ -28,21 +28,54 @@
 
   var SCHLUESSEL = 'wplace:vorrat';
 
-  function heute() {
-    var d = new Date();
-    return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+  /* Aus der verstrichenen Zeit so viele Pixel machen, wie in den Eimer
+     passen. Gerechnet wird erst beim Nachsehen, nicht in einer Schleife -
+     ein Vorrat, der nur beim Hinschauen stimmen muss, braucht keine Uhr,
+     die im Hintergrund laeuft.
+
+     'stand' ist der Zeitpunkt, ab dem die naechsten dreissig Sekunden
+     laufen. Verbraucht wird nur die Zeit, die wirklich zu Pixeln
+     geworden ist - der angefangene Rest bleibt stehen und verfaellt
+     nicht. */
+  function nachfuellen(v) {
+    var jetzt = Date.now();
+    if (!v.stand || v.stand > jetzt) v.stand = jetzt;   // Uhr zurueckgestellt
+    if ((v.rest || 0) >= D.MAX_PIXEL) { v.stand = jetzt; return v; }
+
+    var dazu = Math.floor((jetzt - v.stand) / D.NACHSCHUB_MS);
+    if (dazu <= 0) return v;
+    var vorher = v.rest || 0;
+    v.rest = Math.min(D.MAX_PIXEL, vorher + dazu);
+    v.stand += (v.rest - vorher) * D.NACHSCHUB_MS;
+    if (v.rest >= D.MAX_PIXEL) v.stand = jetzt;
+    SG.storage.set(SCHLUESSEL, v);
+    return v;
   }
 
   P.vorrat = function () {
     var v = SG.storage.get(SCHLUESSEL, null);
-    if (!v || typeof v !== 'object') v = { tag: '', rest: 0, gekauft: 0, gemalt: 0 };
-    if (v.tag !== heute()) {
-      /* Neuer Tag: die Tagesration von 200 Pixeln wird aufgefrischt */
-      v.tag = heute();
-      v.rest = D.TAGESPIXEL;
+    if (!v || typeof v !== 'object') {
+      v = { rest: D.MAX_PIXEL, stand: Date.now(), gekauft: 0, gemalt: 0 };
       SG.storage.set(SCHLUESSEL, v);
     }
-    return v;
+    if (v.tag !== undefined) {
+      /* Stand aus der Zeit der Tagesration - einmal umstellen. Wer
+         gestern 200 uebrig hatte, faengt heute mit einem vollen Eimer
+         an, nicht mit einem uebervollen. */
+      delete v.tag;
+      v.rest = Math.min(v.rest || 0, D.MAX_PIXEL);
+      v.stand = Date.now();
+      SG.storage.set(SCHLUESSEL, v);
+    }
+    return nachfuellen(v);
+  };
+
+  /* Millisekunden bis zum naechsten Pixel. Null heisst: der Eimer ist
+     voll, es laeuft nichts mehr nach. */
+  P.bisNaechstem = function () {
+    var v = P.vorrat();
+    if ((v.rest || 0) >= D.MAX_PIXEL) return 0;
+    return Math.max(0, D.NACHSCHUB_MS - (Date.now() - v.stand));
   };
 
   P.uebrig = function () {
@@ -126,7 +159,7 @@
     }
 
     var rVorrat = resItem('money', '🎨', 'Pixel übrig');
-    var rHeute = resItem('', '📅', 'Heute noch');
+    var rHeute = resItem('', '⏳', 'Nachschub');
     var rXP = resItem('', '⭐', 'XP-Guthaben');
     var rGesamt = resItem('', '🖌', 'Bemalt');
     var rLeute = resItem('', '🛰', 'Verbindung');
@@ -246,8 +279,8 @@
 
       if (!P.abziehen(1)) {
         host.sfx('error');
-        hinweis('Keine Pixel mehr übrig. Morgen gibt es wieder ' + D.TAGESPIXEL
-          + ' gratis — oder du tauschst XP ein.');
+        hinweis('Keine Pixel mehr übrig. Alle ' + (D.NACHSCHUB_MS / 1000)
+          + ' Sekunden kommt einer nach — oder du tauschst XP ein.');
         return;
       }
 
@@ -440,8 +473,10 @@
           + 'was du malst, sehen alle im Hideout in Echtzeit.'],
         ['✏', 'Malen', 'Aktiviere den Schalter „Malen", um Pixel zu setzen. '
           + 'Ohne Malmodus verschiebt ein Wisch nur die Ansicht.'],
-        ['🎨', 'Zweihundert Pixel am Tag', 'Jeden Tag stehen dir ' + D.TAGESPIXEL + ' Pixel '
-          + 'gratis zur Verfügung.'],
+        ['🎨', 'Fünfzig Pixel im Vorrat', 'Mehr als ' + D.MAX_PIXEL + ' passen nicht hinein. '
+          + 'Alle ' + (D.NACHSCHUB_MS / 1000) + ' Sekunden kommt einer nach — ein leerer '
+          + 'Vorrat ist nach ' + Math.round(D.MAX_PIXEL * D.NACHSCHUB_MS / 60000)
+          + ' Minuten wieder voll.'],
         ['⭐', 'Mehr Pixel mit XP', 'Tausche Erfahrung aus beliebigen Spielen gegen Pixel ein. '
           + 'Deine Stufe und dein Rang bleiben dabei erhalten.'],
         ['🧽', 'Radieren', 'Die erste Farbe in der Palette radiert das Pixel wieder auf Weiß zurück.'],
@@ -491,7 +526,10 @@
       var v = P.vorrat();
       rVorrat.set(U.num(P.uebrig()));
       rVorrat.tint(P.uebrig() === 0 ? 'var(--red)' : '');
-      rHeute.set(U.num(v.rest || 0) + ' / ' + D.TAGESPIXEL);
+      var bis = P.bisNaechstem();
+      rHeute.set(bis
+        ? (v.rest || 0) + ' / ' + D.MAX_PIXEL + ' · in ' + Math.ceil(bis / 1000) + ' s'
+        : 'voll · ' + D.MAX_PIXEL + ' / ' + D.MAX_PIXEL);
       rXP.set(U.num(F.guthaben()));
       rGesamt.set(U.short(Object.keys(st.pixel).length));
       if (!SG.relais.verfuegbar()) {
@@ -620,6 +658,12 @@
     st.zoom = 1.1;
     begrenzen();
     syncBar();
+
+    /* Der Vorrat rechnet sich beim Nachsehen aus, aber die Zahl soll
+       auch von selbst weiterlaufen, waehrend jemand zuschaut. Einmal
+       je Sekunde genuegt dafuer. */
+    var uhr = setInterval(syncBar, 1000);
+    host.onDestroy(function () { clearInterval(uhr); });
     fussSetzen('Ziehen verschiebt · zwei Finger oder Mausrad zoomen · „Malen" setzt Pixel');
     draw();
 

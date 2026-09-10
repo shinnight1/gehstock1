@@ -286,7 +286,8 @@ export function extraTests(SG, U, test) {
   test('W-Places: 2000x2000 Fläche, Raster und Palette', () => {
     const D = SG.welt.daten;
     if (D.BREITE !== 2000 || D.HOEHE !== 2000) throw new Error('Maße nicht 2000x2000');
-    if (D.TAGESPIXEL !== 200) throw new Error('Tagespixel nicht 200');
+    if (D.MAX_PIXEL !== 50) throw new Error('Vorrat nicht 50');
+    if (D.NACHSCHUB_MS !== 30000) throw new Error('Nachschub nicht alle 30 s');
     const n = D.nummer(1234, 567);
     if (n !== 567 * 2000 + 1234) throw new Error('Feldnummer falsch');
     if (D.zuX(n) !== 1234 || D.zuY(n) !== 567) throw new Error('Rückrechnung falsch');
@@ -308,7 +309,7 @@ export function extraTests(SG, U, test) {
     if (F.stufe() !== stufeNachXp) throw new Error('Stufe ist gesunken!');
   });
 
-  test('W-Places: Pixelvorrat und Tageskontingent', () => {
+  test('W-Places: Pixelvorrat und Nachkauf', () => {
     const P = SG.welt.ui;
     P.gutschreiben(100);
     const vor = P.uebrig();
@@ -316,6 +317,45 @@ export function extraTests(SG, U, test) {
     const ok = P.abziehen(5);
     if (!ok) throw new Error('Abzug fehlgeschlagen');
     if (P.uebrig() !== vor - 5) throw new Error('Restvorrat stimmt nicht: ' + P.uebrig());
+  });
+
+  test('W-Places: der Eimer laeuft nach und nicht ueber', () => {
+    const D = SG.welt.daten;
+    const P = SG.welt.ui;
+
+    /* Leer anfangen und die Uhr genau zwoelf Nachschuebe zurueckdrehen */
+    SG.storage.set('wplace:vorrat', {
+      rest: 0, gekauft: 0, gemalt: 0,
+      stand: Date.now() - 12 * D.NACHSCHUB_MS,
+    });
+    if (P.vorrat().rest !== 12) throw new Error('nachgelaufen: ' + P.vorrat().rest);
+
+    /* Weit mehr Zeit als Platz: es bleibt beim Deckel */
+    SG.storage.set('wplace:vorrat', {
+      rest: 0, gekauft: 0, gemalt: 0,
+      stand: Date.now() - 500 * D.NACHSCHUB_MS,
+    });
+    if (P.vorrat().rest !== D.MAX_PIXEL) throw new Error('Deckel: ' + P.vorrat().rest);
+    if (P.bisNaechstem() !== 0) throw new Error('voller Eimer laeuft weiter nach');
+
+    /* Angefangene Zeit darf nicht verfallen: 90 Sekunden sind drei
+       Pixel und keine halbe Wartezeit obendrauf. */
+    SG.storage.set('wplace:vorrat', {
+      rest: 0, gekauft: 0, gemalt: 0,
+      stand: Date.now() - 3.5 * D.NACHSCHUB_MS,
+    });
+    const v = P.vorrat();
+    if (v.rest !== 3) throw new Error('Reststueck falsch: ' + v.rest);
+    const bis = P.bisNaechstem();
+    if (bis > D.NACHSCHUB_MS / 2 + 500 || bis < D.NACHSCHUB_MS / 2 - 500) {
+      throw new Error('angefangene Zeit verfallen: ' + bis);
+    }
+
+    /* Alte Staende aus der Tagesration werden gedeckelt */
+    SG.storage.set('wplace:vorrat', { tag: '2024-1-1', rest: 200, gekauft: 0, gemalt: 0 });
+    const alt = P.vorrat();
+    if (alt.rest !== D.MAX_PIXEL) throw new Error('Altstand nicht gedeckelt: ' + alt.rest);
+    if (alt.tag !== undefined) throw new Error('Tagesfeld blieb stehen');
   });
 
   /* --- GehstockMon ---

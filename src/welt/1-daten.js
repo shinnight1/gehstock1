@@ -2,8 +2,9 @@
    W-Places - 2000 x 2000 Pixel-Fläche und Farben
 
    Eine riesige, weiße 2000x2000 Pixel-Leinwand, auf der alle gemeinsam
-   zeichnen können (à la r/place). Zweihundert Pixel gibt es jeden Tag
-   geschenkt; wer mehr möchte, tauscht seine Website-XP ein.
+   zeichnen können (à la r/place). Der Vorrat fasst fünfzig Pixel und
+   füllt sich von selbst wieder auf - einer alle dreißig Sekunden. Wer
+   nicht warten will, tauscht seine Website-XP ein.
    ------------------------------------------------------------------ */
 
 (function (SG) {
@@ -13,7 +14,11 @@
   D.BREITE = 2000;
   D.HOEHE = 2000;
 
-  D.TAGESPIXEL = 200;          // 200 Gratis-Pixel pro Tag
+  /* Der Vorrat ist ein Eimer, der von selbst volläuft: mehr als
+     MAX_PIXEL passen nie hinein, und alle NACHSCHUB_MS kommt einer
+     dazu. Voll ist er nach fünfundzwanzig Minuten. */
+  D.MAX_PIXEL = 50;            // so viele passen in den Vorrat
+  D.NACHSCHUB_MS = 30000;      // alle 30 Sekunden kommt einer nach
   D.SPEICHER_DECKEL = 60000;   // so viele bemalte Felder hält das Relais im Cache
 
   /* Was ein Nachkauf kostet. Stufe/Rang sinken beim Kauf nicht! */
