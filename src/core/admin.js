@@ -85,11 +85,12 @@
         ziel.appendChild(UI.el('div.item.tap', {
           on: { click: function () { profil(e); } },
         }, [
-          UI.el('div.thumb', { text: A.rolleIcon(e.rolle) }),
+          UI.el('div.thumb', { text: A.istOwner(e.code) ? '👑' : A.rolleIcon(e.rolle) }),
           UI.el('div.main', null, [
             UI.el('div.t', { text: e.name || 'ohne Namen' }),
             UI.el('div.d', {
-              text: A.schoen(e.code) + ' · ' + A.rolleName(e.rolle)
+              text: A.schoen(e.code) + ' · '
+                + (A.istOwner(e.code) ? 'Owner' : A.rolleName(e.rolle))
                 + (gesperrt.length ? ' · ' + gesperrt.length + ' gesperrt' : ''),
             }),
           ]),
@@ -208,11 +209,37 @@
     function profil(e) {
       var body2 = UI.el('div');
       var bann = A.gebannt(e.code);
+      var darf = A.darfGegen(e.code);
+      var owner = A.istOwner(e.code);
 
       body2.appendChild(UI.el('div.notice', {
-        html: '<b>' + A.rolleIcon(e.rolle) + ' ' + (e.name || 'ohne Namen') + '</b><br>'
-          + A.schoen(e.code) + ' · ' + A.rolleName(e.rolle),
+        html: '<b>' + (owner ? '👑 ' : '') + A.rolleIcon(e.rolle) + ' '
+          + (e.name || 'ohne Namen') + '</b><br>'
+          + A.schoen(e.code) + ' · ' + A.rolleName(e.rolle)
+          + (owner ? ' · Owner' : ''),
       }));
+
+      /* Umbenennen darf, wer auch sonst an diesen Code heranreicht.
+         Der Name steht ueberall: im Chat, im Protokoll, an der Tuer. */
+      if (darf) {
+        body2.appendChild(UI.btn('✏️ Umbenennen', function () {
+          umbenennen(e);
+        }, 'wide ghost'));
+        body2.appendChild(UI.el('div', { style: { height: '10px' } }));
+      }
+
+      /* Wer geschuetzt ist, wird hier nur angesehen - kein Bann, keine
+         Spielsperre, kein Loeschen, keine Freigaben. */
+      if (!darf) {
+        body2.appendChild(UI.el('div.notice.warn', {
+          html: '<b>🔒 Geschützt</b><br>' + A.schutzGrund(e.code),
+        }));
+        UI.modal({
+          title: 'Profil', body: body2, wide: true,
+          actions: [{ label: 'Fertig', cls: 'primary', onClick: neu }],
+        });
+        return;
+      }
 
       if (bann) {
         body2.appendChild(UI.el('div.notice.warn', {
@@ -316,6 +343,52 @@
        Ein Bann trifft den Code selbst: er kommt nicht mehr durch die
        Tuer, und wer schon drin ist, fliegt sofort heraus - auch mitten
        im Spiel (siehe wache.js). Aufheben geht jederzeit hier. */
+
+    function umbenennen(e) {
+      var nf = UI.el('input', {
+        type: 'text', value: e.name || '', placeholder: 'Neuer Name',
+        maxLength: 20, className: 'feld',
+      });
+      var hinweis = UI.el('div.small', {
+        style: { color: 'var(--red)', minHeight: '18px' },
+      });
+      var dlg = UI.modal({
+        title: 'Umbenennen',
+        body: [
+          UI.el('p.small.muted', {
+            text: 'Der Name steht überall, wo diese Person auftaucht — im Chat, '
+              + 'im Protokoll und an der Tür. Der Code bleibt derselbe.',
+          }),
+          nf, hinweis,
+        ],
+        actions: [
+          { label: 'Abbrechen', cls: 'ghost' },
+          {
+            label: 'Speichern', cls: 'primary', keepOpen: true,
+            onClick: function () {
+              var name = (nf.value || '').trim();
+              if (name.length < 2) {
+                hinweis.textContent = 'Bitte einen Namen eingeben.';
+                try { nf.focus(); } catch (er) { /* egal */ }
+                return;
+              }
+              var alt = e.name || A.schoen(e.code);
+              if (name === alt) { dlg.close(); return; }
+              if (!A.nameSetzen(e.code, name)) {
+                hinweis.textContent = A.schutzGrund(e.code);
+                return;
+              }
+              SG.protokoll.schreiben('name',
+                alt + ' heißt jetzt ' + name, '', e.code);
+              dlg.close();
+              UI.toast('Umbenannt.', 'good');
+              neu();
+            },
+          },
+        ],
+      });
+      setTimeout(function () { try { nf.focus(); } catch (er) { /* egal */ } }, 120);
+    }
 
     function bannDialog(e) {
       var grund = UI.el('textarea', {
@@ -550,6 +623,108 @@
 
     /* ---------------------------------------------------------- Sitzung */
 
+    /* ---------------------------------------------------------- Owner
+
+       Ueber allen Admins steht einer, an den keiner herankommt. Solange
+       niemand eingetragen ist, nimmt sich der erste Admin die Rolle;
+       danach gibt nur der Owner selbst sie weiter. */
+
+    function owner(ziel) {
+      if (A.ownerFrei()) {
+        ziel.appendChild(UI.el('div.notice.warn', {
+          html: '<b>Noch kein Owner.</b><br>Ein Owner steht über allen Admins: '
+            + 'niemand kann ihn sperren, löschen oder umbenennen. Solange die '
+            + 'Rolle frei ist, kann jeder Admin sie sich nehmen.',
+        }));
+        ziel.appendChild(UI.el('div', { style: { height: '8px' } }));
+        ziel.appendChild(UI.btn('👑 Owner werden', function () {
+          UI.confirm('Owner werden?',
+            'Danach kann dir kein Admin mehr etwas anhaben — und nur du '
+            + 'selbst kannst die Rolle weitergeben.', 'Owner werden')
+            .then(function (ok) {
+              if (!ok) return;
+              if (!A.ownerSetzen(A.aktuell.code)) {
+                UI.toast('Ging nicht — es gibt schon einen Owner.', 'bad');
+                return;
+              }
+              SG.protokoll.schreiben('owner',
+                (A.aktuell.name || A.aktuell.code) + ' ist jetzt Owner', '',
+                A.aktuell.code);
+              UI.toast('Du bist jetzt Owner.', 'good');
+              neu();
+            });
+        }, 'wide primary'));
+        return;
+      }
+
+      var name = A.nameVon(A.owner()) || A.schoen(A.owner());
+
+      if (!A.binOwner()) {
+        ziel.appendChild(UI.el('div.notice', {
+          html: '<b>👑 ' + name + '</b><br>An den Owner kommt kein Admin heran. '
+            + 'Weitergeben kann die Rolle nur er selbst.',
+        }));
+        return;
+      }
+
+      ziel.appendChild(UI.el('div.notice', {
+        html: '<b>👑 Du bist Owner.</b><br>Kein Admin kann dich sperren, löschen '
+          + 'oder umbenennen. Umgekehrt bist du der Einzige, der gegen andere '
+          + 'Admins vorgehen darf.',
+      }));
+      ziel.appendChild(UI.el('div', { style: { height: '8px' } }));
+      ziel.appendChild(UI.btn('Owner übergeben', function () {
+        ownerUebergeben();
+      }, 'wide ghost'));
+    }
+
+    /* Weitergeben geht nur an einen Admin - ein Spieler koennte mit der
+       Rolle nichts anfangen und waere bloss unangreifbar. */
+    function ownerUebergeben() {
+      var admins = A.liste().filter(function (e) {
+        return e.rolle === A.ADMIN && e.code !== A.aktuell.code;
+      });
+      if (!admins.length) {
+        UI.toast('Es gibt sonst keinen Admin.', 'bad');
+        return;
+      }
+      var body2 = UI.el('div');
+      body2.appendChild(UI.el('p.small.muted', {
+        text: 'Danach bist du ein Admin wie jeder andere — und der Neue kann '
+          + 'auch gegen dich vorgehen. Rückgängig macht das nur er.',
+      }));
+      var dlg = UI.modal({ title: 'Owner übergeben', body: body2 });
+      admins.forEach(function (e) {
+        body2.appendChild(UI.el('div.item.tap', {
+          on: {
+            click: function () {
+              dlg.close();
+              UI.confirm('An ' + (e.name || A.schoen(e.code)) + ' übergeben?',
+                'Du gibst die Rolle ab und kannst sie nicht zurückholen.',
+                'Übergeben', true).then(function (ok) {
+                  if (!ok) return;
+                  if (!A.ownerSetzen(e.code)) {
+                    UI.toast('Ging nicht.', 'bad');
+                    return;
+                  }
+                  SG.protokoll.schreiben('owner',
+                    'Owner übergeben an ' + (e.name || e.code), '', e.code);
+                  UI.toast('Übergeben.', 'good');
+                  neu();
+                });
+            },
+          },
+        }, [
+          UI.el('div.thumb', { text: '🛡' }),
+          UI.el('div.main', null, [
+            UI.el('div.t', { text: e.name || 'ohne Namen' }),
+            UI.el('div.d', { text: A.schoen(e.code) }),
+          ]),
+          UI.el('div.side', null, [UI.el('div.s', { text: '›' })]),
+        ]));
+      });
+    }
+
     function sitzung(ziel) {
       ziel.appendChild(UI.el('div.notice', {
         html: '<b>' + A.rolleIcon(A.aktuell.rolle) + ' '
@@ -565,6 +740,11 @@
           : 'Kein Relais erreichbar. Alles, was du hier änderst, gilt nur auf '
             + 'diesem Gerät, bis die Verbindung wieder steht.',
       }));
+
+      ziel.appendChild(UI.el('div.sec-head', null, [
+        UI.el('h2', { text: 'Owner' }),
+      ]));
+      owner(ziel);
 
       ziel.appendChild(UI.el('div.sec-head', null, [
         UI.el('h2', { text: 'Werkzeuge' }),

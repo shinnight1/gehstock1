@@ -461,6 +461,47 @@
     }
   };
 
+  /* ------------------------------------------------------------------
+     Der Gehstock
+
+     Das Zeichen des Hauses: ein Griff, der sich nach links ueberschlaegt,
+     und ein langer Schaft. Dieselbe Form wie das Zeichen ueber der Tuer,
+     nur gezeichnet statt aus Raendern gebaut - so laesst sie sich drehen,
+     biegen und beliebig gross ziehen.
+
+       x, y   Mitte der Form
+       h      Gesamthoehe
+       o.bieg Seitlicher Versatz in der Mitte des Schafts. Damit sieht
+              der Stock verdreht aus, ohne dass etwas gerechnet werden
+              muss - eine Quadratkurve genuegt.
+     ------------------------------------------------------------------ */
+
+  G.gehstock = function (c, x, y, h, o) {
+    o = o || {};
+    var d = o.dicke === undefined ? h * 0.13 : o.dicke;
+    var r = o.radius === undefined ? h * 0.2 : o.radius;
+    var tail = o.tail === undefined ? h * 0.14 : o.tail;
+    var bieg = o.bieg || 0;
+    var oben = y - h / 2;
+    var unten = y + h / 2;
+    var hx = x - r;                 // linkes Ende des Griffs
+    var sx = x + r;                 // Achse des Schafts
+
+    c.save();
+    c.strokeStyle = o.color || '#f0b429';
+    c.lineWidth = d;
+    c.lineCap = 'round';
+    c.lineJoin = 'round';
+    c.beginPath();
+    c.moveTo(hx, oben + r + tail);
+    c.lineTo(hx, oben + r);
+    c.arc(x, oben + r, r, Math.PI, 0, false);
+    if (bieg) c.quadraticCurveTo(sx + bieg, (oben + r + unten) / 2, sx, unten);
+    else c.lineTo(sx, unten);
+    c.stroke();
+    c.restore();
+  };
+
   /* Kleines Symbol aus Grundformen - fuer Kacheln und Listen */
   G.icon = function (c, kind, x, y, s, color) {
     c.save();

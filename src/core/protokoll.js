@@ -28,6 +28,8 @@
     code: { icon: '🎫', name: 'Code erstellt' },
     codeweg: { icon: '✂️', name: 'Profil gelöscht' },
     rolle: { icon: '🎖', name: 'Rolle geändert' },
+    name: { icon: '✏️', name: 'Umbenannt' },
+    owner: { icon: '👑', name: 'Owner' },
     sperre: { icon: '🚫', name: 'Spielsperre' },
     wartung: { icon: '🔧', name: 'Wartung' },
     ansage: { icon: '📣', name: 'Ansage' },

@@ -3,6 +3,8 @@
 
    Zwei Ansichten: die Weltkarte mit den Regionen und das Hauptquartier
    im Schnitt über drei Etagen. Beides prozedural gezeichnet.
+
+   Die Karte ist eine echte: Küstenlinien in Grad, flach projiziert.
    ------------------------------------------------------------------ */
 
 (function (SG) {
@@ -14,16 +16,148 @@
 
   var Rd = A.render = {};
 
-  /* Grobe Kontinentumrisse in Anteilen der Kartenflaeche */
+  /* ------------------------------------------------------------------
+     Die Weltkarte
+
+     Kuestenlinien als Laenge/Breite in Grad, nicht als Anteile der
+     Flaeche. Das hat zwei Gruende: die Zahlen lassen sich gegen einen
+     Atlas pruefen, und der Ausschnitt bleibt aenderbar, ohne dass jeder
+     Punkt neu gerechnet werden muss.
+
+     Der Ausschnitt laesst die Antarktis und die leere Polkappe weg -
+     zwischen 84 Grad Nord und 56 Grad Sued liegt alles, was im Spiel
+     vorkommt. Projiziert wird flach (Plattkarte): Laengengrade sind
+     gleich breit, Breitengrade gleich hoch. Fuer eine Lagekarte ist
+     das genau richtig; Groenland faellt dabei zu gross aus, das ist
+     bei dieser Projektion so und stoert hier nicht.
+     ------------------------------------------------------------------ */
+
+  var AUSSCHNITT = { west: -180, ost: 180, nord: 84, sued: -56 };
+
+  function px(lon, w) {
+    return ((lon - AUSSCHNITT.west) / (AUSSCHNITT.ost - AUSSCHNITT.west)) * w;
+  }
+  function py(lat, h) {
+    return ((AUSSCHNITT.nord - lat) / (AUSSCHNITT.nord - AUSSCHNITT.sued)) * h;
+  }
+
+  /* Jede Landmasse ein Streckenzug: lon, lat, lon, lat, ... */
   var LAND = [
-    [0.10, 0.18, 0.24, 0.15, 0.31, 0.21, 0.28, 0.33, 0.23, 0.38, 0.19, 0.47, 0.14, 0.40, 0.09, 0.29],
-    [0.25, 0.52, 0.31, 0.50, 0.34, 0.60, 0.32, 0.72, 0.28, 0.81, 0.245, 0.70, 0.235, 0.60],
-    [0.44, 0.20, 0.53, 0.17, 0.57, 0.26, 0.53, 0.34, 0.46, 0.33, 0.43, 0.26],
-    [0.46, 0.37, 0.56, 0.34, 0.59, 0.45, 0.56, 0.57, 0.50, 0.67, 0.455, 0.58, 0.44, 0.47],
-    [0.56, 0.16, 0.72, 0.12, 0.86, 0.19, 0.90, 0.30, 0.82, 0.39, 0.73, 0.44, 0.66, 0.39, 0.60, 0.31],
-    [0.80, 0.63, 0.89, 0.60, 0.91, 0.71, 0.85, 0.76, 0.79, 0.71],
-    [0.37, 0.05, 0.49, 0.03, 0.53, 0.10, 0.44, 0.13, 0.37, 0.09],
+    /* Nordamerika */
+    [-168, 66, -164, 60, -158, 58, -152, 59, -147, 61, -140, 60, -135, 57,
+      -131, 53, -127, 50, -124, 46, -122, 40, -119, 34, -117, 32, -114, 31,
+      -110, 31, -106, 31, -103, 29, -99, 27, -97, 26, -94, 29, -91, 29,
+      -89, 29, -85, 30, -83, 29, -81, 25, -81, 29, -80, 32, -77, 34, -75, 36,
+      -74, 39, -71, 41, -70, 43, -67, 45, -64, 46, -60, 47, -56, 51, -60, 54,
+      -64, 57, -68, 58, -71, 56, -77, 55, -79, 52, -82, 55, -87, 57, -92, 58,
+      -95, 61, -95, 65, -92, 68, -97, 69, -103, 68, -110, 68, -115, 69,
+      -120, 70, -125, 70, -131, 70, -136, 69, -141, 70, -148, 71, -155, 71,
+      -161, 70, -165, 68],
+    /* Mittelamerika */
+    [-97, 16, -94, 16, -92, 15, -89, 14, -87, 13, -85, 11, -83, 9, -80, 9,
+      -78, 9, -80, 11, -83, 12, -86, 14, -88, 16, -88, 18, -87, 21, -90, 21,
+      -92, 19, -95, 18],
+    /* Suedamerika */
+    [-78, 9, -75, 11, -71, 12, -66, 11, -62, 10, -60, 8, -55, 6, -51, 4,
+      -50, 0, -48, -1, -44, -2, -40, -3, -37, -5, -35, -8, -38, -12, -39, -16,
+      -41, -22, -45, -24, -48, -26, -52, -32, -57, -35, -57, -38, -62, -39,
+      -64, -42, -65, -45, -68, -48, -68, -52, -70, -55, -74, -53, -75, -49,
+      -74, -44, -73, -40, -73, -36, -71, -33, -70, -25, -70, -18, -75, -15,
+      -77, -12, -79, -7, -81, -5, -80, -2, -78, 1, -77, 4, -76, 6],
+    /* Afrika */
+    [-17, 15, -16, 12, -13, 9, -8, 5, -3, 5, 1, 6, 4, 6, 9, 4, 9, 2, 12, -1,
+      13, -5, 12, -9, 12, -17, 15, -22, 17, -28, 18, -34, 22, -34, 25, -34,
+      29, -31, 32, -29, 33, -26, 35, -24, 36, -21, 40, -16, 41, -11, 40, -6,
+      39, -4, 41, -2, 44, 2, 46, 5, 51, 11, 48, 12, 44, 12, 43, 11, 40, 15,
+      37, 18, 36, 22, 34, 28, 33, 31, 30, 31, 25, 32, 19, 30, 15, 32, 11, 34,
+      10, 37, 8, 37, 3, 36, -1, 35, -5, 35, -6, 36, -9, 33, -13, 28, -16, 21],
+    /* Eurasien */
+    [-9, 43, -9, 38, -6, 36, -2, 36, 0, 39, 3, 42, 5, 43, 7, 44, 10, 44,
+      12, 42, 15, 40, 18, 40, 16, 42, 13, 45, 15, 44, 18, 43, 19, 41, 21, 39,
+      23, 38, 24, 40, 26, 39, 26, 41, 29, 41, 33, 42, 36, 41, 36, 36, 35, 33,
+      34, 31, 34, 29, 37, 25, 40, 21, 43, 13, 45, 13, 48, 14, 52, 16, 55, 17,
+      57, 20, 59, 23, 57, 25, 55, 25, 51, 26, 48, 29, 50, 30, 52, 28, 56, 26,
+      61, 25, 66, 25, 68, 23, 70, 21, 73, 16, 74, 15, 76, 9, 78, 8, 80, 13,
+      82, 17, 85, 20, 87, 21, 89, 22, 92, 21, 94, 18, 97, 16, 98, 12, 100, 7,
+      103, 1, 104, 9, 107, 11, 109, 15, 108, 19, 110, 21, 113, 22, 117, 24,
+      120, 26, 122, 30, 121, 35, 119, 39, 122, 40, 124, 40, 126, 40, 126, 37,
+      127, 35, 129, 35, 129, 38, 128, 41, 131, 43, 135, 48, 138, 54, 142, 59,
+      148, 59, 155, 57, 160, 60, 163, 61, 170, 60, 177, 65, 180, 66, 175, 70,
+      165, 70, 155, 71, 145, 72, 135, 72, 128, 73, 115, 73, 105, 76, 100, 77,
+      95, 76, 90, 75, 82, 73, 73, 72, 69, 73, 60, 71, 55, 68, 50, 68, 45, 66,
+      41, 66, 40, 64, 37, 65, 33, 68, 30, 67, 29, 66, 31, 63, 30, 60, 28, 59,
+      24, 59, 21, 57, 21, 55, 19, 54, 14, 54, 11, 54, 9, 54, 8, 55, 8, 53,
+      4, 52, 3, 51, 2, 51, 0, 49, -2, 49, -5, 48, -2, 47, -1, 46, -1, 44,
+      -2, 43, -8, 43],
+    /* Skandinavien */
+    [5, 58, 5, 61, 7, 63, 11, 65, 14, 67, 18, 69, 23, 71, 28, 71, 31, 70,
+      30, 67, 29, 66, 31, 63, 30, 60, 27, 60, 24, 60, 23, 60, 21, 63, 22, 65,
+      19, 64, 17, 62, 17, 60, 16, 58, 14, 56, 13, 55, 12, 56, 11, 58, 8, 58],
+    /* Grossbritannien */
+    [-5, 50, -3, 51, 0, 51, 1, 52, 0, 53, -1, 54, 0, 54, -2, 56, -3, 58,
+      -5, 58, -6, 57, -5, 56, -3, 55, -4, 54, -3, 54, -5, 53, -4, 52, -5, 51],
+    /* Irland */
+    [-10, 52, -9, 51, -7, 52, -6, 52, -6, 54, -6, 55, -8, 55, -10, 54],
+    /* Island */
+    [-24, 65, -22, 66, -18, 66, -14, 66, -14, 65, -18, 64, -22, 64],
+    /* Groenland */
+    [-73, 78, -60, 82, -45, 83, -30, 82, -22, 76, -25, 70, -35, 66, -44, 60,
+      -50, 62, -55, 67, -60, 70, -68, 76],
+    /* Japan */
+    [130, 31, 131, 34, 134, 34, 137, 34, 140, 35, 141, 38, 141, 41, 139, 40,
+      137, 37, 136, 36, 133, 36, 131, 35, 129, 33],
+    [140, 42, 141, 45, 144, 44, 145, 43, 143, 42],
+    /* Sumatra, Java, Borneo, Sulawesi, Neuguinea */
+    [95, 6, 98, 4, 101, 2, 104, -2, 106, -6, 103, -6, 100, -3, 97, 1],
+    [105, -6, 110, -6, 114, -8, 114, -9, 109, -8, 105, -7],
+    [109, 2, 113, 3, 117, 4, 119, 1, 117, -3, 114, -4, 110, -3, 109, 0],
+    [119, 1, 122, 1, 125, 1, 125, -2, 122, -5, 120, -5, 120, -2],
+    [131, -1, 136, -2, 141, -3, 145, -5, 148, -9, 143, -9, 138, -8, 134, -5,
+      131, -3],
+    /* Philippinen */
+    [120, 18, 122, 18, 122, 14, 125, 12, 126, 9, 126, 7, 123, 6, 121, 8,
+      120, 14],
+    /* Australien */
+    [114, -22, 113, -26, 115, -32, 118, -35, 123, -34, 129, -32, 134, -33,
+      138, -35, 141, -38, 145, -38, 148, -37, 150, -35, 153, -28, 153, -25,
+      149, -21, 146, -19, 143, -14, 142, -11, 141, -13, 137, -12, 136, -15,
+      133, -12, 130, -12, 127, -14, 124, -16, 122, -18, 118, -20],
+    /* Tasmanien */
+    [145, -41, 148, -41, 148, -43, 146, -43],
+    /* Neuseeland */
+    [173, -35, 175, -36, 178, -38, 177, -40, 174, -41, 173, -38],
+    [172, -41, 174, -42, 173, -45, 170, -46, 167, -46, 166, -45, 169, -43],
+    /* Madagaskar */
+    [44, -12, 50, -15, 50, -19, 47, -25, 45, -25, 43, -22, 43, -17],
+    /* Sri Lanka */
+    [80, 9, 82, 8, 82, 6, 80, 6],
+    /* Kuba */
+    [-85, 22, -80, 23, -75, 20, -78, 20, -82, 21],
   ];
+
+  /* Binnenmeere. Sie liegen mitten in einer Landmasse und lassen sich
+     als Loch im Streckenzug nicht sauber zeichnen - also kommen sie
+     danach in Ozeanfarbe obendrauf. */
+  var BINNEN = [
+    /* Schwarzes Meer */
+    [28, 41, 33, 42, 38, 44, 41, 43, 40, 45, 38, 46, 34, 46, 31, 46, 29, 45],
+    /* Kaspisches Meer */
+    [47, 45, 51, 45, 53, 42, 54, 41, 53, 37, 50, 37, 49, 40, 48, 42],
+    /* Grosse Seen */
+    [-92, 47, -85, 48, -82, 45, -79, 43, -76, 44, -80, 42, -83, 41, -87, 42,
+      -88, 45],
+    /* Hudson Bay */
+    [-95, 61, -88, 60, -82, 56, -78, 53, -80, 60, -85, 63, -92, 64],
+  ];
+
+  function pfad(c, poly, w, h) {
+    c.beginPath();
+    c.moveTo(px(poly[0], w), py(poly[1], h));
+    for (var i = 2; i < poly.length; i += 2) {
+      c.lineTo(px(poly[i], w), py(poly[i + 1], h));
+    }
+    c.closePath();
+  }
 
   /* ------------------------------------------------------------------
      Weltkarte
@@ -32,39 +166,57 @@
   Rd.mapLayer = function (w, h) {
     return G.cache('spy-map:' + Math.round(w) + 'x' + Math.round(h), w, h, function (c) {
       // Ozean
-      c.fillStyle = G.linear(c, 0, 0, 0, h, [0, '#0a1424', 1, '#0d1b2e']);
+      c.fillStyle = G.linear(c, 0, 0, 0, h, [0, '#081524', 1, '#0b1c2f']);
       c.fillRect(0, 0, w, h);
 
-      // Gitternetz
-      c.strokeStyle = 'rgba(120,160,220,.07)';
+      /* Gradnetz: alle 30 Grad Laenge, alle 20 Grad Breite. Aequator
+         und Wendekreise sind eine Spur heller - das gibt der Karte
+         einen Massstab, ohne dass Zahlen danebenstehen muessen. */
       c.lineWidth = 1;
-      for (var i = 1; i < 12; i++) {
+      for (var lon = -150; lon <= 150; lon += 30) {
+        c.strokeStyle = lon === 0 ? 'rgba(120,170,230,.14)' : 'rgba(120,170,230,.06)';
         c.beginPath();
-        c.moveTo((w / 12) * i, 0);
-        c.lineTo((w / 12) * i, h);
+        c.moveTo(px(lon, w), 0);
+        c.lineTo(px(lon, w), h);
         c.stroke();
       }
-      for (i = 1; i < 8; i++) {
+      for (var lat = 80; lat >= -40; lat -= 20) {
+        c.strokeStyle = lat === 0 ? 'rgba(120,170,230,.14)' : 'rgba(120,170,230,.06)';
         c.beginPath();
-        c.moveTo(0, (h / 8) * i);
-        c.lineTo(w, (h / 8) * i);
+        c.moveTo(0, py(lat, h));
+        c.lineTo(w, py(lat, h));
         c.stroke();
       }
 
-      // Landmassen
+      /* Landmassen. Erst ein weicher Saum nach aussen, dann die Flaeche -
+         so heben sich die Kuesten vom Wasser ab, ohne dass eine zweite
+         Linie noetig waere. */
+      c.save();
+      c.shadowColor = 'rgba(90,150,220,.5)';
+      c.shadowBlur = Math.max(3, w * 0.006);
       LAND.forEach(function (poly) {
-        var pts = [];
-        for (var k = 0; k < poly.length; k += 2) {
-          pts.push(poly[k] * w, poly[k + 1] * h);
-        }
-        c.beginPath();
-        c.moveTo(pts[0], pts[1]);
-        for (k = 2; k < pts.length; k += 2) c.lineTo(pts[k], pts[k + 1]);
-        c.closePath();
-        c.fillStyle = '#1c2a3f';
+        pfad(c, poly, w, h);
+        c.fillStyle = '#1b2b40';
         c.fill();
-        c.strokeStyle = 'rgba(140,180,240,.22)';
-        c.lineWidth = 1.2;
+      });
+      c.restore();
+
+      LAND.forEach(function (poly) {
+        pfad(c, poly, w, h);
+        c.fillStyle = '#1b2b40';
+        c.fill();
+        c.strokeStyle = 'rgba(150,195,245,.3)';
+        c.lineWidth = 1.1;
+        c.stroke();
+      });
+
+      // Binnenmeere zurueck auf Wasserfarbe
+      BINNEN.forEach(function (poly) {
+        pfad(c, poly, w, h);
+        c.fillStyle = '#0b1c2f';
+        c.fill();
+        c.strokeStyle = 'rgba(150,195,245,.22)';
+        c.lineWidth = 1;
         c.stroke();
       });
 

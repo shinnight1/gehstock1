@@ -79,9 +79,20 @@ body {
   -webkit-user-select: none;
 }
 
+/* Die Kulisse: der Gehstock in der Weltkugel. Liegt hinter allem,
+   faengt nichts ab und wird von der Vorlesehilfe uebergangen.
+   Siehe src/core/kulisse.js. */
+#sg-kulisse {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
 #app {
   position: absolute;
   inset: 0;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;

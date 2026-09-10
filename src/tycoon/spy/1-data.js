@@ -190,19 +190,38 @@
 
   /* ---------------------------------------------------------- Regionen */
 
-  /* x/y sind Anteile der Weltkarte (0..1) */
+  /* x/y sind Anteile der Weltkarte (0..1). Sie stehen hier ausgerechnet
+     statt in Grad, weil die Karte sie so braucht und diese Datei vor
+     der Karte geladen wird. Der Ausschnitt in 4-render.js reicht von
+     84 Grad Nord bis 56 Grad Sued ueber die ganze Erde:
+
+       x = (Laenge + 180) / 360        y = (84 - Breite) / 140
+
+     Der Ort in Grad steht jeweils dahinter - wer eine Region
+     verschiebt, rechnet damit zwei Zeilen nach. */
   D.REGIONS = [
-    { id: 'westeuropa', name: 'Westeuropa', x: 0.47, y: 0.32, minLevel: 1 },
-    { id: 'osteuropa', name: 'Osteuropa', x: 0.55, y: 0.30, minLevel: 1 },
-    { id: 'nordamerika', name: 'Nordamerika', x: 0.20, y: 0.30, minLevel: 1 },
-    { id: 'suedamerika', name: 'Südamerika', x: 0.29, y: 0.66, minLevel: 2 },
-    { id: 'nordafrika', name: 'Nordafrika', x: 0.49, y: 0.46, minLevel: 2 },
-    { id: 'westafrika', name: 'Westafrika', x: 0.45, y: 0.57, minLevel: 3 },
-    { id: 'nahost', name: 'Naher Osten', x: 0.60, y: 0.43, minLevel: 3 },
-    { id: 'suedasien', name: 'Südasien', x: 0.68, y: 0.47, minLevel: 4 },
-    { id: 'ostasien', name: 'Ostasien', x: 0.79, y: 0.38, minLevel: 5 },
-    { id: 'ozeanien', name: 'Ozeanien', x: 0.85, y: 0.72, minLevel: 6 },
-    { id: 'arktis', name: 'Arktis', x: 0.50, y: 0.10, minLevel: 8 },
+    /* 4 O, 48 N */
+    { id: 'westeuropa', name: 'Westeuropa', x: 0.511, y: 0.257, minLevel: 1 },
+    /* 28 O, 50 N */
+    { id: 'osteuropa', name: 'Osteuropa', x: 0.578, y: 0.243, minLevel: 1 },
+    /* 98 W, 40 N */
+    { id: 'nordamerika', name: 'Nordamerika', x: 0.228, y: 0.314, minLevel: 1 },
+    /* 58 W, 12 S */
+    { id: 'suedamerika', name: 'Südamerika', x: 0.339, y: 0.686, minLevel: 2 },
+    /* 14 O, 26 N */
+    { id: 'nordafrika', name: 'Nordafrika', x: 0.539, y: 0.414, minLevel: 2 },
+    /* 3 W, 9 N */
+    { id: 'westafrika', name: 'Westafrika', x: 0.492, y: 0.536, minLevel: 3 },
+    /* 44 O, 29 N */
+    { id: 'nahost', name: 'Naher Osten', x: 0.622, y: 0.393, minLevel: 3 },
+    /* 78 O, 22 N */
+    { id: 'suedasien', name: 'Südasien', x: 0.717, y: 0.443, minLevel: 4 },
+    /* 114 O, 34 N */
+    { id: 'ostasien', name: 'Ostasien', x: 0.817, y: 0.357, minLevel: 5 },
+    /* 137 O, 25 S */
+    { id: 'ozeanien', name: 'Ozeanien', x: 0.881, y: 0.779, minLevel: 6 },
+    /* 0 O, 76 N */
+    { id: 'arktis', name: 'Arktis', x: 0.500, y: 0.060, minLevel: 8 },
   ];
 
   D.regionById = function (id) {

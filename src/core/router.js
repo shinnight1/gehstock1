@@ -85,6 +85,10 @@
     /* Die Anwesenheitsliste soll wissen, wo jemand steckt. */
     if (SG.relais && SG.spiegel) SG.relais.ortSetzen(SG.spiegel.wo());
 
+    /* Waehrend eines Spiels liegt ein voller Bildschirm ueber der
+       Kulisse. Sie weiterlaufen zu lassen kostet nur Akku. */
+    if (SG.kulisse) SG.kulisse.ruhen(route.kind === 'game');
+
     if (!force && current && current.kind === route.kind && current.id === route.id) return;
 
     if (current && current.view && current.view.destroy) {

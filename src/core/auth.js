@@ -235,6 +235,10 @@
 
   A.nameSetzen = function (code, name) {
     var k = A.normieren(code);
+    /* Beim Anmelden ist noch niemand da, der etwas duerfen muesste -
+       da traegt sich jemand selbst ein. Einen fremden Namen aendert
+       dagegen nur, wer auch sonst an diesen Code heranreicht. */
+    if (A.aktuell && A.aktuell.code !== k && !A.darfGegen(k)) return false;
     var namen = SG.storage.globalGet('auth:namen', {});
     namen[k] = name;
     SG.storage.globalSet('auth:namen', namen);
@@ -254,6 +258,7 @@
       A.aktuell.name = name;
       SG.storage.globalSet(SITZUNG, A.aktuell);
     }
+    return true;
   };
 
 /* ------------------------------------------------------------------
@@ -279,6 +284,7 @@
   };
 
   A.vergessen = function (code) {
+    if (!A.darfGegen(code)) return A.liste();
     SG.verwaltung.schreiben(function (d) {
       d.profile = (d.profile || []).filter(function (e) { return e.code !== code; });
       delete (d.sperren || {})[code];
@@ -301,6 +307,7 @@
   A.sperren = function (code) { return (V().sperren || {})[A.normieren(code)] || []; };
 
   A.sperrenSetzen = function (code, liste) {
+    if (!A.darfGegen(code)) return;
     SG.verwaltung.schreiben(function (d) {
       d.sperren = d.sperren || {};
       var k = A.normieren(code);
@@ -399,6 +406,7 @@
 
   A.bndSetzen = function (code, an) {
     var k = A.normieren(code);
+    if (!A.darfGegen(k)) return A.hatBnd(k);
     SG.verwaltung.schreiben(function (d) {
       d.bnd = d.bnd || [];
       var i = d.bnd.indexOf(k);
@@ -431,6 +439,67 @@
   };
 
   /* ------------------------------------------------------------------
+     Owner und der Schutz unter Admins
+
+     Ein Admin darf viel - aber nichts gegen einen anderen Admin. Sonst
+     sperrt einer den anderen aus und steht danach allein da. Ueber allen
+     steht der Owner: an den kommt niemand heran, auch kein Admin.
+
+     Wer Owner ist, steht in der Verwaltung und gilt damit auf jedem
+     Geraet. Solange niemand eingetragen ist, kann der erste Admin die
+     Rolle uebernehmen; danach gibt nur der Owner selbst sie weiter.
+     ------------------------------------------------------------------ */
+
+  A.owner = function () { return A.normieren(V().owner || ''); };
+
+  A.istOwner = function (code) {
+    var o = A.owner();
+    return !!o && o === A.normieren(code);
+  };
+
+  A.binOwner = function () { return !!(A.aktuell && A.istOwner(A.aktuell.code)); };
+
+  A.ownerFrei = function () { return !A.owner(); };
+
+  /* Owner werden oder die Rolle weitergeben. Beides geht nur an einen
+     Admin - ein Spieler koennte mit der Rolle nichts anfangen und waere
+     nur unangreifbar. */
+  A.ownerSetzen = function (code) {
+    var k = A.normieren(code);
+    var g = A.pruefen(k);
+    if (!g || g.rolle !== A.ADMIN) return false;
+    if (!A.ownerFrei() && !A.binOwner()) return false;
+    SG.verwaltung.schreiben(function (d) { d.owner = k; });
+    return true;
+  };
+
+  /* Die eine Frage, an der alles haengt: darf der Angemeldete gegen
+     diesen Code vorgehen? Sperren, loeschen, umbenennen, Freigaben
+     entziehen - alles laeuft hierueber. */
+  A.darfGegen = function (code) {
+    var k = A.normieren(code);
+    if (!A.aktuell) return false;
+    if (A.aktuell.code === k) return true;        // gegen sich selbst immer
+    if (!A.istAdmin()) return false;
+    if (A.istOwner(k)) return false;              // an den Owner kommt niemand
+    if (A.binOwner()) return true;                // der Owner an jeden anderen
+    var g = A.pruefen(k);
+    return !(g && g.rolle === A.ADMIN);           // Admin gegen Admin: nein
+  };
+
+  /* Ein Satz, den die Oberflaeche anzeigen kann, wenn es nicht geht. */
+  A.schutzGrund = function (code) {
+    var k = A.normieren(code);
+    if (A.darfGegen(k)) return '';
+    if (A.istOwner(k)) return 'Das ist der Owner. An den kommt niemand heran.';
+    var g = A.pruefen(k);
+    if (g && g.rolle === A.ADMIN) {
+      return 'Admins können einander nichts anhaben. Nur der Owner darf das.';
+    }
+    return 'Dafür fehlen dir die Rechte.';
+  };
+
+  /* ------------------------------------------------------------------
      Banne
 
      Ein gebannter Code kommt nicht mehr durch die Tuer, und wer schon
@@ -446,6 +515,7 @@
 
   A.bannSetzen = function (code, grund, von) {
     var k = A.normieren(code);
+    if (!A.darfGegen(k)) return null;
     SG.verwaltung.schreiben(function (d) {
       d.banne = d.banne || {};
       d.banne[k] = {

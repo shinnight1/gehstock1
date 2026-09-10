@@ -10,9 +10,9 @@ Erkannt werden .png, .jpg, .jpeg, .webp und .gif.
 
 Gebraucht wird zurzeit:
 
-  falschercode.jpg    Wird zehn Sekunden lang gezeigt, wenn jemand einen
-                      falschen Zugangscode eingibt. Fehlt die Datei,
-                      zeichnet das Hideout einen schlichten Ersatz.
+  Nichts, was die Oberflaeche zwingend braucht. Die Bilder von
+  GehstockMon (gm-*.webp) liegen hier; alles andere zeichnet das
+  Hideout selbst.
 
 Bitte an die Größe denken: alles hier landet in der Offline-Datei und
 zählt gegen das Budget von 2048 kB. Ein Bild unter 150 kB ist gut.

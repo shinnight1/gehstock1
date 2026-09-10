@@ -388,4 +388,63 @@ export function extraTests(SG, U, test) {
     const w = e.einheiten.find((u) => u.seite === 'wir');
     if (w.hp === w.maxHp) throw new Error('Wall blieb unberuehrt');
   });
+
+  /* --- Owner und der Schutz unter Admins ---
+
+     Die Regel ist kurz und die Folge gross: geht sie kaputt, sperrt ein
+     Admin den anderen aus und niemand merkt es vor dem Ernstfall. */
+
+  const A = SG.auth;
+  const adminCodes = A.vorrat(A.ADMIN);
+  const spielerCodes = A.vorrat(A.SPIELER);
+  const OWNER = adminCodes[0];
+  const ADMIN2 = adminCodes[1];
+  const SPIELER = spielerCodes[0];
+
+  test('Owner: der erste Admin kann die freie Rolle nehmen', () => {
+    SG.verwaltung.schreiben((d) => { delete d.owner; });
+    if (!A.ownerFrei()) throw new Error('Rolle war nicht frei');
+    A.anmelden(OWNER, 'Owner');
+    if (!A.ownerSetzen(OWNER)) throw new Error('Uebernehmen ging nicht');
+    if (!A.binOwner()) throw new Error('bin nicht Owner');
+  });
+
+  test('Owner: ein Spieler kann die Rolle nicht bekommen', () => {
+    if (A.ownerSetzen(SPIELER)) throw new Error('Spieler wurde Owner');
+    if (A.owner() !== OWNER) throw new Error('Owner hat gewechselt');
+  });
+
+  test('Owner: ein zweiter Admin kommt an ihn nicht heran', () => {
+    A.anmelden(ADMIN2, 'Zweiter');
+    if (A.darfGegen(OWNER)) throw new Error('darfGegen sagt ja');
+    if (A.bannSetzen(OWNER, 'Test')) throw new Error('Bann ging durch');
+    if (A.gebannt(OWNER)) throw new Error('Owner ist gebannt');
+    A.nameSetzen(OWNER, 'Umbenannt');
+    if (A.nameVon(OWNER) === 'Umbenannt') throw new Error('Umbenennen ging durch');
+    A.sperrenSetzen(OWNER, ['tetris']);
+    if (A.sperren(OWNER).length) throw new Error('Spielsperre ging durch');
+  });
+
+  test('Owner: ein Admin kommt auch an andere Admins nicht heran', () => {
+    const dritter = adminCodes[2];
+    A.merken(dritter, 'Dritter', A.ADMIN);
+    A.anmelden(ADMIN2, 'Zweiter');
+    if (A.darfGegen(dritter)) throw new Error('darfGegen sagt ja');
+    if (A.bannSetzen(dritter, 'Test')) throw new Error('Bann ging durch');
+  });
+
+  test('Owner: gegen Spieler darf ein Admin weiterhin alles', () => {
+    A.anmelden(ADMIN2, 'Zweiter');
+    if (!A.darfGegen(SPIELER)) throw new Error('darfGegen sagt nein');
+    if (!A.bannSetzen(SPIELER, 'Test')) throw new Error('Bann ging nicht');
+    A.bannLoesen(SPIELER);
+  });
+
+  test('Owner: der Owner selbst darf gegen jeden Admin vorgehen', () => {
+    A.anmelden(OWNER, 'Owner');
+    if (!A.darfGegen(ADMIN2)) throw new Error('Owner darf nicht');
+    if (!A.bannSetzen(ADMIN2, 'Test')) throw new Error('Bann ging nicht');
+    A.bannLoesen(ADMIN2);
+    A.abmelden();
+  });
 }

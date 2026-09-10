@@ -73,6 +73,10 @@
       return;
     }
 
+    /* Die Kulisse liegt hinter allem und ist schon vor der Tuer da -
+       die Kugel soll gleich beim ersten Blick stehen. */
+    SG.kulisse.start();
+
     /* Die Tarnung wird als Erstes gebaut. Sie muss auch dann schon
        liegen koennen, wenn noch niemand angemeldet ist. */
     SG.tarnung.starten();

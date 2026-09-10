@@ -2,13 +2,11 @@
    Die Tuer.
 
    Vier Ziffern auf einem richtigen Bedienfeld. Wer daneben liegt,
-   bekommt zehn Sekunden lang ein Bild zu sehen und darf es danach
-   erneut versuchen.
+   sieht zehn Sekunden lang zu, wie sich der Gehstock verdreht, und
+   darf es danach erneut versuchen.
 
-   Das Bild kommt aus src/assets/ und wird beim Bauen als Daten-URI
-   eingebettet (SG.assets). Liegt dort nichts, wird ein gezeichneter
-   Ersatz gezeigt - die Offline-Datei bleibt in beiden Faellen ohne
-   externe Verweise.
+   Der Stock wird gezeichnet, nicht geladen: kein Bild, keine Datei,
+   nichts, was in der Offline-Einzeldatei fehlen koennte.
    ------------------------------------------------------------------ */
 
 (function (SG) {
@@ -278,14 +276,9 @@
       var deckel = UI.el('div.gate-strafe');
       var rest = Math.ceil(SPERRE_MS / 1000);
 
-      var bild;
-      if (SG.assets && SG.assets.falschercode) {
-        bild = UI.el('img.gate-bild', { src: SG.assets.falschercode, alt: '' });
-      } else {
-        var cv = UI.el('canvas.gate-bild');
-        bild = cv;
-        setTimeout(function () { ersatzBild(cv); }, 0);
-      }
+      var bild = UI.el('canvas.gate-bild');
+      var stockAus = null;
+      setTimeout(function () { stockAus = verdrehterStock(bild); }, 0);
 
       var zaehler = UI.el('div.gate-zaehler', { text: rest + ' s' });
       var warnung = UI.el('div.gate-warnung');
@@ -304,6 +297,7 @@
         if (r.fall) {
           offenerFall = r.fall;
           clearInterval(t);
+          if (stockAus) stockAus();
           UI.remove(deckel);
           insVerhoer(r.fall);
           return;
@@ -321,33 +315,70 @@
         zaehler.textContent = rest + ' s';
         if (rest <= 0) {
           clearInterval(t);
+          if (stockAus) stockAus();
           UI.remove(deckel);
           gesperrt = false;
         }
       }, 1000);
     }
 
-    function ersatzBild(cv) {
-      var w = 320, h = 320;
+    /* Zehn Sekunden Gehstock: er dreht sich langsam und verwindet sich
+       dabei immer staerker, bis er zurueckschnappt. Gezeichnet statt
+       geladen - dieselbe Form wie das Zeichen ueber der Tuer. */
+
+    function verdrehterStock(cv) {
+      var W = 320, H = 320;
       var dpr = Math.min(window.devicePixelRatio || 1, 2);
-      cv.width = w * dpr; cv.height = h * dpr;
+      cv.width = W * dpr; cv.height = H * dpr;
       cv.style.width = '100%';
       var c = cv.getContext('2d');
       c.setTransform(dpr, 0, 0, dpr, 0, 0);
-      c.fillStyle = '#0b0e15';
-      c.fillRect(0, 0, w, h);
-      G.glow(c, w / 2, h / 2, w * 0.45, '#ff5f6b', 0.25);
-      /* G.text nimmt size/weight/color - font/fill waren hier wirkungslos
-         und der Ersatz kam in weissem Standardtext heraus. */
-      G.text(c, '⛔', w / 2, h * 0.42, {
-        size: 110, align: 'center', baseline: 'middle',
-      });
-      G.text(c, 'Kein Zutritt', w / 2, h * 0.72, {
-        size: 24, weight: 700, color: '#ffd3d7', align: 'center', baseline: 'middle',
-      });
-      G.text(c, 'Hier gehört ein Bild hin — siehe src/assets/', w / 2, h * 0.82, {
-        size: 12, weight: 500, color: '#8794b1', align: 'center', baseline: 'middle',
-      });
+
+      var t0 = 0, raf = 0, lebt = true;
+
+      function bild(zeit) {
+        if (!lebt) return;
+        raf = requestAnimationFrame(bild);
+        if (!t0) t0 = zeit;
+        zeichnen((zeit - t0) / 1000);
+      }
+
+      function zeichnen(t) {
+        c.clearRect(0, 0, W, H);
+        c.fillStyle = '#0b0e15';
+        c.fillRect(0, 0, W, H);
+        G.glow(c, W / 2, H / 2, W * 0.45, '#ff5f6b', 0.22);
+
+        /* Die Verwindung schwillt an und schnappt zurueck: langsam
+           hoch ueber zwei Sekunden, dann in einem Ruck zurueck. */
+        var p = (t % 2.4) / 2.4;
+        var zug = p < 0.78 ? p / 0.78 : 1 - (p - 0.78) / 0.22;
+        zug = zug * zug * (3 - 2 * zug);
+
+        var hoehe = H * 0.62;
+        c.save();
+        c.translate(W / 2, H * 0.46);
+        c.rotate(Math.sin(t * 0.8) * 0.5 + zug * 0.35);
+        c.scale(Math.cos(t * 0.9) < 0 ? -1 : 1, 1);
+        G.gehstock(c, 0, 0, hoehe, {
+          dicke: hoehe * 0.13,
+          radius: hoehe * 0.2,
+          bieg: zug * hoehe * 0.42,
+          color: '#ff5f6b',
+        });
+        c.restore();
+
+        G.text(c, 'Kein Zutritt', W / 2, H * 0.88, {
+          size: 22, weight: 700, color: '#ffd3d7', align: 'center', baseline: 'middle',
+        });
+      }
+
+      raf = requestAnimationFrame(bild);
+      zeichnen(0);
+      return function () {
+        lebt = false;
+        if (raf) cancelAnimationFrame(raf);
+      };
     }
 
     /* -------------------------------------------------- Name erfragen */
