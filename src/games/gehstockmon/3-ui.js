@@ -9,6 +9,7 @@
   function mount(host) {
     var st=D.neuerStand(null), online=null, connected=false, world, dead=false, busy=false, animating=false, drawerView=null;
     var selected=1, battle=null, visual=null, lastNear=null, lastPoll=0, timeOffset=0, tickCount=0, animationToken=0, requestEpoch=0, polling=false;
+    var peerList=[],peerLabels={},presenceBusy=false,lastPresence=0,lastPresenceReply=0;
     var root=el('div',undefined,'gm-shell');host.root.classList.add('gm-game');host.stage.appendChild(root);
     var worldBox=el('div',undefined,'gm-world');root.appendChild(worldBox);
     var hud=el('div',undefined,'gm-hud'),brand=el('div',undefined,'gm-brand');
@@ -16,7 +17,8 @@
     var resources=el('div',undefined,'gm-resource-row'),gold=el('span','','gm-resource'),owned=el('span','','gm-resource');resources.appendChild(gold);resources.appendChild(owned);brand.appendChild(resources);hud.appendChild(brand);
     var actions=el('div',undefined,'gm-top-actions'),worldButton=button('Spielerwelt',showOnline,'gm-button gm-online-button');actions.appendChild(worldButton);actions.appendChild(button('Hilfe',showHelp,'gm-icon-button'));hud.appendChild(actions);root.appendChild(hud);
     var pinsBox=el('div',undefined,'gm-pins'),pins=[];root.appendChild(pinsBox);
-    D.FELDER.forEach(function(f){var p=button('',function(){selectField(f.id,true);},'gm-map-pin');p.setAttribute('aria-label',f.name+' auswählen');p.appendChild(el('span',String(f.id),'gm-pin-number'));p.appendChild(el('span',f.name,'gm-pin-name'));pinsBox.appendChild(p);pins.push(p);});
+    D.FELDER.forEach(function(f){var p=button('',function(){selectField(f.id,true);},'gm-map-pin');p.setAttribute('aria-label',f.name+' auswählen');p.appendChild(el('span',String(f.id),'gm-pin-number'));var text=el('div',undefined,'gm-pin-text');p.titleNode=el('strong',f.name,'gm-pin-name');p.ownerNode=el('span','Wird geladen …','gm-pin-owner');text.appendChild(p.titleNode);text.appendChild(p.ownerNode);p.appendChild(text);pinsBox.appendChild(p);pins.push(p);});
+    var peerLayer=el('div',undefined,'gm-peer-labels');root.appendChild(peerLayer);
     var controls=el('div',undefined,'gm-camera-controls');
     [['+','Näher heran',function(){world.zoom(-7);}],['−','Herauszoomen',function(){world.zoom(7);}],['↶','Kamera drehen',function(){world.rotate(Math.PI/4);}],['◎','Zur eigenen Figur',function(){world.follow();}]].forEach(function(v){var b=button(v[0],function(){if(world)v[2]();},'gm-icon-button');b.setAttribute('aria-label',v[1]);controls.appendChild(b);});root.appendChild(controls);
     var legend=el('div',undefined,'gm-map-legend');[['own','Dein Gebiet'],['rival','Spieler'],['npc','Computer']].forEach(function(v){legend.appendChild(el('span',v[1],v[0]));});root.appendChild(legend);
@@ -43,7 +45,7 @@
     function deadline(parent,until,ready){var span=el('span',until<=now()?ready:duration(until-now()),'gm-countdown');span.setAttribute('data-until',String(until));span.setAttribute('data-ready',ready);parent.appendChild(span);return span;}
     function update(){
       var ts=territories();updateResources();
-      pins.forEach(function(p,i){var t=ts[i];p.hidden=!t;if(!t)return;p.classList.toggle('selected',i+1===selected);p.classList.toggle('owned',own(t));p.classList.toggle('rival',!!t.ownerId&&!own(t));p.firstChild.textContent=own(t)?'⚑':String(i+1);p.lastChild.textContent=D.FELDER[i].name+' · '+E.LEVELS[t.level].name;});
+      pins.forEach(function(p,i){var t=ts[i];p.hidden=!t;if(!t)return;p.classList.toggle('selected',i+1===selected);p.classList.toggle('owned',own(t));p.classList.toggle('rival',!!t.ownerId&&!own(t));p.firstChild.textContent=own(t)?'⚑':String(i+1);p.titleNode.textContent=D.FELDER[i].name;p.ownerNode.textContent=(t.ownerId?'Besitzer: ':'Computer: ')+t.ownerName;p.title=D.FELDER[i].biom+' · '+E.LEVELS[t.level].name+' · '+p.ownerNode.textContent;});
       if(world&&online){world.setHeld(ts.filter(own).map(function(t){return t.id;}));world.setSquad(st.truppe.map(D.mon));if(world.setTerritories)world.setTerritories(ts,online.playerId);}
       drawTarget();syncInput();
     }
@@ -51,7 +53,8 @@
     function drawTarget(){
       UI.clear(target);if(!online||battle)return;var t=current(),f=D.FELDER[selected-1],level=E.LEVELS[t.level];
       target.appendChild(el('div',own(t)?'DEIN AUSSENPOSTEN':t.ownerId?'SPIELERGEBIET · '+t.ownerName:'COMPUTERGEBIET','gm-eyebrow'));target.appendChild(el('h2',f.name));
-      var badges=el('div',undefined,'gm-target-badges');badges.appendChild(el('span',level.name+' · Stufe '+t.level));badges.appendChild(el('span',own(t)?'+'+level.income+' Gold/Std.':'Verteidigung +'+Math.round(level.bonus*100)+' % KP'));target.appendChild(badges);
+      target.appendChild(el('p',f.biom+' · '+(t.ownerId?'Besitzer: ':'Verteidigt von ')+t.ownerName,'gm-territory-owner'));
+      var badges=el('div',undefined,'gm-target-badges');badges.appendChild(el('span',level.name+' · Stufe '+t.level));badges.appendChild(el('span',own(t)?'+'+level.income+' Gold/Std.':'Verteidigung +'+Math.round(level.bonus*100)+' % KP'));badges.appendChild(el('span',own(t)?'Dein Tor öffnet sich bei Annäherung':'Tor geschlossen · Sieg gewährt Zutritt'));target.appendChild(badges);
       if(own(t)){var production=el('p');production.appendChild(el('span',(t.eggStock||0)+'/3 Eier bereit · '));deadline(production,t.eggAt+E.EGG_TIME,'Ei bereit');target.appendChild(production);}
       var row=el('div',undefined,'gm-target-actions');row.appendChild(button(own(t)?'Verwalten':'Aufklären',own(t)?function(){showPost(selected);}:showScout,'gm-button gm-secondary'));
       var near=world?world.distanceTo(selected)<10:true;
@@ -130,7 +133,9 @@
     }
     function fleeBattle(){if(!connected||busy||animating||!battle)return;requestOnline('arena_flee',{battleId:battle.id,revision:battle.revision}).then(function(res){applyOnline(res);showArena(res.arena,false);}).catch(onlineError);}
     function requestOnline(op,data){if(dead||busy)return Promise.reject(new Error('Bitte warte auf die aktuelle Aktion.'));requestEpoch++;busy=true;joyEnd();syncInput();if(battle)renderArena(false);else closeDrawer();return R.online.request(op,data).finally(function(){busy=false;if(!dead){syncInput();if(battle&&!animating)renderArena(false);drawTarget();}});}
-    function applyOnline(res){if(dead)return;online=res;connected=true;lastPoll=Date.now();timeOffset=res.serverTime-Date.now();st=D.neuerStand(res.profile,res.serverTime);worldButton.textContent='Spielerwelt ●';connectionBox.hidden=true;root.classList.remove('gm-disconnected');if(world)world.pause(!!battle);update();}
+    function applyOnline(res){if(dead)return;if(!res.territories||res.territories.length!==D.FELDER.length)throw new Error('Die Karte wurde aktualisiert. Bitte lade die Website neu.');online=res;connected=true;lastPoll=Date.now();timeOffset=res.serverTime-Date.now();st=D.neuerStand(res.profile,res.serverTime);worldButton.textContent=lastPresenceReply?'Spielerwelt · '+(peerList.length+1)+' online':'Spielerwelt';connectionBox.hidden=true;root.classList.remove('gm-disconnected');if(world)world.pause(!!battle);update();}
+    function applyPeers(peers,serverTime){if(dead)return;peerList=peers;var keep={};peers.forEach(function(p){keep[p.id]=true;var label=peerLabels[p.id];if(!label){label=el('span',undefined,'gm-peer-label');peerLayer.appendChild(label);peerLabels[p.id]=label;}label.textContent=p.name+(p.activity==='arena'?' · ⚔':'');label.hidden=true;label.title=p.activity==='arena'?'Kämpft gerade in einer Arena':'Auf der Insel unterwegs';});Object.keys(peerLabels).forEach(function(id){if(!keep[id]){peerLabels[id].remove();delete peerLabels[id];}});if(world&&world.setPeers)world.setPeers(peers,serverTime);worldButton.textContent='Spielerwelt · '+(peers.length+1)+' online';}
+    function syncPresence(){if(dead||!connected||presenceBusy||document.hidden||!world||!world.position)return;presenceBusy=true;lastPresence=Date.now();R.online.request('presence',{position:world.position()}).then(function(res){if(dead||!connected)return;lastPresenceReply=Date.now();applyPeers(res.peers||[],res.serverTime);}).catch(function(){if(!dead&&Date.now()-lastPresenceReply>15000){applyPeers([],now());worldButton.textContent='Spielerwelt · Verbindung prüfen';}}).finally(function(){presenceBusy=false;});}
     function showConnection(message){if(dead)return;connected=false;joyEnd();connectionBox.hidden=false;root.classList.add('gm-disconnected');if(world)world.pause(true);syncInput();UI.clear(connectionBox);
       var card=el('div',undefined,'gm-connection-card');card.appendChild(el('span','GEHSTOCKMON · ONLINE','gm-eyebrow'));card.appendChild(el('h2',message?'Verbindung zur Spielerwelt unterbrochen':'Spielerwelt wird geladen …'));
       card.appendChild(el('p',message||'Deine Mons, Außenposten und die Gebiete der anderen Spieler werden geladen.'));
@@ -141,6 +146,7 @@
     function connectWorld(){if(dead||busy)return;showConnection();requestOnline('join').then(function(res){if(dead)return;if(R.online.pending())return requestOnline('resume');return res;}).then(function(res){if(dead||!res)return;applyOnline(res);if(res.arena&&(res.arena.phase!=='finished'||battle||res.action&&res.action.op==='arena_turn'||res.action&&res.action.op==='arena_flee'))showArena(res.arena,false);else if(battle){battle=null;visual=null;arenaBox.hidden=true;root.classList.remove('gm-arena-open');if(world)world.pause(false);update();}}).catch(onlineError);}
     function resumeOnline(){if(busy)return;requestOnline(R.online.pending()?'resume':'world').then(function(res){applyOnline(res);if(res.arena)showArena(res.arena,false);else{showOnline();notify(res.message||'Aktueller Stand geladen.');}}).catch(onlineError);}
     function showOnline(){if(!openDrawer('Die Spielerwelt','online'))return;drawer.appendChild(el('p','Du teilst diese Welt mit allen Hideout-Spielern. Erobere Gebiete von Spielern und Computergegnern. Deine gespeicherten Mons verteidigen auch, wenn du offline bist.'));
+      drawer.appendChild(el('h3','Auf der Insel'));drawer.appendChild(el('p',peerList.length?peerList.map(function(p){return p.name+(p.activity==='arena'?' (in der Arena)':'');}).join(' · '):'Gerade sind keine anderen Spieler sichtbar.'));
       if(R.online.pending())drawer.appendChild(button('Offene Aktion prüfen',resumeOnline,'gm-button gm-primary'));
       drawer.appendChild(button('Welt aktualisieren',function(){requestOnline('world').then(function(res){applyOnline(res);if(res.arena&&res.arena.phase!=='finished')showArena(res.arena,false);else showOnline();}).catch(onlineError);}));
       drawer.appendChild(el('h3','Letzte Gebietskämpfe'));(online.reports||[]).slice().reverse().forEach(function(r){drawer.appendChild(el('p',r.text,'gm-report-line'));});if(!(online.reports||[]).length)drawer.appendChild(el('p','Noch keine Gebietskämpfe.'));
@@ -150,10 +156,12 @@
     window.addEventListener('offline',connectionLost);window.addEventListener('online',connectionRestored);
     try{world=R.createWorld(host,worldBox,{
       explore:function(){root.classList.remove('gm-overview');},select:function(id){selectField(id,false);},
-      frame:function(project){pins.forEach(function(pin,i){var o=R.orte[i],p=project({x:o.x,y:5.4,z:o.z});pin.style.transform='translate('+p.x+'px,'+p.y+'px) translate(-50%,-100%)';pin.hidden=!online||!!battle||!p.visible||(!root.classList.contains('gm-overview')&&!p.near&&i+1!==selected);});if(!battle&&world){var near=world.distanceTo(selected)<10;if(near!==lastNear){lastNear=near;drawTarget();}}},
+      frame:function(project,inBattle,position,visiblePeers){pins.forEach(function(pin,i){var o=R.orte[i],p=project({x:o.x,y:6,z:o.z});pin.style.transform='translate('+p.x+'px,'+p.y+'px) translate(-50%,-100%)';pin.hidden=!online||!!battle||!p.visible||(!root.classList.contains('gm-overview')&&!p.near&&i+1!==selected);});Object.keys(peerLabels).forEach(function(id){peerLabels[id].hidden=true;});(visiblePeers||[]).forEach(function(peer){var label=peerLabels[peer.id];if(!label)return;var p=project({x:peer.position.x,y:4.2,z:peer.position.z});label.hidden=!!battle||!connected||!p.visible||(!p.near&&!root.classList.contains('gm-overview'));label.style.transform='translate('+p.x+'px,'+p.y+'px) translate(-50%,-100%)';});if(!battle&&world){var near=world.distanceTo(selected)<10;if(near!==lastNear){lastNear=near;drawTarget();}}},
       contextLost:function(){notify('Die Grafik wurde angehalten und wird wiederhergestellt.');},contextRestored:function(){notify('Die Karte ist wieder bereit.');}
     });}catch(err){worldBox.appendChild(el('div','Die Karte konnte nicht gestartet werden. Bitte lade das Spiel neu. '+err.message,'gm-webgl-error'));}
     function tick(){if(dead)return;tickCount++;updateResources();
+      if(connected&&Date.now()-lastPresence>=2000)syncPresence();
+      if(peerList.length&&Date.now()-lastPresenceReply>15000)applyPeers([],now());
       root.querySelectorAll('[data-until]').forEach(function(node){var until=Number(node.getAttribute('data-until'));node.textContent=until<=now()?node.getAttribute('data-ready'):duration(until-now());});
       root.querySelectorAll('[data-enable-at]').forEach(function(node){node.disabled=busy||Number(node.getAttribute('data-enable-at'))>now();});
       if(connected&&tickCount%15===0&&!battle){drawTarget();if(drawerView==='posts'||drawerView&&drawerView.indexOf('post:')===0)refreshDrawer(drawerView);}

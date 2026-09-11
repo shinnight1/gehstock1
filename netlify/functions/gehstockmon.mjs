@@ -14,11 +14,35 @@ function validCode(value) {
   return h % 97 === 0;
 }
 function initialWorld(now) {
-  return { version: 1, players: {}, reports: [], territories: D.FELDER.map((f) => ({ id: f.id, ownerId: null,
+  return { version: 1, mapVersion: D.MAP_VERSION, players: {}, reports: [], territories: D.FELDER.map((f) => ({ id: f.id, ownerId: null,
     ownerName: ['Wilder Clan','Flusswächter','Aschenclan','Nebelwache','Die Krone'][(f.id - 1) % 5],
     defense: A.defenders(f.id).map((k) => ({ id: k.id })), version: 1, ...E.outpost(null, now) })) };
 }
+function migrateMap(world, now) {
+  if (world.mapVersion === D.MAP_VERSION) return;
+  const old = clone(world.territories), biomeId = (id) => (id - 1) % 5 + 1;
+  world.previousMap = { changedAt: now, territories: clone(old) };
+  for (const p of Object.values(world.players)) {
+    for (const egg of p.eggs || []) if (Number.isInteger(egg.territoryId) && egg.territoryId > 0) egg.territoryId = biomeId(egg.territoryId);
+    Object.assign(p, D.neuerStand(p, now));
+    if (p.arena && p.arena.phase !== 'finished') {
+      p.arena = A.flee(p.arena); p.arena.winner = 'map_changed'; p.arena.settled = true;
+      p.arena.message = 'Die Insel hat jetzt fünf Biomgebiete. Wähle ein Gebiet auf der neuen Karte.';
+    }
+    if (p.arena) p.arena.territoryId = biomeId(p.arena.territoryId);
+  }
+  // Einkommen bis zur Umstellung bleibt erhalten; der bisherige Kartenstand ist archiviert.
+  for (const t of old) if (t.ownerId && world.players[t.ownerId]) E.settle(world.players[t.ownerId], Object.assign(t, E.outpost(t, now)), now);
+  world.territories = initialWorld(now).territories.map((base) => {
+    const candidates = old.filter((t) => biomeId(t.id) === base.id && t.ownerId && world.players[t.ownerId]);
+    candidates.sort((a,b) => b.capturedAt - a.capturedAt || b.level - a.level || a.id - b.id);
+    const held = candidates[0];
+    return held ? { ...held, id: base.id, version: Math.max(...old.filter(t=>biomeId(t.id)===base.id).map(t=>t.version||1)) + 1 } : base;
+  });
+  world.mapVersion = D.MAP_VERSION;
+}
 function migrateAndSettle(world, now) {
+  migrateMap(world, now);
   for (const p of Object.values(world.players)) {
     Object.assign(p, D.neuerStand(p, now));
     if (p.arena && p.arena.phase !== 'finished' && now - p.arena.lastActionAt > 20 * 60000) {
@@ -29,6 +53,10 @@ function migrateAndSettle(world, now) {
   for (const t of world.territories) {
     Object.assign(t, E.outpost(t, now));
     if (t.ownerId && world.players[t.ownerId]) E.settle(world.players[t.ownerId], t, now);
+  }
+  for (const [id,p] of Object.entries(world.players)) {
+    p.geschafft = world.territories.filter(t=>t.ownerId===id).map(t=>t.id);
+    p.outposts = Object.fromEntries(world.territories.filter(t=>t.ownerId===id).map(t=>[t.id,E.outpost(t,now)]));
   }
 }
 function validateSquad(p, squad) {
@@ -45,11 +73,28 @@ function protectedOwner(world, t, now) {
 }
 function publicResult(world, id, now, extra = {}) {
   const p = world.players[id];
-  return { playerId: id, serverTime: now, profile: D.neuerStand(p, now), arena: p.arena || null,
-    territories: world.territories.map((t) => ({ id: t.id, ownerId: t.ownerId, ownerName: t.ownerName, version: t.version, level: t.level,
+  return { playerId: id, serverTime: now, mapVersion: world.mapVersion, profile: D.neuerStand(p, now), arena: p.arena || null,
+    territories: world.territories.map((t) => ({ id: t.id, ownerId: t.ownerId, ownerName: world.players[t.ownerId]?.name || t.ownerName, version: t.version, level: t.level,
       defense: A.defenders(t.id, t.ownerId ? t.defense : null).map((k) => ({ id: k.id, name: k.name })),
       eggStock: t.ownerId === id ? t.eggStock : 0, eggAt: t.ownerId === id ? t.eggAt : null })),
     reports: world.reports.filter((r) => r.attackerId === id || r.defenderId === id).slice(-20), ...extra };
+}
+
+// Anwesenheit ist kurzlebig und unabhängig von Gold, Eiern und Kampfaktionen.
+async function updatePresence(db, world, id, position, timestamp) {
+  const p = world.players[id];
+  if (!p) throw new GameError('Betritt zuerst die Spielerwelt.',409);
+  if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.z) || !Number.isFinite(position.heading)
+      || Math.hypot(position.x/123,position.z/115)>1.01 || Math.abs(position.heading)>Math.PI+0.01) throw new GameError('Ungültige Kartenposition.');
+  for (let attempt=0;attempt<8;attempt++) {
+    const entry=await db.getWithMetadata('presence-v1',{type:'json',consistency:'strong'});
+    const players=Object.fromEntries(Object.entries(entry?.data.players||{}).filter(([pid,v])=>world.players[pid]&&timestamp-v.updatedAt<15000));
+    if (!players[id] || players[id].updatedAt<=timestamp) players[id] = { id, name:p.name, x:Math.round(position.x*100)/100, z:Math.round(position.z*100)/100,
+      heading:position.heading, activity:p.arena&&p.arena.phase!=='finished'&&timestamp-p.arena.lastActionAt<20*60000?'arena':'map', updatedAt:timestamp };
+    const result=await db.setJSON('presence-v1',{players},entry?{onlyIfMatch:entry.etag}:{onlyIfNew:true});
+    if(result.modified)return json({serverTime:timestamp,peers:Object.values(players).filter(v=>v.id!==id)});
+  }
+  throw new GameError('Die Mitspieler werden gerade aktualisiert.',409);
 }
 function settleBattle(world, p, id, now, requestId) {
   const b = p.arena; if (b.phase !== 'finished' || b.settled) return;
@@ -71,7 +116,7 @@ function settleBattle(world, p, id, now, requestId) {
 }
 
 /* Each turn, egg and upgrade is authoritative and atomically persisted. */
-export function createHandler({ store, now = Date.now, random = Math.random } = {}) {
+export function createHandler({ store, presenceStore, now = Date.now, random = Math.random } = {}) {
   return async function handle(request) {
     if (request.method !== 'POST') return json({ error: 'POST erforderlich.' }, 405);
     try {
@@ -79,11 +124,16 @@ export function createHandler({ store, now = Date.now, random = Math.random } = 
       const raw = await request.text(); if (raw.length > 24000) throw new GameError('Anfrage zu groß.', 413);
       let body; try { body = JSON.parse(raw); } catch { throw new GameError('Ungültige Anfrage.'); }
       if (!body || !validCode(body.code)) throw new GameError('Bitte melde dich im Hideout an.', 401);
-      if (!['join','world',...mutations].includes(body.op)) throw new GameError('Diese Spielaktion wird nicht mehr unterstützt. Lade das Spiel neu.');
+      if (!['join','world','presence',...mutations].includes(body.op)) throw new GameError('Diese Spielaktion wird nicht mehr unterstützt. Lade das Spiel neu.');
       if (mutations.includes(body.op) && (typeof body.requestId !== 'string' || body.requestId.length < 8 || body.requestId.length > 80)) throw new GameError('Aktionskennung fehlt.');
       const id = createHash('sha256').update('gehstockmon-player:' + body.code).digest('hex').slice(0, 24), timestamp = now();
       const name = typeof body.name === 'string' ? body.name.trim().replace(/[\u0000-\u001f]/g, '').slice(0, 30) : '';
       const db = store || getStore({ name: 'hgh-gehstockmon', consistency: 'strong' }), draw = random();
+      if (body.op === 'presence') {
+        const entry=await db.getWithMetadata(KEY,{type:'json',consistency:'strong'});
+        if(!entry)throw new GameError('Betritt zuerst die Spielerwelt.',409);
+        return await updatePresence(presenceStore||getStore({name:'hgh-gehstockmon-presence',consistency:'strong'}),entry.data,id,body.position,timestamp);
+      }
       for (let attempt = 0; attempt < 8; attempt++) {
         const entry = await db.getWithMetadata(KEY, { type: 'json', consistency: 'strong' });
         const world = entry ? clone(entry.data) : initialWorld(timestamp);

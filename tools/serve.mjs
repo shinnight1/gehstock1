@@ -16,8 +16,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHandler as createMonHandler } from '../netlify/functions/gehstockmon.mjs';
-import { devStore as monStore } from './gehstockmon-dev-store.mjs';
-const monHandler = createMonHandler({ store: monStore() });
+import { devStore as monStore, transientStore } from './gehstockmon-dev-store.mjs';
+const monHandler = createMonHandler({ store: monStore(), presenceStore: transientStore() });
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'dist');

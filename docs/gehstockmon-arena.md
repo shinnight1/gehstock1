@@ -1,6 +1,18 @@
 # GehstockMon: Arena und Außenposten
 
-Stand: 9. September 2026. Diese Spielfassung ersetzt den automatischen Plankampf und das Beschwören gegen Essenz.
+Stand: 10. September 2026. Diese Spielfassung ersetzt den automatischen Plankampf und das Beschwören gegen Essenz.
+
+## Fünf Biome und Mitspieler
+
+Die große Insel enthält fünf eroberbare Gebiete: Mooswacht (Smaragdwald), Flüsterufer (Flussland), Aschenklippen (Vulkanland), Nebelwald (Geisterwald) und Frostkrone (Schneegebirge). Boden, Vegetation und Farben unterscheiden sich über die gesamten Biomflächen. Fluss, Brücken, weiche Kontaktschatten und gerichtete Schatten ergänzen die Landschaft.
+
+Jede Festung hat ein zweiteiliges Tor. Es öffnet sich, wenn sich ihr Besitzer nähert. Andere Spieler bleiben vor dem verschlossenen Eingang und können die Gebietsarena betreten. Bei Besitzwechsel verlassen bisherige Besitzer die Festung. Die Kartenübersicht zeigt den Besitzernamen direkt unter dem Gebietsnamen.
+
+Andere aktive Spieler erscheinen als Pixel-Figuren mit Namen; ein Schwert kennzeichnet einen laufenden Arenakampf. Die Positionen werden etwa alle zwei Sekunden ausgetauscht und zwischen den Meldungen interpoliert. Nach 15 Sekunden ohne Lebenszeichen verschwindet eine Figur. Die Anzeige zeichnet höchstens die 48 nächsten Mitspieler, die Spielerliste zeigt alle gemeldeten Teilnehmer. Anwesenheitsdaten liegen getrennt von Fortschritt und Kampfaktionen und können kein Gold oder Gebiet vergeben.
+
+Neue Spieler beginnen mit Moosling, Glutfuchs, Nebelmolch und Rostknirps, alle gewöhnlich. Seltenere Mons haben mehr KP und Angriff; die Rollen behalten ihre eigenen Fähigkeiten und ihr Tempo. Mooswacht lässt sich mit der Starttruppe erobern. Bestehende Sammlungen und Aufstellungen werden nicht auf die neue Starttruppe zurückgesetzt.
+
+Bei der einmaligen Umstellung von 25 auf fünf Gebiete werden die bisherigen Außenposten nach Biom zusammengeführt. Der zuletzt eroberte besetzte Außenposten bestimmt den Besitzer; bei gleicher Zeit entscheidet zuerst die Ausbaustufe, dann die kleinere Gebietsnummer. Sein Ausbau und Produktionsstand werden übernommen. Fälliges Einkommen aller alten Außenposten wird bis zur Umstellung ausgezahlt. Bereits eingesammelte Eier behalten ihre Brutzeiten und werden ihrem Biom zugeordnet. Laufende Kämpfe enden ohne Eroberungsprämie. Der vorige Kartenstand bleibt intern als `previousMap` erhalten.
 
 ## Spielen
 

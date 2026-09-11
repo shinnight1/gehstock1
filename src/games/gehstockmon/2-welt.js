@@ -1,19 +1,7 @@
 /* GehstockMon: echte 3D-Welt und Wiedergabe der gemeinsamen Kampfmaschine. */
 (function (SG) {
   var R = SG.gehstockmon;
-  R.orte = [
-    { x: -14, z: 12, farbe: '#547d4b', dach: '#a24e34', biom: 'Mooswacht', terrain: 'Wiesenland' },
-    { x: 12, z: 13, farbe: '#3e7772', dach: '#497f92', biom: 'Flüsterfluss', terrain: 'Flussufer' },
-    { x: 20, z: -9, farbe: '#796452', dach: '#a95037', biom: 'Aschenklippen', terrain: 'Felsland' },
-    { x: -4, z: -17, farbe: '#586584', dach: '#65518c', biom: 'Geisterwald', terrain: 'Nebelwald' },
-    { x: -25, z: -7, farbe: '#7a6652', dach: '#b98841', biom: 'Der schwarze Horst', terrain: 'Hochland' }
-  ];
-
-  for (var region = 0; region < 20; region++) {
-    var angle = (region % 10) * Math.PI / 5 + (region >= 10 ? 0.24 : 0), radius = region >= 10 ? 103 : 66;
-    var source = R.orte[region % 5];
-    R.orte.push({ x: Math.cos(angle) * radius, z: Math.sin(angle) * radius * 0.9, farbe: source.farbe, dach: source.dach, biom: SG.gehstockmon.daten.FELDER[region + 5].name, terrain: source.terrain });
-  }
+  R.orte = R.daten.BIOME;
 
   R.createWorld = function (host, container, handlers) {
     var T = window.THREE;
@@ -22,30 +10,34 @@
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
     renderer.outputColorSpace = T.SRGBColorSpace;
     renderer.toneMapping = T.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.35;
+    renderer.toneMappingExposure = 1.12;
+    renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap;
     var canvas = renderer.domElement;
     canvas.className = 'gm-world-canvas';
     canvas.setAttribute('aria-label', '3D-Welt: ziehen zum Erkunden, tippen zum Laufen, zwei Finger zum Zoomen.');
     canvas.tabIndex = 0;
     container.appendChild(canvas);
     var scene = new T.Scene();
-    scene.background = new T.Color('#172d3a');
-    scene.fog = new T.FogExp2('#243a43', 0.0018);
+    scene.background = new T.Color('#345665');
+    scene.fog = new T.FogExp2('#345665', 0.0023);
     var camera = new T.PerspectiveCamera(39, 1, 1, 650);
     var focus = new T.Vector3(-8, 0, 6), desiredFocus = focus.clone();
     var yaw = 0.63, zoom = 38, desiredZoom = 38;
-    var ambient = new T.HemisphereLight('#c0e7ed', '#31312b', 2.3);
+    var ambient = new T.HemisphereLight('#c5dfea', '#303b30', 1.6);
     scene.add(ambient);
-    var sun = new T.DirectionalLight('#ffe1aa', 3.3);
-    sun.position.set(-30, 55, 25); scene.add(sun);
-    var rim = new T.DirectionalLight('#90b8ff', 1.6);
+    var sun = new T.DirectionalLight('#ffe2b2', 3);
+    sun.position.set(-40, 70, 28);sun.castShadow=true;sun.shadow.mapSize.set(1536,1536);sun.shadow.bias=-.00025;sun.shadow.normalBias=.035;
+    sun.shadow.camera.near=1;sun.shadow.camera.far=240;scene.add(sun);scene.add(sun.target);
+    var rim = new T.DirectionalLight('#91b8da', .65);
     rim.position.set(25, 20, -35); scene.add(rim);
     var fixed = new T.Group(); scene.add(fixed);
     var materials = {}, geometries = {}, spriteTextures = {}, spriteMaterials = [], units = [], flags = [], effects = [], battle = false;
-    var groundTextures = [], terrainMaterials = [], upgrades = new T.Group(), upgradeKey = ''; scene.add(upgrades);
+    var groundTextures = [], terrainMaterials = [], upgrades = new T.Group(), upgradeKey = '', gates=[], peers={}; scene.add(upgrades);
+    var shadowTexture=R.contactShadow(T),shadowMaterial=new T.MeshBasicMaterial({map:shadowTexture,transparent:true,depthWrite:false,toneMapped:false});
+    geometries.shadow=new T.PlaneGeometry(1,1);
     for (var terrainKind = 0; terrainKind < 5; terrainKind++) {
-      var terrainTexture = R.groundTexture(T, terrainKind); groundTextures.push(terrainTexture);
-      terrainMaterials.push(new T.MeshStandardMaterial({ map: terrainTexture, roughness: 1, metalness: 0, color: '#e2e4d2' }));
+      var terrainTexture = R.groundTexture(T, terrainKind);terrainTexture.anisotropy=4; groundTextures.push(terrainTexture);
+      terrainMaterials.push(new T.MeshStandardMaterial({ map: terrainTexture, roughness: 1, metalness: 0, color: '#edf0e4' }));
     }
     var time = 0, width = 1, height = 1, dead = false, contextLost = false;
     var selected = 1, held = [], active = null, following = true, inputBlocked = false;
@@ -60,12 +52,14 @@
     }
     function mesh(parent, kind, color, x, y, z, sx, sy, sz, glow) {
       var m = new T.Mesh(geo(kind), mat(color, glow));
-      m.position.set(x, y, z); m.scale.set(sx, sy, sz); parent.add(m); return m;
+      m.position.set(x, y, z); m.scale.set(sx, sy, sz);m.castShadow=sy>.5&&kind!=='land';m.receiveShadow=true; parent.add(m); return m;
     }
     function tree(x, z, size, spectral) {
+      var biome=R.biomeAt(x,z);spectral=biome===3;
       var g = new T.Group(); g.position.set(x, 0, z); g.rotation.y = x * 0.9; fixed.add(g);
       mesh(g, 'cylinder', '#514536', 0, size * 0.45, 0, size * 0.23, size * 0.9, size * 0.23);
-      for (var j = 0; j < 3; j++) mesh(g, 'cone', spectral ? ['#3a405f', '#4d5379', '#626b85'][j] : ['#224936', '#326449', '#4b8050'][j], 0, size * (0.85 + j * 0.3), 0, size * (1.05 - j * 0.22), size * 0.85, size * (1.05 - j * 0.22));
+      if(biome===2){var branch=mesh(g,'cylinder','#423c3a',.4,size*.65,0,size*.14,size*.8,size*.14);branch.rotation.z=-.7;return;}
+      for (var j = 0; j < 3; j++) mesh(g, biome===1?'sphere':'cone', biome===4?['#749692','#c4d9d6','#e1eeea'][j]:spectral ? ['#3a405f', '#4d5379', '#626b85'][j] : ['#224936', '#326449', '#4b8050'][j], 0, size * (0.85 + j * 0.3), 0, size * (1.05 - j * 0.22), size * 0.85, size * (1.05 - j * 0.22));
     }
     function building(x, z, level, color) {
       var g = new T.Group(); g.position.set(x, 0.1, z); fixed.add(g);
@@ -89,14 +83,21 @@
       var dx = b.x - a.x, dz = b.z - a.z, len = Math.sqrt(dx * dx + dz * dz);
       var m = mesh(fixed, 'box', '#a8976e', (a.x + b.x) / 2, 0.23, (a.z + b.z) / 2, 2.3, 0.12, len);
       m.rotation.y = Math.atan2(dx, dz);
+      var previous=a.x-R.riverCenter(a.z);
+      for(var s=1;s<=40;s++){var t=s/40,x=a.x+dx*t,z=a.z+dz*t,side=x-R.riverCenter(z);
+        if(side*previous<0){var crossing=previous/(previous-side),bridge=new T.Group();bridge.position.set(x-dx/40*(1-crossing),.14,z-dz/40*(1-crossing));bridge.rotation.y=m.rotation.y;fixed.add(bridge);
+          mesh(bridge,'box','#806342',0,.3,0,3.2,.35,9);
+          for(var rail=-1;rail<=1;rail+=2){mesh(bridge,'box','#ba9565',rail*1.65,1,0,.15,.17,9);for(var post=-1;post<=1;post+=2)mesh(bridge,'box','#765737',rail*1.65,.65,post*4,.3,1.3,.3);}}
+        previous=side;
+      }
     }
     mesh(fixed, 'land', '#233e47', 0, -3.5, 0, 280, 1, 265);
     mesh(fixed, 'land', '#3c4844', 0, -2.35, 0, 255, 4, 240);
-    var land = mesh(fixed, 'land', '#3d6348', 0, -0.55, 0, 253, 1.1, 238);
+    var land = mesh(fixed, 'land', '#3d6348', 0, -0.64, 0, 253, 1.1, 238);
     land.geometry = land.geometry.clone(); var uv = land.geometry.getAttribute('uv');
     for (var ui = 0; ui < uv.count; ui++) uv.setXY(ui, uv.getX(ui) * 42, uv.getY(ui) * 42);
     land.material = terrainMaterials[0];
-    var water = mesh(fixed, 'box', '#3f8895', 6, 0.035, 8, 3.4, 0.16, 210); water.rotation.y = -0.22;
+    R.createBiomeGround(T,scene,terrainMaterials);var waters=R.createWater(T,scene);
     for (var p = 0; p < R.orte.length; p++) {
       var start = p < 5 ? 0 : p < 15 ? 5 : 15, count = p < 5 ? 5 : 10;
       pathBetween(R.orte[p], R.orte[start + (p - start + 1) % count]);
@@ -111,11 +112,13 @@
       for (var cu = 0; cu < clearingUv.count; cu++) clearingUv.setXY(cu, clearingUv.getX(cu) * 4, clearingUv.getY(cu) * 4);
       clearing.material = terrainMaterials[i % 5];
       building(o.x, o.z - 2.8, 1, o.dach);
-      for (var k = -3; k <= 3; k++) {
-        if (Math.abs(k) < 2) continue;
-        mesh(fixed, 'box', '#838779', o.x + k * 1.65, 0.8, o.z + 3.4, 1.4, 1.5, 0.85);
-        mesh(fixed, 'box', '#a1a190', o.x + k * 1.65, 1.65, o.z + 3.4, 1.55, 0.35, 1);
-      }
+      mesh(fixed,'box','#858d81',o.x-6,1.1,o.z-2,1,2.2,13);mesh(fixed,'box','#858d81',o.x+6,1.1,o.z-2,1,2.2,13);
+      mesh(fixed,'box','#858d81',o.x,1.1,o.z-8,12,2.2,1);
+      [-1,1].forEach(function(side){mesh(fixed,'box','#858d81',o.x+side*4.5,1.1,o.z+4.5,3,2.2,1);mesh(fixed,'cylinder','#a0aa9a',o.x+side*2.8,1.65,o.z+4.5,1.1,3.3,1.1);mesh(fixed,'cone',o.dach,o.x+side*2.8,3.65,o.z+4.5,1.6,1,1.6);});
+      var gate={id:i+1,own:false,open:0,leaves:[]};
+      [-1,1].forEach(function(side){var pivot=new T.Group();pivot.position.set(o.x+side*2.35,.15,o.z+4.5);scene.add(pivot);pivot.name='gate-'+(i+1)+'-'+side;
+        mesh(pivot,'box','#755239',-side*1.17,1.15,0,2.34,2.3,.24);mesh(pivot,'box','#c2a36c',-side*1.17,1.85,.14,2.25,.13,.1);mesh(pivot,'box','#c2a36c',-side*1.17,.5,.14,2.25,.13,.1);gate.leaves.push(pivot);});
+      gates.push(gate);
       for (var j = 0; j < 7; j++) {
         var angle = j * 0.88 + i;
         tree(o.x + Math.cos(angle) * 8, o.z + Math.sin(angle) * 7.8, 2.2 + (j % 3) * 0.5, i % 5 === 3);
@@ -140,8 +143,9 @@
     for (var tuft = 0; tuft < 1400; tuft++) {
       var tx = Math.sin(tuft * 83.17) * 117, tz = Math.cos(tuft * 47.31) * 108;
       if (Math.hypot(tx / 123, tz / 115) > .97 || R.orte.some(function (o) { return Math.hypot(o.x-tx,o.z-tz)<7; })) continue;
-      var grass = mesh(fixed, 'cone', ['#537343','#71884c','#3f673c'][tuft%3], tx, .24, tz, .20, .48 + tuft%3*.09, .12); grass.rotation.z = .22;
-      if (tuft % 13 === 0) mesh(fixed, 'sphere', tuft%2 ? '#d3b269' : '#bccba1', tx, .35, tz, .25, .18, .25);
+      var kind=R.biomeAt(tx,tz),colors=kind===4?['#c8dfdf','#e0eae8','#b6cfd4']:kind===2?['#56443d','#a04d32','#6e5748']:kind===3?['#607878','#647b91','#4d6169']:['#537343','#71884c','#3f673c'];
+      var grass = mesh(fixed, 'cone', colors[tuft%3], tx, .24, tz, .20, .48 + tuft%3*.09, .12); grass.rotation.z = .22;grass.castShadow=false;
+      if (tuft % 13 === 0) mesh(fixed, 'sphere', kind===4?'#e1ece7':kind===2?'#d87542':kind===3?'#99acc7':tuft%2 ? '#d3b269' : '#bccba1', tx, .35, tz, .25, .18, .25);
     }
     R.orte.forEach(function (o, i) {
       if(i%5===2){for(var r=0;r<4;r++){mesh(fixed,'rock','#81776b',o.x+11+r*.7,.8+r*.3,o.z-7-r,2.8,2+r,2.4);mesh(fixed,'cylinder','#a1987e',o.x-11+r*1.7,1.2,o.z-5,1,2.4+(r%2),1);}}
@@ -153,19 +157,20 @@
     var batches = {}, old = [];
     fixed.traverse(function (m) {
       if (!m.isMesh) return;
-      var id = m.material.uuid;
-      if (!batches[id]) batches[id] = { material: m.material, list: [] };
+      var id = m.material.uuid+':'+m.castShadow;
+      if (!batches[id]) batches[id] = { material: m.material, shadow:m.castShadow, list: [] };
       var g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone(); g.applyMatrix4(m.matrixWorld); batches[id].list.push(g); old.push(m);
     });
     old.forEach(function (m) { m.parent.remove(m); if (Object.keys(geometries).every(function (key) { return geometries[key] !== m.geometry; })) m.geometry.dispose(); });
     Object.keys(batches).forEach(function (id) {
       var b = batches[id], merged = T.mergeGeometries(b.list, false);
-      if (merged) { var m = new T.Mesh(merged, b.material); fixed.add(m); }
+      if (merged) { var m = new T.Mesh(merged, b.material);m.castShadow=b.shadow;m.receiveShadow=true; fixed.add(m); }
       b.list.forEach(function (g) { g.dispose(); });
     });
     var influence = R.createInfluence(T, scene);
     function setTerritories(territories, playerId) {
       influence.set(territories, playerId);
+      gates.forEach(function(g,i){g.own=territories[i].ownerId===playerId;var o=R.orte[i];if(!g.own&&explorer&&Math.abs(explorer.group.position.x-o.x)<6&&explorer.group.position.z>o.z-8&&explorer.group.position.z<o.z+4.5){explorer.group.position.set(o.x,.15,o.z+7);clearInput();}});
       var key=territories.map(function(t){return t.level;}).join(',');if(key===upgradeKey)return;upgradeKey=key;
       upgrades.children.slice().forEach(function(m){upgrades.remove(m);m.geometry.dispose();});
       territories.forEach(function(t,i){var o=R.orte[i];if(t.level<2)return;
@@ -176,7 +181,7 @@
           mesh(upgrades,'box','#dfbd69',o.x,3.6,o.z-4.5,4,.7,.9,'#79613b');}
       });
       upgrades.updateMatrixWorld(true);var groups={};upgrades.children.slice().forEach(function(m){var id=m.material.uuid;if(!groups[id])groups[id]={material:m.material,list:[]};var g=m.geometry.index?m.geometry.toNonIndexed():m.geometry.clone();g.applyMatrix4(m.matrixWorld);groups[id].list.push(g);upgrades.remove(m);});
-      Object.keys(groups).forEach(function(id){var b=groups[id],g=T.mergeGeometries(b.list,false);if(g)upgrades.add(new T.Mesh(g,b.material));b.list.forEach(function(p){p.dispose();});});
+      Object.keys(groups).forEach(function(id){var b=groups[id],g=T.mergeGeometries(b.list,false);if(g){var m=new T.Mesh(g,b.material);m.castShadow=true;m.receiveShadow=true;upgrades.add(m);}b.list.forEach(function(p){p.dispose();});});
     }
 
     /* Original generated portraits are the actual walking/battle sprites. */
@@ -223,7 +228,7 @@
       portrait.scale.set(size, size, 1); portrait.position.y = size * 0.52; g.add(portrait);
       if (monId === 'player') { portrait.center.set(0.5, 0); portrait.position.y = 0; }
       var ring = mesh(g, 'ring', color, 0, 0.09, 0, 1.3, 1.3, 1.3); ring.rotation.x = Math.PI / 2;
-      mesh(g, 'cylinder', '#283f37', 0, 0.04, 0, 1.45, 0.045, 0.9);
+      var shadow=new T.Mesh(geometries.shadow,shadowMaterial);shadow.rotation.x=-Math.PI/2;shadow.position.y=.02;shadow.scale.set(2.4,1.5,1);g.add(shadow);
       g.userData = { portrait: portrait, ring: ring, rarity: rarity }; return g;
     }
     function addUnit(id, role, rarity, x, z, enemy, hp, monId) {
@@ -245,7 +250,7 @@
         addUnit('camp' + i, k.typ, k.seltenheit, explorer.group.position.x - (i + 1) * 1.8, explorer.group.position.z + 1.5, false, k.hp, k.id);
       });
     }
-    setSquad(SG.gehstockmon.daten.KATALOG.slice(0, 4));
+    setSquad(SG.gehstockmon.daten.STARTER.map(SG.gehstockmon.daten.mon));
     var selectionRing = mesh(scene, 'ring', '#ffd281', -14, 0.38, 12, 18.6, 18.6, 0.4, '#79613b'); selectionRing.rotation.x = Math.PI / 2;
     var ray = new T.Raycaster(), pointer = new T.Vector2();
     var plane = new T.Mesh(new T.PlaneGeometry(300, 300), new T.MeshBasicMaterial({ visible: false }));
@@ -259,6 +264,25 @@
     function disposeUnit(u) {
       u.group.traverse(function (part) { if (part.isSprite) { part.material.dispose(); spriteMaterials = spriteMaterials.filter(function (m) { return m !== part.material; }); } });
       scene.remove(u.group);
+    }
+    function removePeer(id){var p=peers[id];if(!p)return;disposeUnit(p);p.texture.dispose();delete peers[id];}
+    function setPeers(list,serverTime){
+      var keep={};list.slice().sort(function(a,b){return Math.hypot(a.x-explorer.group.position.x,a.z-explorer.group.position.z)-Math.hypot(b.x-explorer.group.position.x,b.z-explorer.group.position.z);}).slice(0,48).forEach(function(info){
+        if(typeof info.id!=='string'||!Number.isFinite(info.x)||!Number.isFinite(info.z)||!Number.isFinite(info.updatedAt)||serverTime-info.updatedAt>=15000)return;
+        keep[info.id]=true;var p=peers[info.id];
+        if(!p){var g=creature(0,0,false,'player'),texture=g.userData.portrait.material.map.clone();texture.needsUpdate=true;g.userData.portrait.material.map=texture;
+          g.name='peer-'+info.id;g.userData.peerId=info.id;g.userData.ring.material=mat('#89cce5');g.position.set(info.x,.15,info.z);scene.add(g);
+          p=peers[info.id]={group:g,texture:texture,from:g.position.clone(),to:g.position.clone(),elapsed:0,duration:1,updatedAt:0};
+        }
+        if(p.updatedAt!==info.updatedAt){p.from.copy(p.group.position);p.to.set(info.x,.15,info.z);p.duration=T.MathUtils.clamp((info.updatedAt-p.updatedAt)/1000,.15,3);p.elapsed=0;if(p.from.distanceTo(p.to)>45){p.group.position.copy(p.to);p.from.copy(p.to);}}
+        p.updatedAt=info.updatedAt;p.age=Math.max(0,(serverTime-info.updatedAt)/1000);p.heading=info.heading||0;p.info=info;
+      });Object.keys(peers).forEach(function(id){if(!keep[id])removePeer(id);});
+    }
+    function canStep(x,z){
+      return gates.every(function(g,i){var o=R.orte[i],p=explorer.group.position,inside=Math.abs(x-o.x)<6.4&&z>o.z-8.4&&z<o.z+4.8,was=Math.abs(p.x-o.x)<6.4&&p.z>o.z-8.4&&p.z<o.z+4.8;
+        if(!inside&&!was)return true;if(inside&&was)return g.own;
+        return g.own&&g.open>.65&&Math.abs(x-o.x)<2.25&&Math.max(z,p.z)>=o.z+4.8;
+      });
     }
     function setHeld(ids) {
       held = ids.slice();
@@ -376,6 +400,12 @@
     var loop = host.loop({
       update: function (dt) {
         if (dead || contextLost) return; time += dt;
+        waters.update(time);
+        gates.forEach(function(g,i){var o=R.orte[i],near=Math.hypot(explorer.group.position.x-o.x,explorer.group.position.z-o.z)<14;g.open+=((g.own&&near?1:0)-g.open)*Math.min(1,dt*5);g.leaves[0].rotation.y=-g.open*Math.PI*.47;g.leaves[1].rotation.y=g.open*Math.PI*.47;});
+        Object.keys(peers).forEach(function(id){var p=peers[id];p.age+=dt;if(p.age>=15){removePeer(id);return;}p.elapsed+=dt;p.group.position.lerpVectors(p.from,p.to,Math.min(1,p.elapsed/p.duration));
+          var walking=p.elapsed<p.duration&&p.from.distanceTo(p.to)>.15;p.group.position.y=.15+(walking?Math.abs(Math.sin(time*10))*.12:0);
+          var across=Math.cos(yaw)*Math.sin(p.heading)-Math.sin(yaw)*Math.cos(p.heading);if(Math.abs(across)>.1){p.texture.repeat.x=across>0?-1:1;p.texture.offset.x=across>0?1:0;}
+        });
         if (keys.q) yaw += dt; if (keys.e) yaw -= dt;
         var vx = stick.x + (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0);
         var vz = stick.y + (keys.s || keys.arrowdown ? 1 : 0) - (keys.w || keys.arrowup ? 1 : 0);
@@ -389,7 +419,8 @@
         if (!battle && !inputBlocked) {
           var dx = destination.x - explorer.group.position.x, dz = destination.z - explorer.group.position.z, dist = Math.hypot(dx, dz);
           if (dist > 0.1) {
-            var move = Math.min(dist, dt * 11); explorer.group.position.x += dx / dist * move; explorer.group.position.z += dz / dist * move;
+            var move = Math.min(dist, dt * 11),nextX=explorer.group.position.x+dx/dist*move,nextZ=explorer.group.position.z+dz/dist*move;
+            if(canStep(nextX,nextZ)){explorer.group.position.x=nextX;explorer.group.position.z=nextZ;}
             explorer.group.rotation.y = Math.atan2(dx, dz); explorer.group.position.y = 0.15 + Math.abs(Math.sin(time * 10)) * 0.12;
             var across = Math.cos(yaw) * dx - Math.sin(yaw) * dz;
             if (Math.abs(across) > dist * 0.12) {
@@ -431,13 +462,16 @@
       render: function () {
         if (dead || contextLost || document.hidden) return;
         camera.position.set(focus.x + Math.sin(yaw) * zoom * 0.75, zoom * 0.86, focus.z + Math.cos(yaw) * zoom * 0.75);
+        sun.position.set(focus.x-40,70,focus.z+28);sun.target.position.set(focus.x,0,focus.z);
+        var extent=Math.max(42,zoom*.75);if(Math.abs(sun.shadow.camera.right-extent)>2){sun.shadow.camera.left=sun.shadow.camera.bottom=-extent;sun.shadow.camera.right=sun.shadow.camera.top=extent;sun.shadow.camera.updateProjectionMatrix();}
         camera.lookAt(focus); camera.updateMatrixWorld(); renderer.render(scene, camera);
-        if (handlers.frame) handlers.frame(project, battle, explorer.group.position);
+        if (handlers.frame) handlers.frame(project, battle, explorer.group.position,Object.keys(peers).map(function(id){return {id:id,position:peers[id].group.position,info:peers[id].info};}));
       }
     });
     loop.start();
     return {
-      select: select, overview: overview, follow: follow, setHeld: setHeld, setSquad: setSquad, setTerritories: setTerritories, startBattle: startBattle, endBattle: endBattle, step: step, project: project,
+      select: select, overview: overview, follow: follow, setHeld: setHeld, setSquad: setSquad, setTerritories: setTerritories, setPeers: setPeers, startBattle: startBattle, endBattle: endBattle, step: step, project: project,
+      position:function(){return {x:explorer.group.position.x,z:explorer.group.position.z,heading:explorer.group.rotation.y};},
       zoom: function (delta) { desiredZoom = T.MathUtils.clamp(desiredZoom + delta, 20, 245); },
       rotate: function (delta) { yaw += delta; },
       move: function (x, y) { if (inputBlocked || battle) return; stick.x = x; stick.y = y; },
@@ -447,7 +481,7 @@
       pause: function (yes) { if (yes) loop.pause(true); else loop.resume(true); },
       destroy: function () {
         if (dead) return; dead = true; loop.destroy(); off.forEach(function (f) { f(); }); if (observer) observer.disconnect();
-        influence.destroy();
+        Object.keys(peers).forEach(removePeer);influence.destroy();waters.destroy();shadowTexture.dispose();shadowMaterial.dispose();if(sun.shadow.map)sun.shadow.map.dispose();
         var seen = new Set(); scene.traverse(function (m) { if (m.geometry && !seen.has(m.geometry)) { seen.add(m.geometry); m.geometry.dispose(); } });
         Object.keys(geometries).forEach(function (key) { if (!seen.has(geometries[key])) geometries[key].dispose(); });
         Object.keys(materials).forEach(function (key) { materials[key].dispose(); }); plane.material.dispose();

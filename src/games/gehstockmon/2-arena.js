@@ -3,7 +3,7 @@
   var D = SG.gehstockmon.daten, A = SG.gehstockmon.arena = {};
   var stats = [[132,20,3],[88,29,8],[112,22,5],[96,25,11]];
   var specials = ['Schildstoß', 'Sichelstreich', 'Lebensquell', 'Runenstörung'];
-  A.stats = function (mon) { var s = stats[mon.typ]; return { hp: s[0], ang: s[1], tempo: s[2] }; };
+  A.stats = function (mon) { var s = stats[mon.typ],factor=[.78,1,1.18,1.38][mon.seltenheit]; return { hp: Math.round(s[0]*factor), ang: Math.round(s[1]*factor), tempo: s[2] }; };
   A.moves = function (u, round) {
     return [
       { id: 'strike', name: 'Stockhieb', text: 'Zuverlässiger Angriff', damage: u.ang, enabled: true },
@@ -20,7 +20,6 @@
     if (saved && saved.length) return saved.map(function (e) { return D.mon(e.id || e.monId) || D.KATALOG[0]; });
     var roster = [['moosling','rostknirps'], ['sumpfschnapper','nebelmolch','klinge'], ['kieselkrabb','glutfuchs','donnerwidder'], ['dornenwolf','pilzhueter','nachtflatter'], ['runengolem','frostklaue','seelenqualle','obsidianrabe']];
     var ids = roster[(fieldId - 1) % 5].slice();
-    if (fieldId > 15) ids[ids.length - 1] = ['titanenkrone','sonnenkoenig','sternengeweih','leerenwyrm','weltenfresser'][(fieldId - 1) % 5];
     return ids.map(D.mon);
   };
   A.create = function (roster, enemies, options) {

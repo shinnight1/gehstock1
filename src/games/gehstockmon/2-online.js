@@ -22,7 +22,7 @@
       function clearPending() {
         if (mutation && SG.auth.aktuell && SG.auth.aktuell.code === code) SG.storage.del(key);
       }
-      var ctrl = new AbortController(), timer = setTimeout(function () { ctrl.abort(); }, 15000);
+      var ctrl = new AbortController(), timer = setTimeout(function () { ctrl.abort(); }, op==='presence'?5000:15000);
       return fetch('/api/gehstockmon', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store', signal: ctrl.signal,
         body: JSON.stringify(Object.assign({}, data, { op: op, code: code, name: SG.auth.aktuell.name || 'Wanderer' }))

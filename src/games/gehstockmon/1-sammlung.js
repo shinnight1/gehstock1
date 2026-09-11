@@ -36,8 +36,11 @@
     D.KATALOG.push({ id: v[0], name: v[1], typ: v[2], seltenheit: v[3], bild: 'gm-' + v[4], lore: v[5], rolle: basis.rolle, hp: basis.hp, ang: basis.ang, tempo: basis.tempo, faeh: basis.faeh, mono: basis.mono });
   });
   D.mon = function (id) { return D.KATALOG.find(function (k) { return k.id === id; }) || null; };
+  D.STARTER = ['moosling','glutfuchs','nebelmolch','rostknirps'];
   D.neuerStand = function (save) {
-    var st = { plaene: {}, geschafft: [], besitz: ['bollwerk', 'klinge', 'waerter', 'spaeher'], truppe: ['bollwerk', 'klinge', 'waerter', 'spaeher'], essenz: 60, siege: 0, beschwoerungen: 0 };
+    var collection=save&&Array.isArray(save.besitz)?Array.from(new Set(save.besitz.filter(function(id){return !!D.mon(id);} ))):[];
+    D.STARTER.forEach(function(id){if(collection.length<4&&collection.indexOf(id)<0)collection.push(id);});
+    var st = { plaene: {}, geschafft: [], besitz: collection, truppe: collection.slice(0,4), essenz: 60, siege: 0, beschwoerungen: 0 };
     D.KATALOG.forEach(function (k) {
       var basis = D.KREATUREN[k.typ];
       var p = save && save.plaene && save.plaene[k.id];

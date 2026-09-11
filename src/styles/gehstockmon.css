@@ -61,3 +61,20 @@
 .gm-connection-card p{margin:12px 0 20px;font-size:16px;line-height:1.55;color:#c6d8d6}
 .gm-connection-card button{min-height:48px;width:100%;font-size:16px}
 .gm-disconnected>:not(.gm-world):not(.gm-connection):not(.gm-notice){visibility:hidden}
+
+/* Fünf lesbare Reviere und Namen direkt über den echten Mitspielern. */
+.gm-pins{z-index:3}.gm-hud,.gm-camera-controls,.gm-target,.gm-dock,.gm-joystick{z-index:4}
+.gm-brand{border-radius:16px;background:linear-gradient(130deg,#102b35f5,#193b44dc);border-color:#88b8b033;backdrop-filter:blur(10px);box-shadow:0 12px 36px #071d3044}
+.gm-map-pin{padding:8px 12px 8px 8px;border-radius:10px;gap:10px;min-width:145px;background:#102c35ed;box-shadow:0 5px 0 #071b2466,0 12px 28px #071d3044}
+.gm-pin-text{display:flex;flex-direction:column;min-width:0;text-align:left;gap:3px}
+.gm-pin-name{font-size:15px;line-height:1.2}.gm-pin-owner{font-size:13px;font-weight:500;color:#c4d9df;max-width:205px;overflow:hidden;text-overflow:ellipsis;line-height:1.35}
+.gm-map-pin.owned .gm-pin-owner{color:#a8e4cd}.gm-map-pin.rival .gm-pin-owner{color:#ffc0b7}
+.gm-target{background:linear-gradient(135deg,#16343ff5,#0e2531f5);border-radius:18px;border-color:#a9c5bd44;border-top-color:#ddba77;box-shadow:0 16px 45px #07192566;backdrop-filter:blur(12px)}
+.gm-target .gm-territory-owner{font-size:14px;line-height:1.5;color:#d4e5df}.gm-target-badges{font-size:13px;gap:8px;margin:12px 0}
+.gm-target-badges span:last-child{color:#c2d1b7}.gm-overview .gm-target{visibility:hidden}
+.gm-peer-labels{position:absolute;inset:0;z-index:2;overflow:hidden;pointer-events:none}
+.gm-peer-label{position:absolute;top:0;left:0;padding:5px 10px;border:1px solid #8fc6dd88;border-radius:7px;background:#102f3aed;box-shadow:0 3px 10px #071e2966;font-size:13px;font-weight:700;line-height:1.3;color:#e3f2f5;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis}
+.gm-arena-open .gm-peer-labels,.gm-drawer-open .gm-peer-labels{visibility:hidden}
+.gm-arena.biome-4 .gm-arena-scene{background:linear-gradient(#385570,#8da9b4 52%,#d1dfdf 53%,#86a3ac)}
+.gm-arena.biome-2 .gm-arena-scene{background:linear-gradient(#382f3a,#925343 52%,#6a4d40 53%,#322e32)}
+@media(max-width:600px){.gm-map-pin{min-width:125px;max-width:190px;gap:7px;padding:7px}.gm-pin-name{font-size:14px}.gm-pin-owner{font-size:12px;max-width:142px}.gm-peer-label{font-size:12px;max-width:130px}.gm-target-badges{font-size:12px}.gm-top-actions .gm-online-button{max-width:150px;font-size:13px}}
