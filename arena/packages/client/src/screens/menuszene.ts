@@ -47,7 +47,7 @@ export interface Menuszene {
  */
 const AUSSCHNITT = 0.58;
 
-export function menuszeneAnlegen(eltern: HTMLElement): Menuszene {
+export function menuszeneAnlegen(eltern: HTMLElement, arena = 0): Menuszene {
   const canvas = document.createElement('canvas');
   canvas.className = 'a-szene';
   eltern.appendChild(canvas);
@@ -98,9 +98,9 @@ export function menuszeneAnlegen(eltern: HTMLElement): Menuszene {
     /* Unten links buendig: der eigene Koenig steht im Vordergrund, das
        ferne Ende faellt oben aus dem Bild. */
     ctx!.translate(-kamera.x0, -(kamera.y0 + kamera.hoehePx - hoehe));
-    const bild = feldBauen(kamera, dichte);
+    const bild = feldBauen(kamera, dichte, arena);
     ctx!.drawImage(bild.unten, kamera.x0, kamera.y0, kamera.breitePx, kamera.hoehePx);
-    wasserZeichnen(ctx!, kamera, 0);
+    wasserZeichnen(ctx!, kamera, 0, arena);
 
     const rand = obenVersatz(kamera);
     ctx!.drawImage(

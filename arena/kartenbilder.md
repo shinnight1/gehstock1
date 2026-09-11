@@ -273,3 +273,132 @@ Wenn du alle sechzehn in einer Sitzung erzeugst, bleibt der Stil
 zuverlässiger gleich, als wenn du über Tage verteilt nachlegst. Falls
 eine Karte aus der Reihe fällt, hilft es meist, sie zusammen mit einer
 bereits gelungenen neu zu erzeugen und dabei auf diese zu verweisen.
+
+---
+
+# Nachtrag: die zehn neuen Karten
+
+Dieselben Regeln wie oben — quadratisch 1024 × 1024, freigestellt auf
+durchsichtigem Grund, Motiv mittig mit Luft am Rand. Dateiname ist die
+**id**, nicht der Anzeigename.
+
+Es werden **zwei** Bilder je Karte gebraucht:
+
+| wohin | was | Größe |
+| --- | --- | --- |
+| `bildquellen/cards/<id>.png` → `assets/cards/<id>.webp` | Kartenbild, Porträt, mit Wucht | 1024 |
+| `bildquellen/units/<id>.png` → `assets/units/<id>.webp` | Feldfigur, ganze Gestalt, von schräg oben | 1024 |
+
+Umgerechnet wird mit:
+
+```bash
+node arena/tools/bilder-wandeln.mjs cards 512 0.85
+```
+
+```bash
+node arena/tools/bilder-wandeln.mjs units 320 0.85
+```
+
+Solange nichts da ist, zeichnet das Spiel Farbflächen und Kapseln —
+es bricht nichts, es sieht nur unfertig aus.
+
+## Schildwache · `schildwache` · 2 Elixir · gewöhnlich
+
+> A stoic armored sentinel bracing behind an oversized tower shield,
+> weathered grey steel, dented rim, feet planted wide in a defensive
+> stance, no weapon raised — purely defensive posture, muted slate and
+> gunmetal palette, dramatic rim light from the left, fantasy game card
+> art, painterly, transparent background, centered, 1024x1024
+
+## Klingenschwärmer · `klingenschwaermer` · 3 Elixir · gewöhnlich
+
+> Four small winged blade-creatures flying in tight formation, bodies
+> like folded razors with translucent insect wings, pale green and steel,
+> motion blur on the wingtips, fast and fragile looking, fantasy game
+> card art, painterly, transparent background, centered, 1024x1024
+
+## Sturmbock · `sturmbock` · 4 Elixir · gewöhnlich
+
+> A massive armored battering ram on wheels shaped like a charging ram's
+> skull, iron-banded oak beam, dust kicked up beneath, leaning forward
+> mid-charge, warm rust and brown tones, fantasy game card art,
+> painterly, transparent background, centered, 1024x1024
+
+## Windstoß · `windstoss` · 2 Elixir · gewöhnlich · Zauber
+
+> A burst of concentrated wind rendered as spiralling pale blue air
+> currents and swept dust, a visible shockwave ring at its heart, no
+> creature, no caster — the spell effect alone, luminous white-cyan,
+> fantasy game spell icon, painterly, transparent background, centered,
+> 1024x1024
+
+## Glutschleuder · `glutschleuder` · 3 Elixir · selten
+
+> A compact siege catapult loaded with a glowing ember cluster, iron
+> frame and taut rope, sparks rising from the payload, warm orange glow
+> lighting the mechanism from within, fantasy game card art, painterly,
+> transparent background, centered, 1024x1024
+
+## Schattenklinge · `schattenklinge` · 3 Elixir · selten
+
+> A lithe hooded assassin mid-lunge, twin curved daggers, cloak
+> dissolving into wisps of shadow at the hem, deep violet and charcoal
+> with a single cold highlight along the blades, fast and lethal,
+> fantasy game card art, painterly, transparent background, centered,
+> 1024x1024
+
+## Dornenwall · `dornenwall` · 4 Elixir · selten
+
+> A defensive structure of interwoven thorned vines grown over a stone
+> base, long barbed tendrils coiled and ready to lash outward, deep
+> green and grey with dark red thorn tips, static and rooted, fantasy
+> game card art, painterly, transparent background, centered, 1024x1024
+
+## Sturmreiter · `sturmreiter` · 5 Elixir · episch
+
+> An armored rider astride a great storm-eagle in flight, lance lowered,
+> crackling static arcing across the feathers, deep indigo and violet
+> plumage with bright electric highlights, powerful and airborne,
+> fantasy game card art, painterly, transparent background, centered,
+> 1024x1024
+
+## Nebelbrut · `nebelbrut` · 5 Elixir · episch
+
+> A hollow spire of pale bone and grey mist with an open maw at its top,
+> faint moth-like shapes spilling out of the opening, drifting fog
+> around its base, muted lavender and bone-white, a building not a
+> creature, fantasy game card art, painterly, transparent background,
+> centered, 1024x1024
+
+## Titanenfaust · `titanenfaust` · 6 Elixir · legendär
+
+> A colossal stone-and-iron giant raising one enormous fist for a
+> ground-shattering strike, cracks glowing molten orange along its
+> forearm, moss and age on the shoulders, immense weight and slowness in
+> the pose, low heroic angle, fantasy game card art, painterly,
+> transparent background, centered, 1024x1024
+
+## Nebelfalter · `nebelfalter` · von der Nebelbrut ausgeworfen
+
+Nicht sammelbar, taucht also nie in der Sammlung auf — aber auf dem Feld
+schon. Deshalb reicht hier das **Feldbild** allein.
+
+> A single small ghostly moth of pale violet mist, translucent ragged
+> wings, faint trailing vapor, fragile and weightless, fantasy game
+> creature, painterly, transparent background, centered, 1024x1024
+
+## Wie die Feldbilder sich unterscheiden
+
+Für `bildquellen/units/` gilt dasselbe Motiv, aber:
+
+- **ganze Gestalt**, nicht Brustbild — Füße müssen im Bild sein
+- **von schräg oben** gesehen, etwa 30 Grad, passend zur Kameraperspektive
+- **neutrale Haltung**, keine extreme Pose: die Figur steht später ruhig
+  auf dem Feld und wird nur 30 bis 60 Pixel hoch dargestellt
+- **hoher Kontrast zur Silhouette**, weil bei dieser Größe nur der Umriss
+  übrig bleibt
+
+Hänge dafür an jeden Prompt oben an:
+
+> full body, standing, seen from a 30 degree elevated angle, neutral
+> pose, strong readable silhouette

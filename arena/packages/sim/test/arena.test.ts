@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   BREITE, HOEHE, FLUSS_OBEN, FLUSS_UNTEN, BRUECKEN, BRUECKE_BREITE,
   istBegehbar, istImFluss, darfPlatzieren, turmY, spiegelY, naechsteBruecke,
+  KOENIG_X,
 } from '../src/arena.js';
 import { tile } from '../src/fixed.js';
 
@@ -53,5 +54,36 @@ describe('Arena-Geometrie', () => {
   it('laesst die Platzierung nicht ins Aus rutschen', () => {
     expect(darfPlatzieren(0, tile(-0.5), tile(20), [])).toBe(false);
     expect(darfPlatzieren(0, tile(9), tile(33), [])).toBe(false);
+  });
+});
+
+describe('Sperrzone um den Koenig', () => {
+  it('verbietet das Setzen unmittelbar am eigenen Koenigsturm', () => {
+    /* Direkt an den Koenig zu setzen war die staerkste Verteidigung
+       im Spiel und kostete nichts: die Einheit erschien hinter dem
+       Angreifer, der Turm uebernahm den Rest. */
+    const ky = turmY(0, 'koenig');
+    expect(darfPlatzieren(0, KOENIG_X, ky, [])).toBe(false);
+    expect(darfPlatzieren(0, KOENIG_X, ky - tile(2), [])).toBe(false);
+    expect(darfPlatzieren(0, KOENIG_X + tile(2), ky, [])).toBe(false);
+  });
+
+  it('erlaubt es knapp ausserhalb wieder', () => {
+    const ky = turmY(0, 'koenig');
+    expect(darfPlatzieren(0, KOENIG_X, ky - tile(4.5), [])).toBe(true);
+    expect(darfPlatzieren(0, KOENIG_X + tile(5), ky, [])).toBe(true);
+  });
+
+  it('gilt gespiegelt fuer die andere Seite', () => {
+    const ky = turmY(1, 'koenig');
+    expect(darfPlatzieren(1, KOENIG_X, ky, [])).toBe(false);
+    expect(darfPlatzieren(1, KOENIG_X, ky + tile(5), [])).toBe(true);
+  });
+
+  it('sperrt nicht den gegnerischen Koenig', () => {
+    /* Auf der gegnerischen Haelfte darf man ohnehin erst, wenn dort
+       ein Turm gefallen ist - und dann soll der Druck ankommen. */
+    const gegnerKoenig = turmY(1, 'koenig');
+    expect(darfPlatzieren(0, KOENIG_X, gegnerKoenig, ['links', 'rechts'])).toBe(true);
   });
 });

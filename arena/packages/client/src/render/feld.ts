@@ -13,7 +13,8 @@
 import {
   BREITE, HOEHE, HOEHE_TILES, FLUSS_OBEN, FLUSS_UNTEN, BRUECKEN, tile,
 } from '@arena/sim';
-import { FARBE } from './palette.js';
+import { arenaFarben } from './arenafarben.js';
+import type { FeldFarben } from './arenafarben.js';
 import { kameraLokal, pxX, pxY, skalaBei } from './kamera.js';
 import type { Kamera } from './kamera.js';
 import { bodenPfad } from './perspektive.js';
@@ -27,6 +28,8 @@ export interface Feldbild {
   hoehe: number;
   dichte: number;
   gespiegelt: boolean;
+  /** Fuer welche Arena gebacken - sonst bliebe ein alter Anstrich stehen. */
+  arena: number;
 }
 
 /* Die obere Ebene ragt ueber das Feld hinaus - Bande und Bruecken
@@ -34,13 +37,14 @@ export interface Feldbild {
 const UEBERSTAND = 0.12;
 
 export function feldPasst(
-  bild: Feldbild | null, k: Kamera, dichte: number,
+  bild: Feldbild | null, k: Kamera, dichte: number, arena: number,
 ): bild is Feldbild {
   return !!bild
     && bild.breite === k.breitePx
     && bild.hoehe === k.hoehePx
     && bild.dichte === dichte
-    && bild.gespiegelt === k.gespiegelt;
+    && bild.gespiegelt === k.gespiegelt
+    && bild.arena === arena;
 }
 
 /** Wo die obere Ebene aufgelegt wird - sie ist groesser als das Feld. */
@@ -59,18 +63,19 @@ function ebeneAnlegen(k: Kamera, dichte: number, rand: number) {
   return { canvas, c };
 }
 
-export function feldBauen(k: Kamera, dichte: number): Feldbild {
+export function feldBauen(k: Kamera, dichte: number, arena = 0): Feldbild {
   const lokal = kameraLokal(k);
   const rand = obenVersatz(k);
+  const f = arenaFarben(arena);
 
   const u = ebeneAnlegen(k, dichte, 0);
-  rasenZeichnen(u.c, lokal);
-  maehmuster(u.c, lokal);
-  rasenFlecken(u.c, lokal);
-  laufwege(u.c, lokal);
-  grasHalme(u.c, lokal);
-  uferZeichnen(u.c, lokal);
-  flussbett(u.c, lokal);
+  rasenZeichnen(u.c, lokal, f);
+  maehmuster(u.c, lokal, f);
+  rasenFlecken(u.c, lokal, f);
+  laufwege(u.c, lokal, f);
+  grasHalme(u.c, lokal, f);
+  uferZeichnen(u.c, lokal, f);
+  flussbett(u.c, lokal, f);
 
   const o = ebeneAnlegen(k, dichte, rand);
   for (const b of BRUECKEN) brueckeZeichnen(o.c, lokal, b.x);
@@ -79,21 +84,23 @@ export function feldBauen(k: Kamera, dichte: number): Feldbild {
 
   return {
     unten: u.canvas, oben: o.canvas,
-    breite: k.breitePx, hoehe: k.hoehePx, dichte, gespiegelt: k.gespiegelt,
+    breite: k.breitePx, hoehe: k.hoehePx, dichte, gespiegelt: k.gespiegelt, arena,
   };
 }
 
 /* ------------------------------ Rasen ------------------------------ */
 
-function rasenZeichnen(c: CanvasRenderingContext2D, k: Kamera): void {
-  c.fillStyle = FARBE.rasen;
+function rasenZeichnen(
+  c: CanvasRenderingContext2D, k: Kamera, f: FeldFarben,
+): void {
+  c.fillStyle = f.rasen;
   bodenPfad(c, k, 0, 0, BREITE, HOEHE);
   c.fill();
 
   /* Die hintere Haelfte einen Hauch dunkler. Das ist kein Muster,
      sondern Distanz: was weiter weg liegt, bekommt weniger Licht -
      und man sieht ohne Nachdenken, wo die eigene Seite aufhoert. */
-  c.fillStyle = FARBE.rasenOben;
+  c.fillStyle = f.rasenOben;
   c.globalAlpha = 0.34;
   bodenPfad(c, k, 0, 0, BREITE, FLUSS_OBEN);
   c.fill();
@@ -101,9 +108,11 @@ function rasenZeichnen(c: CanvasRenderingContext2D, k: Kamera): void {
 }
 
 /** Maehstreifen quer zur Spielrichtung, je zwei Tiles breit. */
-function maehmuster(c: CanvasRenderingContext2D, k: Kamera): void {
+function maehmuster(
+  c: CanvasRenderingContext2D, k: Kamera, f: FeldFarben,
+): void {
   for (let t = 0; t < HOEHE_TILES; t += 2) {
-    c.fillStyle = (t / 2) % 2 === 0 ? FARBE.rasenHell : FARBE.rasenDunkel;
+    c.fillStyle = (t / 2) % 2 === 0 ? f.rasenHell : f.rasenDunkel;
     c.globalAlpha = 0.4;
     bodenPfad(c, k, 0, tile(t), BREITE, tile(Math.min(t + 2, HOEHE_TILES)));
     c.fill();
@@ -119,7 +128,9 @@ function maehmuster(c: CanvasRenderingContext2D, k: Kamera): void {
  * einen gewachsenen Rasen - hier heller, dort ausgetreten. Sie sind
  * gebacken, kosten also im laufenden Spiel nichts.
  */
-function rasenFlecken(c: CanvasRenderingContext2D, k: Kamera): void {
+function rasenFlecken(
+  c: CanvasRenderingContext2D, k: Kamera, f: FeldFarben,
+): void {
   const streu = streuAusSeed(0xf1ec);
   for (let i = 0; i < 44; i++) {
     const y = streu.bereich(0, HOEHE);
@@ -148,7 +159,9 @@ function rasenFlecken(c: CanvasRenderingContext2D, k: Kamera): void {
  * Arena zum ersten Mal sieht, weiss sofort, dass es zwei Bahnen und
  * zwei Bruecken gibt.
  */
-function laufwege(c: CanvasRenderingContext2D, k: Kamera): void {
+function laufwege(
+  c: CanvasRenderingContext2D, k: Kamera, f: FeldFarben,
+): void {
   const streu = streuAusSeed(0x1a4e);
   for (const b of BRUECKEN) {
     /* Kein Polygon, sondern viele weiche Flecken entlang der Bahn.
@@ -182,7 +195,9 @@ function laufwege(c: CanvasRenderingContext2D, k: Kamera): void {
  * Muster hinten grob und vorne fein aus - genau umgekehrt zur
  * Perspektive.
  */
-function grasHalme(c: CanvasRenderingContext2D, k: Kamera): void {
+function grasHalme(
+  c: CanvasRenderingContext2D, k: Kamera, f: FeldFarben,
+): void {
   const streu = streuAusSeed(0x5eed);
   for (let i = 0; i < 1400; i++) {
     const y = streu.bereich(0, HOEHE);
@@ -190,7 +205,7 @@ function grasHalme(c: CanvasRenderingContext2D, k: Kamera): void {
     const laenge = skalaBei(k, y) * tile(streu.bereich(0.06, 0.14));
     const px = pxX(k, x, y);
     const py = pxY(k, y);
-    c.fillStyle = streu.zahl() > 0.45 ? FARBE.rasenTupfen : FARBE.rasenSchatten;
+    c.fillStyle = streu.zahl() > 0.45 ? f.rasenTupfen : f.rasenSchatten;
     c.fillRect(px, py - laenge, Math.max(1, laenge * 0.45), Math.max(1, laenge));
   }
 }
@@ -198,7 +213,9 @@ function grasHalme(c: CanvasRenderingContext2D, k: Kamera): void {
 /* ------------------------- Ufer und Fluss -------------------------- */
 
 /** Erdstreifen an beiden Ufern, mit unruhiger Kante zum Rasen. */
-function uferZeichnen(c: CanvasRenderingContext2D, k: Kamera): void {
+function uferZeichnen(
+  c: CanvasRenderingContext2D, k: Kamera, f: FeldFarben,
+): void {
   const streu = streuAusSeed(0x11fe);
   const kanten = [
     { kante: FLUSS_OBEN, richtung: -1 },
@@ -207,7 +224,7 @@ function uferZeichnen(c: CanvasRenderingContext2D, k: Kamera): void {
   for (const eintrag of kanten) {
     const kante = eintrag.kante;
     const tiefe = tile(0.55) * eintrag.richtung;
-    c.fillStyle = FARBE.erde;
+    c.fillStyle = f.erde;
     c.beginPath();
     const schritte = 26;
     for (let i = 0; i <= schritte; i++) {
@@ -226,7 +243,7 @@ function uferZeichnen(c: CanvasRenderingContext2D, k: Kamera): void {
     c.fill();
 
     // Heller Sandsaum direkt an der Wasserlinie.
-    c.fillStyle = FARBE.sand;
+    c.fillStyle = f.sand;
     c.globalAlpha = 0.45;
     bodenPfad(c, k, 0, kante, BREITE, kante - tile(0.14) * eintrag.richtung);
     c.fill();
@@ -235,8 +252,10 @@ function uferZeichnen(c: CanvasRenderingContext2D, k: Kamera): void {
 }
 
 /** Dunkles Flussbett. Das bewegte Wasser kommt pro Bild darueber. */
-function flussbett(c: CanvasRenderingContext2D, k: Kamera): void {
-  c.fillStyle = FARBE.wasserTief;
+function flussbett(
+  c: CanvasRenderingContext2D, k: Kamera, f: FeldFarben,
+): void {
+  c.fillStyle = f.wasserTief;
   bodenPfad(c, k, 0, FLUSS_OBEN, BREITE, FLUSS_UNTEN);
   c.fill();
 }

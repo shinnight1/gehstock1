@@ -20,7 +20,7 @@
    ------------------------------------------------------------------ */
 
 import {
-  karteVon, restZeit, botAnlegen, botTick, botProfil,
+  karteVon, restZeit, botAnlegen, botTick, botProfil, arenaFuer,
 } from '@arena/sim';
 import type { Einheit, Spieler, Ausgang, BotZustand } from '@arena/sim';
 import { flaecheAnlegen } from './render/flaeche.js';
@@ -71,6 +71,13 @@ export interface SpielOptionen {
   gegnerDeck?: string[];
   /** Trophaeenstand - bestimmt, wie stark der Bot spielt. */
   trophaeen?: number;
+  /**
+   * Welche Arena gezeigt wird. Ohne Angabe die zum Trophaeenstand.
+   *
+   * Im Freundesduell zaehlen keine Trophaeen; dort legt der Raum die
+   * Arena fest, damit beide dasselbe Feld sehen.
+   */
+  arena?: number;
   /** Beide Seiten auf dieselbe Stufe normalisieren. */
   einheitlicheLevel?: boolean;
   /** Wird genau einmal gerufen, wenn das Match entschieden ist. */
@@ -97,6 +104,7 @@ export function spielStarten(wurzel: HTMLElement, optionen: SpielOptionen = {}):
   const zurueck = zurueckKnopfAnlegen(wurzel, optionen.onExit);
 
   const trophaeen = optionen.trophaeen ?? 0;
+  const arenaId = optionen.arena ?? arenaFuer(trophaeen).id;
 
   const lauf = optionen.lauf ?? laufStarten({
     seed: optionen.seed ?? (Date.now() & 0x7fffffff),
@@ -252,11 +260,11 @@ export function spielStarten(wurzel: HTMLElement, optionen: SpielOptionen = {}):
       ctx.translate(ruettelX, ruettelY);
     }
 
-    if (!feldPasst(feldbild, kamera, flaeche.dichte)) {
-      feldbild = feldBauen(kamera, flaeche.dichte);
+    if (!feldPasst(feldbild, kamera, flaeche.dichte, arenaId)) {
+      feldbild = feldBauen(kamera, flaeche.dichte, arenaId);
     }
     ctx.drawImage(feldbild.unten, kamera.x0, kamera.y0, kamera.breitePx, kamera.hoehePx);
-    wasserZeichnen(ctx, kamera, zeit);
+    wasserZeichnen(ctx, kamera, zeit, arenaId);
 
     const rand = obenVersatz(kamera);
     ctx.drawImage(

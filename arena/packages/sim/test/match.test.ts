@@ -89,7 +89,7 @@ describe('Zuege', () => {
     const fremd = s.spieler[0].queue[0]!;
     const cmd: Command = {
       typ: 'playCard', spieler: 0, kartenId: fremd,
-      tick: s.tick, x: tile(9), y: tile(25),
+      tick: s.tick, x: tile(9), y: tile(22),
     };
     expect(pruefeZug(s, cmd)).toBe('nichtAufDerHand');
     expect(fuehreZugAus(s, cmd)).toBe(false);
@@ -101,7 +101,7 @@ describe('Zuege', () => {
     const karte = s.spieler[0].hand[0]!;
     expect(pruefeZug(s, {
       typ: 'playCard', spieler: 0, kartenId: karte,
-      tick: s.tick, x: tile(9), y: tile(25),
+      tick: s.tick, x: tile(9), y: tile(22),
     })).toBe('zuwenigElixir');
   });
 
@@ -132,7 +132,7 @@ describe('Zuege', () => {
     const naechste = s.spieler[0].queue[0]!;
     const ok = fuehreZugAus(s, {
       typ: 'playCard', spieler: 0, kartenId: karte,
-      tick: s.tick, x: tile(9), y: tile(25),
+      tick: s.tick, x: tile(9), y: tile(22),
     });
     expect(ok).toBe(true);
     expect(s.spieler[0].hand[1]).toBe(naechste);

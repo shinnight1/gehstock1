@@ -32,6 +32,22 @@ import type { App, Schirm } from '../app.js';
 
 const PHASEN = { aufladen: 0.6, flug: 1.2, aufprall: 0.5, reveal: 1.2 };
 
+/**
+ * Wie wuchtig der Einschlag je Seltenheit ausfaellt.
+ *
+ * Die Abstufung ist der eigentliche Inhalt der Animation: sie muss
+ * lange bevor die Karte lesbar ist verraten, was gleich daliegt.
+ * Deshalb wachsen Funkenzahl, Zahl der Schockwellen und der
+ * Bildschirmblitz gemeinsam - und nur die beiden oberen Stufen
+ * bekommen ueberhaupt einen Strahlenkranz.
+ */
+const WUCHT = {
+  gewoehnlich: { funken: 70, wellen: 1, kranz: 0, blitz: 0.45, welle: 260 },
+  selten: { funken: 110, wellen: 2, kranz: 0, blitz: 0.6, welle: 340 },
+  episch: { funken: 170, wellen: 3, kranz: 320, blitz: 0.78, welle: 440 },
+  legendaer: { funken: 230, wellen: 4, kranz: 480, blitz: 0.95, welle: 560 },
+} as const;
+
 /* Tonhoehe je Seltenheit. Man hoert, was gezogen wurde, bevor die
    Karte sich fertig gedreht hat - das ist die halbe Spannung. */
 const TONHOEHE: Record<Seltenheit, number> = {
@@ -234,27 +250,65 @@ export function rollBauen(wurzel: HTMLElement, app: App): Schirm {
           + (gross ? 1.5 : 1) + ')';
         flieger.style.opacity = '1';
         flieger.style.background = t < 0.5 ? '#e8eef7' : farbe;
-        const spurBreite = (gross ? 26 : 16) * (t < 0.5 ? 0.6 : 1);
+        const spurBreite = (gross ? 30 : 17) * (t < 0.5 ? 0.6 : 1);
         partikel!.spur(fx, fy, t < 0.5 ? '#e8eef7' : farbe, spurBreite);
+
+        /* Ab der Haelfte sprueht das Objekt seitlich Funken ab. Das
+           ist der Moment, in dem die Farbe erscheint - und die Funken
+           machen daraus ein Ereignis statt eines Farbwechsels. Nur
+           fuer die hohen Seltenheiten, damit der Unterschied zaehlt. */
+        if (gross && t > 0.45) {
+          for (let i = 0; i < 2; i++) {
+            const streu = (Math.random() - 0.5) * 2;
+            partikel!.funke(fx, fy, streu * 260, (Math.random() - 0.3) * 300, farbe, 0.45);
+          }
+        }
       } else if (zeit < gesamt) {
         // Phase 3: Aufprall.
         if (!explodiert) {
           explodiert = true;
+          const w = WUCHT[hoechste];
           app.klang.spiel('rollAufprall', TONHOEHE[hoechste]);
           flieger.style.opacity = '0';
-          partikel!.explosion(mx, my, gross ? 160 : 90, farbe, gross ? 620 : 420);
+
+          /* Erst weiss, dann farbig: der erste Moment ist reine
+             Helligkeit, die Farbe kommt einen Wimpernschlag spaeter.
+             Umgekehrt sieht es aus, als waere jemand mit dem Pinsel
+             ausgerutscht. */
+          partikel!.explosion(mx, my, Math.round(w.funken * 0.35), '#ffffff', 760);
+          partikel!.explosion(mx, my, w.funken, farbe, 460);
+
+          /* Mehrere Wellen, zeitlich versetzt. Eine einzelne liest
+             sich als Kreis, drei als Druck. */
+          for (let i = 0; i < w.wellen; i++) {
+            const verzug = i * 90;
+            window.setTimeout(() => {
+              partikel?.schockwelle(mx, my, w.welle * (1 + i * 0.45), farbe, 0.5 + i * 0.1);
+            }, verzug);
+          }
+          if (w.kranz > 0) {
+            partikel!.strahlenkranz(mx, my, farbe, w.kranz, PHASEN.aufprall + 1.4);
+          }
+
           blitz.style.background = farbe;
           blitz.animate(
-            [{ opacity: 0.85 }, { opacity: 0 }],
-            { duration: 320, easing: 'ease-out' },
+            [{ opacity: w.blitz }, { opacity: 0 }],
+            { duration: 260 + w.wellen * 60, easing: 'ease-out' },
           );
-          if (hoechste === 'legendaer' && app.optionen.screenshake) {
+
+          /* Erschuetterung ab episch, beim Legendaeren staerker. Nur
+             transform - ein bewegter Schatten kostet auf dem iPad die
+             Bildrate. */
+          const ruettelt = hoechste === 'legendaer' || hoechste === 'episch';
+          if (ruettelt && app.optionen.screenshake) {
+            const kraft = hoechste === 'legendaer' ? 9 : 5;
             buehne.animate([
               { transform: 'translate(0,0)' },
-              { transform: 'translate(-6px,4px)' },
-              { transform: 'translate(5px,-3px)' },
+              { transform: `translate(${-kraft}px,${kraft * 0.6}px)` },
+              { transform: `translate(${kraft * 0.8}px,${-kraft * 0.5}px)` },
+              { transform: `translate(${-kraft * 0.4}px,${kraft * 0.25}px)` },
               { transform: 'translate(0,0)' },
-            ], { duration: 260, easing: 'ease-out' });
+            ], { duration: 200 + kraft * 20, easing: 'ease-out' });
           }
         }
       } else {

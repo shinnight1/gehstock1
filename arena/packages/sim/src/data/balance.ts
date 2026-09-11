@@ -58,7 +58,12 @@ export const TURM = {
     dmg: 109,
     /** Ticks zwischen zwei Schuessen: 1.0 s. */
     angriffsTakt: sekunden(1.0),
-    reichweite: 7000,
+    /* Von 7000 auf 5600 gesenkt. Sieben Kacheln reichten weit ueber
+       den Fluss: ein Angriff stand schon unter Beschuss, bevor er die
+       Bruecke verlassen hatte, und Fernkaempfer konnten den Turm nie
+       aus sicherem Abstand angehen. Mit 5,6 Kacheln deckt der Koenig
+       seinen Hof, nicht die halbe Karte. */
+    reichweite: 5600,
     /** Ticks, bis der Koenig nach dem Aufwachen zum ersten Mal schiesst. */
     aufwachVerzoegerung: sekunden(1.0),
   },
@@ -67,7 +72,11 @@ export const TURM = {
     dmg: 90,
     /** 0.8 s - schneller als der Koenig, dafuer schwaecher pro Schuss. */
     angriffsTakt: sekunden(0.8),
-    reichweite: 7500,
+    /* Von 7500 auf 6000. Der Seitenturm hatte mehr Reichweite als der
+       Koenig, ohne dass es dafuer einen Grund gab - vermutlich ein
+       vertauschtes Zahlenpaar. Er bleibt der weiter reichende von
+       beiden, aber nicht mehr um anderthalb Kacheln. */
+    reichweite: 6000,
   },
 } as const;
 
@@ -174,14 +183,28 @@ export interface Arena {
   readonly name: string;
   /** Ab dieser Trophaeenzahl gilt die Arena. */
   readonly ab: number;
+  /**
+   * Botstaerke am unteren Rand dieser Arena, 0 bis 1.
+   *
+   * Vorher haing die Staerke allein an einer weichen Kurve ueber alle
+   * Trophaeen. Bei 300 - dem Eintritt in die zweite Arena - lag sie
+   * damit bei 2,8 Prozent zwischen leicht und schwer: der Gegner
+   * spielte praktisch genauso schlecht wie in der ersten. Eine neue
+   * Arena muss sich aber anfuehlen wie eine neue Arena.
+   *
+   * Innerhalb einer Arena wird von hier bis zum Wert der naechsten
+   * ueberblendet. Der Verlauf bleibt also stetig - der Sprung liegt
+   * nicht an der Grenze, sondern im steilen Anstieg davor.
+   */
+  readonly haerte: number;
 }
 
 export const ARENEN: readonly Arena[] = [
-  { id: 0, name: 'Sandgrube', ab: 0 },
-  { id: 1, name: 'Bruchsteinhof', ab: 300 },
-  { id: 2, name: 'Frostkanal', ab: 800 },
-  { id: 3, name: 'Aschewall', ab: 1500 },
-  { id: 4, name: 'Sturmspitze', ab: 2500 },
+  { id: 0, name: 'Sandgrube', ab: 0, haerte: 0 },
+  { id: 1, name: 'Bruchsteinhof', ab: 300, haerte: 0.32 },
+  { id: 2, name: 'Frostkanal', ab: 800, haerte: 0.52 },
+  { id: 3, name: 'Aschewall', ab: 1500, haerte: 0.72 },
+  { id: 4, name: 'Sturmspitze', ab: 2500, haerte: 0.88 },
 ];
 
 export function arenaFuer(trophaeen: number): Arena {

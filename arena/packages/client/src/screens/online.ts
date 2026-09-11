@@ -17,7 +17,8 @@
    ?server= oder aus dem, was der Spieler zuletzt eingetippt hat.
    ------------------------------------------------------------------ */
 
-import type { Ausgang, Spieler } from '@arena/sim';
+import { ARENEN } from '@arena/sim';
+import type { Ausgang, Spieler, MatchAufbau } from '@arena/sim';
 import { codeSaeubern, codeGueltig, WIEDER_FENSTER_S } from '@arena/netz';
 import type { Fehlergrund, Sitzplatz } from '@arena/netz';
 import { levelTabelle, deckGueltig } from '@arena/meta';
@@ -181,7 +182,7 @@ export function onlineBauen(wurzel: HTMLElement, app: App): Schirm {
         level: levelTabelle(p),
       },
       onBericht: (b) => { letzterBericht = b; warteraumZeigen(b); },
-      onStart: (lauf, ich) => partieStarten(lauf, ich),
+      onStart: (lauf, ich, aufbau) => partieStarten(lauf, ich, aufbau),
       onEnde: (ausgang, tuerme, grund) => partieBeenden(ausgang, tuerme, grund),
     });
     was(sitzung);
@@ -256,7 +257,12 @@ export function onlineBauen(wurzel: HTMLElement, app: App): Schirm {
 
   /* ----------------------------- Partie ---------------------------- */
 
-  function partieStarten(lauf: OnlineLauf, ich: Spieler): void {
+  function partieStarten(lauf: OnlineLauf, ich: Spieler, aufbau: MatchAufbau): void {
+    /* Im Freundesduell zaehlen keine Trophaeen, also gibt es auch
+       keine Arena, in der man steht. Gewaehlt wird aus dem Seed des
+       Matches - den haben beide Seiten, also sehen beide dasselbe
+       Feld, und es ist nicht jedes Mal dieselbe Sandgrube. */
+    const arena = Math.abs(aufbau.seed) % ARENEN.length;
     seite.textContent = '';
     /* Dasselbe Element traegt jetzt das Spielfeld statt eines Menues:
        Polsterung und Scrollen weg, sonst sitzt der Canvas in einem
@@ -265,6 +271,7 @@ export function onlineBauen(wurzel: HTMLElement, app: App): Schirm {
     spiel = spielStarten(seite, {
       lauf,
       ich,
+      arena,
       screenshake: app.optionen.screenshake,
       onKlang: (art, hoehe) => app.klang.spiel(art as never, hoehe),
       onExit: () => { sitzung?.aufgeben(); app.gehe('menu'); },

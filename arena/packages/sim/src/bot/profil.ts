@@ -14,7 +14,7 @@
    ------------------------------------------------------------------ */
 
 import { tile } from '../fixed.js';
-import { ARENEN, TICKS_PRO_SEKUNDE } from '../data/balance.js';
+import { ARENEN, TICKS_PRO_SEKUNDE, arenaFuer } from '../data/balance.js';
 
 export interface BotProfil {
   /** Ticks, bis der Bot auf eine gespielte Karte reagiert. */
@@ -52,9 +52,6 @@ const SCHWER = {
 /** Ab hier buendelt der Bot Angriffe. */
 const PUSH_AB = 1500;
 
-/** Trophaeenstand, ab dem der Bot sein Maximum erreicht. */
-const MAX_TROPHAEEN = ARENEN[ARENEN.length - 1]!.ab + 500;
-
 function misch(leicht: number, schwer: number, t: number): number {
   return Math.round(leicht + (schwer - leicht) * t);
 }
@@ -62,13 +59,24 @@ function misch(leicht: number, schwer: number, t: number): number {
 /**
  * Botprofil zu einem Trophaeenstand.
  *
- * `t` laeuft von 0 bei null Trophaeen bis 1 am oberen Ende. Der
- * Verlauf ist bewusst leicht beschleunigt: die ersten Arenen sollen
- * nachgiebig bleiben, weil dort die Decks noch duenn sind.
+ * `t` laeuft von 0 bis 1 und wird nicht mehr aus einer Kurve ueber
+ * alle Trophaeen gebildet, sondern aus der Arena: jede hat einen
+ * eigenen Haertegrad, und innerhalb einer Arena wird zum Wert der
+ * naechsten ueberblendet.
+ *
+ * Der Grund steht bei `Arena.haerte`. Kurz: eine reine Gesamtkurve
+ * liess die zweite Arena bei 2,8 Prozent Staerke beginnen - also
+ * genauso leicht wie die erste. Die Stufen gehoeren dorthin, wo der
+ * Spieler sie als Fortschritt erlebt.
  */
 export function botProfil(trophaeen: number): BotProfil {
-  const roh = Math.max(0, Math.min(1, trophaeen / MAX_TROPHAEEN));
-  const t = roh * roh * (3 - 2 * roh); // weiche Kurve, an beiden Enden flach
+  const arena = arenaFuer(trophaeen);
+  const naechste = ARENEN.find((a) => a.ab > trophaeen);
+  const spanne = naechste && naechste.ab > arena.ab
+    ? Math.max(0, Math.min(1, (trophaeen - arena.ab) / (naechste.ab - arena.ab)))
+    : 1;
+  const bis = naechste ? naechste.haerte : 1;
+  const t = Math.max(0, Math.min(1, arena.haerte + (bis - arena.haerte) * spanne));
 
   return {
     reaktion: misch(LEICHT.reaktion, SCHWER.reaktion, t),

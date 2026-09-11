@@ -101,7 +101,8 @@ export function menuBauen(wurzel: HTMLElement, app: App): Schirm {
 
   const seite = el('div.a-schirm.a-menu', {}, [spalte]);
   wurzel.appendChild(seite);
-  const szene = menuszeneAnlegen(buehne);
+  // Das Menue zeigt die Arena, in der man gerade steht.
+  const szene = menuszeneAnlegen(buehne, arena.id);
 
   return {
     zerstoeren() {

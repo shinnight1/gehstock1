@@ -1,5 +1,5 @@
 /* ------------------------------------------------------------------
-   Die 16 Karten.
+   Die 26 Karten.
 
    Alle Namen und Rollen sind eigene Erfindungen. Werte in Millitiles
    und Ticks (20 pro Sekunde): tempo 50 entspricht einem Tile je
@@ -8,52 +8,95 @@
    ============================ ROLLEN ============================
 
    Tank            Steinwaechter, Frostkoloss
-   Schwarm         Rattenschar, Hundemeute, Speerwerferinnen
-   Flaechenschaden Hammergarde, Flammenspeier
-   Luft            Sturmfalken, Wolkenwal
+   Block           Schildwache (haelt auf, toetet nicht)
+   Schwarm Boden   Rattenschar, Hundemeute, Speerwerferinnen
+   Schwarm Luft    Sturmfalken, Klingenschwaermer
+   Meuchler        Schattenklinge (ein Ziel, sehr schnell)
+   Flaechenschaden Hammergarde, Flammenspeier, Glutschleuder,
+                   Titanenfaust
+   Luft schwer     Wolkenwal (nur Gebaeude), Sturmreiter (wehrt sich)
    Fernkampf       Bogenschuetzin, Blitzmagier
-   Gebaeude        Bollwerk (defensiv), Krypta (Spawner)
+   Turmlaeufer     Steinwaechter, Sturmbock, Wolkenwal
+   Gebaeude        Bollwerk (defensiv), Dornenwall (defensiv,
+                   Flaeche), Krypta (Spawner Boden),
+                   Nebelbrut (Spawner Luft)
    Zauber          Feuersturm (gross), Funkenregen (klein),
-                   Frostschleier (Verlangsamung)
+                   Frostschleier (Verlangsamung), Windstoss (schiebt)
 
    ========================= KONTER-MATRIX =========================
 
    Jede Rolle hat mindestens einen klaren Konter. Gelesen wird:
    "Was steht mir gegenueber -> was setze ich dagegen."
 
-   Steinwaechter   -> Rattenschar, Hundemeute   (ignoriert Einheiten,
-                      dreht sich nicht um; Schwaerme fressen ihn auf)
-   Frostkoloss     -> Speerwerferinnen, Bollwerk
-   Rattenschar     -> Funkenregen, Hammergarde, Flammenspeier
+   Steinwaechter   -> Rattenschar, Hundemeute, Schattenklinge
+                      (ignoriert Einheiten, dreht sich nicht um)
+   Frostkoloss     -> Speerwerferinnen, Bollwerk, Schattenklinge
+   Schildwache     -> Hammergarde, Titanenfaust (Flaeche geht durch),
+                      Sturmbock (schiebt sie weg)
+   Rattenschar     -> Funkenregen, Hammergarde, Flammenspeier,
+                      Glutschleuder
    Hundemeute      -> Feuersturm, Hammergarde, Flammenspeier
    Speerwerferinnen-> Funkenregen, Blitzmagier, Hundemeute
+   Klingenschwaermer-> Funkenregen, Flammenspeier, Glutschleuder,
+                      Dornenwall (vier duenne Koerper, Flaeche raeumt)
+   Schattenklinge  -> Rattenschar, Hundemeute (stirbt an vielen),
+                      Funkenregen
    Hammergarde     -> Rattenschar (zu langsam fuer viele Ziele),
                       Bogenschuetzin (ausserhalb ihrer Reichweite)
    Flammenspeier   -> Sturmfalken, Blitzmagier, Funkenregen
-   Sturmfalken     -> Speerwerferinnen, Bogenschuetzin, Funkenregen
+   Glutschleuder   -> Schattenklinge, Sturmfalken (kommt schneller
+                      heran, als sie nachladen kann)
+   Titanenfaust    -> Wolkenwal, Sturmreiter (sie trifft nur Boden),
+                      Steinwaechter (laeuft an ihr vorbei)
+   Sturmfalken     -> Speerwerferinnen, Bogenschuetzin, Funkenregen,
+                      Glutschleuder, Dornenwall
+   Sturmreiter     -> Speerwerferinnen, Blitzmagier, Dornenwall
    Wolkenwal       -> Speerwerferinnen, Sturmfalken, Blitzmagier
                       (ignoriert Einheiten, wird von Luftabwehr zerlegt)
+   Sturmbock       -> Schildwache, Rattenschar, Bollwerk
+                      (geht nur auf Gebaeude, jeder Block haelt ihn)
    Bogenschuetzin  -> Feuersturm, Hundemeute, Blitzmagier
    Blitzmagier     -> Hundemeute, Rattenschar (stirbt an Naehe)
    Bollwerk        -> Feuersturm, Steinwaechter, Wolkenwal
+   Dornenwall      -> Feuersturm, Steinwaechter, Titanenfaust
+                      (steht fest und kann nicht ausweichen)
    Krypta          -> Feuersturm, Flammenspeier
+   Nebelbrut       -> Feuersturm, Glutschleuder, Dornenwall
    Feuersturm      -> nichts direkt; Antwort ist Verteilen
    Funkenregen     -> nichts direkt; Antwort ist Verteilen
    Frostschleier   -> nichts direkt; Antwort ist frueher setzen
+   Windstoss       -> nichts direkt; Antwort ist nachsetzen
+
+   ======================== LUFT UND ABWEHR ========================
+
+   Von 26 Karten fliegen sechs. Nach oben schiessen koennen neun:
+   Speerwerferinnen, Bogenschuetzin, Blitzmagier, Flammenspeier,
+   Glutschleuder, Dornenwall, Sturmfalken, Klingenschwaermer,
+   Sturmreiter - dazu alle Zauber.
+
+   Dieses Verhaeltnis ist gemessen und nicht geschaetzt. Beim Einbau
+   der zehn neuen Karten kamen drei Flieger dazu, ohne dass die Abwehr
+   mitwuchs. Ergebnis: die Nebelbrut stand bei 65 Prozent Siegquote,
+   und die Sturmfalken stiegen von 52 auf 62,5 - ohne dass an ihnen
+   eine einzige Zahl geaendert worden waere. Die ganze Achse gewann.
+
+   Repariert wurde nicht Karte fuer Karte, sondern die Ursache:
+   Glutschleuder und Dornenwall treffen seither auch Luft. Das hat die
+   Haelfte aufgefangen und nebenbei zwei zu schwache Karten mittig
+   gezogen.
 
    ====================== SCHWARM-BUDGET =========================
 
    Ein Schwarm bringt viele kleine Koerper und damit sehr viel
    Schaden je Elixir. Ohne Obergrenze schlaegt er alles, auch seine
-   eigenen Konter - genau das war beim ersten Durchlauf der Fall:
-   Sturmfalken haben die Speerwerferinnen gelegt, die sie eigentlich
-   vom Himmel holen sollen. Seither gilt als Richtwert fuer den
-   Gesamtschaden je Sekunde einer ganzen Gruppe:
+   eigenen Konter. Richtwert fuer den Gesamtschaden je Sekunde einer
+   ganzen Gruppe:
 
-     2 Elixir  bis etwa  390   (Rattenschar 386, dafuer 110 HP je Stueck)
+     2 Elixir  bis etwa  390   (Rattenschar 386, dafuer 72 HP je Stueck)
      3 Elixir  bis etwa  390   (Hundemeute 378, nur Boden)
      3 Elixir  bis etwa  300   (Speerwerferinnen 300, dafuer Reichweite)
-     3 Elixir  bis etwa  220   (Sturmfalken 210, dafuer Luft)
+     3 Elixir  bis etwa  220   (Sturmfalken 174, Klingenschwaermer 200,
+                                dafuer Luft)
 
    Wer fliegt oder weit schiesst, bekommt weniger Schaden - die
    Faehigkeit ist Teil des Preises.
@@ -61,15 +104,12 @@
    Der Rohwert allein reicht dabei nicht als Massstab. Drei Einheiten
    mit Einzelschaden verschwenden einen Teil davon, weil sie im selben
    Moment auf dasselbe Ziel schiessen und es mehrfach ueberschiessen;
-   gemessen kommen etwa 55 Prozent an. Deshalb liegen die
-   Speerwerferinnen leicht ueber dem Richtwert - sonst verlieren sie
-   gegen genau die Flieger, die sie kontern sollen.
+   gemessen kommen etwa 55 Prozent an.
 
    Die Regel dahinter: wer nur Gebaeude angreift, verliert gegen
    Schwaerme. Wer Flaechenschaden macht, gewinnt gegen Schwaerme,
    verliert aber gegen einzelne dicke Ziele. Luft ist stark, solange
-   nichts nach oben schiesst - deshalb koennen sechs der sechzehn
-   Karten Luft treffen.
+   nichts nach oben schiesst.
    ------------------------------------------------------------------ */
 
 import type { Karte } from '../karte.js';
@@ -200,7 +240,13 @@ export const KARTEN: readonly Karte[] = [
   /* ------------------------------- Luft ------------------------------ */
   karte({
     id: 'sturmfalken', name: 'Sturmfalken', seltenheit: 'gewoehnlich', elixir: 3,
-    hp: 200, dmg: 70, angriffsTakt: sekunden(1), tempo: 105,
+    /* Schaden von 70 auf 58 gesenkt, ohne dass an der Karte selbst
+       etwas falsch war: mit den neuen Fliegern stieg sie von 52 auf
+       62,5 Prozent, allein weil die ganze Luftachse zulegte. Zwei
+       neue Abwehrkarten haben davon die Haelfte aufgefangen, den Rest
+       muss die Karte selbst tragen - 174 Schaden je Sekunde liegen
+       jetzt sauber unter dem Luftbudget von 220. */
+    hp: 200, dmg: 58, angriffsTakt: sekunden(1), tempo: 105,
     reichweite: 700, zieltAuf: 'beides', ebene: 'luft', anzahl: 3, radius: 300,
     deployZeit: sekunden(0.8),
     text: 'Drei Flieger. Kommen über Fluss und Mauern hinweg.',
@@ -287,7 +333,200 @@ export const KARTEN: readonly Karte[] = [
     text: 'Halbiert Tempo und Schlagzahl im Wirkbereich, vier Sekunden lang.',
     farbe: '#8fd9f2',
   }),
+
+  /* ================= Erweiterung: zehn weitere Karten ================
+
+     Gebaut wurden Luecken, nicht Varianten. Was vorher fehlte:
+
+       - ein billiger Block, der aufhaelt statt zu toeten
+       - ein zweiter Luftschwarm
+       - ein Rammbock, der Tuerme angeht und Einheiten ignoriert
+       - ein Zauber, der schiebt statt Schaden zu machen
+       - Flaechenschaden auf Distanz unterhalb des Flammenspeiers
+       - ein Meuchler gegen einzelne dicke Ziele
+       - ein zweites Verteidigungsgebaeude, mit Flaechenwirkung
+       - ein schwerer Flieger, der sich auch gegen Einheiten wehrt
+       - ein Spawner fuer Luft
+       - ein langsamer Brecher als zweite Legendaere
+
+     Die Werte folgen dem Schwarm-Budget weiter oben. Nach dem Einbau
+     wurde mit `npm run turnier` gemessen; wo etwas danebenlag, steht
+     die Begruendung an der Karte. */
+
+  /* ------------------------- Block und Schwarm ----------------------- */
+  karte({
+    id: 'schildwache', name: 'Schildwache', seltenheit: 'gewoehnlich', elixir: 2,
+    /* Von 780 auf 950 HP: 45,1 Prozent gemessen. Eine Karte, deren
+       einziger Zweck Zeit ist, muss diese Zeit auch liefern. */
+    hp: 950, dmg: 60, angriffsTakt: sekunden(1.2), tempo: 55,
+    reichweite: 800, zieltAuf: 'boden', radius: 520,
+    /* Viel HP fuer zwei Elixir, dafuer kaum Schaden. Ihre Aufgabe ist
+       Zeit, nicht Toeten: sie stellt sich in den Weg, waehrend
+       dahinter etwas anderes arbeitet. */
+    text: 'Hält auf. Mehr kann sie nicht, mehr soll sie nicht.',
+    farbe: '#7f8a96',
+  }),
+  karte({
+    id: 'klingenschwaermer', name: 'Klingenschwärmer', seltenheit: 'gewoehnlich',
+    elixir: 3, hp: 115, dmg: 45, angriffsTakt: sekunden(0.9), tempo: 115,
+    reichweite: 650, zieltAuf: 'beides', ebene: 'luft', anzahl: 4, radius: 260,
+    deployZeit: sekunden(0.8),
+    /* Gemessen zuerst mit 55 Schaden: 59,7 Prozent, und damit ueber
+       dem Budget von 220 Schaden je Sekunde fuer drei Elixir Luft -
+       vier Koerper mal 61 waren 244. Mit 45 sind es 200, also knapp
+       darunter, was richtig ist: vier Ziele sind mehr wert als drei. */
+    text: 'Vier dünne Flieger. Zusammen gefährlich, einzeln nichts.',
+    farbe: '#9fd15a',
+  }),
+  karte({
+    id: 'sturmbock', name: 'Sturmbock', seltenheit: 'gewoehnlich', elixir: 4,
+    /* Nachgezogen von 1500/320: mit 44,2 Prozent gemessen zu schwach.
+       Wer nur Gebaeude angreift, braucht genug Panzer, um ueberhaupt
+       anzukommen. */
+    hp: 1850, dmg: 360, angriffsTakt: sekunden(1.6), tempo: 75,
+    reichweite: 850, zieltAuf: 'nur_gebaeude', radius: 560,
+    rueckstoss: 450,
+    /* Schneller und billiger als der Steinwaechter, dafuer weniger
+       zaeh. Sein Rueckstoss schiebt einen einzelnen Blocker beiseite -
+       gegen einen Schwarm nuetzt ihm das nichts. */
+    text: 'Rennt auf Türme zu und schiebt weg, was im Weg steht.',
+    farbe: '#a8703f',
+  }),
+  karte({
+    id: 'windstoss', name: 'Windstoß', seltenheit: 'gewoehnlich', elixir: 2,
+    art: 'zauber', zauberRadius: 2600, zauberDmg: 150, zauberTurmDmg: 40,
+    rueckstoss: 1600, deployZeit: 0,
+    /* Gemessen 41,8 Prozent - fast so schwach wie der Frostschleier,
+       und aus demselben Grund: ein Zauber, der nur Zeit kauft, ist
+       das, womit ein Bot am wenigsten anfangen kann. Damit die Karte
+       auch ohne kluges Timing etwas taugt, hat sie jetzt einen Boden
+       aus Schaden - genug, um einen angeschlagenen Schwarm mitzunehmen,
+       zu wenig, um den Funkenregen zu ersetzen. */
+    /* Der erste Zauber, der nicht ueber Schaden wirkt, sondern Zeit
+       kauft: ein zurueckgeworfener Schwarm braucht Sekunden zurueck,
+       und Sekunden vor dem eigenen Turm sind teurer als Lebenspunkte. */
+    text: 'Wirft zurück, was zu nah gekommen ist. Schaden fast keiner.',
+    farbe: '#bcd9e8',
+  }),
+
+  /* --------------------- Fernkampf und Meuchler ---------------------- */
+  karte({
+    id: 'glutschleuder', name: 'Glutschleuder', seltenheit: 'selten', elixir: 3,
+    /* Von 480/95 angehoben: 44,8 Prozent gemessen. Der Abstand zum
+       Flammenspeier darf bleiben, aber nicht so gross sein, dass die
+       Karte nie das Deck sieht. */
+    hp: 560, dmg: 120, angriffsTakt: sekunden(1.4), tempo: 55,
+    reichweite: 3600, zieltAuf: 'beides', schadensTyp: 'flaeche',
+    flaechenRadius: 900, radius: 400,
+    /* Flaechenschaden auf Distanz unterhalb des Flammenspeiers:
+       kuerzer und schwaecher, dafuer ein Elixir billiger.
+
+       Trifft auch Luft, und das ist kein Zierrat, sondern die
+       Korrektur eines Fehlers: mit den drei neuen Fliegern stieg die
+       Luftachse auf 60 bis 65 Prozent Siegquote, und die Sturmfalken
+       kletterten auf 62,5, ohne dass an ihnen etwas geaendert worden
+       waere. Jede einzelne Luftkarte zu schwaechen haette das Symptom
+       behandelt; gefehlt hat Abwehr. */
+    text: 'Wirft Glut in die Menge. Gegen Einzelne Verschwendung.',
+    farbe: '#d98c3a',
+  }),
+  karte({
+    id: 'schattenklinge', name: 'Schattenklinge', seltenheit: 'selten', elixir: 3,
+    hp: 420, dmg: 230, angriffsTakt: sekunden(1.1), tempo: 125,
+    reichweite: 650, zieltAuf: 'boden', radius: 320,
+    deployZeit: sekunden(0.7),
+    /* Sehr schnell, sehr hoher Einzelschaden, sehr duenn. Gegen einen
+       Tank die beste Antwort im Spiel; gegen einen Schwarm stirbt sie
+       vor dem zweiten Schlag. */
+    text: 'Schnell und tödlich gegen Einzelne. Gegen viele verloren.',
+    farbe: '#6d5a8f',
+  }),
+  karte({
+    id: 'dornenwall', name: 'Dornenwall', seltenheit: 'selten', elixir: 4,
+    hp: 1100, dmg: 110, angriffsTakt: sekunden(1.1), tempo: 0,
+    reichweite: 3000, zieltAuf: 'beides', schadensTyp: 'flaeche',
+    flaechenRadius: 800, radius: 600,
+    lebensdauer: sekunden(30),
+    /* Das zweite Verteidigungsgebaeude. Das Bollwerk haelt einen
+       Angreifer fest, dieser hier raeumt seine Begleitung ab. Beide
+       zusammen sind stark - acht Elixir in Gebaeuden heisst aber auch,
+       dass vorne nichts passiert.
+
+       Schiesst nach oben, aus demselben Grund wie die Glutschleuder:
+       die Luftabwehr musste mit den neuen Fliegern mitwachsen. Ein
+       Gebaeude, das Luft trifft, ist die Antwort auf einen Spawner,
+       der Luft auswirft. */
+    text: 'Steht, hält dreißig Sekunden und räumt ab, was sich nähert.',
+    farbe: '#6f8f57',
+  }),
+
+  /* ----------------------- Luft und Beschwoerung --------------------- */
+  karte({
+    id: 'sturmreiter', name: 'Sturmreiter', seltenheit: 'episch', elixir: 5,
+    hp: 1300, dmg: 260, angriffsTakt: sekunden(1.4), tempo: 70,
+    reichweite: 900, zieltAuf: 'beides', ebene: 'luft', radius: 560,
+    /* Der Wolkenwal geht nur auf Gebaeude und laesst sich von
+       Luftabwehr zerlegen, ohne sich zu wehren. Dieser hier schlaegt
+       zurueck - und geht dafuer schneller kaputt. */
+    text: 'Schwerer Flieger, der sich wehrt. Trifft alles.',
+    farbe: '#7a6ce0',
+  }),
+  karte({
+    id: 'nebelbrut', name: 'Nebelbrut', seltenheit: 'episch', elixir: 5,
+    hp: 820, dmg: 0, angriffsTakt: sekunden(1), tempo: 0,
+    reichweite: 0, zieltAuf: 'boden', radius: 560,
+    lebensdauer: sekunden(20), spawnTakt: sekunden(6),
+    spawnKarte: 'nebelfalter', spawnAnzahl: 2,
+    /* Gemessen 65,3 Prozent Siegquote - der hoechste Wert im ganzen
+       Spiel und weit ausserhalb des Bandes. Ein Spawner, der Luft
+       auswirft, trifft auf viel weniger Antworten als einer am Boden:
+       sieben Wellen zu zwei Faltern fuer vier Elixir waren schlicht
+       zu viel Material.
+
+       Ein Elixir teurer, kuerzere Lebensdauer, langsamerer Takt: aus
+       sieben Wellen werden drei. Nach dem ersten Durchgang lag sie
+       noch bei 59,8 und musste ein zweites Mal herunter - ein
+       Spawner skaliert eben nicht mit einer Zahl, sondern mit dem
+       Produkt aus Dauer und Takt. */
+    /* Wie die Krypta, nur nach oben. Der Unterschied ist nicht die
+       Zahl, sondern wogegen der Gegner antworten muss: Luft braucht
+       andere Karten als Boden, und wer beides abdeckt, hat weniger
+       Platz fuer den Angriff. */
+    text: 'Wirft alle vier Sekunden zwei Falter aus. Bis sie zerfällt.',
+    farbe: '#8f7fb8',
+  }),
+
+  /* ------------------------------ Brecher ---------------------------- */
+  karte({
+    id: 'titanenfaust', name: 'Titanenfaust', seltenheit: 'legendaer', elixir: 6,
+    hp: 2600, dmg: 520, angriffsTakt: sekunden(2.2), tempo: 40,
+    reichweite: 1000, zieltAuf: 'boden', schadensTyp: 'flaeche',
+    flaechenRadius: 1600, radius: 720,
+    rueckstoss: 900, deployZeit: sekunden(1.2),
+    /* Sechs Elixir ist der hoechste Preis im Spiel, und genau das ist
+       die Karte: wer sie setzt, hat danach zwei Zuege lang nichts. Sie
+       raeumt alles weg, was vor ihr steht - aber nur, was vor ihr
+       steht, und sie ist langsam genug, dass man ihr ausweicht. */
+    text: 'Ein Schlag räumt eine ganze Front. Zwischen den Schlägen wehrlos.',
+    farbe: '#c05a43',
+  }),
+
+  /* Von der Nebelbrut ausgeworfen, nicht sammelbar - wie der
+     Knochendiener bei der Krypta. */
+  karte({
+    id: 'nebelfalter', name: 'Nebelfalter', seltenheit: 'gewoehnlich', elixir: 0,
+    /* Von 110/45 herunter. Die Nebelbrut blieb nach drei Aenderungen
+       an ihr selbst bei 59 Prozent - weil ihr Wert nicht in ihr
+       steckt, sondern in dem, was sie auswirft. An der falschen Zahl
+       zu drehen kostet drei Durchgaenge; an der richtigen einen. */
+    hp: 95, dmg: 32, angriffsTakt: sekunden(1), tempo: 110,
+    reichweite: 620, zieltAuf: 'beides', ebene: 'luft', radius: 250,
+    deployZeit: sekunden(0.4), sammelbar: false,
+    text: 'Kommt aus der Nebelbrut.',
+    farbe: '#b9a8d8',
+  }),
 ];
+
 
 const NACH_ID = new Map<string, Karte>();
 for (const k of KARTEN) NACH_ID.set(k.id, k);

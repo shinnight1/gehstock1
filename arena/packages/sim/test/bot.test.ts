@@ -90,19 +90,36 @@ describe('Botdeck', () => {
 describe('Schwierigkeitsskalierung', () => {
   it('laesst Stufe 2500 gegen Stufe 300 deutlich haeufiger gewinnen', () => {
     /* Gemessen mit dem Turnierwerkzeug, damit die Stichprobe reicht.
-       Die frueherer Fassung urteilte aus dreissig Partien - bei einem
-       Vertrauensband von siebzehn Prozentpunkten war das Glueckssache,
-       und sie fiel prompt um, als sich Kartenwerte aenderten, die mit
-       der Botstaerke nichts zu tun haben.
-
        Beide Seiten spielen dasselbe Deck: gemessen werden soll die
-       Stufe, nicht die Karten. */
+       Stufe, nicht die Karten.
+
+       Die Schranke liegt beim Doppelten des Rauschens, nicht beim
+       Dreifachen. Grund: seit die Haerte an der Arena haengt, ist der
+       300er-Bot kein Anfaenger mehr, sondern spielt bereits ein
+       Drittel des Weges zur Hoechststufe. Der Abstand nach oben ist
+       damit kleiner geworden - gewollt, denn die zweite Arena soll
+       sich nach zweiter Arena anfuehlen. Gemessen ueber 400 Partien
+       liegt er bei 63 Prozent, also beim 2,8-fachen des Bandes.
+
+       Deshalb auch 400 Partien statt 200: bei 200 ist das Band so
+       breit, dass ein echter Abstand von 13 Punkten nicht mehr sicher
+       von Rauschen zu trennen waere. */
     const e = duell(DECK_TEST, DECK_TEST, {
-      partien: 200, seed: 17, trophaeen: 2500, trophaeenB: 300,
+      partien: 400, seed: 17, trophaeen: 2500, trophaeenB: 300,
     });
-    // Deutlich heisst: der Abstand ist ein Vielfaches des Rauschens.
-    expect(e.quote - 0.5).toBeGreaterThan(e.unsicherheit / 100 * 3);
-    expect(e.quote).toBeGreaterThan(0.62);
+    expect(e.quote - 0.5).toBeGreaterThan(e.unsicherheit / 100 * 2);
+    expect(e.quote).toBeGreaterThan(0.58);
+  }, 120_000);
+
+  it('macht die zweite Arena spuerbar schwerer als die erste', () => {
+    /* Der eigentliche Zweck der Arena-Haerte. Vorher lag der Bot bei
+       300 Trophaeen bei 2,8 Prozent zwischen leicht und schwer - also
+       praktisch gleichauf mit dem Anfangsgegner. Ein Wechsel der Arena
+       muss sich bemerkbar machen. */
+    const e = duell(DECK_TEST, DECK_TEST, {
+      partien: 200, seed: 23, trophaeen: 300, trophaeenB: 0,
+    });
+    expect(e.quote).toBeGreaterThan(0.58);
   }, 120_000);
 
   it('endet zwischen gleich starken Bots ausgeglichen', () => {

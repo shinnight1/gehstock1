@@ -49,6 +49,20 @@ export const SEITE_RECHTS_X = BRUECKE_RECHTS_X;
 export const KOENIG_RADIUS = tile(2);
 export const SEITE_RADIUS = tile(1.5);
 
+/**
+ * Sperrzone um den eigenen Koenigsturm.
+ *
+ * Direkt an den Koenig zu setzen war die staerkste Verteidigung im
+ * Spiel und kostete nichts: eine Einheit erschien hinter dem
+ * Angreifer, noch bevor der zuschlagen konnte, und der Turm
+ * uebernahm den Rest. Wer verteidigt, soll die Einheit ein Stueck
+ * davor stellen und damit entscheiden, wo gekaempft wird.
+ *
+ * Gemessen vom Turmmittelpunkt. Vier Kacheln heisst: zwei Kacheln
+ * Luft um den Turm herum, der ja selbst zwei misst.
+ */
+export const KOENIG_SPERRE = tile(4);
+
 /** Spiegelt eine y-Koordinate auf die Gegenseite. */
 export function spiegelY(y: number): number {
   return HOEHE - y;
@@ -96,6 +110,14 @@ export function naechsteBruecke(x: number): { flanke: Flanke; x: number } {
  * `offeneFlanken` enthaelt die Flanken, deren gegnerischer Seitenturm
  * bereits zerstoert ist.
  */
+/** Liegt der Punkt in der Sperrzone um den eigenen Koenigsturm? */
+export function imKoenigsschatten(spieler: Spieler, x: number, y: number): boolean {
+  const ky = turmY(spieler, 'koenig');
+  const dx = x - KOENIG_X;
+  const dy = y - ky;
+  return dx * dx + dy * dy < KOENIG_SPERRE * KOENIG_SPERRE;
+}
+
 export function darfPlatzieren(
   spieler: Spieler,
   x: number,
@@ -103,6 +125,12 @@ export function darfPlatzieren(
   offeneFlanken: readonly Flanke[],
 ): boolean {
   if (x < 0 || x > BREITE || y < 0 || y > HOEHE) return false;
+
+  /* Nicht unmittelbar an den eigenen Koenig. Gilt nur fuer den
+     eigenen: auf der gegnerischen Haelfte darf man ohnehin erst,
+     wenn dort ein Turm gefallen ist, und dann soll der Druck auch
+     ankommen duerfen. */
+  if (imKoenigsschatten(spieler, x, y)) return false;
 
   const eigeneHaelfte = spieler === 0 ? y >= FLUSS_UNTEN : y <= FLUSS_OBEN;
   if (eigeneHaelfte) return true;

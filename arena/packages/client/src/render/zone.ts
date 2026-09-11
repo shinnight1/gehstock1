@@ -12,7 +12,10 @@
    heisst, hier nicht.
    ------------------------------------------------------------------ */
 
-import { BREITE, HOEHE, FLUSS_OBEN, FLUSS_UNTEN, KOENIG_X } from '@arena/sim';
+import {
+  BREITE, HOEHE, FLUSS_OBEN, FLUSS_UNTEN, KOENIG_X,
+  KOENIG_SPERRE, turmY,
+} from '@arena/sim';
 import type { Spieler, Flanke } from '@arena/sim';
 import { FARBE } from './palette.js';
 import { bodenPfad, bodenEllipse } from './perspektive.js';
@@ -51,6 +54,21 @@ export function zoneZeichnen(
   const kante = spieler === 0 ? FLUSS_UNTEN : FLUSS_OBEN;
   bodenPfad(c, k, 0, kante, BREITE, kante);
   c.stroke();
+
+  /* Der Hof des eigenen Koenigs ist gesperrt. Er wird ausgestanzt und
+     nicht nur weggelassen: die Aufhellung ringsum macht das Loch erst
+     als Verbot lesbar. Ohne diese Anzeige tippt man dorthin und nichts
+     passiert - der schlechteste Weg, eine Regel zu vermitteln. */
+  const ky = turmY(spieler, 'koenig');
+  c.fillStyle = 'rgba(10, 14, 22, 0.45)';
+  bodenEllipse(c, k, KOENIG_X, ky, KOENIG_SPERRE, 0.55);
+  c.fill();
+  c.strokeStyle = 'rgba(248, 113, 113, 0.5)';
+  c.lineWidth = 2;
+  c.setLineDash([7, 6]);
+  bodenEllipse(c, k, KOENIG_X, ky, KOENIG_SPERRE, 0.55);
+  c.stroke();
+  c.setLineDash([]);
 }
 
 /** Ring unter dem Zeiger. `erlaubt` faerbt ihn gruen oder rot. */

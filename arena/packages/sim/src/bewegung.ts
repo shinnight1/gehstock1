@@ -18,7 +18,8 @@
 import { schrittRichtung, dist2, isqrt, clamp } from './fixed.js';
 import type { Vek2 } from './fixed.js';
 import {
-  BREITE, HOEHE, FLUSS_OBEN, FLUSS_UNTEN, BRUECKE_Y, naechsteBruecke, istImFluss,
+  BREITE, HOEHE, FLUSS_OBEN, FLUSS_UNTEN, BRUECKE_Y,
+  naechsteBruecke, istImFluss, istBegehbar,
 } from './arena.js';
 import type { MatchState, Einheit } from './state.js';
 import { KAMPF } from './data/balance.js';
@@ -57,6 +58,22 @@ function wegpunkt(s: MatchState, e: Einheit, raus: Vek2): void {
   if (e.ebene === 'luft') {
     raus.x = zielX;
     raus.y = zielY;
+    return;
+  }
+
+  /* Steht die Einheit im Wasser und nicht auf einer Bruecke, gilt nur
+     noch eines: zurueck auf die Bruecke. Ohne diesen Vorrang laeuft
+     sie weiter auf ihr Ziel zu, jeder Schritt wird an der Wasserkante
+     abgewiesen, und sie rutscht bis zum Matchende seitwaerts am Fluss
+     entlang - lebendig, aber nutzlos.
+
+     Hineingeraten kann sie durch Rueckstoss oder weil ein Knaeuel sie
+     von der Bruecke gedrueckt hat. Das sollte die Kollisionsaufloesung
+     inzwischen verhindern; diese Rettung bleibt trotzdem, weil ein
+     Zustand, aus dem es kein Zurueck gibt, immer ein Fehler ist. */
+  if (istImFluss(e.y) && !istBegehbar(e.x, e.y)) {
+    raus.x = naechsteBruecke(e.x).x;
+    raus.y = BRUECKE_Y;
     return;
   }
 
@@ -134,10 +151,16 @@ export function bewegen(s: MatchState, e: Einheit): void {
   const neuX = e.x + schritt.x;
   const neuY = e.y + schritt.y;
 
-  /* Bodeneinheiten duerfen nicht ins Wasser. Wer es doch versucht -
-     etwa nach einem Rueckstoss - bleibt an der Uferkante stehen. */
-  if (e.ebene === 'boden' && istImFluss(neuY) && !aufBruecke(neuX)) {
-    e.x = clamp(neuX, 0, BREITE);
+  /* Bodeneinheiten duerfen nicht ins Wasser - aber nur, solange sie
+     noch auf festem Grund stehen. Wer schon drin ist, muss wieder
+     heraus duerfen, sonst ist der Schritt in jede Richtung gesperrt
+     und die Einheit klebt fuer immer im Fluss. */
+  if (e.ebene === 'boden'
+    && !istBegehbar(neuX, neuY)
+    && istBegehbar(e.x, e.y)) {
+    // Am Ufer entlanggleiten statt hineinzulaufen.
+    const seitwaerts = clamp(neuX, 0, BREITE);
+    if (istBegehbar(seitwaerts, e.y)) e.x = seitwaerts;
     return;
   }
 
@@ -155,9 +178,28 @@ export function bewegen(s: MatchState, e: Einheit): void {
   }
 }
 
-function aufBruecke(x: number): boolean {
-  const b = naechsteBruecke(x);
-  return Math.abs(x - b.x) <= 1000;
+/**
+ * Eine Einheit verschieben, ohne sie ins Wasser zu druecken.
+ *
+ * Der haeufigste Weg in den Fluss war genau hier: ein Knaeuel auf der
+ * Bruecke schiebt sich auseinander, und wer aussen steht, landet
+ * daneben. Danach war die Einheit verloren.
+ *
+ * Geht der Schub nicht ganz, wird er achsenweise versucht - so
+ * rutscht eine gedraengte Einheit die Bruecke entlang, statt stehen
+ * zu bleiben und den Stau zu verfestigen.
+ */
+function schieben(e: Einheit, dx: number, dy: number): void {
+  const zielX = clamp(e.x + dx, 0, BREITE);
+  const zielY = clamp(e.y + dy, 0, HOEHE);
+
+  if (istBegehbar(zielX, zielY)) {
+    e.x = zielX;
+    e.y = zielY;
+    return;
+  }
+  if (istBegehbar(zielX, e.y)) { e.x = zielX; return; }
+  if (istBegehbar(e.x, zielY)) { e.y = zielY; }
 }
 
 /* --------------------- Kollisionsaufloesung ------------------------ */
@@ -204,12 +246,8 @@ export function kollisionAufloesen(s: MatchState): void {
       const sy = Math.trunc((dy * schub) / d / 2);
 
       // Gebaeude stehen fest und werden nicht geschoben.
-      if (!b.istGebaeude) {
-        b.x = clamp(b.x + sx, 0, BREITE);
-        b.y = clamp(b.y + sy, 0, HOEHE);
-      }
-      a.x = clamp(a.x - sx, 0, BREITE);
-      a.y = clamp(a.y - sy, 0, HOEHE);
+      if (!b.istGebaeude) schieben(b, sx, sy);
+      schieben(a, -sx, -sy);
     }
   }
 }
