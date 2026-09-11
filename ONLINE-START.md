@@ -28,6 +28,22 @@ Die ZIP ist ein vollständiges Projektpaket. Netlify Drop veröffentlicht nur st
 
 Die Befehle und Optionen entsprechen der [Netlify-CLI-Dokumentation](https://cli.netlify.com/commands/deploy/).
 
+## Ein Übergabepaket bauen
+
+```sh
+npm run paket
+```
+
+Erzeugt `Hideout-Komplett-Online.zip` aus dem Stand, der auf GitHub liegt,
+nicht aus dem eigenen Arbeitsverzeichnis. Zu zweit ist das der Unterschied,
+der zählt: halbfertige Änderungen kommen nicht mit ins Paket. Gebaut wird in
+einem temporären zweiten Arbeitsbaum, das eigene Arbeitsverzeichnis bleibt
+unberührt.
+
+Weichen die Lock-Dateien vom GitHub-Stand ab, bricht der Befehl ab, statt
+neuen Quellcode gegen alte Abhängigkeiten zu bauen. Dann erst `git pull`,
+`npm ci` und `npm ci --prefix arena`.
+
 ## Nach Änderungen erneut bauen
 
 ```sh

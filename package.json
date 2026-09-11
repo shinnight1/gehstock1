@@ -6,7 +6,8 @@
   "scripts": {
     "build": "node build.mjs",
     "dev": "node tools/serve.mjs",
-    "test": "node tools/test.mjs"
+    "test": "node tools/test.mjs",
+    "paket": "node tools/github-paket.mjs"
   },
   "dependencies": {
     "@netlify/blobs": "^11.0.3"
