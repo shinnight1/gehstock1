@@ -85,8 +85,22 @@ interface RaumStand {
 }
 
 export function relaisVerbindungAnlegen(o: VerbindungOptionen): Verbindung {
-  let zustand: Netzzustand = 'verbindet';
+  /* Sofort offen, und das ist keine Schoenfaerberei.
+
+     Es gibt hier nichts zu verbinden: das Relais ist eine Adresse, zu
+     der man einzelne Anfragen schickt, kein Draht, der erst stehen
+     muss. Der Bildschirm legt die Sitzung an und will unmittelbar
+     danach den Raum aufmachen - er fragt dafuer den Zustand ab. Stand
+     hier 'verbindet', wartete er auf ein Ereignis, das nie kommt,
+     waehrend die Verbindung auf den Raumwunsch wartete, den er nie
+     schickt. Genau so hing der Warteraum bei "verbinde ...". */
+  let zustand: Netzzustand = 'offen';
   let zu = false;
+
+  /* Den Zustand trotzdem melden, sonst steht in der Anzeige weiter
+     'verbindet' - sie kennt ihn nur aus dieser Meldung. Verzoegert,
+     damit der Aufrufer das Ergebnis erst zu fassen bekommt. */
+  setTimeout(() => { if (!zu) o.onZustand('offen'); }, 0);
 
   /* Platz im Raum. Ohne diese drei Werte ist man beim Relais niemand. */
   let code = '';
@@ -166,6 +180,7 @@ export function relaisVerbindungAnlegen(o: VerbindungOptionen): Verbindung {
   /* --------------------------- Beitreten --------------------------- */
 
   async function raumNeu(): Promise<void> {
+    if (code) return;   // schon in einem Raum - kein zweiter
     /* ziffern: vierstelliger Zahlencode statt des sechsstelligen
        Buchstabencodes der anderen Spiele. Man ruft ihn quer ueber
        den Tisch zu, da zaehlt jede Stelle. */
@@ -179,6 +194,7 @@ export function relaisVerbindungAnlegen(o: VerbindungOptionen): Verbindung {
   }
 
   async function raumBei(gesucht: string): Promise<void> {
+    if (code) return;
     const d = await ruf('join', { code: gesucht, game: SPIEL });
     if (!d) return;
     uebernehmen(d);

@@ -17,6 +17,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { relaisVerbindungAnlegen } from '../src/netz/relais.js';
+import { sitzungAnlegen } from '../src/netz/sitzung.js';
 import type { VomServer, Anmeldung } from '@arena/netz';
 
 interface Raum {
@@ -133,6 +134,29 @@ const ruhen = (n = 1): Promise<void> => warte(400 * n);
 
 describe('Freundesduell ueber das Relais', () => {
   beforeEach(() => { attrappe(); });
+
+  /* Dieser Test geht bewusst durch die echte Sitzung statt direkt auf
+     die Verbindung.
+
+     Die drei Tests darunter taten das nicht, und genau deshalb gingen
+     sie durch, waehrend der Warteraum auf der fertigen Seite ewig bei
+     "verbinde ..." stand: die Sitzung macht den Raum nur auf, wenn die
+     Verbindung sich als offen meldet, und die Relaisverbindung meldete
+     das nie. Henne und Ei, und kein Test dazwischen. */
+  it('macht den Raum ueber die Sitzung wirklich auf', async () => {
+    let code = '';
+    const s = sitzungAnlegen({
+      url: '',
+      anmeldung: { name: 'A', deck: ['a'], level: {} },
+      onBericht: (b) => { if (b.code) code = b.code; },
+      onStart: () => { /* kommt hier nicht */ },
+      onEnde: () => { /* kommt hier nicht */ },
+    });
+    s.raumOeffnen(true);
+    await ruhen(2);
+    expect(code).toMatch(/^[0-9]{4}$/);
+    s.schliessen();
+  });
 
   it('vergibt einen vierstelligen Zahlencode', async () => {
     const a = spieler('A');
