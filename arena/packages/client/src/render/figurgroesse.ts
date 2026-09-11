@@ -18,62 +18,69 @@
 
    MASSSTAB
 
-   1.0 ist ein erwachsener Mensch, also etwa ein Tile hoch - die
-   Bogenschuetzin ist der Nullpunkt. Alles andere richtet sich daran
-   aus:
+   Die Bogenschuetzin ist der Nullpunkt: 1,2 Tiles hoch, ein
+   erwachsener Mensch. Daran richtet sich alles aus.
 
-     0.7 bis 0.8   Schwaerme: Ratten, Hunde, Falken, Falter
-     1.0 bis 1.1   Menschen, auch gepanzert
-     1.3 bis 1.5   Gebaeude, Reittiere, schwere Maschinen
-     1.6 bis 1.8   Katapult und Riesen
-     2.4           der Wolkenwal
+     0,95 Tiles   Schwaerme: Ratten, Klingenschwaermer, Falter
+     1,05          Hunde, Falken, Knochendiener
+     1,2           Menschen
+     1,6           schwere Panzerung
+     2,0 bis 2,5   Gebaeude, Reittiere, Maschinen, Riesen
+     2,9 bis 3,0   Titanenfaust und Wolkenwal
 
-   Die Schwaerme sind bewusst nicht so klein, wie sie sein muessten.
-   Sechs massstabsgetreue Ratten waeren auf dem iPad sechs Punkte, und
-   eine Karte, die man nicht erkennt, kann man nicht spielen. Der
-   Massstab endet dort, wo die Lesbarkeit anfaengt.
+   Die Spanne ist mit Absicht eng, gut das Dreifache vom kleinsten
+   zum groessten. Ein erster Versuch ging vom halben Menschen bis zum
+   fuenffachen, und beide Enden waren falsch: die Schwaerme
+   verschwanden auf dem Feld, und der Wal deckte zu, was unter ihm
+   passierte. Massstabstreue nuetzt nichts, wenn man die Karte nicht
+   mehr erkennt oder nichts anderes mehr sieht.
+
+   Deshalb heisst die Regel hier nicht "so gross wie in echt",
+   sondern: das Kleinste muss lesbar bleiben, das Groesste darf nichts
+   verdecken. Dazwischen soll man den Unterschied sehen.
    ------------------------------------------------------------------ */
 
 /** Bildfaktor je Karte. Fehlt ein Eintrag, gilt 1. */
 const SKALA: Readonly<Record<string, number>> = {
-  /* --- Schwaerme: kleiner als ein Mensch, aber noch erkennbar --- */
-  rattenschar: 0.7,
-  hundemeute: 0.75,
-  sturmfalken: 0.8,
-  klingenschwaermer: 0.75,
-  nebelfalter: 0.75,
+  /* --- Schwaerme. Klar kleiner als ein Mensch, aber nie ein Punkt. --- */
+  rattenschar: 1.26,
+  hundemeute: 1.13,
+  sturmfalken: 1.21,
+  klingenschwaermer: 1.26,
+  nebelfalter: 1.31,
 
   /* --- Menschen. Die Bogenschuetzin ist der Massstab. --- */
-  bogenschuetzin: 1,
-  blitzmagier: 1,
-  schattenklinge: 1,
-  knochendiener: 1,
-  speerwerferinnen: 1.1,
-  hammergarde: 1.05,
-  schildwache: 1.05,
-  flammenspeier: 1.1,
+  bogenschuetzin: 1.22,
+  blitzmagier: 1.15,
+  schattenklinge: 1.29,
+  knochendiener: 1.34,
+  speerwerferinnen: 1.32,
+  hammergarde: 1.15,
+  schildwache: 1.06,
+  flammenspeier: 1.18,
 
   /* --- Gebaeude und Reittiere --- */
-  dornenwall: 1.25,
-  bollwerk: 1.3,
-  krypta: 1.35,
-  nebelbrut: 1.4,
-  sturmreiter: 1.5,
+  dornenwall: 1.15,
+  bollwerk: 1.08,
+  krypta: 1.13,
+  nebelbrut: 1.29,
+  sturmreiter: 1.35,
 
   /* --- Maschinen und Riesen --- */
-  steinwaechter: 1.35,
-  frostkoloss: 1.4,
-  sturmbock: 1.4,
-  titanenfaust: 1.65,
+  steinwaechter: 1.23,
+  frostkoloss: 1.34,
+  sturmbock: 1.35,
+  titanenfaust: 1.39,
   /* Ein Katapult ist ein Geraet, das mehrere Leute bedienen. Es muss
      deutlich ueber jeden Menschen hinausragen, sonst liest es sich
      als Person mit Werkzeug. */
-  glutschleuder: 1.75,
+  glutschleuder: 1.81,
 
-  /* Der Wal ist die Ausnahme, die den Massstab erst sichtbar macht:
-     wenn er ueber das Feld zieht, soll klar sein, dass darunter alles
-     andere klein ist. */
-  wolkenwal: 2.4,
+  /* Der Wal ist das Groesste im Spiel, aber nur zweieinhalbmal ein
+     Mensch. Vorher war er fuenfmal so gross und schob sich als
+     Flaeche ueber das Feld - man sah nicht mehr, was darunter
+     kaempfte. Gross sein heisst hier: der Groesste, nicht im Weg. */
+  wolkenwal: 1.48,
 };
 
 export function figurSkala(karte: string): number {

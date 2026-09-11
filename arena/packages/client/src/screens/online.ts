@@ -2,7 +2,7 @@
    Freundesduell: Raum aufmachen oder beitreten, dann spielen.
 
    Kein Zufallsgegner. Wer gegen jemanden spielen will, bekommt einen
-   sechsstelligen Code und gibt ihn weiter - das ist der ganze
+   vierstelligen Code und gibt ihn weiter - das ist der ganze
    Vorgang. Suchlisten und Warteschlangen waeren eine eigene Baustelle
    mit eigenen Problemen (Wartezeit, Abbrecher, Sprachen) und stehen
    nicht im Auftrag.
@@ -80,8 +80,8 @@ export function onlineBauen(wurzel: HTMLElement, app: App): Schirm {
 
     const code = el('input.a-feld.a-code-feld', {
       attr: {
-        type: 'text', inputmode: 'numeric', placeholder: '123456',
-        maxlength: '7', autocomplete: 'off',
+        type: 'text', inputmode: 'numeric', placeholder: '1234',
+        maxlength: '5', autocomplete: 'off',
       },
     }) as HTMLInputElement;
 
@@ -163,7 +163,7 @@ export function onlineBauen(wurzel: HTMLElement, app: App): Schirm {
             const url = adresse.value.trim();
             const c = codeSaeubern(code.value);
             if (!url) { anmeldungZeigen('Ohne Serveradresse geht es nicht.'); return; }
-            if (!codeGueltig(c)) { anmeldungZeigen('Ein Code hat sechs Ziffern.'); return; }
+            if (!codeGueltig(c)) { anmeldungZeigen('Ein Code hat vier Ziffern.'); return; }
             serverUrlMerken(url);
             starten(url, (s) => s.raumBetreten(c));
           },

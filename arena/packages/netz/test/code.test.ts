@@ -3,7 +3,7 @@ import { codeErzeugen, codeGueltig, codeSaeubern, tokenErzeugen } from '../src/c
 import { nachrichtLesen } from '../src/protokoll.js';
 
 describe('Raumcode', () => {
-  it('erzeugt immer sechs Ziffern', () => {
+  it('erzeugt immer vier Ziffern', () => {
     for (let i = 0; i < 500; i++) {
       const code = codeErzeugen(() => false);
       expect(code).not.toBeNull();
@@ -13,8 +13,8 @@ describe('Raumcode', () => {
 
   it('faengt die Raender des Zufalls ab', () => {
     // Math.random() liefert 0 bis knapp unter 1 - beide Enden muessen gehen.
-    expect(codeErzeugen(() => false, () => 0)).toBe('100000');
-    expect(codeErzeugen(() => false, () => 0.9999999999)).toBe('999999');
+    expect(codeErzeugen(() => false, () => 0)).toBe('1000');
+    expect(codeErzeugen(() => false, () => 0.9999999999)).toBe('9999');
   });
 
   it('weicht belegten Codes aus', () => {
@@ -34,17 +34,17 @@ describe('Raumcode', () => {
   });
 
   it('erkennt Unfug', () => {
+    expect(codeGueltig('123')).toBe(false);
     expect(codeGueltig('12345')).toBe(false);
-    expect(codeGueltig('1234567')).toBe(false);
-    expect(codeGueltig('12a456')).toBe(false);
-    expect(codeGueltig(123456)).toBe(false);
+    expect(codeGueltig('12a4')).toBe(false);
+    expect(codeGueltig(1234)).toBe(false);
     expect(codeGueltig(null)).toBe(false);
   });
 
   it('raeumt abgelesene Eingaben auf', () => {
-    expect(codeSaeubern(' 123 456 ')).toBe('123456');
-    expect(codeSaeubern('123-456')).toBe('123456');
-    expect(codeSaeubern('1234567890')).toBe('123456');
+    expect(codeSaeubern(' 12 34 ')).toBe('1234');
+    expect(codeSaeubern('12-34')).toBe('1234');
+    expect(codeSaeubern('1234567890')).toBe('1234');
   });
 });
 

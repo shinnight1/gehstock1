@@ -1,31 +1,38 @@
 /* ------------------------------------------------------------------
    Raumcodes.
 
-   Sechs Ziffern, weil sie sich ueber den Tisch zurufen lassen. Kein
-   Buchstabe: "B" und "8" oder "O" und "0" ueber ein Mikro zu
-   unterscheiden ist genau die Art von Reibung, die man beim Spielen
-   mit Freunden nicht will.
+   Vier Ziffern, weil sie sich ueber den Tisch zurufen und im Kopf
+   behalten lassen. Kein Buchstabe: "B" und "8" oder "O" und "0" ueber
+   ein Mikro zu unterscheiden ist genau die Art von Reibung, die man
+   beim Spielen mit Freunden nicht will.
 
    Der Code ist kein Geheimnis und soll keines sein. Er verhindert
    nicht, dass jemand fremde Raeume durchprobiert - dagegen hilft,
    dass ein Raum nur eine Viertelstunde lebt und beim zweiten Spieler
    dichtmacht. Wer trotzdem hineinstolpert, findet ein Kartenspiel.
 
+   Vier statt sechs Stellen heisst neuntausend statt einer Million
+   moeglicher Codes. Das ist eine bewusste Entscheidung fuer die
+   Bequemlichkeit: bei einer Handvoll gleichzeitiger Raeume trifft
+   ein geratener Code praktisch nie, und wer trifft, landet in einem
+   Kartenspiel. Waere in einem Raum etwas zu holen, waere die
+   Rechnung eine andere.
+
    Erzeugt wird nicht aus der Simulation heraus: die hat ihren eigenen
    Zufall, und der gehoert zur Partie. Ein Raumcode, der den
    Match-Zufall verschoebe, waere ein Fehler, den niemand findet.
    ------------------------------------------------------------------ */
 
-const STELLEN = 6;
-const KLEINSTE = 100_000;
-const GROESSTE = 999_999;
+const STELLEN = 4;
+const KLEINSTE = 1_000;
+const GROESSTE = 9_999;
 
 /**
  * Neuer Code, der noch nicht vergeben ist.
  *
  * `belegt` entscheidet, ob ein Vorschlag schon laeuft. Nach genug
- * Fehlversuchen gibt die Funktion auf und liefert null - bei einer
- * Million moeglicher Codes heisst das, dass der Server ohnehin am
+ * Fehlversuchen gibt die Funktion auf und liefert null - bei
+ * neuntausend moeglichen Codes heisst das, dass der Server ohnehin am
  * Ende ist.
  */
 export function codeErzeugen(
@@ -41,11 +48,11 @@ export function codeErzeugen(
   return null;
 }
 
-/** Nur Ziffern, genau sechs. Alles andere wird gar nicht erst gesucht. */
+/** Nur Ziffern, genau vier. Alles andere wird gar nicht erst gesucht. */
 export function codeGueltig(code: unknown): code is string {
   return typeof code === 'string'
     && code.length === STELLEN
-    && /^[0-9]{6}$/.test(code);
+    && /^[0-9]{4}$/.test(code);
 }
 
 /**
