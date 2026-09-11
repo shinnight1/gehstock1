@@ -37,10 +37,10 @@ export const ELIXIR = {
 /* --------------------------- Match-Ablauf --------------------------- */
 
 export const MATCH = {
-  /** Regulaere Spielzeit: 3 Minuten. */
-  dauer: sekunden(180),
+  /** Regulaere Spielzeit: 2 Minuten. */
+  dauer: sekunden(120),
   /** Ab hier doppeltes Elixir - die letzten 60 Sekunden. */
-  doppeltAb: sekunden(120),
+  doppeltAb: sekunden(60),
   /** Verlaengerung: 2 Minuten, dreifaches Elixir, erster Turmtreffer
       entscheidet. */
   overtime: sekunden(120),
@@ -201,10 +201,10 @@ export interface Arena {
 
 export const ARENEN: readonly Arena[] = [
   { id: 0, name: 'Sandgrube', ab: 0, haerte: 0 },
-  { id: 1, name: 'Bruchsteinhof', ab: 300, haerte: 0.32 },
-  { id: 2, name: 'Frostkanal', ab: 800, haerte: 0.52 },
-  { id: 3, name: 'Aschewall', ab: 1500, haerte: 0.72 },
-  { id: 4, name: 'Sturmspitze', ab: 2500, haerte: 0.88 },
+  { id: 1, name: 'Bruchsteinhof', ab: 300, haerte: 0.46 },
+  { id: 2, name: 'Frostkanal', ab: 800, haerte: 0.63 },
+  { id: 3, name: 'Aschewall', ab: 1500, haerte: 0.8 },
+  { id: 4, name: 'Sturmspitze', ab: 2500, haerte: 0.93 },
 ];
 
 export function arenaFuer(trophaeen: number): Arena {

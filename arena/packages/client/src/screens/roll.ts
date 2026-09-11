@@ -27,10 +27,18 @@ import { el, kopf } from '../ui/dom.js';
 import { kartenKachel } from '../ui/kartenkachel.js';
 import { SELTENHEIT_FARBE } from '../render/palette.js';
 import { partikelfeldAnlegen } from '../render/rollpartikel.js';
+import { rollhimmelAnlegen } from '../render/rollhimmel.js';
 import type { Partikelfeld } from '../render/rollpartikel.js';
+import type { Rollhimmel } from '../render/rollhimmel.js';
 import type { App, Schirm } from '../app.js';
 
-const PHASEN = { aufladen: 0.6, flug: 1.2, aufprall: 0.5, reveal: 1.2 };
+/* Der Halt zwischen Anflug und Aufprall ist Absicht und der wichtigste
+   Viertelsekundenabschnitt der ganzen Animation: die Schnuppe steht
+   riesig im Bild, nichts bewegt sich, und erst danach zerspringt sie.
+   Ohne diese Pause laeuft alles durch und der Aufprall geht unter. */
+const PHASEN = {
+  himmel: 0.9, schnuppen: 1.5, anflug: 0.9, halt: 0.3, aufprall: 0.5, reveal: 1.2,
+};
 
 /**
  * Wie wuchtig der Einschlag je Seltenheit ausfaellt.
@@ -42,14 +50,19 @@ const PHASEN = { aufladen: 0.6, flug: 1.2, aufprall: 0.5, reveal: 1.2 };
  * bekommen ueberhaupt einen Strahlenkranz.
  */
 const WUCHT = {
-  gewoehnlich: { funken: 70, wellen: 1, kranz: 0, blitz: 0.45, welle: 260 },
-  selten: { funken: 110, wellen: 2, kranz: 0, blitz: 0.6, welle: 340 },
-  episch: { funken: 170, wellen: 3, kranz: 320, blitz: 0.78, welle: 440 },
-  legendaer: { funken: 230, wellen: 4, kranz: 480, blitz: 0.95, welle: 560 },
+  gewoehnlich: { kern: 3, funken: 70, wellen: 1, kranz: 0, blitz: 0.45, welle: 260 },
+  selten: { kern: 4, funken: 110, wellen: 2, kranz: 0, blitz: 0.6, welle: 340 },
+  episch: { kern: 6, funken: 170, wellen: 3, kranz: 320, blitz: 0.78, welle: 440 },
+  legendaer: { kern: 8, funken: 230, wellen: 4, kranz: 480, blitz: 0.95, welle: 560 },
 } as const;
 
 /* Tonhoehe je Seltenheit. Man hoert, was gezogen wurde, bevor die
    Karte sich fertig gedreht hat - das ist die halbe Spannung. */
+/* Reihenfolge der Schnuppen: schwach zuerst, die beste zuletzt. */
+const RANG: Record<Seltenheit, number> = {
+  gewoehnlich: 0, selten: 1, episch: 2, legendaer: 3,
+};
+
 const TONHOEHE: Record<Seltenheit, number> = {
   gewoehnlich: 1, selten: 1.2, episch: 1.5, legendaer: 2,
 };
@@ -66,6 +79,7 @@ export function rollBauen(wurzel: HTMLElement, app: App): Schirm {
   const ohneAnimation = ruhig || app.optionen.ohneAnimation;
 
   let partikel: Partikelfeld | null = null;
+  let himmel: Rollhimmel | null = null;
   let anforderung = 0;
   let laeuft = false;
   let ueberspringen = false;
@@ -184,34 +198,74 @@ export function rollBauen(wurzel: HTMLElement, app: App): Schirm {
 
     const buehne = el('div.a-buehne');
     seite.appendChild(buehne);
+    /* Reihenfolge zaehlt: der Himmel liegt hinten, die Aufprall-
+       partikel davor, das DOM der Karten ganz oben. */
+    himmel = rollhimmelAnlegen(buehne);
     partikel = partikelfeldAnlegen(buehne);
 
-    const flieger = el('div.a-flieger');
-    buehne.appendChild(flieger);
     const blitz = el('div.a-blitz');
     buehne.appendChild(blitz);
 
     const hoechste = hoechsteSeltenheit(ergebnisse);
     const farbe = SELTENHEIT_FARBE[hoechste];
-    const gross = hoechste === 'episch' || hoechste === 'legendaer';
     app.klang.spiel('rollAufladen');
-    let flugKlangKam = false;
 
-    /* Ein Tipp irgendwohin bricht ab. Der Hinweis steht klein am Rand -
-       wer die Animation kennt, will sie nicht jedes Mal sehen. */
+    /* Die Schnuppen steigen in der Seltenheit an: die blassen zuerst,
+       die beste zuletzt. Andersherum waere die Spannung nach der
+       ersten Sekunde vorbei. Die letzte ist die Heldenschnuppe, auf
+       die am Ende zugeflogen wird. */
+    const reihe = ergebnisse
+      .map((r) => karteVon(r.kartenId)?.seltenheit ?? 'gewoehnlich')
+      .sort((a, b) => RANG[a] - RANG[b]);
+
     const abbrechen = (): void => { ueberspringen = true; };
     buehne.addEventListener('pointerup', abbrechen);
     buehne.appendChild(el('div.a-skip', { text: 'Tippen zum Überspringen' }));
 
-    const gesamt = PHASEN.aufladen + PHASEN.flug + PHASEN.aufprall;
+    const bisAnflug = PHASEN.himmel + PHASEN.schnuppen;
+    const bisHalt = bisAnflug + PHASEN.anflug;
+    const bisAufprall = bisHalt + PHASEN.halt;
+    const gesamt = bisAufprall + PHASEN.aufprall;
     let zeit = 0;
     let letzterStempel = 0;
     let explodiert = false;
+    /* Der Start haengt an der Zeit, nicht an der Bildnummer - sonst
+       wandert die Choreografie mit der Bildrate. */
+    let gestartet = 0;
     laeuft = true;
 
     const kasten = (): { b: number; h: number } => {
       const r = buehne.getBoundingClientRect();
       return { b: r.width, h: r.height };
+    };
+
+    /**
+     * Eine Schnuppe in den Raum setzen.
+     *
+     * Die Tiefe ist gestaffelt: jede zweite kommt deutlich naeher
+     * vorbei. Nur dadurch entsteht Parallaxe - alle in derselben
+     * Entfernung saehen aus wie ein flaches Bild, das sich schiebt.
+     *
+     * Die Heldenschnuppe startet weiter hinten und lebt laenger, weil
+     * die Kamera sie erst in der naechsten Phase einholt.
+     */
+    const losschicken = (s: Seltenheit, i: number, held: boolean): void => {
+      const w = WUCHT[s];
+      /* Tiefe gestaffelt: jede zweite kommt deutlich naeher vorbei.
+         Nur dadurch entsteht Parallaxe - alle in derselben Entfernung
+         saehen aus wie ein flaches Bild, das sich schiebt. */
+      const tiefe = held ? 2200 : 700 + (i % 2) * 420 + ((i * 37) % 5) * 70;
+      /* Start links ausserhalb, in der oberen Bildhaelfte: dort ist
+         der Himmel dunkel und eine Schnuppe hebt sich ab. Ueber den
+         Wolken unten ginge sie unter. */
+      const sy = held ? -0.55 : -0.85 + ((i * 53) % 7) * 0.09;
+      const sx = held ? -1.15 : -1.45 - ((i * 29) % 5) * 0.12;
+      const dauer = held
+        ? PHASEN.anflug + PHASEN.halt + PHASEN.aufprall + 0.9
+        : 1.25;
+      himmel?.schnuppe(tiefe, sx, sy, SELTENHEIT_FARBE[s],
+        held ? 14 : w.kern * 2, dauer, held, held && s === 'legendaer');
+      app.klang.spiel('rollFlug', TONHOEHE[s]);
     };
 
     const schritt = (stempel: number): void => {
@@ -221,55 +275,42 @@ export function rollBauen(wurzel: HTMLElement, app: App): Schirm {
       zeit += dt;
 
       const { b, h } = kasten();
-      const mx = b / 2;
-      const my = h / 2;
 
       if (ueberspringen) { fertig(ergebnisse); return; }
 
-      if (zeit < PHASEN.aufladen) {
-        // Phase 1: Licht wird vom Rand hereingezogen.
-        const t = zeit / PHASEN.aufladen;
-        buehne.style.setProperty('--dunkel', String(t * 0.75));
-        for (let i = 0; i < 3; i++) {
-          const rand = Math.random();
-          const vonX = rand < 0.5 ? (Math.random() < 0.5 ? 0 : b) : Math.random() * b;
-          const vonY = rand < 0.5 ? Math.random() * h : (Math.random() < 0.5 ? 0 : h);
-          partikel!.funke(vonX, vonY, (mx - vonX) * 1.6, (my - vonY) * 1.6, '#dbeafe', 0.6);
-        }
-      } else if (zeit < PHASEN.aufladen + PHASEN.flug) {
-        // Phase 2: Flug. Die Farbe wird erst ab der Haelfte sichtbar.
-        const t = (zeit - PHASEN.aufladen) / PHASEN.flug;
-        if (!flugKlangKam) {
-          flugKlangKam = true;
-          app.klang.spiel('rollFlug', TONHOEHE[hoechste]);
-        }
-        const weg = gross ? doppelDurchflug(t) : einDurchflug(t);
-        const fx = weg * b;
-        const fy = my + Math.sin(t * Math.PI * (gross ? 2 : 1)) * h * 0.12;
-        flieger.style.transform = 'translate(' + fx + 'px,' + fy + 'px) scale('
-          + (gross ? 1.5 : 1) + ')';
-        flieger.style.opacity = '1';
-        flieger.style.background = t < 0.5 ? '#e8eef7' : farbe;
-        const spurBreite = (gross ? 30 : 17) * (t < 0.5 ? 0.6 : 1);
-        partikel!.spur(fx, fy, t < 0.5 ? '#e8eef7' : farbe, spurBreite);
+      /* Der Himmel hellt in der ersten Phase auf und bleibt danach
+         hell. Er laeuft durch alle Phasen weiter, damit Wolken und
+         Sterne nicht mitten im Bild stehenbleiben. */
+      const tag = Math.min(1, zeit / PHASEN.himmel);
+      /* Der Anflug beginnt erst, wenn alle Schnuppen unterwegs sind. */
+      const anflug = zeit <= bisAnflug ? 0
+        : Math.min(1, (zeit - bisAnflug) / PHASEN.anflug);
 
-        /* Ab der Haelfte sprueht das Objekt seitlich Funken ab. Das
-           ist der Moment, in dem die Farbe erscheint - und die Funken
-           machen daraus ein Ereignis statt eines Farbwechsels. Nur
-           fuer die hohen Seltenheiten, damit der Unterschied zaehlt. */
-        if (gross && t > 0.45) {
-          for (let i = 0; i < 2; i++) {
-            const streu = (Math.random() - 0.5) * 2;
-            partikel!.funke(fx, fy, streu * 260, (Math.random() - 0.3) * 300, farbe, 0.45);
-          }
+      if (zeit >= PHASEN.himmel && zeit < bisAnflug) {
+        /* Die Starts verteilen sich ueber die ersten drei Viertel der
+           Phase. Das letzte Viertel gehoert der Heldenschnuppe allein. */
+        const t = (zeit - PHASEN.himmel) / PHASEN.schnuppen;
+        const faellig = Math.min(reihe.length,
+          Math.floor((t / 0.75) * reihe.length) + 1);
+        while (gestartet < faellig) {
+          losschicken(reihe[gestartet]!, gestartet, gestartet === reihe.length - 1);
+          gestartet++;
         }
-      } else if (zeit < gesamt) {
-        // Phase 3: Aufprall.
+      } else if (zeit >= bisAnflug && zeit < bisHalt) {
+        // Falls die Bildrate eingebrochen ist: nichts darf ausfallen.
+        while (gestartet < reihe.length) {
+          losschicken(reihe[gestartet]!, gestartet, gestartet === reihe.length - 1);
+          gestartet++;
+        }
+      } else if (zeit >= bisAufprall && zeit < gesamt) {
+        // Aufprall dort, wo die Heldenschnuppe steht.
         if (!explodiert) {
           explodiert = true;
           const w = WUCHT[hoechste];
+          const treffer = himmel?.heldImBild();
+          const mx = treffer ? treffer.x : b / 2;
+          const my = treffer ? treffer.y : h / 2;
           app.klang.spiel('rollAufprall', TONHOEHE[hoechste]);
-          flieger.style.opacity = '0';
 
           /* Erst weiss, dann farbig: der erste Moment ist reine
              Helligkeit, die Farbe kommt einen Wimpernschlag spaeter.
@@ -311,28 +352,17 @@ export function rollBauen(wurzel: HTMLElement, app: App): Schirm {
             ], { duration: 200 + kraft * 20, easing: 'ease-out' });
           }
         }
-      } else {
+      } else if (zeit >= gesamt) {
         fertig(ergebnisse);
         return;
       }
 
+      himmel!.bild(dt, tag, anflug);
       partikel!.bild(dt);
       anforderung = requestAnimationFrame(schritt);
     };
 
     anforderung = requestAnimationFrame(schritt);
-  }
-
-  /** Ein Durchflug von links nach rechts, in der Mitte am schnellsten. */
-  function einDurchflug(t: number): number {
-    return t * t * (3 - 2 * t);
-  }
-
-  /** Zwei Durchfluege - das Signal fuer Episch und Legendaer. */
-  function doppelDurchflug(t: number): number {
-    if (t < 0.45) return (t / 0.45) * 1.15 - 0.1;
-    if (t < 0.55) return 1.05 - ((t - 0.45) / 0.1) * 1.15;
-    return -0.1 + ((t - 0.55) / 0.45) * 0.6;
   }
 
   function fertig(ergebnisse: RollErgebnis[]): void {
@@ -398,6 +428,8 @@ export function rollBauen(wurzel: HTMLElement, app: App): Schirm {
     anforderung = 0;
     partikel?.zerstoeren();
     partikel = null;
+    himmel?.zerstoeren();
+    himmel = null;
   }
 
   aufbauen();
