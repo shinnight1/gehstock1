@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-import { data as D, economy as E, arena as A } from '../netlify/functions/lib/gehstockmon-rules.mjs';
+import { data as D, economy as E, arena as A, hours as H } from '../netlify/functions/lib/gehstockmon-rules.mjs';
 import { createHandler } from '../netlify/functions/gehstockmon.mjs';
 let passed=0,sequence=0;
 async function test(name,fn){await fn();passed++;console.log('ok',name);}
 export function memoryStore(){let data=null,version=0;return{get data(){return data;},async getWithMetadata(){return data?{data:structuredClone(data),etag:String(version)}:null;},async setJSON(key,next,opts){await new Promise(setImmediate);if((opts.onlyIfNew&&data)||(opts.onlyIfMatch!==undefined&&opts.onlyIfMatch!==String(version)))return{modified:false};data=structuredClone(next);version++;return{modified:true};}};}
 function codeAt(index){let codes=[];for(let n=0;n<10000;n++){const code=String(n).padStart(4,'0'),text='code:'+code+':gehstock:hideout:2026:kellergewoelbe';let h=0x811c9dc5;for(const c of text){h^=c.charCodeAt(0);h=(h+(h<<1)+(h<<4)+(h<<7)+(h<<8)+(h<<24))>>>0;}if(h%97===0)codes.push(code);}return codes[index];}
-const ca=codeAt(0),cb=codeAt(1),stamp=1800000000000;
+const ca=codeAt(0),cb=codeAt(1),stamp=Date.parse('2026-09-17T07:00:00+02:00');
 async function call(handler,code,op,data={}){const response=await handler(new Request('http://localhost/api/gehstockmon',{method:'POST',body:JSON.stringify({code,name:code===ca?'Test A':'Test B',op,requestId:'request-'+(++sequence),...data})}));return{status:response.status,...await response.json()};}
 function action(b){const u=b.teams[0][b.active[0]],e=b.teams[1][b.active[1]];if(b.phase==='replace')return{kind:'switch',slot:b.teams[0].findIndex((k)=>k.hp>0)};if(u.charges>0&&((u.role===2&&u.hp<u.maxHp*.67)||(u.role===1&&e.hp<=e.maxHp*.35)||(u.role===3&&!e.weakened)))return{kind:'move',move:'special'};return{kind:'move',move:b.round>=u.powerReady?'power':'strike'};}
 async function win(handler,code,territoryId=1){let r=await call(handler,code,'world');r=await call(handler,code,'arena_start',{territoryId,version:r.territories[territoryId-1].version,squad:r.profile.truppe});assert.equal(r.status,200);for(let i=0;r.arena.phase!=='finished'&&i<80;i++){r=await call(handler,code,'arena_turn',{battleId:r.arena.id,revision:r.arena.revision,action:action(r.arena)});assert.equal(r.status,200,r.error);}assert.equal(r.arena.winner,'wir');return r;}
@@ -50,5 +50,45 @@ await test('Presence shares positions, expires departures and cannot change prog
   let r=await call(h,ca,'presence',{position:{x:-9,z:17,heading:1}});assert.equal(r.peers.length,1);assert.equal(r.peers[0].id,b.playerId);assert.equal(r.peers[0].x,12);assert.ok(!('code' in r.peers[0])&&!('profile' in r.peers[0]));assert.equal(JSON.stringify(store.data),snapshot);
   assert.equal((await call(h,ca,'presence',{position:{x:9999,z:1,heading:0}})).status,400);assert.equal((await call(h,ca,'presence',{position:{x:'0',z:1,heading:0}})).status,400);
   time+=15001;r=await call(h,ca,'presence',{position:{x:-9,z:17,heading:1}});assert.equal(r.peers.length,0);assert.equal(Object.keys(presence.data.players).length,1);
+});
+await test('Berlin opening boundaries include Friday, block weekends and follow daylight saving',()=>{
+  for(const [day,close] of [[14,13],[15,13],[16,14],[17,15],[18,13]]) {
+    const start=Date.parse('2026-09-'+day+'T07:00:00+02:00'),end=start+(close-7)*E.HOUR;
+    assert.equal(H.access(start-1).open,false);assert.equal(H.access(start).open,true);assert.equal(H.access(end-1).open,true);assert.equal(H.access(end).open,false);
+  }
+  for(const date of ['2026-09-19T00:00:00+02:00','2026-09-20T12:00:00+02:00','2026-09-21T06:59:59+02:00'])assert.equal(H.access(Date.parse(date)).open,false);
+  for(const [closed,open] of [['2026-10-24T12:00:00+02:00','2026-10-26T07:00:00+01:00'],['2027-03-27T12:00:00+01:00','2027-03-29T07:00:00+02:00']])assert.equal(H.access(Date.parse(closed)).nextOpenAt,Date.parse(open));
+});
+await test('Closed server rejects every operation and spoofed client clocks without changing stores',async()=>{
+  let time=Date.parse('2026-09-18T12:59:59+02:00');const store=memoryStore(),presence=memoryStore(),h=createHandler({store,presenceStore:presence,now:()=>time});await call(h,ca,'join');
+  const before=JSON.stringify(store.data);time+=1000;
+  for(const op of ['join','world','presence','arena_start','arena_turn','arena_flee','collect','incubate','hatch','upgrade','defend']) {
+    const r=await call(h,ca,op,{serverTime:stamp,now:stamp,position:{x:0,z:0,heading:0}});assert.equal(r.status,423,op);assert.equal(r.access.open,false);assert.equal(r.profile,undefined);
+  }
+  assert.equal(JSON.stringify(store.data),before);assert.equal(presence.data,null);
+  time=Date.parse('2026-09-21T07:00:00+02:00');assert.equal((await call(h,ca,'join')).status,200);
+  const lateStore=memoryStore();let checks=0;const late=createHandler({store:lateStore,now:()=>Date.parse('2026-09-21T12:59:59.999+02:00')+(checks++?1:0)});
+  assert.equal((await call(late,ca,'join')).status,423);assert.equal(lateStore.data,null,'a request crossing closing time cannot commit');
+});
+await test('Each completed weekend gives two eggs per held post once, preserving overflow and ownership rewards',async()=>{
+  let time=Date.parse('2026-09-11T07:00:00+02:00');const store=memoryStore(),h=createHandler({store,now:()=>time});const a=await call(h,ca,'join');await call(h,cb,'join');
+  const p=store.data.players[a.playerId];for(const t of store.data.territories)Object.assign(t,{ownerId:a.playerId,...E.outpost(null,time)});
+  p.eggs=Array.from({length:11},(_,i)=>({id:'saved-'+i,territoryId:1,producedAt:time,startedAt:time,readyAt:time+E.HOUR}));
+  time=Date.parse('2026-09-14T07:00:00+02:00');const results=await Promise.all([call(h,ca,'join'),call(h,ca,'join')]);
+  assert.equal(results.reduce((sum,r)=>sum+(r.weekendDelivery||0),0),1);let r=await call(h,ca,'world');assert.equal(r.profile.eggs.length,12);assert.equal(Object.values(r.profile.weekendEggs).reduce((a,b)=>a+b,0),9);assert.equal(r.profile.eggs[0].readyAt,Date.parse('2026-09-11T08:00:00+02:00'));
+  r=await call(h,ca,'hatch',{eggId:'saved-0',requestId:'weekend-hatch-once'});assert.equal(r.weekendDelivery,1);assert.equal(r.profile.eggs.length,12);assert.equal(Object.values(r.profile.weekendEggs).reduce((a,b)=>a+b,0),8);
+  const retry=await call(h,ca,'hatch',{eggId:'saved-0',requestId:'weekend-hatch-once'});assert.equal(retry.duplicate,true);assert.deepEqual(retry.profile.weekendEggs,r.profile.weekendEggs);
+  const other=await call(h,cb,'world');assert.equal(other.profile.eggs.length,0);assert.deepEqual(other.profile.weekendEggs,{});
+  // Previously earned gifts belong to the old owner even if a territory changes later.
+  store.data.territories[0].ownerId=other.playerId;Object.assign(store.data.territories[0],E.outpost(null,time));
+  time=Date.parse('2026-09-28T07:00:00+02:00');r=await call(h,ca,'join');assert.equal(Object.values(r.profile.weekendEggs).reduce((a,b)=>a+b,0),24);
+  const b=await call(h,cb,'join');assert.equal(b.profile.eggs.length,4);assert.equal((await call(h,cb,'join')).profile.eggs.length,4);
+});
+await test('Weekend replaces normal egg production, retains partial cycles and ignores DST length',()=>{
+  for(const [friday,monday] of [['2026-09-18T23:00:00+02:00','2026-09-21T00:00:00+02:00'],['2026-10-23T23:00:00+02:00','2026-10-26T00:00:00+01:00'],['2027-03-26T23:00:00+01:00','2027-03-29T00:00:00+02:00']]) {
+    const start=Date.parse(friday),end=Date.parse(monday),p=D.neuerStand(null,start),post=E.outpost(null,start);E.settle(p,post,end);assert.equal(post.eggStock,0);assert.equal(E.nextEggAt(post),end+E.HOUR);E.weekend(p,post,1,end);assert.equal(p.weekendEggs[1],2);E.weekend(p,post,1,end);assert.equal(p.weekendEggs[1],2);E.settle(p,post,end+E.HOUR);assert.equal(post.eggStock,1);
+  }
+  assert.equal(H.weekends(Date.parse('2026-09-12T01:00:00+02:00'),Date.parse('2026-09-14T07:00:00+02:00')).count,0,'ownership must precede the weekend');
+  assert.equal(H.weekends(0,Date.parse('2026-09-14T07:00:00+02:00')).count,1,'no rewards before introduction');
 });
 console.log('\n'+passed+' GehstockMon regression checks passed.');

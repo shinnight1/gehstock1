@@ -13,7 +13,7 @@ class Element{
 export async function checkUi(D,E,A,handler,code,clock,otherCode){
   const legacy={gold:999999,besitz:D.KATALOG.map(k=>k.id),geschafft:[1,2,3]};
   const values=new Map([['stand',legacy],['arena-v1',{invalid:'legacy fight'}],['online-squad',['moosling']]]),timers=new Map(),storage={get:(k,d)=>values.has(k)?structuredClone(values.get(k)):d,set:(k,v)=>values.set(k,structuredClone(v)),del:k=>values.delete(k)};
-  let definition,timerId=0,blocked=false,pauses=[],latest,unreachable=true,loseResponse=false,requests=[],visiblePeers=[],worldFrame;
+  let definition,timerId=0,blocked=false,pauses=[],latest,unreachable=true,loseResponse=false,requests=[],visiblePeers=[],worldFrame,delayReply=false,releaseReply;
   const stage=new Element('div'),root=new Element('div');root.appendChild(stage);
   const world={setHeld(){},setSquad(){},setTerritories(){},setPeers:list=>visiblePeers=list,position:()=>({x:-10,z:17,heading:0}),select(){},follow(){},overview(){},distanceTo:()=>0,blockInput:yes=>{blocked=yes;},move(){},pause:yes=>pauses.push(yes),destroy(){}};
   const SG={gehstockmon:{daten:D,wirtschaft:E,arena:A,orte:D.BIOME,createWorld:(host,container,handlers)=>{worldFrame=handlers.frame;return world;}},util:{},storage,auth:{aktuell:{code,name:'UI Test'}},offline:false,env:{},assets:{},register:def=>{definition=def;}};
@@ -22,9 +22,9 @@ export async function checkUi(D,E,A,handler,code,clock,otherCode){
   const context=vm.createContext({SG,document,window:{addEventListener:(k,fn)=>listeners[k]=fn,removeEventListener:k=>delete listeners[k]},Date:class extends Date{static now(){return clock.value;}},AbortController,setTimeout,clearTimeout,fetch:async(url,opts)=>{
     requests.push(JSON.parse(opts.body));if(unreachable)throw new TypeError('Server nicht erreichbar');
     const response=await handler(new Request('http://localhost'+url,opts));if(response.ok){const data=await response.clone().json();if(data.profile)latest=data;}
-    if(loseResponse){loseResponse=false;throw new TypeError('Antwort verloren');}return response;
+    if(loseResponse){loseResponse=false;throw new TypeError('Antwort verloren');}if(delayReply){delayReply=false;await new Promise(resolve=>releaseReply=resolve);}return response;
   }});
-  for(const file of['src/core/ui.js','src/games/gehstockmon/2-online.js','src/games/gehstockmon/3-ui.js'])vm.runInContext(fs.readFileSync(file,'utf8'),context);
+  for(const file of['src/core/ui.js','src/games/gehstockmon/1-zeiten.js','src/games/gehstockmon/2-online.js','src/games/gehstockmon/3-ui.js'])vm.runInContext(fs.readFileSync(file,'utf8'),context);
   const mount=()=>definition.mount({stage,root,store:storage,onLeave(){},sfx(){},after:(fn,ms)=>{timers.set(++timerId,{fn,at:clock.value+ms});return timerId;},cancel:id=>timers.delete(id)});
   let game=mount();
   const find=fn=>{const e=root.all().find(e=>e.visible&&fn(e));assert.ok(e,'control exists');return e;};
@@ -66,6 +66,16 @@ export async function checkUi(D,E,A,handler,code,clock,otherCode){
   const storedGold=game.state.gold;unreachable=true;listeners.offline();assert.ok(blocked);await jump(clock.value+3*E.HOUR);assert.equal(game.state.gold,storedGold,'offline clock cannot advance progression');
   unreachable=false;listeners.online();await flush();assert.equal(root.querySelector('.gm-connection').hidden,true);assert.ok(game.state.gold>storedGold,'server settles income on reconnect');
   assert.deepEqual(values.get('stand'),legacy,'old local save left intact and unused');assert.deepEqual(values.get('arena-v1'),{invalid:'legacy fight'});assert.deepEqual(values.get('online-squad'),['moosling']);
+  // Close an active fight exactly at the deadline, including a response lost
+  // before closing. The pending receipt remains recoverable on the next day.
+  click('⚔ Arena betreten');await flush();loseResponse=true;chooseMove(latest.arena);await flush();assert.ok(SG.gehstockmon.online.pending());
+  const close=SG.gehstockmon.zeiten.access(clock.value).closesAt;await jump(close);assert.ok(blocked);assert.equal(root.querySelector('.gm-arena').hidden,true);assert.ok(root.querySelector('.gm-closed-card'));assert.ok(root.querySelector('.gm-connection').textContent.includes('Freitag · 7–13 Uhr'));
+  await assert.rejects(SG.gehstockmon.online.request('resume'),e=>e.status===423);assert.ok(SG.gehstockmon.online.pending(),'closed requests retain uncertain receipts');
+  const next=SG.gehstockmon.zeiten.access(clock.value).nextOpenAt;await jump(next);assert.equal(root.querySelector('.gm-connection').hidden,true,'reopens without reloading');assert.equal(SG.gehstockmon.online.pending(),null);
+  click('Zurück zur Karte');click('⚔ Arena betreten');await flush();delayReply=true;chooseMove(latest.arena);await flush();assert.ok(releaseReply);
+  await jump(SG.gehstockmon.zeiten.access(clock.value).closesAt);releaseReply();await flush();assert.ok(root.querySelector('.gm-closed-card'));assert.equal(root.querySelector('.gm-arena').hidden,true,'late combat response cannot reopen the closed game');
+  game.destroy();timers.clear();while(stage.firstChild)stage.removeChild(stage.firstChild);game=mount();await flush();assert.ok(root.querySelector('.gm-closed-card'),'loading while closed shows hours rather than a connection error');assert.ok(blocked);
+  await jump(SG.gehstockmon.zeiten.access(clock.value).nextOpenAt);assert.equal(root.querySelector('.gm-connection').hidden,true);assert.ok(game.state.eggs.some(e=>e.id.startsWith('weekend-')),'weekend eggs arrive when reopening');
   game.destroy();
   assert.equal(listeners.offline,undefined);assert.equal(listeners.online,undefined);
   // A direct offline-file route is gated too, even though the catalog hides it.

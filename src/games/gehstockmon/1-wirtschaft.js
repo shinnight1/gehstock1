@@ -13,7 +13,8 @@
     var t = value || {}, captured = number(t.capturedAt, now);
     return { level: Math.max(1, Math.min(3, Math.floor(number(t.level, 1)))), capturedAt: captured,
       incomeAt: Math.max(captured, number(t.incomeAt, captured)), eggAt: Math.max(captured, number(t.eggAt, captured)),
-      eggStock: Math.min(E.STOCK_LIMIT, Math.floor(number(t.eggStock, 0))) };
+      eggStock: Math.min(E.STOCK_LIMIT, Math.floor(number(t.eggStock, 0))),
+      weekendAt: Math.max(captured, number(t.weekendAt, SG.gehstockmon.zeiten.REWARDS_START)) };
   };
   var previous = D.neuerStand;
   D.neuerStand = function (save, now) {
@@ -22,6 +23,8 @@
     st.gold = Math.floor(number(old.gold, st.essenz + 120));
     st.goldRemainder = Math.min(0.999999999, number(old.goldRemainder, 0));
     st.clockAt = number(old.clockAt, now); st.eggSerial = Math.floor(number(old.eggSerial, 0));
+    st.weekendEggs = {};
+    D.FELDER.forEach(function (f) { var n = Math.floor(number(old.weekendEggs && old.weekendEggs[f.id], 0)); if (n) st.weekendEggs[f.id] = n; });
     st.eggs = []; var seen = {};
     (Array.isArray(old.eggs) ? old.eggs : []).slice(0, E.BAG_LIMIT).forEach(function (egg) {
       if (!egg || typeof egg.id !== 'string' || seen[egg.id] || !D.FELDER.some(function (f) { return f.id === egg.territoryId; })) return;
@@ -37,8 +40,22 @@
     now = Math.max(st.clockAt || 0, now); st.clockAt = now;
     var end = Math.max(post.incomeAt, now), earned = st.goldRemainder + (end - post.incomeAt) / E.HOUR * E.LEVELS[post.level].income;
     var whole = Math.floor(earned + 1e-8); st.gold += whole; st.goldRemainder = Math.max(0, earned - whole); post.incomeAt = end;
-    var cycles = Math.max(0, Math.floor((now - post.eggAt) / E.EGG_TIME));
-    if (cycles) { post.eggStock = Math.min(E.STOCK_LIMIT, post.eggStock + cycles); post.eggAt += cycles * E.EGG_TIME; }
+    var H = SG.gehstockmon.zeiten, produced = H.productionTime(post.eggAt), cycles = Math.max(0, Math.floor((H.productionTime(now) - produced) / E.EGG_TIME));
+    if (cycles) { post.eggStock = Math.min(E.STOCK_LIMIT, post.eggStock + cycles); post.eggAt = H.productionAt(produced + cycles * E.EGG_TIME); }
+  };
+  E.nextEggAt = function (post) { var H = SG.gehstockmon.zeiten; return H.productionAt(H.productionTime(post.eggAt) + E.EGG_TIME); };
+  E.weekend = function (st, post, id, now) {
+    var reward = SG.gehstockmon.zeiten.weekends(Math.max(post.capturedAt, post.weekendAt), now);
+    if (reward.count) { st.weekendEggs[id] = (st.weekendEggs[id] || 0) + reward.count * 2; post.weekendAt = reward.through; }
+  };
+  E.deliverWeekend = function (st, now) {
+    var delivered = 0;
+    Object.keys(st.weekendEggs).forEach(function (id) {
+      var count = Math.min(st.weekendEggs[id], E.BAG_LIMIT - st.eggs.length);
+      for (var i = 0; i < count; i++) st.eggs.push({ id: 'weekend-' + id + '-' + now + '-' + (++st.eggSerial), territoryId: Number(id), producedAt: now, startedAt: null, readyAt: null });
+      st.weekendEggs[id] -= count; delivered += count; if (!st.weekendEggs[id]) delete st.weekendEggs[id];
+    });
+    return delivered;
   };
   E.tick = function (st, now) { Object.keys(st.outposts).forEach(function (id) { E.settle(st, st.outposts[id], now); }); };
   E.capture = function (st, id, now) {

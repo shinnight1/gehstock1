@@ -249,7 +249,8 @@ const SG = { rules: {} };
     var t = value || {}, captured = number(t.capturedAt, now);
     return { level: Math.max(1, Math.min(3, Math.floor(number(t.level, 1)))), capturedAt: captured,
       incomeAt: Math.max(captured, number(t.incomeAt, captured)), eggAt: Math.max(captured, number(t.eggAt, captured)),
-      eggStock: Math.min(E.STOCK_LIMIT, Math.floor(number(t.eggStock, 0))) };
+      eggStock: Math.min(E.STOCK_LIMIT, Math.floor(number(t.eggStock, 0))),
+      weekendAt: Math.max(captured, number(t.weekendAt, SG.gehstockmon.zeiten.REWARDS_START)) };
   };
   var previous = D.neuerStand;
   D.neuerStand = function (save, now) {
@@ -258,6 +259,8 @@ const SG = { rules: {} };
     st.gold = Math.floor(number(old.gold, st.essenz + 120));
     st.goldRemainder = Math.min(0.999999999, number(old.goldRemainder, 0));
     st.clockAt = number(old.clockAt, now); st.eggSerial = Math.floor(number(old.eggSerial, 0));
+    st.weekendEggs = {};
+    D.FELDER.forEach(function (f) { var n = Math.floor(number(old.weekendEggs && old.weekendEggs[f.id], 0)); if (n) st.weekendEggs[f.id] = n; });
     st.eggs = []; var seen = {};
     (Array.isArray(old.eggs) ? old.eggs : []).slice(0, E.BAG_LIMIT).forEach(function (egg) {
       if (!egg || typeof egg.id !== 'string' || seen[egg.id] || !D.FELDER.some(function (f) { return f.id === egg.territoryId; })) return;
@@ -273,8 +276,22 @@ const SG = { rules: {} };
     now = Math.max(st.clockAt || 0, now); st.clockAt = now;
     var end = Math.max(post.incomeAt, now), earned = st.goldRemainder + (end - post.incomeAt) / E.HOUR * E.LEVELS[post.level].income;
     var whole = Math.floor(earned + 1e-8); st.gold += whole; st.goldRemainder = Math.max(0, earned - whole); post.incomeAt = end;
-    var cycles = Math.max(0, Math.floor((now - post.eggAt) / E.EGG_TIME));
-    if (cycles) { post.eggStock = Math.min(E.STOCK_LIMIT, post.eggStock + cycles); post.eggAt += cycles * E.EGG_TIME; }
+    var H = SG.gehstockmon.zeiten, produced = H.productionTime(post.eggAt), cycles = Math.max(0, Math.floor((H.productionTime(now) - produced) / E.EGG_TIME));
+    if (cycles) { post.eggStock = Math.min(E.STOCK_LIMIT, post.eggStock + cycles); post.eggAt = H.productionAt(produced + cycles * E.EGG_TIME); }
+  };
+  E.nextEggAt = function (post) { var H = SG.gehstockmon.zeiten; return H.productionAt(H.productionTime(post.eggAt) + E.EGG_TIME); };
+  E.weekend = function (st, post, id, now) {
+    var reward = SG.gehstockmon.zeiten.weekends(Math.max(post.capturedAt, post.weekendAt), now);
+    if (reward.count) { st.weekendEggs[id] = (st.weekendEggs[id] || 0) + reward.count * 2; post.weekendAt = reward.through; }
+  };
+  E.deliverWeekend = function (st, now) {
+    var delivered = 0;
+    Object.keys(st.weekendEggs).forEach(function (id) {
+      var count = Math.min(st.weekendEggs[id], E.BAG_LIMIT - st.eggs.length);
+      for (var i = 0; i < count; i++) st.eggs.push({ id: 'weekend-' + id + '-' + now + '-' + (++st.eggSerial), territoryId: Number(id), producedAt: now, startedAt: null, readyAt: null });
+      st.weekendEggs[id] -= count; delivered += count; if (!st.weekendEggs[id]) delete st.weekendEggs[id];
+    });
+    return delivered;
   };
   E.tick = function (st, now) { Object.keys(st.outposts).forEach(function (id) { E.settle(st, st.outposts[id], now); }); };
   E.capture = function (st, id, now) {
@@ -311,6 +328,43 @@ const SG = { rules: {} };
     if (!price) throw new Error('Deine Festung ist vollständig ausgebaut.');
     if (st.gold < price) throw new Error('Für den Ausbau brauchst du ' + price + ' Gold.');
     st.gold -= price; post.level++; return post.level;
+  };
+})(SG);
+
+/* Ein Kalender für Server und Anzeige: deutsche Ortszeit, auch bei Zeitumstellung. */
+(function (SG) {
+  var H = SG.gehstockmon.zeiten = {}, DAY = 86400000, HOUR = 3600000;
+  H.ZONE = 'Europe/Berlin';
+  H.CLOSE = [0, 13, 13, 14, 15, 13, 0];
+  H.LABELS = ['Montag · 7–13 Uhr', 'Dienstag · 7–13 Uhr', 'Mittwoch · 7–14 Uhr', 'Donnerstag · 7–15 Uhr', 'Freitag · 7–13 Uhr', 'Samstag & Sonntag · geschlossen'];
+  // Erstes Wochenende dieser Regel; alte Spielstände bekommen keine rückwirkenden Monate.
+  H.REWARDS_START = Date.parse('2026-09-12T00:00:00+02:00');
+  var parts = new Intl.DateTimeFormat('en-GB', { timeZone: H.ZONE, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
+  function local(t) { var p = {}; parts.formatToParts(new Date(t)).forEach(function (v) { if (v.type !== 'literal') p[v.type] = Number(v.value); }); return p; }
+  function mod(n, d) { return ((n % d) + d) % d; }
+  H.day = function (t) { var p = local(t); return Date.UTC(p.year, p.month - 1, p.day) / DAY; };
+  H.weekday = function (d) { return new Date(d * DAY).getUTCDay(); };
+  H.at = function (d, hour) {
+    var wall = d * DAY + hour * HOUR, t = wall;
+    for (var i = 0; i < 2; i++) { var p = local(t); t += wall - Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second); }
+    return t;
+  };
+  H.access = function (t) {
+    var d = H.day(t), close = H.CLOSE[H.weekday(d)], open = !!close && t >= H.at(d, 7) && t < H.at(d, close), next = null;
+    for (var i = 0; i <= 7; i++) if (H.CLOSE[H.weekday(d + i)] && H.at(d + i, 7) > t) { next = H.at(d + i, 7); break; }
+    return { open: open, serverTime: t, timeZone: H.ZONE, closesAt: open ? H.at(d, close) : null, nextOpenAt: next };
+  };
+  H.format = function (t) { return new Intl.DateTimeFormat('de-DE', { timeZone: H.ZONE, weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }).format(new Date(t)); };
+  // Virtuelle Produktionszeit lässt Samstag und Sonntag aus. Die Zeitumstellung
+  // liegt ebenfalls am Sonntag und verändert daher keine Eier-Produktionsstunde.
+  H.productionTime = function (t) { var d = H.day(t), weekday = mod(d + 3, 7); return (Math.floor((d + 3) / 7) * 5 + Math.min(weekday, 5)) * DAY + (weekday < 5 ? t - H.at(d, 0) : 0); };
+  H.productionAt = function (v) { var days = Math.floor(v / DAY), d = Math.floor(days / 5) * 7 + mod(days, 5) - 3; return H.at(d, 0) + mod(v, DAY); };
+  H.weekends = function (since, until) {
+    since = Math.max(since, H.REWARDS_START); if (until <= since) return { count: 0, through: since };
+    var day = H.day(since), saturday = day + mod(6 - H.weekday(day), 7);
+    if (H.at(saturday, 0) < since) saturday += 7;
+    var count = Math.max(0, Math.floor((H.day(until) - saturday - 2) / 7) + 1);
+    return { count: count, through: count ? H.at(saturday + 2 + (count - 1) * 7, 0) : since };
   };
 })(SG);
 
@@ -669,5 +723,6 @@ const SG = { rules: {} };
 
 export const data = SG.gehstockmon.daten;
 export const economy = SG.gehstockmon.wirtschaft;
+export const hours = SG.gehstockmon.zeiten;
 export const arena = SG.gehstockmon.arena;
 export const fight = SG.rules.gehstockmon.kaempfe;

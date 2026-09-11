@@ -30,12 +30,13 @@
         if ((res.headers.get('content-type') || '').indexOf('json') < 0) throw new Error('Der Spielserver ist hier noch nicht erreichbar. Bitte öffne die veröffentlichte Hideout-Website.');
         return res.json().then(function (result) {
           if (!res.ok || result.error) {
-            if (res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429) clearPending();
-            var error=new Error(result.error || 'Server nicht erreichbar.');error.status=res.status;throw error;
+            if (res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429 && res.status !== 423) clearPending();
+            var error=new Error(result.error || 'Server nicht erreichbar.');error.status=res.status;error.access=result.access;throw error;
           }
           clearPending(); result.action = { op: op, territoryId: data.territoryId, squad: data.squad }; return result;
         });
       }).catch(function (err) {
+        if (err.status === 423 && err.access) throw err;
         if (mutation && SG.auth.aktuell && SG.auth.aktuell.code === code && pending()) throw new Error('Antwort unbestätigt. Unter Spielerwelt → Offene Aktion prüfen erhältst du das Ergebnis, ohne erneut zu bezahlen.');
         if (err.name === 'AbortError') throw new Error('Der Server antwortet noch nicht. Bitte erneut versuchen.'); throw err;
       }).finally(function () { clearTimeout(timer); });

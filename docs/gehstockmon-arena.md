@@ -1,6 +1,16 @@
 # GehstockMon: Arena und Außenposten
 
-Stand: 10. September 2026. Diese Spielfassung ersetzt den automatischen Plankampf und das Beschwören gegen Essenz.
+Stand: 11. September 2026. Diese Spielfassung ersetzt den automatischen Plankampf und das Beschwören gegen Essenz.
+
+## Öffnungszeiten und Wochenende
+
+Es gilt ausschließlich deutsche Ortszeit (`Europe/Berlin`), einschließlich Sommer- und Winterzeit. Montag, Dienstag und Freitag ist GehstockMon von 7 bis 13 Uhr geöffnet, Mittwoch von 7 bis 14 Uhr und Donnerstag von 7 bis 15 Uhr. Samstag und Sonntag bleibt es vollständig geschlossen. Der Beginn ist eingeschlossen, die Schlusszeit ausgeschlossen: um 13:00 Uhr ist ein 7–13-Uhr-Tag bereits gesperrt.
+
+Der Server prüft alle Aktionen, Weltabrufe und Anwesenheitsmeldungen vor dem Lesen der Welt und erneut vor dem Speichern. Geschlossene Anfragen erhalten HTTP 423 samt nächster Öffnung und verändern keinen Spielstand. Eine geänderte Geräteuhr umgeht die Sperre nicht. Die Oberfläche sperrt auch laufende Kämpfe zur Schlusszeit, zeigt den Wochenplan und verbindet sich zur nächsten Öffnung automatisch. Unbestätigte Aktionen bleiben bis zur nächsten Öffnung abrufbar; die bisherige Ablaufregel für inaktive Kämpfe bleibt bestehen.
+
+Ab dem Wochenende 12./13. September 2026 bringt jeder bereits zu Wochenendbeginn gehaltene Außenposten genau zwei Wochenend-Eier. Die normale Eierproduktion pausiert Samstag und Sonntag; angebrochene Produktionszeiten und vorhandene Eier bleiben erhalten. Gold und begonnene Brutzeiten laufen weiter.
+
+Beim nächsten Eintritt nach einem abgeschlossenen Wochenende werden die Eier automatisch in die Bruttasche gelegt. Überzählige Eier bleiben in einer separaten Reserve, auch nach Gebietsverlust, und rücken nach, sobald ein Brut-Ei schlüpft. Mehrere verpasste Wochenenden werden nachgeholt. Der Server führt pro Außenposten einen atomar gespeicherten Abrechnungsstand; Neuladen und parallele Anfragen vergeben keine doppelten Eier. Vor dem genannten ersten Wochenende werden keine rückwirkenden Prämien berechnet.
 
 ## Fünf Biome und Mitspieler
 
@@ -22,7 +32,7 @@ Ein vollständiger Sieg erobert das Gebiet und gibt einmalig 40 Gold. Flucht, Ni
 
 ## Eier und Gold
 
-- Ein eigener Außenposten produziert alle **2 Stunden ein Ei**, bis zu drei vor Ort.
+- Ein eigener Außenposten produziert unter der Woche alle **2 Stunden ein Ei**, bis zu drei vor Ort. Am Wochenende gelten die zwei Wochenend-Eier je Außenposten.
 - Eier werden abgeholt und danach für **1 Stunde** in einen Brutplatz gelegt.
 - Drei Brutplätze, zwölf Eier in der Tasche. Abgeholte Eier bleiben bei Gebietsverlust erhalten.
 - Es schlüpft jeweils ein noch fehlendes Mon. Bei vollständiger Sammlung liefert ein weiteres Ei 75 Gold.

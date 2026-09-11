@@ -61,6 +61,10 @@
 .gm-connection-card p{margin:12px 0 20px;font-size:16px;line-height:1.55;color:#c6d8d6}
 .gm-connection-card button{min-height:48px;width:100%;font-size:16px}
 .gm-disconnected>:not(.gm-world):not(.gm-connection):not(.gm-notice){visibility:hidden}
+.gm-hours-label{display:block;margin-top:7px;font-size:14px;color:#c6d8d6}
+.gm-hours-list{list-style:none;padding:0;margin:20px 0;border-block:1px solid #487374;font-size:16px;line-height:1.5}
+.gm-hours-list li{padding:7px 0}.gm-hours-list li+li{border-top:1px solid #48737455}
+.gm-closed-card .gm-next-opening,.gm-weekend-reserve{color:#f4d68b}
 
 /* Fünf lesbare Reviere und Namen direkt über den echten Mitspielern. */
 .gm-pins{z-index:3}.gm-hud,.gm-camera-controls,.gm-target,.gm-dock,.gm-joystick{z-index:4}

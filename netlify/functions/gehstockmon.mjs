@@ -1,12 +1,17 @@
 import { getStore } from '@netlify/blobs';
 import { createHash } from 'node:crypto';
-import { data as D, economy as E, arena as A } from './lib/gehstockmon-rules.mjs';
+import { data as D, economy as E, arena as A, hours as H } from './lib/gehstockmon-rules.mjs';
 
 const KEY = 'world-v2';
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' } });
 const mutations = ['arena_start', 'arena_turn', 'arena_flee', 'collect', 'incubate', 'hatch', 'upgrade', 'defend'];
 class GameError extends Error { constructor(message, status = 400) { super(message); this.status = status; } }
+function requireOpen(timestamp) {
+  const access = H.access(timestamp);
+  if (!access.open) { const error = new GameError('GehstockMon ist gerade geschlossen.', 423); error.access = access; throw error; }
+  return access;
+}
 function validCode(value) {
   if (typeof value !== 'string' || !/^\d{4}$/.test(value)) return false;
   const text = 'code:' + value + ':gehstock:hideout:2026:kellergewoelbe'; let h = 0x811c9dc5;
@@ -52,7 +57,7 @@ function migrateAndSettle(world, now) {
   }
   for (const t of world.territories) {
     Object.assign(t, E.outpost(t, now));
-    if (t.ownerId && world.players[t.ownerId]) E.settle(world.players[t.ownerId], t, now);
+    if (t.ownerId && world.players[t.ownerId]) { E.settle(world.players[t.ownerId], t, now); E.weekend(world.players[t.ownerId], t, t.id, now); }
   }
   for (const [id,p] of Object.entries(world.players)) {
     p.geschafft = world.territories.filter(t=>t.ownerId===id).map(t=>t.id);
@@ -73,7 +78,7 @@ function protectedOwner(world, t, now) {
 }
 function publicResult(world, id, now, extra = {}) {
   const p = world.players[id];
-  return { playerId: id, serverTime: now, mapVersion: world.mapVersion, profile: D.neuerStand(p, now), arena: p.arena || null,
+  return { playerId: id, serverTime: now, access: H.access(now), mapVersion: world.mapVersion, profile: D.neuerStand(p, now), arena: p.arena || null,
     territories: world.territories.map((t) => ({ id: t.id, ownerId: t.ownerId, ownerName: world.players[t.ownerId]?.name || t.ownerName, version: t.version, level: t.level,
       defense: A.defenders(t.id, t.ownerId ? t.defense : null).map((k) => ({ id: k.id, name: k.name })),
       eggStock: t.ownerId === id ? t.eggStock : 0, eggAt: t.ownerId === id ? t.eggAt : null })),
@@ -81,7 +86,7 @@ function publicResult(world, id, now, extra = {}) {
 }
 
 // Anwesenheit ist kurzlebig und unabhängig von Gold, Eiern und Kampfaktionen.
-async function updatePresence(db, world, id, position, timestamp) {
+async function updatePresence(db, world, id, position, timestamp, clock) {
   const p = world.players[id];
   if (!p) throw new GameError('Betritt zuerst die Spielerwelt.',409);
   if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.z) || !Number.isFinite(position.heading)
@@ -91,8 +96,9 @@ async function updatePresence(db, world, id, position, timestamp) {
     const players=Object.fromEntries(Object.entries(entry?.data.players||{}).filter(([pid,v])=>world.players[pid]&&timestamp-v.updatedAt<15000));
     if (!players[id] || players[id].updatedAt<=timestamp) players[id] = { id, name:p.name, x:Math.round(position.x*100)/100, z:Math.round(position.z*100)/100,
       heading:position.heading, activity:p.arena&&p.arena.phase!=='finished'&&timestamp-p.arena.lastActionAt<20*60000?'arena':'map', updatedAt:timestamp };
+    requireOpen(clock());
     const result=await db.setJSON('presence-v1',{players},entry?{onlyIfMatch:entry.etag}:{onlyIfNew:true});
-    if(result.modified)return json({serverTime:timestamp,peers:Object.values(players).filter(v=>v.id!==id)});
+    if(result.modified)return json({serverTime:timestamp,access:H.access(timestamp),peers:Object.values(players).filter(v=>v.id!==id)});
   }
   throw new GameError('Die Mitspieler werden gerade aktualisiert.',409);
 }
@@ -127,12 +133,13 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
       if (!['join','world','presence',...mutations].includes(body.op)) throw new GameError('Diese Spielaktion wird nicht mehr unterstützt. Lade das Spiel neu.');
       if (mutations.includes(body.op) && (typeof body.requestId !== 'string' || body.requestId.length < 8 || body.requestId.length > 80)) throw new GameError('Aktionskennung fehlt.');
       const id = createHash('sha256').update('gehstockmon-player:' + body.code).digest('hex').slice(0, 24), timestamp = now();
+      requireOpen(timestamp);
       const name = typeof body.name === 'string' ? body.name.trim().replace(/[\u0000-\u001f]/g, '').slice(0, 30) : '';
       const db = store || getStore({ name: 'hgh-gehstockmon', consistency: 'strong' }), draw = random();
       if (body.op === 'presence') {
         const entry=await db.getWithMetadata(KEY,{type:'json',consistency:'strong'});
         if(!entry)throw new GameError('Betritt zuerst die Spielerwelt.',409);
-        return await updatePresence(presenceStore||getStore({name:'hgh-gehstockmon-presence',consistency:'strong'}),entry.data,id,body.position,timestamp);
+        return await updatePresence(presenceStore||getStore({name:'hgh-gehstockmon-presence',consistency:'strong'}),entry.data,id,body.position,timestamp,now);
       }
       for (let attempt = 0; attempt < 8; attempt++) {
         const entry = await db.getWithMetadata(KEY, { type: 'json', consistency: 'strong' });
@@ -178,15 +185,18 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
           }
           if (body.op === 'incubate') { E.incubate(p,body.eggId,timestamp); extra.message = 'Die Brutzeit hat begonnen: 1 Stunde.'; }
           if (body.op === 'hatch') { const mon = E.hatch(p,body.eggId,timestamp,draw); extra.monId = mon && mon.id; extra.message = mon ? mon.name + ' ist geschlüpft!' : 'Sammlung vollständig! Das Ei bringt dir 75 Gold.'; }
+          const weekendEggs = E.deliverWeekend(p, timestamp);
+          if (weekendEggs) extra.weekendDelivery = weekendEggs;
         } catch (err) { if (err instanceof GameError) throw err; throw new GameError(err.message); }
         if (mutations.includes(body.op)) p.actionReceipts = receipts.concat({ id: body.requestId, op: body.op, extra }).slice(-40);
         world.version++;
+        requireOpen(now());
         const write = await db.setJSON(KEY, world, entry ? { onlyIfMatch: entry.etag } : { onlyIfNew: true });
         if (write.modified) return json(publicResult(world, id, timestamp, extra));
       }
       throw new GameError('Die Welt wird gerade verändert. Bitte versuche es erneut.', 409);
     } catch (err) {
-      if (err instanceof GameError) return json({ error: err.message }, err.status);
+      if (err instanceof GameError) return json({ error: err.message, ...(err.access ? { access: err.access, serverTime: err.access.serverTime } : {}) }, err.status);
       console.error('GehstockMon storage failure:', err.message); return json({ error: 'Die Spielerwelt ist vorübergehend nicht erreichbar.' }, 503);
     }
   };
