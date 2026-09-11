@@ -668,18 +668,6 @@
   opacity: 0;
   pointer-events: none;
 }
-.arena-wurzel .a-skip {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: calc(env(safe-area-inset-bottom) + 18px);
-  text-align: center;
-  color: #e2e8f0;
-  font-size: 12px;
-  /* Der Himmel wird hell - reiner Text ginge darin unter. */
-  background: rgba(8, 12, 22, 0.35);
-  padding: 4px 0;
-}
 
 .arena-wurzel .a-ergebnis .a-karte { border-color: var(--glanz, #334155); }
 .arena-wurzel .a-neu,

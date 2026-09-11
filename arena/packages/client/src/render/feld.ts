@@ -194,19 +194,64 @@ function laufwege(
  * wie Karton. Die Halme wachsen mit der Tiefe mit, sonst saehe das
  * Muster hinten grob und vorne fein aus - genau umgekehrt zur
  * Perspektive.
+ *
+ * Gezeichnet werden Bueschel, keine gleichverteilten Einzelhalme.
+ * Gleichverteilt ist Rauschen und liest sich aus zwei Metern
+ * Entfernung wieder als Flaeche; Gras waechst in Gruppen, und erst
+ * die Luecken dazwischen machen die Halme sichtbar.
+ *
+ * Der Halm ist ein schmales Dreieck mit gebogener Flanke, nicht ein
+ * Rechteck. Ein Rechteck hat oben dieselbe Breite wie unten und sieht
+ * bei dieser Groesse aus wie ein Strich - die Verjuengung ist das,
+ * was man als Grashalm erkennt.
+ *
+ * Alles hier ist gebacken und kostet im laufenden Spiel nichts. Die
+ * paar tausend Pfade fallen einmal beim Bildaufbau an.
  */
 function grasHalme(
   c: CanvasRenderingContext2D, k: Kamera, f: FeldFarben,
 ): void {
   const streu = streuAusSeed(0x5eed);
-  for (let i = 0; i < 1400; i++) {
-    const y = streu.bereich(0, HOEHE);
-    const x = streu.bereich(0, BREITE);
-    const laenge = skalaBei(k, y) * tile(streu.bereich(0.06, 0.14));
-    const px = pxX(k, x, y);
-    const py = pxY(k, y);
-    c.fillStyle = streu.zahl() > 0.45 ? f.rasenTupfen : f.rasenSchatten;
-    c.fillRect(px, py - laenge, Math.max(1, laenge * 0.45), Math.max(1, laenge));
+  const BUESCHEL = 700;
+  const JE_BUESCHEL = 6;
+  const toene = [f.rasenTupfen, f.rasenSchatten, f.rasenHell];
+
+  for (let b = 0; b < BUESCHEL; b++) {
+    const bx = streu.bereich(0, BREITE);
+    const by = streu.bereich(0, HOEHE);
+    /* Ein Bueschel hat einen Grundton, seine Halme weichen nur leicht
+       davon ab. Halme in wahllosen Farben nebeneinander sehen nach
+       Bildrauschen aus, nicht nach Gras. */
+    const grundton = Math.floor(streu.bereich(0, toene.length));
+    const streuung = skalaBei(k, by) * tile(0.34);
+
+    for (let i = 0; i < JE_BUESCHEL; i++) {
+      const y = by + streu.bereich(-0.5, 0.5) * tile(0.3);
+      if (y < 0 || y > HOEHE) continue;
+      const x = bx + streu.bereich(-0.5, 0.5) * tile(0.3);
+      const skala = skalaBei(k, y);
+      const laenge = skala * tile(streu.bereich(0.1, 0.28));
+      const dicke = Math.max(1, laenge * 0.3);
+      /* Neigung: alle Halme eines Bueschels lehnen in aehnliche
+         Richtung, als haette derselbe Wind sie erwischt. */
+      const neigung = streu.bereich(-0.45, 0.45) * laenge;
+      const px = pxX(k, x, y) + streu.bereich(-0.5, 0.5) * streuung * 0.4;
+      const py = pxY(k, y);
+
+      c.fillStyle = toene[
+        streu.zahl() > 0.72 ? (grundton + 1) % toene.length : grundton
+      ]!;
+      c.beginPath();
+      c.moveTo(px - dicke / 2, py);
+      // Eine gebogene Flanke hoch zur Spitze, die andere gerade zurueck.
+      c.quadraticCurveTo(
+        px - dicke / 2 + neigung * 0.35, py - laenge * 0.6,
+        px + neigung, py - laenge,
+      );
+      c.lineTo(px + dicke / 2, py);
+      c.closePath();
+      c.fill();
+    }
   }
 }
 

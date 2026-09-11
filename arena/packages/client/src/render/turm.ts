@@ -249,10 +249,17 @@ function steinAufbau(
     MATERIAL.stein, b.sockelHoehe,
   );
 
+  /* Sieben Lagen statt vier. Vier liest sich noch als Streifenmuster,
+     ab sechs bis acht kippt es in Mauerwerk um - die Lagen werden
+     schmaler als die Steine breit sind, und genau das erkennt das
+     Auge als Verband. */
   mauerwerk(
     c, k, t.x, t.y, b.koerper, b.koerper, b.koerperHoehe,
-    b.sockelHoehe, 4, FARBE.steinFuge,
+    b.sockelHoehe, 7, FARBE.steinFuge,
   );
+
+  torbogen(c, k, t, b);
+  verwitterung(c, k, t, b);
 
   // Schiessscharte in Parteifarbe.
   const scharteBreite = b.koerper * 0.26;
@@ -261,10 +268,22 @@ function steinAufbau(
     parteiMaterial(t.spieler), b.sockelHoehe + b.koerperHoehe * 0.3,
   );
 
+  /* Gesims: eine Platte, die einen Tick ueber den Koerper hinaussteht.
+     Sie kostet einen Quader und macht aus einer Saeule ein Bauwerk -
+     die Silhouette bekommt eine Stufe, statt glatt durchzulaufen.
+     Das ist nur Aussehen; der Radius, auf den Einheiten zielen,
+     aendert sich nicht. */
+  const gesimsHoehe = tile(0.13);
+  const gesimsBasis = b.sockelHoehe + b.koerperHoehe;
+  quader(
+    c, k, t.x, t.y, b.koerper * 1.14, b.koerper * 1.14, gesimsHoehe,
+    MATERIAL.stein, gesimsBasis,
+  );
+
   // Zinnen als kleine Bloecke auf der Deckflaeche.
   const felder = b.zinnen * 2 - 1;
   const breite = b.koerper / (felder + 1);
-  const basis = b.sockelHoehe + b.koerperHoehe;
+  const basis = gesimsBasis + gesimsHoehe;
   for (let i = 0; i < b.zinnen; i++) {
     const versatz = -b.koerper / 2 + breite * (i * 2 + 0.5) + breite / 2;
     for (const reihe of [-1, 1]) {
@@ -277,6 +296,69 @@ function steinAufbau(
 
   risse(c, k, t, b, anteil);
   return pxY(k, t.y) - pxHoehe(k, t.y, basis + b.zinne);
+}
+
+/**
+ * Tor an der Vorderwand.
+ *
+ * Ein Bauwerk ohne Eingang liest sich als Block. Der Bogen ist die
+ * billigste Form, die das Auge sofort als Tuer nimmt - und weil er
+ * dunkel ist, gibt er der Wand nebenbei Tiefe.
+ */
+function torbogen(
+  c: CanvasRenderingContext2D, k: Kamera, t: Turm, b: Bau,
+): void {
+  const vorne = t.y + b.koerper / 2;
+  const px = pxX(k, t.x, vorne);
+  const boden = pxY(k, vorne) - pxHoehe(k, vorne, b.sockelHoehe);
+  const breit = skalaBei(k, vorne) * b.koerper;
+  const hoch = pxHoehe(k, vorne, b.koerperHoehe) * 0.4;
+  const halb = breit * 0.15;
+
+  c.fillStyle = 'rgba(12, 14, 20, 0.72)';
+  c.beginPath();
+  c.moveTo(px - halb, boden);
+  c.lineTo(px - halb, boden - hoch * 0.55);
+  c.quadraticCurveTo(px, boden - hoch * 1.25, px + halb, boden - hoch * 0.55);
+  c.lineTo(px + halb, boden);
+  c.closePath();
+  c.fill();
+
+  // Heller Sturz ueber dem Bogen, damit er nicht als Loch wirkt.
+  c.strokeStyle = FARBE.steinFuge;
+  c.lineWidth = Math.max(1, breit * 0.022);
+  c.beginPath();
+  c.moveTo(px - halb * 1.2, boden - hoch * 0.55);
+  c.quadraticCurveTo(px, boden - hoch * 1.35, px + halb * 1.2, boden - hoch * 0.55);
+  c.stroke();
+}
+
+/**
+ * Verwitterung am Fuss.
+ *
+ * Ein paar dunkle Flecken dort, wo Regen und Erde an den Stein gehen.
+ * Feste Positionen aus der Turmlage abgeleitet, damit derselbe Turm
+ * bei jedem Bild dieselben Flecken hat - ein Bauwerk, dessen Patina
+ * flackert, faellt sofort auf.
+ */
+function verwitterung(
+  c: CanvasRenderingContext2D, k: Kamera, t: Turm, b: Bau,
+): void {
+  const vorne = t.y + b.koerper / 2;
+  const px = pxX(k, t.x, vorne);
+  const boden = pxY(k, vorne) - pxHoehe(k, vorne, b.sockelHoehe);
+  const breit = skalaBei(k, vorne) * b.koerper;
+  const hoch = pxHoehe(k, vorne, b.koerperHoehe);
+
+  c.fillStyle = 'rgba(30, 38, 30, 0.22)';
+  for (let i = 0; i < 5; i++) {
+    const seite = ((t.x / 1000 + i * 7) % 5) / 5 - 0.5;
+    const x = px + seite * breit * 0.8;
+    const h = hoch * (0.1 + ((i * 3) % 4) * 0.05);
+    c.beginPath();
+    c.ellipse(x, boden - h * 0.3, breit * 0.09, h, 0, 0, Math.PI * 2);
+    c.fill();
+  }
 }
 
 /**

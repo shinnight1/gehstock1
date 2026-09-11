@@ -14,7 +14,9 @@
    (siehe packages/sim/src/fixed.ts).
    ------------------------------------------------------------------ */
 
-import { BREITE, FLUSS_OBEN, FLUSS_UNTEN, tile } from '@arena/sim';
+import {
+  BREITE, BRUECKEN, BRUECKE_BREITE, FLUSS_OBEN, FLUSS_UNTEN, tile,
+} from '@arena/sim';
 import { arenaFarben } from './arenafarben.js';
 import type { FeldFarben } from './arenafarben.js';
 import { pxX, pxY, skalaBei } from './kamera.js';
@@ -81,6 +83,8 @@ export function wasserZeichnen(
   c.fill();
   c.globalAlpha = 1;
 
+  spiegelungen(c, k, zeit, f);
+
   c.lineCap = 'round';
   c.lineJoin = 'round';
   for (const w of WELLEN) {
@@ -113,6 +117,105 @@ export function wasserZeichnen(
   schaumkante(c, k, FLUSS_OBEN, zeit, 1, f);
   schaumkante(c, k, FLUSS_UNTEN, zeit, -1, f);
   c.restore();
+}
+
+/**
+ * Was sich im Wasser spiegelt.
+ *
+ * Drei Sachen, und alle drei sind das, was ein Fluss von einer blauen
+ * Flaeche unterscheidet:
+ *
+ *   Ufer     Der Erdstreifen liegt direkt am Wasser und wirft ein
+ *            Abbild hinein. Es steht nicht still, sondern zittert
+ *            mit der Stroemung.
+ *   Bruecke  Unter einer Bruecke ist Schatten. Ohne ihn scheint die
+ *            Bruecke ueber dem Wasser zu schweben.
+ *   Glanz    Breite helle Baender, die langsam wandern. Das ist der
+ *            Himmel auf der Oberflaeche.
+ *
+ * Gezeichnet wird alles in waagerechten Scheiben, deren x-Versatz
+ * einer Sinuswelle folgt. Eine echte Spiegelung braeuchte die Szene
+ * ein zweites Mal - das waere fuer einen Effekt, der halb verdeckt
+ * ist, ein schlechter Tausch.
+ */
+function spiegelungen(
+  c: CanvasRenderingContext2D, k: Kamera, zeit: number, f: FeldFarben,
+): void {
+  const hoehe = FLUSS_UNTEN - FLUSS_OBEN;
+
+  /* ---------------------------- Ufer ---------------------------- */
+  const ufer = [
+    { kante: FLUSS_OBEN, richtung: 1 },
+    { kante: FLUSS_UNTEN, richtung: -1 },
+  ];
+  for (const u of ufer) {
+    const scheiben = 7;
+    for (let i = 0; i < scheiben; i++) {
+      const anteil = i / scheiben;
+      const y = u.kante + tile(0.55) * anteil * u.richtung;
+      /* Nach innen schwaecher: die Spiegelung verliert sich, je
+         weiter sie von ihrem Ufer wegkommt. */
+      c.globalAlpha = (1 - anteil) * (1 - anteil) * 0.34;
+      c.fillStyle = f.erde;
+      const wackel = tile(0.16) * Math.sin(zeit * 1.3 + anteil * 5.2);
+      const hoch = tile(0.55) / scheiben * u.richtung;
+      c.beginPath();
+      const schritte = 12;
+      for (let j = 0; j <= schritte; j++) {
+        const x = (BREITE * j) / schritte + wackel * Math.sin(j * 1.7 + zeit);
+        const px = pxX(k, x, y);
+        if (j === 0) c.moveTo(px, pxY(k, y));
+        else c.lineTo(px, pxY(k, y));
+      }
+      for (let j = schritte; j >= 0; j--) {
+        const x = (BREITE * j) / schritte + wackel * Math.sin(j * 1.7 + zeit);
+        c.lineTo(pxX(k, x, y + hoch), pxY(k, y + hoch));
+      }
+      c.closePath();
+      c.fill();
+    }
+  }
+  c.globalAlpha = 1;
+
+  /* -------------------------- Bruecken --------------------------- */
+  for (const b of BRUECKEN) {
+    const halb = BRUECKE_BREITE / 2;
+    const verlauf = c.createLinearGradient(
+      0, pxY(k, FLUSS_OBEN), 0, pxY(k, FLUSS_UNTEN),
+    );
+    verlauf.addColorStop(0, 'rgba(0,0,0,0)');
+    verlauf.addColorStop(0.5, 'rgba(0,0,0,0.42)');
+    verlauf.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = verlauf;
+    bodenPfad(c, k, b.x - halb * 1.25, FLUSS_OBEN, b.x + halb * 1.25, FLUSS_UNTEN);
+    c.fill();
+  }
+
+  /* --------------------------- Glanz ----------------------------- */
+  c.strokeStyle = f.wasserGlanz;
+  for (let i = 0; i < 3; i++) {
+    const takt = zeit * (0.09 + i * 0.035) + i * 0.4;
+    const lage = (takt % 1.4) - 0.2;
+    if (lage < 0 || lage > 1) continue;
+    const y = FLUSS_OBEN + hoehe * lage;
+    /* In der Mitte am hellsten: streifendes Licht trifft die Mitte
+       der Rinne, nicht die flachen Raender. */
+    const mitte = 1 - Math.abs(lage - 0.5) * 2;
+    c.globalAlpha = 0.06 + mitte * 0.1;
+    c.lineWidth = Math.max(2, skalaBei(k, y) * tile(0.22));
+    c.beginPath();
+    for (let j = 0; j <= PUNKTE; j++) {
+      const anteil = j / PUNKTE;
+      const x = BREITE * anteil;
+      const yy = y + tile(0.05) * Math.sin(anteil * 5.4 + zeit * 0.7 + i);
+      const px = pxX(k, x, yy);
+      const py = pxY(k, yy);
+      if (j === 0) c.moveTo(px, py);
+      else c.lineTo(px, py);
+    }
+    c.stroke();
+  }
+  c.globalAlpha = 1;
 }
 
 /**

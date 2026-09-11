@@ -82,7 +82,9 @@ export function rollBauen(wurzel: HTMLElement, app: App): Schirm {
   let himmel: Rollhimmel | null = null;
   let anforderung = 0;
   let laeuft = false;
-  let ueberspringen = false;
+  /* Die Animation laeuft immer ganz durch; das hier ist nur der
+     Notausgang, falls die Bildschleife stehenbleibt. */
+  let notausgang = 0;
 
   function aufbauen(): void {
     stoppen();
@@ -194,8 +196,6 @@ export function rollBauen(wurzel: HTMLElement, app: App): Schirm {
   function animieren(ergebnisse: RollErgebnis[]): void {
     stoppen();
     seite.textContent = '';
-    ueberspringen = false;
-
     const buehne = el('div.a-buehne');
     seite.appendChild(buehne);
     /* Reihenfolge zaehlt: der Himmel liegt hinten, die Aufprall-
@@ -218,9 +218,19 @@ export function rollBauen(wurzel: HTMLElement, app: App): Schirm {
       .map((r) => karteVon(r.kartenId)?.seltenheit ?? 'gewoehnlich')
       .sort((a, b) => RANG[a] - RANG[b]);
 
-    const abbrechen = (): void => { ueberspringen = true; };
-    buehne.addEventListener('pointerup', abbrechen);
-    buehne.appendChild(el('div.a-skip', { text: 'Tippen zum Überspringen' }));
+    /* Kein Ueberspringen. Die Ziehung soll jedes Mal ganz laufen -
+       eine Animation, die man wegtippt, kann keine Spannung aufbauen.
+
+       Der Notausgang bleibt aber: laeuft die Bildschleife nicht, weil
+       der Bildschirm aus ist oder der Tab im Hintergrund liegt, haelt
+       requestAnimationFrame an und `zeit` steht. Ohne diese Uhr saesse
+       man im schwarzen Bild fest, bis die App neu geladen wird.
+       Deshalb eine zweite, unabhaengige Frist mit grosszuegigem
+       Aufschlag, die notfalls von allein zum Ergebnis geht. */
+    notausgang = window.setTimeout(() => {
+      if (laeuft) fertig(ergebnisse);
+    }, (PHASEN.himmel + PHASEN.schnuppen + PHASEN.anflug + PHASEN.halt
+      + PHASEN.aufprall + 3) * 1000);
 
     const bisAnflug = PHASEN.himmel + PHASEN.schnuppen;
     const bisHalt = bisAnflug + PHASEN.anflug;
@@ -275,8 +285,6 @@ export function rollBauen(wurzel: HTMLElement, app: App): Schirm {
       zeit += dt;
 
       const { b, h } = kasten();
-
-      if (ueberspringen) { fertig(ergebnisse); return; }
 
       /* Der Himmel hellt in der ersten Phase auf und bleibt danach
          hell. Er laeuft durch alle Phasen weiter, damit Wolken und
@@ -426,6 +434,8 @@ export function rollBauen(wurzel: HTMLElement, app: App): Schirm {
     laeuft = false;
     if (anforderung) cancelAnimationFrame(anforderung);
     anforderung = 0;
+    if (notausgang) window.clearTimeout(notausgang);
+    notausgang = 0;
     partikel?.zerstoeren();
     partikel = null;
     himmel?.zerstoeren();
