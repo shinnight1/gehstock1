@@ -85,7 +85,13 @@ for (const name of plan.dateien) {
   try {
     const bild = new Image();
     bild.src = './quelle/' + encodeURIComponent(name);
-    await bild.decode();
+    /* Nicht decode(): das Versprechen loest in manchen Browserzustaenden
+       nie aus, obwohl das Bild laengst vollstaendig da ist. Dann steht
+       die ganze Schleife beim ersten Bild still. load kommt zuverlaessig. */
+    if (!bild.complete) await new Promise((fertig, schief) => {
+      bild.onload = fertig;
+      bild.onerror = () => schief(new Error('Bild nicht lesbar'));
+    });
 
     const mess = document.createElement('canvas');
     mess.width = bild.naturalWidth; mess.height = bild.naturalHeight;
