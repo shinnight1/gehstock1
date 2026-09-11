@@ -46,9 +46,25 @@ describe('Arena-Geometrie', () => {
   });
 
   it('oeffnet nach einem Turmfall genau das eine Viertel', () => {
-    expect(darfPlatzieren(0, tile(3), tile(6), ['links'])).toBe(true);
-    expect(darfPlatzieren(0, tile(15), tile(6), ['links'])).toBe(false);
-    expect(darfPlatzieren(0, tile(15), tile(6), ['links', 'rechts'])).toBe(true);
+    expect(darfPlatzieren(0, tile(3), tile(10), ['links'])).toBe(true);
+    expect(darfPlatzieren(0, tile(15), tile(10), ['links'])).toBe(false);
+    expect(darfPlatzieren(0, tile(15), tile(10), ['links', 'rechts'])).toBe(true);
+  });
+
+  it('laesst auch im offenen Viertel nicht bis an den gegnerischen Koenig', () => {
+    /* Ein gefallener Seitenturm reichte sonst, um direkt neben den
+       gegnerischen Koenig zu setzen. Dagegen hatte der Verteidiger
+       kein Mittel: seine eigene Sperrzone verbietet ihm genau dort
+       die Antwort. */
+    const grenze = turmY(1, 'seite');
+    expect(darfPlatzieren(0, tile(3), grenze, ['links'])).toBe(true);
+    expect(darfPlatzieren(0, tile(3), grenze - tile(1), ['links'])).toBe(false);
+    expect(darfPlatzieren(0, tile(3), turmY(1, 'koenig'), ['links'])).toBe(false);
+
+    // Gespiegelt gilt dasselbe fuer den anderen Spieler.
+    const gespiegelt = turmY(0, 'seite');
+    expect(darfPlatzieren(1, tile(3), gespiegelt, ['links'])).toBe(true);
+    expect(darfPlatzieren(1, tile(3), gespiegelt + tile(1), ['links'])).toBe(false);
   });
 
   it('laesst die Platzierung nicht ins Aus rutschen', () => {
@@ -80,10 +96,15 @@ describe('Sperrzone um den Koenig', () => {
     expect(darfPlatzieren(1, KOENIG_X, ky + tile(5), [])).toBe(true);
   });
 
-  it('sperrt nicht den gegnerischen Koenig', () => {
-    /* Auf der gegnerischen Haelfte darf man ohnehin erst, wenn dort
-       ein Turm gefallen ist - und dann soll der Druck ankommen. */
+  it('sperrt auch den gegnerischen Koenig, aber nicht die halbe Haelfte', () => {
+    /* Frueher galt hier das Gegenteil: ein gefallener Turm gab die
+       ganze gegnerische Haelfte frei, bis an den Koenig. Das war
+       nicht Druck, sondern das Ende - der Verteidiger konnte dort
+       wegen seiner eigenen Sperrzone gar nicht antworten. */
     const gegnerKoenig = turmY(1, 'koenig');
-    expect(darfPlatzieren(0, KOENIG_X, gegnerKoenig, ['links', 'rechts'])).toBe(true);
+    expect(darfPlatzieren(0, KOENIG_X, gegnerKoenig, ['links', 'rechts'])).toBe(false);
+
+    // Bis vor die gegnerischen Seitentuerme geht es aber sehr wohl.
+    expect(darfPlatzieren(0, KOENIG_X, turmY(1, 'seite'), ['links', 'rechts'])).toBe(true);
   });
 });

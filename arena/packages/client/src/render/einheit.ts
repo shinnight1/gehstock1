@@ -21,6 +21,7 @@ import { karteVon } from '@arena/sim';
 import type { Einheit, Projektil, Spieler } from '@arena/sim';
 import { FARBE } from './palette.js';
 import { pxX, pxY, skalaBei, pxHoehe } from './kamera.js';
+import { figurSkala } from './figurgroesse.js';
 import type { Kamera } from './kamera.js';
 import { schatten, bodenEllipse } from './perspektive.js';
 import { figurJetzt } from '../assets/lader.js';
@@ -94,9 +95,15 @@ export function einheitZeichnen(
 
   /* Deutlich groesser als der Kollisionsradius. Der Radius bestimmt,
      wie eng Einheiten stehen; die Figur darf darueber hinausragen,
-     sonst sind sechs Ratten auf dem iPad sechs Punkte. */
-  const breite = s * e.radius * 2.2;
-  const hoehe = s * e.radius * 2.9;
+     sonst sind sechs Ratten auf dem iPad sechs Punkte.
+
+     Der Bildfaktor kommt aus figurgroesse.ts und setzt den Massstab:
+     ein Katapult ist groesser als die Frau, die es bedient, und der
+     Wal groesser als alles andere. Am Radius aendert das nichts - der
+     bleibt Spielregel. */
+  const bild = figurSkala(e.karte);
+  const breite = s * e.radius * 2.2 * bild;
+  const hoehe = s * e.radius * 2.9 * bild;
   const farbe = karte?.farbe ?? FARBE.steinVorne;
   const getroffen = tick - e.getroffenTick < BLITZ_TICKS;
 
@@ -107,8 +114,8 @@ export function einheitZeichnen(
     const qw = figur instanceof HTMLImageElement ? figur.naturalWidth : figur.width;
     const qh = figur instanceof HTMLImageElement ? figur.naturalHeight : figur.height;
     if (qw > 0 && qh > 0) {
-      const maxB = s * e.radius * 2.6;
-      const maxH = s * e.radius * 3.1;
+      const maxB = s * e.radius * 2.6 * bild;
+      const maxH = s * e.radius * 3.1 * bild;
       const sk = Math.min(maxB / qw, maxH / qh);
       const bw = qw * sk;
       const bh = qh * sk;
@@ -219,8 +226,9 @@ function gebaeudeZeichnen(
   const s = skalaBei(k, a.y);
   const px = pxX(k, a.x, a.y);
   const boden = pxY(k, a.y);
-  const breite = s * e.radius * 1.9;
-  const hoehe = s * e.radius * 1.7;
+  const bild = figurSkala(e.karte);
+  const breite = s * e.radius * 1.9 * bild;
+  const hoehe = s * e.radius * 1.7 * bild;
   const getroffen = tick - e.getroffenTick < BLITZ_TICKS;
 
   c.fillStyle = FARBE.seite[e.spieler];
@@ -234,8 +242,8 @@ function gebaeudeZeichnen(
     const qw = figur instanceof HTMLImageElement ? figur.naturalWidth : figur.width;
     const qh = figur instanceof HTMLImageElement ? figur.naturalHeight : figur.height;
     if (qw > 0 && qh > 0) {
-      const maxB = s * e.radius * 2.4;
-      const maxH = s * e.radius * 2.2;
+      const maxB = s * e.radius * 2.4 * bild;
+      const maxH = s * e.radius * 2.2 * bild;
       const sk = Math.min(maxB / qw, maxH / qh);
       const bw = qw * sk;
       const bh = qh * sk;

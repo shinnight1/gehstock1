@@ -39,13 +39,32 @@ export function zoneZeichnen(
   bodenPfad(c, k, 0, eigeneVon, BREITE, eigeneBis);
   c.fill();
 
+  /* Das freigeschaltete Viertel reicht nur bis zur gegnerischen
+     Seitenturmlinie. Die Aufhellung muss dort ebenfalls aufhoeren -
+     eine Anzeige, die mehr verspricht als die Regel erlaubt, ist
+     schlimmer als gar keine. */
+  const grenze = turmY(spieler === 0 ? 1 : 0, 'seite');
   for (const flanke of offeneFlanken) {
     const von = flanke === 'links' ? 0 : KOENIG_X;
     const bis = flanke === 'links' ? KOENIG_X : BREITE;
-    const y1 = spieler === 0 ? 0 : FLUSS_UNTEN;
-    const y2 = spieler === 0 ? FLUSS_OBEN : HOEHE;
+    const y1 = spieler === 0 ? grenze : FLUSS_UNTEN;
+    const y2 = spieler === 0 ? FLUSS_OBEN : grenze;
     bodenPfad(c, k, von, y1, bis, y2);
     c.fill();
+  }
+
+  // Die hintere Kante sichtbar machen, wenn dort ueberhaupt etwas offen ist.
+  if (offeneFlanken.length) {
+    c.strokeStyle = 'rgba(248, 113, 113, 0.55)';
+    c.lineWidth = 2;
+    c.setLineDash([9, 7]);
+    for (const flanke of offeneFlanken) {
+      const von = flanke === 'links' ? 0 : KOENIG_X;
+      const bis = flanke === 'links' ? KOENIG_X : BREITE;
+      bodenPfad(c, k, von, grenze, bis, grenze);
+      c.stroke();
+    }
+    c.setLineDash([]);
   }
 
   // Kante an der Wasserlinie - die wichtigste Grenze des Spiels.

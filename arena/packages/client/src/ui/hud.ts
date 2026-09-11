@@ -15,7 +15,7 @@
    kann.
    ------------------------------------------------------------------ */
 
-import { karteVon, ELIXIR, TICKS_PRO_SEKUNDE } from '@arena/sim';
+import { karteVon, elixirTempo, ELIXIR, TICKS_PRO_SEKUNDE } from '@arena/sim';
 import type { MatchState, Spieler } from '@arena/sim';
 import { FARBE, SELTENHEIT_FARBE } from '../render/palette.js';
 import { kartenbildJetzt } from '../render/kartenbild.js';
@@ -144,7 +144,8 @@ export function hudZeichnen(
   }
   naechsteZeichnen(c, lage, dichte);
   elixirZeichnen(c, lage, s, spieler);
-  uhrZeichnen(c, k, restTicks, s.phase === 'overtime');
+  uhrZeichnen(c, k, restTicks, s.phase === 'overtime', elixirTempo(s) > 1,
+    s.phase === 'laeuft');
   turmstandZeichnen(c, k, s, spieler);
 }
 
@@ -290,13 +291,37 @@ function elixirZeichnen(
     c.fill();
   }
 
-  /* Keine Zahl neben der Leiste: sie sagt nichts, was die Leiste
-     nicht schon zeigt, und sass genau dort, wo die unterste
-     Kartenreihe endet. */
+  /* Die Zahl sitzt IN der Leiste, rechts, nicht daneben.
+
+     Frueher stand hier, eine Zahl sage nichts, was die Leiste nicht
+     zeigt. Das stimmt fuer den Ruhezustand und ist im Gefecht falsch:
+     wer entscheiden will, ob eine Fuenf-Elixir-Karte gleich passt,
+     zaehlt sonst zehn Balken ab, waehrend die Einheiten laufen. Neben
+     der Leiste war kein Platz - darin schon. */
+  const voll = p.elixir >= ELIXIR.cap;
+  c.textAlign = 'right';
+  c.textBaseline = 'middle';
+  c.font = '800 ' + Math.round(hoehe * 0.92) + 'px system-ui, sans-serif';
+  c.fillStyle = 'rgba(8, 10, 18, 0.55)';
+  c.fillText(String(p.elixir), x + breite - 5, y + hoehe / 2 + 1);
+  c.fillStyle = voll ? '#fde68a' : '#f5d0fe';
+  c.fillText(String(p.elixir), x + breite - 6, y + hoehe / 2);
+
+  /* Doppeltes und dreifaches Elixir waren bisher unsichtbar. Das ist
+     der groesste Zustandswechsel des Matches - ab da kostet Zoegern
+     doppelt - und er stand nirgends. */
+  const tempo = elixirTempo(s);
+  if (tempo > 1) {
+    c.textAlign = 'left';
+    c.font = '800 ' + Math.round(hoehe * 0.72) + 'px system-ui, sans-serif';
+    c.fillStyle = tempo >= 3 ? '#fbbf24' : '#f0abfc';
+    c.fillText('x' + tempo, x + 5, y + hoehe / 2);
+  }
 }
 
 function uhrZeichnen(
-  c: CanvasRenderingContext2D, k: Kamera, restTicks: number, overtime: boolean,
+  c: CanvasRenderingContext2D, k: Kamera, restTicks: number,
+  overtime: boolean, doppelt: boolean, laeuft: boolean,
 ): void {
   const sekunden = Math.max(0, Math.ceil(restTicks / TICKS_PRO_SEKUNDE));
   const m = Math.floor(sekunden / 60);
@@ -306,42 +331,97 @@ function uhrZeichnen(
   const mitte = k.x0 / 2;
   c.textAlign = 'center';
   c.textBaseline = 'top';
-  c.fillStyle = overtime ? '#fbbf24' : FARBE.text;
+  /* Unter zwanzig Sekunden wird die Uhr rot. Eine Uhr, die immer
+     gleich aussieht, liest man irgendwann nicht mehr - die Farbe
+     holt den Blick genau dann zurueck, wenn es darauf ankommt. */
+  const knapp = laeuft && !overtime && sekunden <= 20;
+  c.fillStyle = overtime ? '#fbbf24' : knapp ? '#f87171' : FARBE.text;
   c.font = '700 ' + Math.round(k.x0 * 0.22) + 'px system-ui, sans-serif';
   c.fillText(text, mitte, 28);
 
+  c.font = '700 ' + Math.round(k.x0 * 0.075) + 'px system-ui, sans-serif';
   if (overtime) {
     c.fillStyle = '#fbbf24';
-    c.font = '700 ' + Math.round(k.x0 * 0.08) + 'px system-ui, sans-serif';
     c.fillText('VERLÄNGERUNG', mitte, 28 + k.x0 * 0.26);
+    c.fillStyle = '#fbbf24';
+    c.fillText('DREIFACHES ELIXIR', mitte, 28 + k.x0 * 0.345);
+  } else if (doppelt) {
+    c.fillStyle = '#f0abfc';
+    c.fillText('DOPPELTES ELIXIR', mitte, 28 + k.x0 * 0.26);
   }
 }
 
-/** Turmstand als Punktreihe: eigene unten, gegnerische oben. */
+/**
+ * Turmstand als Punktreihe: gegnerische oben, eigene unten.
+ *
+ * Der Punkt allein sagte nur "steht" oder "steht nicht". Damit war
+ * der wichtigste Zwischenzustand unsichtbar: ein Turm bei zehn
+ * Prozent sah aus wie einer bei vollen hundert, obwohl der eine mit
+ * dem naechsten Angriff faellt und der andere nicht. Jetzt laeuft ein
+ * Ring um den Punkt, der mit dem Turm abnimmt.
+ */
 function turmstandZeichnen(
   c: CanvasRenderingContext2D, k: Kamera, s: MatchState, spieler: Spieler,
 ): void {
   const mitte = k.x0 / 2;
   const r = Math.max(6, k.x0 * 0.035);
-  const reihen: { spieler: Spieler; y: number }[] = [
-    { spieler: (spieler === 0 ? 1 : 0) as Spieler, y: 28 + k.x0 * 0.42 },
-    { spieler, y: 28 + k.x0 * 0.42 + r * 3.2 },
+  const reihen: { spieler: Spieler; y: number; text: string }[] = [
+    {
+      spieler: (spieler === 0 ? 1 : 0) as Spieler,
+      y: 28 + k.x0 * 0.46,
+      text: 'Gegner',
+    },
+    { spieler, y: 28 + k.x0 * 0.46 + r * 3.6, text: 'Du' },
   ];
 
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
   for (const reihe of reihen) {
+    c.fillStyle = FARBE.textLeise;
+    c.font = '600 ' + Math.round(r * 0.95) + 'px system-ui, sans-serif';
+    c.fillText(reihe.text, mitte, reihe.y - r * 1.75);
+
     const tuerme = s.tuerme.filter((t) => t.spieler === reihe.spieler);
     for (let i = 0; i < tuerme.length; i++) {
       const t = tuerme[i]!;
-      const x = mitte + (i - (tuerme.length - 1) / 2) * r * 2.6;
+      const x = mitte + (i - (tuerme.length - 1) / 2) * r * 2.8;
+      const gross = t.art === 'koenig' ? r : r * 0.78;
+      const lebt = t.hp > 0;
+
       c.beginPath();
-      c.arc(x, reihe.y, t.art === 'koenig' ? r : r * 0.78, 0, Math.PI * 2);
-      c.fillStyle = t.hp > 0 ? FARBE.seite[reihe.spieler] : '#33415580';
+      c.arc(x, reihe.y, gross, 0, Math.PI * 2);
+      c.fillStyle = lebt ? FARBE.seite[reihe.spieler] : '#33415580';
       c.fill();
-      if (t.hp > 0 && t.hp < t.maxHp) {
-        c.strokeStyle = '#ffffff';
-        c.lineWidth = 1.5;
+
+      if (!lebt) {
+        /* Gefallene Tuerme bekommen ein Kreuz. Ein blasser Punkt
+           allein sieht im Gefecht aus wie ein Punkt, den man nur
+           schlecht sieht. */
+        c.strokeStyle = '#64748b';
+        c.lineWidth = Math.max(1.5, gross * 0.22);
+        c.beginPath();
+        c.moveTo(x - gross * 0.5, reihe.y - gross * 0.5);
+        c.lineTo(x + gross * 0.5, reihe.y + gross * 0.5);
+        c.moveTo(x + gross * 0.5, reihe.y - gross * 0.5);
+        c.lineTo(x - gross * 0.5, reihe.y + gross * 0.5);
         c.stroke();
+        continue;
       }
+
+      const anteil = Math.max(0, Math.min(1, t.hp / t.maxHp));
+      const ring = gross + Math.max(2, r * 0.28);
+      c.strokeStyle = 'rgba(15, 23, 42, 0.7)';
+      c.lineWidth = Math.max(2, r * 0.26);
+      c.beginPath();
+      c.arc(x, reihe.y, ring, 0, Math.PI * 2);
+      c.stroke();
+
+      /* Oben beginnen und im Uhrzeigersinn abnehmen - so wandert die
+         Luecke dorthin, wo das Auge sie erwartet. */
+      c.strokeStyle = anteil > 0.5 ? '#4ade80' : anteil > 0.25 ? '#facc15' : '#f87171';
+      c.beginPath();
+      c.arc(x, reihe.y, ring, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * anteil);
+      c.stroke();
     }
   }
 }

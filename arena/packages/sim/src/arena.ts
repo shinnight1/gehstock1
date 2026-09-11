@@ -140,5 +140,20 @@ export function darfPlatzieren(
   if (offeneFlanken.indexOf(flanke) < 0) return false;
 
   // Das freigeschaltete Viertel: gegnerische Haelfte, richtige Flanke.
-  return spieler === 0 ? y <= FLUSS_OBEN : y >= FLUSS_UNTEN;
+  if (spieler === 0 ? y > FLUSS_OBEN : y < FLUSS_UNTEN) return false;
+
+  /* Und dort ist an der gegnerischen Seitenturmlinie Schluss.
+
+     Ohne diese Grenze reichte ein gefallener Seitenturm, um Einheiten
+     direkt neben den gegnerischen Koenig zu stellen. Der Verteidiger
+     hatte dagegen kein Mittel: seine eigene Sperrzone verbietet ihm
+     genau dort die Antwort, und der Koenigsturm allein haelt einen
+     vorbereiteten Angriff nicht auf. Ein offener Flanke soll Druck
+     erlauben, nicht das Spiel beenden.
+
+     Die Linie liegt auf den gegnerischen Seitentuermen, nicht
+     dazwischen: sie ist damit im Bild an etwas festgemacht, das man
+     ohnehin sieht, statt an einer unsichtbaren Zahl. */
+  const grenze = turmY(spieler === 0 ? 1 : 0, 'seite');
+  return spieler === 0 ? y >= grenze : y <= grenze;
 }
