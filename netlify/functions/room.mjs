@@ -97,7 +97,15 @@ function newId(n = 8) {
   return s;
 }
 
-function newCode() {
+function newCode(ziffern) {
+  /* Vier Ziffern auf Wunsch, sonst sechs Zeichen aus dem Alphabet.
+
+     Die Arena fragt nach Ziffern, weil man einen Raumcode dort quer
+     ueber den Tisch zuruft und im Kopf behaelt. Neuntausend statt
+     einer Milliarde moeglicher Codes ist dabei kein Sicherheitsproblem:
+     ein Raum lebt zwanzig Minuten, macht beim zweiten Spieler dicht,
+     und wer hineinstolpert, findet ein Kartenspiel. */
+  if (ziffern) return String(1000 + Math.floor(Math.random() * 9000));
   let c = '';
   for (let i = 0; i < 6; i++) c += ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
   return c;
@@ -816,11 +824,15 @@ function pixAntwort(doc, since) {
 async function raum(st, op, msg) {
   if (op === 'create') {
     const seats = Math.max(2, Math.min(8, Number(msg.seats) || 2));
-    let code = newCode();
-    for (let i = 0; i < 5; i++) {
+    const ziffern = !!msg.ziffern;
+    let code = newCode(ziffern);
+    /* Bei vier Ziffern lohnen mehr Versuche: der Raum ist kleiner,
+       also treffen Kollisionen frueher. Zwoelf Griffe ins Leere
+       heissen bei neuntausend Codes, dass sehr viel los ist. */
+    for (let i = 0; i < (ziffern ? 12 : 5); i++) {
       const da = await st.get('room:' + code, { type: 'json' });
       if (!da) break;
-      code = newCode();
+      code = newCode(ziffern);
     }
     const player = {
       id: 'p' + newId(),

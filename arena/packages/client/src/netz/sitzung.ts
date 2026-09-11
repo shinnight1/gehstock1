@@ -14,6 +14,7 @@
 import type { MatchAufbau, Ausgang, Spieler } from '@arena/sim';
 import type { VomServer, Sitzplatz, Fehlergrund, Anmeldung } from '@arena/netz';
 import { verbindungAnlegen, VERSION } from './verbindung.js';
+import { relaisVerbindungAnlegen } from './relais.js';
 import type { Verbindung, Netzzustand } from './verbindung.js';
 import { onlineLaufStarten } from '../sim/onlineLauf.js';
 import type { OnlineLauf } from '../sim/onlineLauf.js';
@@ -104,7 +105,12 @@ export function sitzungAnlegen(o: SitzungOptionen): Sitzung {
 
   const melden = (): void => { o.onBericht({ ...bericht }); };
 
-  const verbindung: Verbindung = verbindungAnlegen({
+  /* Ohne Adresse laeuft das Duell ueber das Relais der Seite - das
+     ist der Normalfall, seit niemand mehr einen Server starten muss.
+     Eine Adresse ist die Ausnahme fuer die Entwicklung: wer den
+     echten WebSocket-Server laufen hat, bekommt ihn mit ?server=. */
+  const bauen = o.url ? verbindungAnlegen : relaisVerbindungAnlegen;
+  const verbindung: Verbindung = bauen({
     url: o.url,
     onZustand: (z) => { bericht.netz = z; melden(); },
     onOffen: () => {

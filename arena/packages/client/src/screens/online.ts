@@ -13,8 +13,11 @@
    werden, und ein Abriss zwischen Warteraum und Anpfiff waere nicht
    zu ueberbruecken.
 
-   Die Serveradresse wird nie geraten. Sie kommt aus mount(), aus
-   ?server= oder aus dem, was der Spieler zuletzt eingetippt hat.
+   Eine Serveradresse tippt niemand mehr ein. Das Duell laeuft ueber
+   das Relais der Hideout-Seite unter /api/room - dieselbe Stelle, die
+   auch die anderen Spiele benutzen. Wer den echten WebSocket-Server
+   laufen hat, erreicht ihn noch ueber mount() oder ?server=; das ist
+   der Weg fuer die Entwicklung, nicht fuer die Spieler.
    ------------------------------------------------------------------ */
 
 import { ARENEN } from '@arena/sim';
@@ -28,7 +31,7 @@ import type { Sitzung, SitzungBericht } from '../netz/sitzung.js';
 import type { OnlineLauf } from '../sim/onlineLauf.js';
 import { spielStarten } from '../spiel.js';
 import type { Spiel } from '../spiel.js';
-import { serverUrlLesen, serverUrlMerken } from '../netz/adresse.js';
+import { serverUrlLesen } from '../netz/adresse.js';
 import type { App, Schirm } from '../app.js';
 import type { EndeDaten } from './ende.js';
 
@@ -71,13 +74,6 @@ export function onlineBauen(wurzel: HTMLElement, app: App): Schirm {
   /* ---------------------------- Anmeldung -------------------------- */
 
   function anmeldungZeigen(fehler?: string): void {
-    const adresse = el('input.a-feld', {
-      attr: {
-        type: 'url', placeholder: 'wss://…', value: serverUrlLesen(app),
-        autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false',
-      },
-    }) as HTMLInputElement;
-
     const code = el('input.a-feld.a-code-feld', {
       attr: {
         type: 'text', inputmode: 'numeric', placeholder: '1234',
@@ -104,11 +100,7 @@ export function onlineBauen(wurzel: HTMLElement, app: App): Schirm {
         }),
         el('button.a-gross', {
           text: 'Zurück in die Partie',
-          tippen: () => {
-            const url = adresse.value.trim() || serverUrlLesen(app);
-            if (!url) { anmeldungZeigen('Ohne Serveradresse geht es nicht.'); return; }
-            starten(url, (sitz) => sitz.zurueckKehren());
-          },
+          tippen: () => { starten(serverUrlLesen(app), (sitz) => sitz.zurueckKehren()); },
         }),
         el('button.a-klein', {
           text: 'Verwerfen',
@@ -116,23 +108,11 @@ export function onlineBauen(wurzel: HTMLElement, app: App): Schirm {
         }),
       ]) : null,
 
-      el('label.a-online-zeile', {}, [
-        el('span.a-online-marke', { text: 'Server' }),
-        adresse,
-      ]),
-      el('div.a-online-hinweis', {
-        text: 'Die Adresse deines eigenen Servers. Im WLAN reicht ws://<IP>:8081, '
-          + 'im Netz muss es wss:// sein.',
-      }),
-
       el('div.a-online-block', {}, [
         el('button.a-gross', {
           text: 'Raum aufmachen',
           tippen: () => {
-            const url = adresse.value.trim();
-            if (!url) { anmeldungZeigen('Ohne Serveradresse geht es nicht.'); return; }
-            serverUrlMerken(url);
-            starten(url, (s) => s.raumOeffnen(einheitlich.checked));
+            starten(serverUrlLesen(app), (s) => s.raumOeffnen(einheitlich.checked));
           },
         }),
         el('label.a-online-haken', {}, [
@@ -160,12 +140,9 @@ export function onlineBauen(wurzel: HTMLElement, app: App): Schirm {
         el('button.a-gross.zweit', {
           text: 'Raum betreten',
           tippen: () => {
-            const url = adresse.value.trim();
             const c = codeSaeubern(code.value);
-            if (!url) { anmeldungZeigen('Ohne Serveradresse geht es nicht.'); return; }
             if (!codeGueltig(c)) { anmeldungZeigen('Ein Code hat vier Ziffern.'); return; }
-            serverUrlMerken(url);
-            starten(url, (s) => s.raumBetreten(c));
+            starten(serverUrlLesen(app), (s) => s.raumBetreten(c));
           },
         }),
       ]),

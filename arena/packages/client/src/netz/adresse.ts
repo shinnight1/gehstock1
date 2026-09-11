@@ -7,8 +7,11 @@
                                  steht, und sagt es uns.
      2. ?server= in der Adresse  fuer den Test vom iPad: eine IP
                                  eintippen, ohne neu zu bauen.
-     3. zuletzt eingetippt       damit man sie nicht jedes Mal
-                                 wieder eingeben muss.
+   Eine dritte Quelle gab es einmal: die zuletzt eingetippte Adresse.
+   Sie ist weg, seit das Duell ueber das Relais der Seite laeuft und
+   niemand mehr eine Adresse eintippt. Ein gemerkter Wert von frueher
+   wuerde das Relais stillschweigend uebersteuern - und der Spieler
+   saesse vor einem Server, den es nicht mehr gibt.
 
    Was es ausdruecklich nicht gibt: eine Herleitung aus `location`.
    Der Auftrag verlangt, dass der Build nichts ueber die Domain
@@ -21,8 +24,6 @@
    nichts geht.
    ------------------------------------------------------------------ */
 
-const SCHLUESSEL = 'arena.server.v1';
-
 export interface MitServer {
   /** Adresse aus mount(), falls die Hub-Seite eine gesetzt hat. */
   readonly serverUrl?: string | undefined;
@@ -34,17 +35,7 @@ export function serverUrlLesen(app: MitServer): string {
     const ausAdresse = new URLSearchParams(location.search).get('server');
     if (ausAdresse) return normalisieren(ausAdresse);
   } catch { /* Kein location - dann eben nicht. */ }
-  try {
-    const gemerkt = globalThis.localStorage?.getItem(SCHLUESSEL);
-    if (gemerkt) return normalisieren(gemerkt);
-  } catch { /* Kein Speicher. */ }
   return '';
-}
-
-export function serverUrlMerken(url: string): void {
-  try {
-    globalThis.localStorage?.setItem(SCHLUESSEL, normalisieren(url));
-  } catch { /* Kein Speicher - gilt dann nur diese Sitzung. */ }
 }
 
 /**
