@@ -202,6 +202,20 @@
   font-size: 13px; margin: 8px 0;
 }
 .kv dt { color: var(--muted); }
+
+/* Zeilen, die nicht aus dt/dd bestehen, spannen sich ueber beide Spalten:
+   eine Angabe je Zeile, Wert rechts. Sonst stehen zwei Paare
+   nebeneinander und man liest quer statt runter. */
+.kv .kv-row {
+  grid-column: 1 / -1;
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  min-width: 0;
+}
+.kv .kv-row .k { color: var(--muted); min-width: 0; }
+.kv .kv-row .v {
+  text-align: right; font-weight: 600; font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 .kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
 .kv dd.g { color: var(--green); }
 .kv dd.r { color: var(--red); }
@@ -340,3 +354,168 @@
   .wp-farbe { width: 26px; height: 26px; }
   .wp-fuss { font-size: 11px; }
 }
+
+/* ------------------------------------------------------------------
+   Wirtschafts-Tycoon: Firmenkarten, Branchen, Bank
+
+   Die Branchenfarbe kommt als --bf am Element an. Alles, was in einer
+   Karte farbig ist, zieht sie von dort - so bleibt eine Branche ueber
+   Firmenliste, Branchenuebersicht und Statistik hinweg dieselbe Farbe.
+   ------------------------------------------------------------------ */
+
+.biz-firma {
+  position: relative; overflow: hidden;
+  background: var(--panel-2); border: 1px solid var(--line-soft);
+  border-radius: var(--r-md); padding: 11px 12px 11px 14px; margin-bottom: 9px;
+}
+.biz-firma::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--bf, var(--line));
+}
+.biz-firma.neu { border-style: dashed; }
+.biz-firma.neu .biz-kopf .ic { filter: grayscale(.4); opacity: .8; }
+
+.biz-kopf { display: flex; align-items: center; gap: 10px; }
+.biz-kopf .ic {
+  width: 42px; height: 42px; flex: 0 0 auto; border-radius: 11px;
+  display: grid; place-items: center; font-size: 20px;
+  background: #0d1220; border: 1px solid var(--line-soft);
+}
+.biz-kopf .nm { flex: 1; min-width: 0; }
+.biz-kopf .nm .t {
+  font-size: 14.5px; font-weight: 650;
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.biz-kopf .nm .s { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+.biz-stufe {
+  flex: 0 0 auto; font-size: 12px; font-weight: 700; color: var(--gold-2);
+  font-variant-numeric: tabular-nums;
+  background: rgba(240, 180, 41, .14); border-radius: 7px; padding: 3px 8px;
+}
+
+.biz-chip {
+  font-size: 10px; font-weight: 700; letter-spacing: .02em;
+  padding: 2px 6px; border-radius: 5px;
+  background: var(--bfd, var(--panel-3));
+  color: var(--bf, var(--text-2));
+}
+
+.biz-zahlen { display: flex; align-items: baseline; gap: 8px; margin-top: 9px; flex-wrap: wrap; }
+.biz-zahlen .gross {
+  font-size: 16px; font-weight: 700; color: var(--green);
+  font-variant-numeric: tabular-nums;
+}
+.biz-zahlen .klein { font-size: 11.5px; color: var(--dim); }
+
+.biz-mods { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 7px; }
+.biz-mod {
+  font-size: 10.5px; font-weight: 650; padding: 2px 6px; border-radius: 5px;
+  background: var(--panel-3); color: var(--text-2);
+}
+.biz-mod.up { background: var(--green-dim); color: #d6ffe8; }
+.biz-mod.down { background: var(--red-dim); color: #ffd8dc; }
+
+.biz-fort { height: 4px; border-radius: 3px; background: var(--panel-3); overflow: hidden; margin-top: 9px; }
+.biz-fort i { display: block; height: 100%; background: var(--gold); border-radius: 3px; }
+
+.biz-fuss { display: flex; gap: 6px; align-items: center; margin-top: 9px; }
+.biz-fuss .btn { flex: 1 1 auto; }
+.biz-fuss .btn.eng { flex: 0 0 auto; }
+
+.biz-ausbau { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px; align-items: center; }
+.biz-ausbau .stufe {
+  font-size: 10.5px; padding: 2px 7px; border-radius: 5px;
+  background: var(--panel-3); color: var(--dim);
+}
+.biz-ausbau .stufe.on { background: var(--green-dim); color: #d6ffe8; font-weight: 650; }
+
+/* ---------------------------------------------------------- Branchenkarte */
+
+.biz-branche {
+  position: relative; overflow: hidden;
+  background: var(--panel-2); border: 1px solid var(--line-soft);
+  border-radius: var(--r-md); padding: 12px 12px 12px 14px; margin-bottom: 10px;
+}
+.biz-branche::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--bf, var(--line));
+}
+.biz-branche.aus { opacity: .5; }
+.biz-bkopf { display: flex; align-items: center; gap: 9px; }
+.biz-bkopf .ic { font-size: 20px; flex: 0 0 auto; }
+.biz-bkopf .nm { flex: 1; min-width: 0; font-size: 14.5px; font-weight: 650; }
+.biz-bkopf .wert {
+  font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
+
+.biz-messe { margin-top: 10px; }
+.biz-messe .zeile {
+  display: flex; justify-content: space-between; gap: 8px;
+  font-size: 11.5px; color: var(--muted); margin-bottom: 3px;
+}
+.biz-messe .zeile b { color: var(--text-2); font-variant-numeric: tabular-nums; }
+.biz-messe .balken {
+  height: 6px; border-radius: 4px; background: var(--panel-3); overflow: hidden;
+  margin-bottom: 9px;
+}
+.biz-messe .balken i { display: block; height: 100%; border-radius: 4px; background: var(--bf, var(--blue)); }
+.biz-messe .balken i.warn { background: var(--gold); }
+.biz-messe .balken i.bad { background: var(--red); }
+
+/* ---------------------------------------------------------- Bank */
+
+.biz-gross {
+  font-size: 27px; font-weight: 750; font-variant-numeric: tabular-nums;
+  text-align: center; margin: 2px 0 0; line-height: 1.2;
+}
+.biz-gross.schuld { color: var(--red); }
+.biz-gross.frei { color: var(--green); }
+.biz-gross-dazu {
+  text-align: center; font-size: 11.5px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .07em; font-weight: 700;
+}
+
+.biz-schieber { width: 100%; margin: 14px 0 4px; accent-color: var(--gold); }
+
+/* ---------------------------------------------------------- Aufteilung */
+
+.biz-anteile { display: flex; height: 10px; border-radius: 5px; overflow: hidden; margin: 10px 0 8px; }
+.biz-anteile i { display: block; height: 100%; }
+.biz-legende { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11.5px; color: var(--muted); }
+.biz-legende span { display: flex; align-items: center; gap: 5px; }
+.biz-legende i { width: 9px; height: 9px; border-radius: 2px; flex: 0 0 auto; }
+
+/* ---------------------------------------------------------- Angebote */
+
+/* Eine Gelegenheit sieht anders aus als eine Firma, weil sie ablaeuft. */
+.biz-angebot {
+  position: relative; overflow: hidden;
+  background: linear-gradient(180deg, rgba(240, 180, 41, .11), rgba(240, 180, 41, .03));
+  border: 1px solid var(--gold-dim);
+  border-radius: var(--r-md); padding: 11px 12px 11px 14px; margin-bottom: 10px;
+}
+.biz-angebot::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--gold);
+}
+.biz-angebot .biz-zahlen .gross { color: var(--gold-2); font-size: 15px; }
+.biz-frist {
+  font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 5px;
+  background: var(--gold-dim); color: #ffeec4; white-space: nowrap;
+}
+
+/* ---------------------------------------------------------- Leitung */
+
+.biz-leitung {
+  margin-top: 9px; padding: 9px 10px 8px;
+  border-radius: 10px; background: rgba(0, 0, 0, .22);
+  border: 1px solid var(--line-soft);
+}
+.biz-leitung .zeile {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+  font-size: 12px; color: var(--muted); margin-bottom: 6px;
+}
+.biz-leitung .zeile b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.biz-leitung .hinweis { font-size: 11.5px; color: var(--dim); }
+.biz-leitung .btn + .btn { margin-top: 5px; }
