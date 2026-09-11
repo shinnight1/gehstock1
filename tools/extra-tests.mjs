@@ -269,6 +269,99 @@ export function extraTests(SG, U, test) {
     if (back.tag !== s.tag) throw new Error('Datum');
   });
 
+  test('Wirtschaft: jede Firma hängt an einer bekannten Branche', () => {
+    const s = BZ.create(29);
+    let preis = 0;
+    BD.FIRMEN.forEach((f) => {
+      if (!BD.branche(f.branche)) throw new Error(f.id + ': Branche ' + f.branche);
+      if (f.zulieferer && !BD.branche(f.zulieferer)) throw new Error(f.id + ': Zulieferer');
+      if (f.zulieferer === f.branche) throw new Error(f.id + ' beliefert sich selbst');
+      if (f.kosten < preis) throw new Error(f.id + ' bricht die Preisreihenfolge');
+      preis = f.kosten;
+    });
+    BD.BRANCHEN.forEach((b) => {
+      if (!BD.firmenDerBranche(b.id).length) throw new Error(b.id + ' hat keine Firma');
+      for (let d = 0; d < 400; d += 7) {
+        const k = BZ.konjunktur(s, b.id, d);
+        if (k < 1 - b.schwankung - 1e-9 || k > 1 + b.schwankung + 1e-9) {
+          throw new Error(b.id + ': Konjunktur ' + k);
+        }
+      }
+    });
+  });
+  test('Wirtschaft: der Markt sättigt, Werbung hebt ihn wieder', () => {
+    const s = BZ.create(11);
+    s.geld = 1e12;
+    BZ.firmaKaufen(s, 'zeitung', 60);
+    const l = BZ.lage(s);
+    if (!(l.medien.saettigung < 0.9)) throw new Error('keine Sättigung: ' + l.medien.saettigung);
+    const vorher = BZ.firmenErtragEff(s, 'zeitung');
+    if (BZ.marktKaufen(s, 'medien')) throw new Error('Kampagne gescheitert');
+    if (!(BZ.firmenErtragEff(s, 'zeitung') > vorher)) throw new Error('Werbung wirkt nicht');
+    if (!(s.gewinnSeitAbrechnung < 0)) throw new Error('Werbung mindert den Gewinn nicht');
+  });
+  test('Wirtschaft: eigene Zulieferer bringen mehr', () => {
+    const s = BZ.create(13);
+    s.geld = 1e12;
+    BZ.firmaKaufen(s, 'imbiss', 5);
+    const ohne = BZ.lieferBonus(s, BD.firma('imbiss'));
+    if (ohne !== 1) throw new Error('Bonus ohne Zulieferer: ' + ohne);
+    BZ.firmaKaufen(s, 'gemuese', 1);
+    if (!(BZ.lieferBonus(s, BD.firma('imbiss')) > ohne)) throw new Error('Zulieferer wirkt nicht');
+  });
+  test('Wirtschaft: Ausbau wirkt erst ab der nötigen Stufe', () => {
+    const s = BZ.create(19);
+    s.geld = 1e9;
+    BZ.firmaKaufen(s, 'zeitung', 5);
+    if (BZ.ausbauKaufen(s, 'zeitung') === null) throw new Error('Ausbau zu früh erlaubt');
+    BZ.firmaKaufen(s, 'zeitung', 20);
+    const vor = BZ.firmenErtrag(s, 'zeitung');
+    if (BZ.ausbauKaufen(s, 'zeitung')) throw new Error('Ausbau gescheitert');
+    const nach = BZ.firmenErtrag(s, 'zeitung');
+    if (Math.abs(nach - vor * BD.AUSBAU[0].faktor) > 1e-6) throw new Error('Ausbau wirkt nicht');
+  });
+  test('Wirtschaft: Firmenstufen lassen sich wieder abgeben', () => {
+    const s = BZ.create(23);
+    s.geld = 1e7;
+    BZ.firmaKaufen(s, 'wasch', 20);
+    const ertragVor = BZ.firmenErtrag(s, 'wasch');
+    const geldVor = s.geld;
+    if (BZ.firmaVerkaufen(s, 'wasch', 5)) throw new Error('Verkauf gescheitert');
+    if (s.firmen.wasch !== 15) throw new Error('Stufen stimmen nicht');
+    if (!(s.geld > geldVor)) throw new Error('kein Erlös');
+    if (!(BZ.firmenErtrag(s, 'wasch') < ertragVor)) throw new Error('Ertrag unverändert');
+  });
+  test('Wirtschaft: Kredit ändert das Vermögen nicht, Zinsen schon', () => {
+    const s = BZ.create(17);
+    s.geld = 500000;
+    BZ.firmaKaufen(s, 'zeitung', 40);
+    const vorher = BZ.vermoegen(s);
+    const rahmen = Math.floor(BZ.kreditRahmen(s));
+    if (!(rahmen > 0)) throw new Error('kein Kreditrahmen');
+    if (BZ.kreditAufnehmen(s, rahmen * 4) === null) throw new Error('Rahmen wird nicht geachtet');
+    if (BZ.kreditAufnehmen(s, rahmen)) throw new Error('Kredit gescheitert');
+    if (Math.abs(BZ.vermoegen(s) - vorher) > 1) throw new Error('Kredit erhöht das Vermögen');
+    for (let i = 0; i < BD.SEK_PRO_TAG; i++) BZ.step(s, 1);
+    if (!(s.stat.zinsen > 0)) throw new Error('keine Zinsen gebucht');
+    if (BZ.kreditTilgen(s, s.schuld)) throw new Error('Tilgen gescheitert');
+    if (s.schuld !== 0) throw new Error('nach dem Tilgen immer noch Schulden');
+  });
+  test('Wirtschaft: alte Spielstände ohne Branchen laden', () => {
+    const alt = {
+      v: 1, seed: 5, zeit: 400, tag: 20, monat: 0, geld: 1234,
+      firmen: { zeitung: 7 }, immobilien: {}, aktien: [], residenz: 0,
+      ereignis: { id: 'boom', restTage: 3 },
+    };
+    const s = BZ.deserialize(alt);
+    if (!s) throw new Error('nicht geladen');
+    if (s.firmen.zeitung !== 7) throw new Error('Firmen verloren');
+    if (s.ereignisse.length !== 1) throw new Error('Ereignis verloren');
+    if (s.schuld !== 0) throw new Error('Schuld erfunden');
+    if (!(BZ.ertragGesamt(s) > 0)) throw new Error('kein Ertrag');
+    for (let i = 0; i < 200; i++) BZ.step(s, 1);
+    if (!isFinite(s.geld)) throw new Error('Kasse ungültig');
+  });
+
   /* --- Speicher unter file:// --- */
   test('Speicher: Spielstand-Code hin und zurück', () => {
     SG.storage.set('test:probe', { x: 42, s: 'Grüße' });

@@ -29,6 +29,8 @@
       lastSave: 0,
       saveWarned: false,
       kaufMenge: 1,          // 1 | 10 | 100 | 'max'
+      brancheReiter: 'alle', // Reiter in der Firmenschublade
+      ansehenReiter: 'wohnen',
       pop: [],               // aufsteigende +Betraege am Schreibtisch
       puls: 0,
       t: 0,
@@ -75,8 +77,10 @@
     var rAnsehen = resItem('', '👑', 'Ansehen');
     var rRang = resItem('', '🏅', 'Rang');
     var rSteuer = resItem('', '🧾', 'Steuern offen');
+    var rSchuld = resItem('', '🏦', 'Schulden');
+    rSchuld.style.display = 'none';
     var rDatum = resItem('', '📅', 'Zeit');
-    [rGeld, rProSek, rVermoegen, rAnsehen, rRang, rSteuer, rDatum]
+    [rGeld, rProSek, rVermoegen, rAnsehen, rRang, rSteuer, rSchuld, rDatum]
       .forEach(function (e) { res.appendChild(e); });
 
     TEMPI.forEach(function (sp) {
@@ -116,10 +120,11 @@
     }
 
     dockBtn('🏢', 'Firmen', function () { openFirmen(); });
+    dockBtn('🧭', 'Branchen', function () { openBranchen(); });
     dockBtn('📈', 'Börse', function () { openBoerse(); });
     dockBtn('🏘', 'Immobilien', function () { openImmobilien(); });
-    dockBtn('🏡', 'Wohnen', function () { openResidenz(); });
-    dockBtn('💎', 'Luxus', function () { openLuxus(); });
+    var bBank = dockBtn('🏦', 'Bank', function () { openBank(); });
+    dockBtn('👑', 'Ansehen', function () { openAnsehen(); });
     var bSteuer = dockBtn('🧾', 'Steuern', function () { openSteuern(); });
     dockBtn('📊', 'Statistik', function () { openStats(); });
 
@@ -289,6 +294,50 @@
 
     /* ---------------------------------------------------------- Firmen */
 
+    /* Branchenfarbe an ein Element haengen. Alles Farbige in einer Karte
+       zieht sie von dort - eine Branche sieht ueberall gleich aus. */
+    function euroFein(n) {
+      return Math.abs(n) < 10 ? U.num(n, 2) + String.fromCharCode(160) + String.fromCharCode(8364)
+        : U.euro(n, true);
+    }
+
+    function farbig(el, br) {
+      if (!br) return el;
+      el.style.setProperty('--bf', br.farbe);
+      el.style.setProperty('--bfd', U.mixHex(br.farbe, '#212a3d', 0.78));
+      return el;
+    }
+
+    /* Einmal handeln: Fehler melden oder Klang, Kopfzeile und Schublade
+       nachziehen. Jeder Knopf in den Schubladen laeuft hier durch. */
+    function handeln(fn, self) {
+      var fehler = fn();
+      if (fehler) { host.sfx('error'); UI.toast(fehler, 'bad', 2200); return false; }
+      host.sfx('cash');
+      host.buzz(10);
+      syncBar();
+      if (self && self.rebuild) self.rebuild();
+      return true;
+    }
+
+    /* Kleines Schild fuer einen Faktor: "Konjunktur +12 %" */
+    function modChip(name, faktor) {
+      var p = (faktor - 1) * 100;
+      var cls = p > 0.5 ? '.up' : (p < -0.5 ? '.down' : '');
+      return UI.el('div.biz-mod' + cls, {
+        text: name + ' ' + (p >= 0 ? '+' : '') + U.num(p, 0) + ' %',
+      });
+    }
+
+    /* Sichtbar ist, was man besitzt - und was man sich einmal fast
+       leisten konnte. Dadurch taucht auf jeder Preisstufe eine kleine
+       Auswahl aus mehreren Branchen gleichzeitig auf. */
+    function sichtbar(s, i) {
+      if ((s.firmen[D.FIRMEN[i].id] || 0) > 0) return true;
+      if (i === 0) return true;
+      return Math.max(s.verdientGesamt, s.geld) >= D.FIRMEN[i].kosten * 0.4;
+    }
+
     function openFirmen() {
       var api = drawer('Firmen', function (body, self) { firmenInhalt(body, self); });
       nachbauen(api, function (body) { firmenInhalt(body, api); });
@@ -296,6 +345,23 @@
 
     function firmenInhalt(body, self) {
       var s = st.s;
+      var lage = S.lage(s);
+      var i;
+
+      var offen = {};
+      for (i = 0; i < D.FIRMEN.length; i++) if (sichtbar(s, i)) offen[D.FIRMEN[i].branche] = true;
+      var reiter = [{ id: 'alle', label: 'Alle' }];
+      D.BRANCHEN.forEach(function (b) {
+        if (offen[b.id]) reiter.push({ id: b.id, label: b.icon + ' ' + b.name });
+      });
+      if (st.brancheReiter !== 'alle' && !offen[st.brancheReiter]) st.brancheReiter = 'alle';
+      if (reiter.length > 2) {
+        body.appendChild(UI.tabs(reiter, function (id) {
+          st.brancheReiter = id;
+          self.rebuild();
+        }, st.brancheReiter));
+      }
+
       var mengen = UI.el('div.row.wrap', { style: { gap: '6px', marginBottom: '12px' } });
       [1, 10, 100, 'max'].forEach(function (m) {
         mengen.appendChild(UI.btn(m === 'max' ? 'max' : '×' + m, function () {
@@ -303,30 +369,316 @@
           self.rebuild();
         }, 'sm' + (st.kaufMenge === m ? ' primary' : ' ghost')));
       });
-      body.appendChild(UI.el('p.small.muted', {
-        text: 'Firmen bringen laufend Geld, ganz ohne Zutun. Jede Stufe kostet mehr '
-          + 'als die vorige — alle ' + D.MEILENSTEIN + ' Stufen verdoppelt sich der Ertrag.',
-      }));
       body.appendChild(mengen);
 
-      D.FIRMEN.forEach(function (def, i) {
-        var stufe = s.firmen[def.id] || 0;
-        if (i > 0 && !(s.firmen[D.FIRMEN[i - 1].id] > 0) && !stufe) return;
-        var menge = st.kaufMenge === 'max'
-          ? Math.max(1, S.maxStufen(s, def.id)) : st.kaufMenge;
-        var preis = D.firmenPreisMenge(def, stufe, menge);
-        var ertrag = S.firmenErtrag(s, def.id);
-        var bisMeilen = D.MEILENSTEIN - (stufe % D.MEILENSTEIN);
-        var unten = def.text + '<br>'
-          + (stufe
-            ? '<b>Stufe ' + stufe + '</b> · ' + U.euro(ertrag, true) + ' / Sekunde'
-              + ' · noch ' + bisMeilen + ' bis zur Verdopplung'
-            : 'noch nicht gegründet');
-        body.appendChild(zeile(def.icon, def.name, unten,
-          (menge > 1 ? '×' + menge + ' · ' : '') + U.euro(preis, true),
-          s.geld >= preis,
-          function () { return S.firmaKaufen(s, def.id, menge); }));
+      var gezeigt = 0;
+      for (i = 0; i < D.FIRMEN.length; i++) {
+        var def = D.FIRMEN[i];
+        if (!sichtbar(s, i)) continue;
+        if (st.brancheReiter !== 'alle' && def.branche !== st.brancheReiter) continue;
+        body.appendChild(firmenKarte(def, lage, self));
+        gezeigt++;
+      }
+      if (!gezeigt) {
+        body.appendChild(UI.empty('🏢', 'Nichts in Sicht',
+          'In dieser Branche ist noch nichts zu haben.'));
+      }
+    }
+
+    function firmenKarte(def, lage, self) {
+      var s = st.s;
+      var br = D.branche(def.branche);
+      var stufe = s.firmen[def.id] || 0;
+      var l = lage[def.branche] || { konj: 1, saettigung: 1, ereignis: 1 };
+
+      var menge = st.kaufMenge === 'max'
+        ? Math.max(1, S.maxStufen(s, def.id)) : st.kaufMenge;
+      var preis = D.firmenPreisMenge(def, stufe, menge);
+      var machbar = s.geld >= preis;
+
+      var karte = farbig(UI.el('div.biz-firma' + (stufe ? '' : '.neu')), br);
+
+      karte.appendChild(UI.el('div.biz-kopf', null, [
+        UI.el('div.ic', { text: def.icon }),
+        UI.el('div.nm', null, [
+          UI.el('div.t', null, [def.name, br ? UI.el('span.biz-chip', { text: br.name }) : null]),
+          UI.el('div.s', { text: def.text }),
+        ]),
+        stufe ? UI.el('div.biz-stufe', { text: 'Stufe ' + stufe }) : null,
+      ]));
+
+      if (stufe) {
+        var eff = S.firmenErtragEff(s, def.id, lage) * S.faktor(s, 'firmen');
+        karte.appendChild(UI.el('div.biz-zahlen', null, [
+          UI.el('div.gross', { text: euroFein(eff) + ' / s' }),
+          UI.el('div.klein', { text: 'unverändert wären es ' + euroFein(S.firmenErtrag(s, def.id)) }),
+        ]));
+
+        var mods = UI.el('div.biz-mods');
+        mods.appendChild(modChip('Konjunktur', l.konj));
+        if (l.saettigung < 0.995) mods.appendChild(modChip('Marktsättigung', l.saettigung));
+        if (Math.abs((l.ereignis || 1) - 1) > 0.001) mods.appendChild(modChip('Ereignis', l.ereignis));
+        if (def.zulieferer) {
+          var zb = D.branche(def.zulieferer);
+          mods.appendChild(modChip('Zulieferer ' + (zb ? zb.name : ''), S.lieferBonus(s, def)));
+        }
+        karte.appendChild(mods);
+
+        var rest = stufe % D.MEILENSTEIN;
+        karte.appendChild(UI.el('div.biz-fort', null, [
+          UI.el('i', { style: { width: (rest / D.MEILENSTEIN * 100) + '%' } }),
+        ]));
+        karte.appendChild(UI.el('div.klein', {
+          style: { marginTop: '4px', fontSize: '11px', color: 'var(--dim)' },
+          text: 'noch ' + (D.MEILENSTEIN - rest) + ' Stufen bis zur nächsten Verdopplung',
+        }));
+      } else {
+        var hinweis = euroFein(def.ertrag) + ' je Sekunde und Stufe';
+        if (def.zulieferer) {
+          var zb2 = D.branche(def.zulieferer);
+          hinweis += ' · kauft bei ' + (zb2 ? zb2.name : def.zulieferer) + ' ein';
+        }
+        karte.appendChild(UI.el('div.biz-zahlen', null, [
+          UI.el('div.klein', { text: hinweis }),
+        ]));
+      }
+
+      var kaufBtn = UI.btn((menge > 1 ? '×' + menge + ' · ' : '') + U.euro(preis, true), function () {
+        handeln(function () { return S.firmaKaufen(s, def.id, menge); }, self);
+      }, 'sm' + (machbar ? ' primary' : ' ghost'));
+      if (!machbar) kaufBtn.disabled = true;
+
+      var fuss = UI.el('div.biz-fuss', null, [kaufBtn]);
+      if (stufe) {
+        fuss.appendChild(UI.btn('−1', function () {
+          handeln(function () { return S.firmaVerkaufen(s, def.id, 1); }, self);
+        }, 'sm ghost eng'));
+      }
+      karte.appendChild(fuss);
+
+      if (stufe) {
+        var haben = s.ausbau[def.id] || 0;
+        var reihe = UI.el('div.biz-ausbau');
+        for (var k = 0; k < D.AUSBAU.length; k++) {
+          reihe.appendChild(UI.el('div.stufe' + (k < haben ? '.on' : ''), {
+            text: D.ausbauName(def.branche, k),
+          }));
+        }
+        karte.appendChild(reihe);
+
+        var naechster = S.ausbauNaechster(s, def.id);
+        if (naechster) {
+          var apreis = D.ausbauPreis(def, haben);
+          var frei = stufe >= naechster.abStufe;
+          var ab = UI.btn(frei
+            ? D.ausbauName(def.branche, haben) + ' · ' + U.euro(apreis, true)
+              + '  <span style="opacity:.7">×' + naechster.faktor + '</span>'
+            : D.ausbauName(def.branche, haben) + ' ab Stufe ' + naechster.abStufe,
+            function () { handeln(function () { return S.ausbauKaufen(s, def.id); }, self); },
+            'sm wide' + (frei && s.geld >= apreis ? ' primary' : ' ghost'));
+          if (!frei || s.geld < apreis) ab.disabled = true;
+          ab.style.marginTop = '7px';
+          karte.appendChild(ab);
+        }
+      }
+
+      return karte;
+    }
+
+    /* ---------------------------------------------------------- Branchen */
+
+    function openBranchen() {
+      var api = drawer('Branchen', function (body, self) { branchenInhalt(body, self); });
+      nachbauen(api, function (body) { branchenInhalt(body, api); });
+    }
+
+    function branchenInhalt(body, self) {
+      var s = st.s;
+      var lage = S.lage(s);
+
+      body.appendChild(UI.el('p.small.muted', {
+        text: 'Jede Branche hat ihre eigene Konjunktur und ihren eigenen Markt. '
+          + 'Wer alles in eine Branche steckt, fährt jede Welle voll mit und stößt '
+          + 'irgendwann an die Marktgrenze.',
+      }));
+
+      D.BRANCHEN.forEach(function (br) {
+        var l = lage[br.id];
+        var karte = farbig(UI.el('div.biz-branche' + (l.firmen ? '' : '.aus')), br);
+
+        var ertrag = 0;
+        D.firmenDerBranche(br.id).forEach(function (f) {
+          ertrag += S.firmenErtragEff(s, f.id, lage);
+        });
+        ertrag *= S.faktor(s, 'firmen');
+
+        karte.appendChild(UI.el('div.biz-bkopf', null, [
+          UI.el('div.ic', { text: br.icon }),
+          UI.el('div.nm', { text: br.name }),
+          UI.el('div.wert', {
+            text: l.firmen ? euroFein(ertrag) + ' / s' : '—',
+            style: { color: l.firmen ? 'var(--green)' : 'var(--dim)' },
+          }),
+        ]));
+        karte.appendChild(UI.el('div.small.muted', {
+          style: { marginTop: '2px' }, text: br.text,
+        }));
+
+        var reihe = [];
+        for (var d = -30; d <= 0; d++) reihe.push(S.konjunktur(s, br.id, d));
+        karte.appendChild(UI.chart(reihe, { height: 38, color: br.farbe }));
+
+        var messe = UI.el('div.biz-messe');
+        var kp = (l.konj - 1) * 100;
+        messe.appendChild(UI.el('div.zeile', null, [
+          UI.el('span', { text: 'Konjunktur (30 Tage, letzter Punkt heute)' }),
+          UI.el('b', {
+            text: (kp >= 0 ? '+' : '') + U.num(kp, 0) + ' %',
+            style: { color: kp >= 0 ? 'var(--green)' : 'var(--red)' },
+          }),
+        ]));
+
+        if (l.firmen) {
+          var aus = l.markt > 0 ? l.roh / l.markt : 0;
+          messe.appendChild(UI.el('div.zeile', null, [
+            UI.el('span', { text: 'Marktauslastung' }),
+            UI.el('b', { text: U.num(aus * 100, 0) + ' %' }),
+          ]));
+          messe.appendChild(UI.el('div.balken', null, [
+            UI.el('i' + (aus > 2 ? '.bad' : (aus > 1 ? '.warn' : '')), {
+              style: { width: (U.clamp(aus, 0, 1) * 100) + '%' },
+            }),
+          ]));
+          if (l.saettigung < 0.995) {
+            messe.appendChild(UI.el('div.zeile', null, [
+              UI.el('span', {
+                text: 'Übersättigt — der Ertrag wird gedrückt',
+                style: { color: 'var(--red)' },
+              }),
+              UI.el('b', {
+                text: '−' + U.num((1 - l.saettigung) * 100, 0) + ' %',
+                style: { color: 'var(--red)' },
+              }),
+            ]));
+          }
+          messe.appendChild(UI.el('div.zeile', null, [
+            UI.el('span', { text: 'Betriebe · Marktvolumen' }),
+            UI.el('b', { text: l.firmen + ' · ' + euroFein(l.markt) + ' / s' }),
+          ]));
+        }
+        karte.appendChild(messe);
+
+        var preis = S.marktPreis(s, br.id);
+        if (preis !== null) {
+          var kampagnen = s.markt[br.id] || 0;
+          var b = UI.btn('📣 Werbekampagne · ' + U.euro(preis, true), function () {
+            handeln(function () { return S.marktKaufen(s, br.id); }, self);
+          }, 'sm wide' + (s.geld >= preis ? ' primary' : ' ghost'));
+          if (s.geld < preis) b.disabled = true;
+          karte.appendChild(b);
+          karte.appendChild(UI.el('div.small.muted', {
+            style: { marginTop: '5px', fontSize: '11px' },
+            text: 'Hebt den Markt dauerhaft um '
+              + Math.round((D.MARKT_SCHUB - 1) * 100) + ' Prozent'
+              + (kampagnen ? ' · bisher ' + kampagnen + ' Kampagnen' : '')
+              + ' · gilt als Betriebsausgabe und senkt die Steuer.',
+          }));
+        } else {
+          karte.appendChild(UI.el('div.small.muted', {
+            text: 'Noch kein eigener Betrieb in dieser Branche.',
+          }));
+        }
+        body.appendChild(karte);
       });
+    }
+
+    /* ---------------------------------------------------------- Bank */
+
+    function betragsfeld(max) {
+      max = Math.floor(Math.max(0, max));
+      var feld = UI.el('input', {
+        type: 'number', value: String(max), min: '0', max: String(max),
+        style: {
+          width: '100%', height: '46px', background: '#0b0e15',
+          border: '1px solid var(--line)', borderRadius: '10px',
+          color: 'var(--text)', padding: '0 12px', outline: 'none', fontSize: '17px',
+        },
+      });
+      var knoepfe = UI.el('div.row.wrap', { style: { gap: '6px', margin: '8px 0 10px' } }, [
+        UI.btn('Viertel', function () { feld.value = String(Math.floor(max / 4)); }, 'sm ghost'),
+        UI.btn('Hälfte', function () { feld.value = String(Math.floor(max / 2)); }, 'sm ghost'),
+        UI.btn('Alles', function () { feld.value = String(max); }, 'sm ghost'),
+      ]);
+      return {
+        el: UI.el('div', null, [feld, knoepfe]),
+        wert: function () { return U.clamp(Math.floor(Number(feld.value) || 0), 0, max); },
+      };
+    }
+
+    function openBank() {
+      var api = drawer('Bank', function (body, self) { bankInhalt(body, self); });
+      nachbauen(api, function (body) { bankInhalt(body, api); });
+    }
+
+    function bankInhalt(body, self) {
+      var s = st.s;
+      var rahmen = S.kreditRahmen(s);
+      var schuld = s.schuld || 0;
+
+      body.appendChild(UI.el('div.biz-gross-dazu', {
+        text: schuld > 0 ? 'Offene Schuld' : 'Freier Kreditrahmen',
+      }));
+      body.appendChild(UI.el('div.biz-gross.' + (schuld > 0 ? 'schuld' : 'frei'), {
+        text: U.euro(schuld > 0 ? schuld : rahmen, true),
+      }));
+
+      body.appendChild(UI.el('div.kv', { style: { marginTop: '12px' } }, [
+        zeileKV('Sicherheiten', U.euro(S.sicherheiten(s), true)),
+        zeileKV('davon Firmenwert', U.euro(S.firmenwert(s), true)),
+        zeileKV('Rahmen noch frei', U.euro(rahmen, true)),
+        zeileKV('Zins je Tag', U.num(D.KREDIT.zinsTag * 100, 2) + ' % · '
+          + U.euro(S.zinsTag(s), true)),
+        zeileKV('Zinsen insgesamt', U.euro(s.stat.zinsen || 0, true)),
+      ]));
+
+      body.appendChild(UI.el('p.small.muted', {
+        text: 'Die Bank beleiht Firmen, Depot, Immobilien und Wohnsitz mit '
+          + U.pct(D.KREDIT.quote) + '. Zinsen laufen täglich, mindern aber den '
+          + 'steuerpflichtigen Gewinn. Reicht die Kasse nicht, wachsen sie in die '
+          + 'Schuld hinein — und ab ' + U.pct(D.KREDIT.notgrenze)
+          + ' der Sicherheiten verwertet die Bank selbst: erst Depot, dann Immobilien.',
+      }));
+
+      if (schuld > S.sicherheiten(s) * D.KREDIT.notgrenze * 0.75) {
+        body.appendChild(UI.el('div.notice.warn', {
+          style: { margin: '10px 0' },
+          html: '<b>Der Kredit wird knapp gedeckt.</b><br>'
+            + 'Noch eine Flaute, und die Bank greift ins Depot.',
+        }));
+      }
+
+      if (rahmen >= 1) {
+        var feld = betragsfeld(rahmen);
+        body.appendChild(UI.el('div.sec-head', null, [UI.el('h2', { text: 'Kredit aufnehmen' })]));
+        body.appendChild(feld.el);
+        body.appendChild(UI.btn('Aufnehmen', function () {
+          handeln(function () { return S.kreditAufnehmen(s, feld.wert()); }, self);
+        }, 'wide primary'));
+      } else if (schuld <= 0) {
+        body.appendChild(UI.el('div.notice', {
+          style: { margin: '10px 0' },
+          text: 'Ohne Sicherheiten gibt die Bank nichts. Ein erster Betrieb genügt schon.',
+        }));
+      }
+
+      if (schuld > 0) {
+        var feld2 = betragsfeld(Math.min(schuld, s.geld));
+        body.appendChild(UI.el('div.sec-head', null, [UI.el('h2', { text: 'Tilgen' })]));
+        body.appendChild(feld2.el);
+        body.appendChild(UI.btn('Tilgen', function () {
+          handeln(function () { return S.kreditTilgen(s, feld2.wert()); }, self);
+        }, 'wide'));
+      }
     }
 
     /* ---------------------------------------------------------- Boerse */
@@ -483,11 +835,39 @@
       });
     }
 
-    /* ---------------------------------------------------------- Residenz */
+    /* ---------------------------------------------------------- Ansehen */
 
-    function openResidenz() {
-      var api = drawer('Wohnen', function (body, self) { residenzInhalt(body, self); });
-      nachbauen(api, function (body) { residenzInhalt(body, api); });
+    /* Wohnsitz und Luxus stehen zusammen in einer Schublade: beide zahlen
+       auf dieselbe Zahl ein, und die entscheidet ueber die oberen Raenge. */
+    function openAnsehen() {
+      var api = drawer('Ansehen', function (body, self) { ansehenInhalt(body, self); });
+      nachbauen(api, function (body) { ansehenInhalt(body, api); });
+    }
+
+    function ansehenInhalt(body, self) {
+      var s = st.s;
+      var reiter = st.ansehenReiter || 'wohnen';
+
+      body.appendChild(UI.tabs([
+        { id: 'wohnen', label: '🏡 Wohnen' },
+        { id: 'luxus', label: '💎 Luxus' },
+      ], function (id) { st.ansehenReiter = id; self.rebuild(); }, reiter));
+
+      var rang = S.rang(s);
+      var naechster = null;
+      for (var i = 0; i < D.RAENGE.length; i++) {
+        if (D.RAENGE[i].ab > S.vermoegen(s) || D.RAENGE[i].ansehen > S.ansehen(s)) {
+          naechster = D.RAENGE[i]; break;
+        }
+      }
+      body.appendChild(UI.el('div.kv', null, [
+        zeileKV('Ansehen', String(S.ansehen(s))),
+        zeileKV('Rang', rang.name),
+        naechster ? zeileKV('Für ' + naechster.name + ' nötig', naechster.ansehen + ' Ansehen') : null,
+      ]));
+
+      if (reiter === 'wohnen') residenzInhalt(body);
+      else luxusInhalt(body);
     }
 
     function residenzInhalt(body) {
@@ -519,13 +899,6 @@
           s.geld >= def.preis,
           function () { return S.residenzBeziehen(s, i); }));
       });
-    }
-
-    /* ---------------------------------------------------------- Luxus */
-
-    function openLuxus() {
-      var api = drawer('Luxus', function (body, self) { luxusInhalt(body, self); });
-      nachbauen(api, function (body) { luxusInhalt(body, api); });
     }
 
     function luxusInhalt(body) {
@@ -591,10 +964,18 @@
       ]));
 
       if (s.steuerFaellig > 0) {
-        body.appendChild(UI.el('div.notice.warn', {
+        var rest = D.STEUER_FRIST - (s.steuerOffenMonate || 0);
+        body.appendChild(UI.el('div.notice.' + (rest <= 1 ? 'bad' : 'warn'), {
           style: { margin: '10px 0' },
           html: '<b>Offen: ' + U.euro(s.steuerFaellig) + '</b><br>'
-            + 'Solange etwas offen ist, schaut das Finanzamt genauer hin.',
+            + (s.steuerOffenMonate
+              ? 'Seit ' + s.steuerOffenMonate + ' ' + U.plural(s.steuerOffenMonate, 'Monat', 'Monaten')
+                + ' überfällig. Jeden Monat kommen 5 Prozent Säumniszuschlag dazu'
+                + (rest > 0
+                  ? ', und in ' + rest + ' ' + U.plural(rest, 'Monat', 'Monaten')
+                    + ' zieht das Finanzamt Depot und Immobilien ein.'
+                  : '. Die Vollstreckung läuft bereits.')
+              : 'Solange etwas offen ist, schaut das Finanzamt genauer hin.'),
         }));
         body.appendChild(UI.btn('Jetzt überweisen', function () {
           var fehler = S.steuerZahlen(s);
@@ -640,19 +1021,31 @@
       drawer('Statistik', function (body) {
         var s = st.s;
         var rang = S.rang(s);
+        var i;
         var naechster = null;
-        for (var i = 0; i < D.RAENGE.length; i++) {
+        for (i = 0; i < D.RAENGE.length; i++) {
           if (D.RAENGE[i].ab > S.vermoegen(s) || D.RAENGE[i].ansehen > S.ansehen(s)) {
             naechster = D.RAENGE[i]; break;
           }
+        }
+
+        /* Vermoegenskurve. Ein Punkt je Spieltag, hoechstens die letzten
+           sechzig - mehr sagt auf dem kleinen Bild nichts mehr aus. */
+        if (s.verlauf && s.verlauf.length > 2) {
+          var werte = s.verlauf.slice(-60).map(function (p) { return p.v; });
+          body.appendChild(UI.el('div.small.muted', { text: 'Vermögen der letzten '
+            + Math.min(60, s.verlauf.length) + ' Tage' }));
+          body.appendChild(UI.chart(werte, { height: 96, color: '#3ddc84', fill: 'rgba(61,220,132,.28)' }));
         }
 
         body.appendChild(UI.el('div.kv', null, [
           zeileKV('Rang', rang.name),
           zeileKV('Vermögen', U.euro(S.vermoegen(s), true)),
           zeileKV('Konto', U.euro(s.geld, true)),
+          zeileKV('Firmenwert', U.euro(S.firmenwert(s), true)),
           zeileKV('Depot', U.euro(S.depotwert(s), true)),
           zeileKV('Immobilien', U.euro(S.immobilienwert(s), true)),
+          (s.schuld > 0 ? zeileKV('Schulden', '− ' + U.euro(s.schuld, true)) : null),
           zeileKV('Ansehen', String(S.ansehen(s))),
           zeileKV('Insgesamt verdient', U.euro(s.verdientGesamt, true)),
           zeileKV('Tipps am Schreibtisch', U.num(s.tipps)),
@@ -662,10 +1055,37 @@
         if (naechster) {
           body.appendChild(UI.el('div.notice', {
             style: { margin: '10px 0' },
-            html: '<b>Nächster Rang: ' + naechster.name + '</b><br>'
-              + 'Nötig: ' + U.euro(naechster.ab, true) + ' Vermögen'
-              + (naechster.ansehen ? ' und ' + naechster.ansehen + ' Ansehen' : ''),
+            html: '<b>Nächster Rang: ' + naechster.name + '</b><br>' + fehltText(naechster),
           }));
+        }
+
+        /* Welche Branche traegt das Geschaeft? Ein Balken sagt das
+           schneller als zehn Zeilen Zahlen. */
+        var summe = 0, teile = [];
+        for (i = 0; i < D.BRANCHEN.length; i++) {
+          var br = D.BRANCHEN[i];
+          var wert = (s.stat.branchen && s.stat.branchen[br.id]) || 0;
+          if (wert > 0) { teile.push({ br: br, wert: wert }); summe += wert; }
+        }
+        if (summe > 0) {
+          teile.sort(function (a, b) { return b.wert - a.wert; });
+          body.appendChild(UI.el('div.sec-head', null, [
+            UI.el('h2', { text: 'Woher der Firmenertrag kam' }),
+          ]));
+          var balken = UI.el('div.biz-anteile');
+          var legende = UI.el('div.biz-legende');
+          teile.forEach(function (t) {
+            balken.appendChild(UI.el('i', {
+              style: { width: (t.wert / summe * 100) + '%', background: t.br.farbe },
+            }));
+            var punkt = UI.el('i');
+            punkt.style.background = t.br.farbe;
+            legende.appendChild(UI.el('span', null, [
+              punkt, t.br.name + ' ' + anteilText(t.wert / summe),
+            ]));
+          });
+          body.appendChild(balken);
+          body.appendChild(legende);
         }
 
         body.appendChild(UI.el('div.sec-head', null, [UI.el('h2', { text: 'Woher das Geld kam' })]));
@@ -674,6 +1094,8 @@
           zeileKV('Mieten', U.euro(s.stat.mieten, true)),
           zeileKV('Dividenden', U.euro(s.stat.dividenden, true)),
           zeileKV('Steuern gezahlt', U.euro(s.stat.steuern, true)),
+          zeileKV('Zinsen gezahlt', U.euro(s.stat.zinsen || 0, true)),
+          zeileKV('Werbung', U.euro(s.stat.werbung || 0, true)),
           zeileKV('Für Luxus ausgegeben', U.euro(s.stat.luxusAusgaben, true)),
         ]));
 
@@ -688,6 +1110,20 @@
         });
         body.appendChild(log);
       });
+    }
+
+    /* Nur nennen, was wirklich noch fehlt. Eine Bedingung, die laengst
+       erfuellt ist, liest sich sonst wie eine Huerde. */
+    function fehltText(rang) {
+      var s = st.s, fehlt = [];
+      if (S.vermoegen(s) < rang.ab) fehlt.push(U.euro(rang.ab, true) + ' Vermögen');
+      if (S.ansehen(s) < rang.ansehen) fehlt.push(rang.ansehen + ' Ansehen');
+      return fehlt.length ? 'Es fehlt noch: ' + fehlt.join(' und ') + '.' : 'Gleich so weit.';
+    }
+
+    function anteilText(anteil) {
+      var p = anteil * 100;
+      return (p > 0 && p < 0.5 ? '<1' : U.num(p, 0)) + ' %';
     }
 
     function zeileKV(k, v) {
@@ -763,6 +1199,66 @@
               { ic: '⭐', text: 'Alle <b>' + D.MEILENSTEIN + ' Stufen</b> verdoppelt '
                 + 'sich der Ertrag einer Firma. Es lohnt sich, an einer dranzubleiben, '
                 + 'statt überall eine Stufe zu kaufen.' },
+              { ic: '🔧', text: 'Ab Stufe ' + D.AUSBAU[0].abStufe + ' lässt sich eine Firma '
+                + '<b>ausbauen</b>. Drei Ausbaustufen wirken auf den ganzen Betrieb — '
+                + 'zusammen das Neunfache.' },
+            ],
+          },
+          {
+            kicker: 'Der Kern des Spiels', title: 'Branchen und Zulieferer',
+            art: function (c, w, h) {
+              var farben = ['#8bc34a', '#ff8f5e', '#7c6cff', '#4aa3ff', '#ffd166'];
+              for (var i = 0; i < 5; i++) {
+                var x = w * (0.09 + i * 0.185);
+                var hh = h * (0.18 + Math.abs(Math.sin(i * 1.7)) * 0.4);
+                G.fillRound(c, x, h * 0.72 - hh, w * 0.13, hh, 5, farben[i]);
+              }
+              c.strokeStyle = 'rgba(255,255,255,.35)';
+              c.lineWidth = 2;
+              c.beginPath();
+              for (var k = 0; k <= 40; k++) {
+                var px = w * (0.06 + k / 40 * 0.88);
+                var py = h * 0.28 + Math.sin(k / 40 * Math.PI * 3) * h * 0.1;
+                if (k === 0) c.moveTo(px, py); else c.lineTo(px, py);
+              }
+              c.stroke();
+            },
+            body: [
+              'Jede Firma gehört zu einer <b>Branche</b>. Jede Branche hat ihre '
+                + 'eigene Konjunktur — Technologie schwankt wild, Gesundheit kaum.',
+              { ic: '🔗', text: 'Manche Firmen kaufen bei einer anderen Branche ein. '
+                + 'Wer den <b>Zulieferer selbst besitzt</b>, verdient bis zu '
+                + Math.round(D.LIEFER_MAX * 100) + ' Prozent mehr. Eine Bäckerei '
+                + 'neben dem eigenen Gutshof rechnet sich doppelt.' },
+              { ic: '📣', text: 'Und jeder Markt ist endlich: Wer alles in eine Branche '
+                + 'stapelt, verkauft irgendwann unter Wert. Eine Werbekampagne hebt '
+                + 'den Markt — oder man geht einfach in die nächste Branche.' },
+            ],
+          },
+          {
+            kicker: 'Fremdes Geld', title: 'Die Bank leiht, die Bank holt',
+            art: function (c, w, h) {
+              G.fillRound(c, w * 0.2, h * 0.42, w * 0.6, h * 0.36, 6, '#e9edf6');
+              c.fillStyle = '#8794b1';
+              for (var i = 0; i < 5; i++) {
+                c.fillRect(w * (0.25 + i * 0.11), h * 0.46, w * 0.045, h * 0.28);
+              }
+              G.poly(c, [
+                [w * 0.15, h * 0.42], [w * 0.5, h * 0.2], [w * 0.85, h * 0.42],
+              ], '#f0b429', true);
+              G.text(c, '€', w * 0.5, h * 0.86, {
+                font: G.font(Math.round(h * 0.18), 700), fill: '#3ddc84',
+                align: 'center', baseline: 'middle',
+              });
+            },
+            body: [
+              'Die Bank beleiht Firmen, Depot und Immobilien mit '
+                + Math.round(D.KREDIT.quote * 100) + ' Prozent. Geliehenes Geld '
+                + 'kauft die nächste Firma sofort statt in zehn Minuten.',
+              { ic: '⚠', text: 'Zinsen laufen <b>jeden Tag</b>. Ist die Kasse leer, '
+                + 'wachsen sie in die Schuld hinein — und ab '
+                + Math.round(D.KREDIT.notgrenze * 100) + ' Prozent der Sicherheiten '
+                + 'verkauft die Bank Depot und Immobilien selbst.' },
             ],
           },
           {
@@ -836,13 +1332,21 @@
       var s = st.s;
       if (!s) return;
       rGeld.set(U.euro(s.geld, true));
-      rProSek.set(U.euro(S.ertragGesamt(s), true));
+      rProSek.set(euroFein(S.ertragGesamt(s)));
       rVermoegen.set(U.euro(S.vermoegen(s), true));
       rAnsehen.set(String(S.ansehen(s)));
       rRang.set(S.rang(s).name);
       rSteuer.set(s.steuerFaellig > 0 ? U.euro(s.steuerFaellig, true) : '—');
       rSteuer.tint(s.steuerFaellig > 0 ? 'var(--red)' : '');
       bSteuer.classList.toggle('warn', s.steuerFaellig > 0);
+
+      var schuld = s.schuld || 0;
+      var eng = schuld > 0 && schuld > S.sicherheiten(s) * D.KREDIT.notgrenze * 0.75;
+      rSchuld.style.display = schuld > 0 ? '' : 'none';
+      rSchuld.set(U.euro(schuld, true));
+      rSchuld.tint(eng ? 'var(--red)' : (schuld > 0 ? 'var(--gold)' : ''));
+      bBank.classList.toggle('warn', eng);
+
       var monat = Math.floor(s.tag / D.TAGE_PRO_MONAT) + 1;
       rDatum.set('Tag ' + s.tag + ' · Monat ' + monat);
     }
@@ -873,43 +1377,76 @@
 
     /* ---------------------------------------------------------- Zeichnen */
 
+    /* Das Bild erzaehlt denselben Weg wie die Zahlen: erst ein
+       Schreibtisch vor einer flachen Vorstadt, spaeter ein Bueroturm
+       ueber einer Skyline, die in den Farben der eigenen Branchen
+       leuchtet. Dazu laeuft ein Tageslauf mit - ein Spieltag ist eine
+       Umdrehung von Morgen bis Nacht. */
     function draw() {
       var s = st.s;
       var w = stage.w, h = stage.h;
       if (!s) return;
+      var i;
 
-      // Hintergrund: Buero, das mit dem Rang waechst
       var stufe = 0;
-      for (var i = 0; i < D.RAENGE.length; i++) {
+      for (i = 0; i < D.RAENGE.length; i++) {
         if (S.vermoegen(s) >= D.RAENGE[i].ab) stufe = i;
       }
-      var himmel = G.linear(ctx, 0, 0, 0, h,
-        [0, stufe >= 5 ? '#121a2c' : '#0d1017',
-          1, stufe >= 3 ? '#1a2233' : '#10141d']);
-      ctx.fillStyle = himmel;
+
+      var tz = (s.zeit % D.SEK_PRO_TAG) / D.SEK_PRO_TAG;
+      var licht = U.clamp(Math.sin((tz - 0.22) * Math.PI * 2) * 0.5 + 0.5, 0, 1);
+      var abend = U.clamp(1 - Math.abs(tz - 0.72) * 7, 0, 1);
+
+      var oben = U.mixHex('#070a12', '#25406b', licht);
+      var unten = U.mixHex('#0a0e17', '#4a5d82', Math.pow(licht, 0.7));
+      unten = U.mixHex(unten, '#8a4a3c', abend * 0.55);
+      ctx.fillStyle = G.linear(ctx, 0, 0, 0, h * 0.72, [0, oben, 1, unten]);
       ctx.fillRect(0, 0, w, h);
 
-      // Skyline hinter dem Fenster
-      skyline(w, h, stufe);
+      // Sterne, solange es dunkel ist
+      if (licht < 0.5) {
+        var rngS = U.rng(99);
+        ctx.fillStyle = 'rgba(255,255,255,' + ((0.5 - licht) * 1.4).toFixed(3) + ')';
+        for (i = 0; i < 46; i++) {
+          ctx.fillRect(Math.round(rngS() * w), Math.round(rngS() * h * 0.5), 1.6, 1.6);
+        }
+      }
 
-      // Schreibtisch
+      // Sonne und Mond ziehen ueber denselben Bogen
+      var bx = w * (0.1 + tz * 0.8);
+      var by = h * 0.46 - Math.sin(tz * Math.PI) * h * 0.3;
+      if (licht > 0.12) {
+        G.glow(ctx, bx, by, h * 0.16, '#ffd166', 0.22 * licht);
+        G.circle(ctx, bx, by, h * 0.035, '#ffe7a8');
+      } else {
+        var mx = w * (0.9 - tz * 0.8);
+        G.circle(ctx, mx, h * 0.2, h * 0.026, 'rgba(226,234,255,.85)');
+      }
+
+      skyline(w, h, stufe, licht);
+
+      // Der Raum: alles unterhalb der Fensterkante gehoert zum Schreibtisch
       var tischH = Math.min(h * 0.3, 190);
       var tischY = h - tischH - 8;
-      G.fillRound(ctx, w * 0.08, tischY, w * 0.84, tischH, 14, '#1b2233');
-      ctx.fillStyle = 'rgba(255,255,255,.04)';
-      ctx.fillRect(w * 0.08, tischY, w * 0.84, 3);
+      ctx.fillStyle = G.linear(ctx, 0, tischY - 40, 0, h, [0, 'rgba(8,11,17,0)', 1, '#080b11']);
+      ctx.fillRect(0, tischY - 40, w, h - tischY + 40);
 
-      // Bildschirm mit Kontostand
-      var bw = Math.min(w * 0.5, 300), bh = bw * 0.42;
-      var bx = w / 2 - bw / 2, by = tischY - bh - 6;
-      G.fillRound(ctx, bx, by, bw, bh, 8, '#0a0d14');
-      G.strokeRound(ctx, bx, by, bw, bh, 8, 'rgba(240,180,41,.35)', 1.5);
-      G.fitText(ctx, U.euro(s.geld, true), bx + bw / 2, by + bh * 0.42, bw - 20, {
-        font: G.font(Math.round(bh * 0.34), 700, true),
+      G.fillRound(ctx, w * 0.06, tischY, w * 0.88, tischH, 16, '#1b2233');
+      ctx.fillStyle = 'rgba(255,255,255,.05)';
+      ctx.fillRect(w * 0.06, tischY, w * 0.88, 3);
+
+      // Bildschirm mit Kontostand und Vermoegenskurve
+      var bw = Math.min(w * 0.5, 320), bh = bw * 0.44;
+      var bxx = w / 2 - bw / 2, byy = tischY - bh - 8;
+      G.fillRound(ctx, bxx, byy, bw, bh, 9, '#0a0d14');
+      G.strokeRound(ctx, bxx, byy, bw, bh, 9, 'rgba(240,180,41,.35)', 1.5);
+      kurveImBildschirm(bxx + 8, byy + bh * 0.52, bw - 16, bh * 0.36);
+      G.fitText(ctx, U.euro(s.geld, true), bxx + bw / 2, byy + bh * 0.3, bw - 22, {
+        font: G.font(Math.round(bh * 0.3), 700, true),
         fill: '#f0b429', align: 'center', baseline: 'middle',
       });
-      G.text(ctx, S.rang(s).name, bx + bw / 2, by + bh * 0.76, {
-        font: G.font(Math.round(bh * 0.15), 600),
+      G.text(ctx, S.rang(s).name, bxx + bw / 2, byy + bh * 0.87, {
+        font: G.font(Math.round(bh * 0.14), 600),
         fill: '#8794b1', align: 'center', baseline: 'middle',
       });
 
@@ -955,24 +1492,55 @@
         ctx.globalAlpha = 1;
       }
 
-      // Laufendes Ereignis
-      if (s.ereignis) {
-        var def = null;
-        for (i = 0; i < D.EREIGNISSE.length; i++) {
-          if (D.EREIGNISSE[i].id === s.ereignis.id) def = D.EREIGNISSE[i];
-        }
-        if (def) {
-          var txt = def.name + ' · noch ' + s.ereignis.restTage + ' Tage';
-          ctx.font = G.font(12, 650);
-          var tw = ctx.measureText(txt).width + 22;
-          G.fillRound(ctx, w / 2 - tw / 2, 10, tw, 26, 13,
-            def.gut ? 'rgba(61,220,132,.16)' : 'rgba(255,95,107,.16)');
-          G.text(ctx, txt, w / 2, 23, {
-            font: G.font(12, 650), fill: def.gut ? '#c8f3da' : '#ffd3d7',
-            align: 'center', baseline: 'middle',
-          });
-        }
+      // Laufende Ereignisse, bis zu zwei nebeneinander unter der Kopfzeile
+      var aktiv = S.aktiveEreignisse(s);
+      var y = 10;
+      for (i = 0; i < aktiv.length && i < 2; i++) {
+        var def = aktiv[i];
+        var txt = def.name + ' · noch ' + s.ereignisse[i].restTage + ' Tage';
+        ctx.font = G.font(12, 650);
+        var tw = ctx.measureText(txt).width + 22;
+        G.fillRound(ctx, 12, y, tw, 26, 13,
+          def.gut ? 'rgba(61,220,132,.2)' : 'rgba(255,95,107,.2)');
+        G.text(ctx, txt, 12 + tw / 2, y + 13, {
+          font: G.font(12, 650), fill: def.gut ? '#c8f3da' : '#ffd3d7',
+          align: 'center', baseline: 'middle',
+        });
+        y += 30;
       }
+
+      // Schulden mahnen sichtbar, nicht nur in der Kopfzeile
+      if (s.schuld > 0) {
+        G.text(ctx, '🏦 ' + U.euro(s.schuld, true) + ' Schulden', 12, h - 10, {
+          font: G.font(11.5, 650), fill: 'rgba(255,95,107,.8)',
+          align: 'left', baseline: 'bottom',
+        });
+      }
+    }
+
+    /* Kleine Vermoegenskurve auf dem Bildschirm. Bewusst ohne Achsen -
+       sie soll nur zeigen, ob es hoch oder runter geht. */
+    function kurveImBildschirm(x, y, w, h) {
+      var s = st.s;
+      var reihe = (s.verlauf || []).slice(-40);
+      if (reihe.length < 3) return;
+      var mn = Infinity, mx = -Infinity, i;
+      for (i = 0; i < reihe.length; i++) {
+        if (reihe[i].v < mn) mn = reihe[i].v;
+        if (reihe[i].v > mx) mx = reihe[i].v;
+      }
+      if (!(mx > mn)) return;
+      ctx.save();
+      ctx.beginPath();
+      for (i = 0; i < reihe.length; i++) {
+        var px = x + (i / (reihe.length - 1)) * w;
+        var py = y + h - (reihe[i].v - mn) / (mx - mn) * h;
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.strokeStyle = 'rgba(61,220,132,.75)';
+      ctx.lineWidth = 1.6;
+      ctx.stroke();
+      ctx.restore();
     }
 
     /* Trefferflaeche des Karriereknopfs. Wird aus den Buehnenmassen
@@ -983,26 +1551,51 @@
       var tischH = Math.min(h * 0.3, 190);
       var tischY = h - tischH - 8;
       var kbW = Math.min(w * 0.26, 170), kbH = 54;
-      return { x: w * 0.1, y: tischY + tischH * 0.5 - kbH / 2, w: kbW, h: kbH };
+      return { x: w * 0.09, y: tischY + tischH * 0.5 - kbH / 2, w: kbW, h: kbH };
     }
 
-    function skyline(w, h, stufe) {
-      var haeuser = 6 + stufe * 2;
-      var basis = h * 0.62;
-      var rng = U.rng(4242);
-      for (var i = 0; i < haeuser; i++) {
-        var bw2 = w / haeuser;
-        var x = i * bw2;
-        var hoehe = basis * (0.25 + rng() * (0.2 + stufe * 0.07));
-        ctx.fillStyle = i % 2 ? '#161d2b' : '#131926';
-        ctx.fillRect(x + 2, basis - hoehe, bw2 - 4, hoehe);
-        // Fenster
-        ctx.fillStyle = 'rgba(240,180,41,' + (0.05 + stufe * 0.025) + ')';
-        for (var fy = basis - hoehe + 8; fy < basis - 8; fy += 12) {
-          for (var fx = x + 8; fx < x + bw2 - 10; fx += 10) {
-            if ((fx + fy) % 3) continue;
-            ctx.fillRect(fx, fy, 4, 6);
+    /* Zwei Haeuserreihen hintereinander. Die vordere leuchtet in den
+       Farben der Branchen, in denen tatsaechlich Betriebe stehen - wer
+       sein Geld aus der Technik holt, sieht das an der Skyline. */
+    function skyline(w, h, stufe, licht) {
+      var s = st.s;
+      var lage = S.lage(s);
+      var farben = [];
+      for (var b = 0; b < D.BRANCHEN.length; b++) {
+        var br = D.BRANCHEN[b];
+        if (lage[br.id] && lage[br.id].firmen) farben.push(br.farbe);
+      }
+      var basis = h * 0.64;
+
+      reihe(basis - h * 0.03, 5 + stufe, 0.16 + stufe * 0.035, '#10151f', 0.35);
+      reihe(basis, 7 + stufe * 2, 0.22 + stufe * 0.06, '#161d2b', 1);
+
+      function reihe(grund, anzahl, hoch, grundfarbe, vorne) {
+        var rng = U.rng(4242 + Math.round(anzahl));
+        var x = -8;
+        for (var i = 0; i < anzahl && x < w; i++) {
+          var bw = w / anzahl * (0.55 + rng() * 0.95);
+          var hoehe = grund * (0.22 + rng() * hoch);
+          var farbe = grundfarbe;
+          if (vorne === 1 && farben.length) {
+            farbe = U.mixHex(grundfarbe, farben[i % farben.length], 0.1 + licht * 0.16);
           }
+          ctx.fillStyle = farbe;
+          ctx.fillRect(x + 2, grund - hoehe, bw - 4, hoehe);
+          if (vorne === 1 && rng() < 0.3) {
+            ctx.fillRect(x + bw * 0.5 - 1, grund - hoehe - 14, 2, 14);
+          }
+
+          // Fenster: nachts hell, tagsueber kaum zu sehen
+          var glanz = (0.06 + stufe * 0.02) + (1 - licht) * 0.35 * vorne;
+          ctx.fillStyle = 'rgba(240,180,41,' + Math.min(0.6, glanz).toFixed(3) + ')';
+          for (var fy = grund - hoehe + 9; fy < grund - 9; fy += 13) {
+            for (var fx = x + 9; fx < x + bw - 11; fx += 11) {
+              if (rng() < 0.42) continue;
+              ctx.fillRect(fx, fy, 4, 6);
+            }
+          }
+          x += bw + 3;
         }
       }
     }
@@ -1150,8 +1743,9 @@
     id: 'biztycoon',
     name: 'Wirtschafts-Tycoon',
     category: 'tycoon',
-    desc: 'Vom Aushilfsjob zum Imperium — Firmen, Börse, Immobilien, Steuern',
-    tags: ['wirtschaft', 'geld', 'aktien', 'immobilien', 'aufbau', 'tippen', 'business'],
+    desc: 'Vom Aushilfsjob zum Imperium — elf Branchen, Lieferketten, Börse, Bank und Finanzamt',
+    tags: ['wirtschaft', 'geld', 'aktien', 'immobilien', 'aufbau', 'tippen', 'business',
+      'branchen', 'konjunktur', 'kredit'],
     heavy: false,
     scoreLabel: function (bests, stats) {
       return stats && stats.rang ? String(stats.rang) : null;
