@@ -31,6 +31,8 @@
       kaufMenge: 1,          // 1 | 10 | 100 | 'max'
       brancheReiter: 'alle', // Reiter in der Firmenschublade
       ansehenReiter: 'wohnen',
+      statsReiter: 'zahlen',
+      bericht: null,         // was in der Abwesenheit passiert ist
       pop: [],               // aufsteigende +Betraege am Schreibtisch
       puls: 0,
       t: 0,
@@ -111,6 +113,13 @@
 
     /* ---------------------------------------------------------- Leiste unten */
 
+    /* Roter Punkt an einem Knopf: hier wartet etwas, das ablaeuft. */
+    function punkt(knopf, an) {
+      var da = knopf.querySelector('.dotmark');
+      if (an && !da) knopf.appendChild(UI.el('div.dotmark'));
+      else if (!an && da) UI.remove(da);
+    }
+
     function dockBtn(icon, label, onClick) {
       var b = UI.el('button.dockbtn', {
         on: { click: function () { host.sfx('click'); onClick(b); } },
@@ -119,7 +128,7 @@
       return b;
     }
 
-    dockBtn('🏢', 'Firmen', function () { openFirmen(); });
+    var bFirmen = dockBtn('🏢', 'Firmen', function () { openFirmen(); });
     dockBtn('🧭', 'Branchen', function () { openBranchen(); });
     dockBtn('📈', 'Börse', function () { openBoerse(); });
     dockBtn('🏘', 'Immobilien', function () { openImmobilien(); });
@@ -142,6 +151,24 @@
 
     var autosaveT = setInterval(function () { save(st.slot, true); }, 20000);
     host.onDestroy(function () { clearInterval(autosaveT); });
+
+    var wegSeit = 0;
+    function sichtwechsel() {
+      if (document.hidden) { wegSeit = Date.now(); return; }
+      if (!wegSeit || !st.s) return;
+      var weg = (Date.now() - wegSeit) / 1000;
+      wegSeit = 0;
+      var b = S.nachholen(st.s, weg);
+      if (!b) return;
+      st.bericht = b;
+      shownAlerts = st.s.meldungen.length;
+      syncBar();
+      zeigeBericht();
+    }
+    document.addEventListener('visibilitychange', sichtwechsel);
+    host.onDestroy(function () {
+      document.removeEventListener('visibilitychange', sichtwechsel);
+    });
 
     /* ---------------------------------------------------------- Spielstand */
 
@@ -184,6 +211,11 @@
       st.s = s;
       st.slot = n;
       store.set('slot', n);
+      /* Was in der Zwischenzeit passiert ist. Im Selbsttest bleibt das
+         aus - dort soll die Uhr des Rechners nichts entscheiden. */
+      if (s.zuletzt && !(SG.selftest && SG.selftest.active)) {
+        st.bericht = S.nachholen(s, (Date.now() - s.zuletzt) / 1000);
+      }
       syncSpeeds();
       return true;
     }
@@ -315,6 +347,7 @@
       if (fehler) { host.sfx('error'); UI.toast(fehler, 'bad', 2200); return false; }
       host.sfx('cash');
       host.buzz(10);
+      S.zielePruefen(st.s);
       syncBar();
       if (self && self.rebuild) self.rebuild();
       return true;
@@ -336,6 +369,98 @@
       if ((s.firmen[D.FIRMEN[i].id] || 0) > 0) return true;
       if (i === 0) return true;
       return Math.max(s.verdientGesamt, s.geld) >= D.FIRMEN[i].kosten * 0.4;
+    }
+
+    /* ---------------------------------------------------------- Angebote */
+
+    /* Gelegenheiten stehen ganz oben in der Firmenliste. Sie laufen ab,
+       also muessen sie da sein, wo man ohnehin hinschaut. */
+    function angebotKarte(a, self) {
+      var s = st.s;
+      var machbar = s.geld >= a.preis;
+      var karte = UI.el('div.biz-angebot');
+      karte.appendChild(UI.el('div.biz-kopf', null, [
+        UI.el('div.ic', { text: a.icon || '🤝' }),
+        UI.el('div.nm', null, [
+          UI.el('div.t', null, [
+            a.titel,
+            UI.el('span.biz-frist', {
+              text: 'noch ' + a.restTage + ' ' + U.plural(a.restTage, 'Tag', 'Tage'),
+            }),
+          ]),
+          UI.el('div.s', { text: a.text }),
+        ]),
+      ]));
+      karte.appendChild(UI.el('div.biz-zahlen', null, [
+        UI.el('div.gross', { text: a.was }),
+      ]));
+      karte.appendChild(UI.el('div.biz-mods', null, [
+        UI.el('div.biz-mod.up', { text: U.num(a.rabatt * 100, 0) + ' % unter Preis' }),
+        UI.el('div.biz-mod', { text: 'sonst ' + U.euro(a.voll, true) }),
+      ]));
+      var knopf = UI.btn('Zuschlagen · ' + U.euro(a.preis, true), function () {
+        handeln(function () { return S.angebotAnnehmen(s, a.nr); }, self);
+      }, 'sm wide' + (machbar ? ' primary' : ' ghost'));
+      if (!machbar) knopf.disabled = true;
+      knopf.style.marginTop = '9px';
+      karte.appendChild(knopf);
+      return karte;
+    }
+
+    /* Leitung eines Betriebs. Der Kasten sagt nicht nur, was sie kostet,
+       sondern ob sie sich bei der heutigen Lage ueberhaupt rechnet -
+       genau das ist die Entscheidung. */
+    function leitungBlock(def, lage, self) {
+      var s = st.s;
+      var n = s.leitung[def.id] || 0;
+      var jetzt = D.LEITUNG[n - 1];
+      var naechste = D.LEITUNG[n];
+      var block = UI.el('div.biz-leitung');
+
+      var kopf = UI.el('div.zeile', null, [
+        UI.el('span', { text: jetzt ? jetzt.icon + ' ' + jetzt.name : '👤 Keine Leitung' }),
+        UI.el('b', {
+          text: jetzt ? '− ' + U.euro(S.leitungLohn(s, def.id), true) + ' / Tag' : '—',
+          style: { color: jetzt ? 'var(--red)' : 'var(--dim)' },
+        }),
+      ]);
+      block.appendChild(kopf);
+
+      if (!naechste) {
+        block.appendChild(UI.el('div.hinweis', { text: 'Über dem Vorstand sitzt niemand mehr.' }));
+        return block;
+      }
+
+      /* Rechnet sich die naechste Stufe? Der Lohn haengt am Grundertrag,
+         der Gewinn am tatsaechlichen - in einer Flaute kippt das. */
+      var l = lage[def.branche] || { faktor: 1 };
+      var wirkung = l.faktor * S.lieferBonus(s, def) * S.faktor(s, 'firmen');
+      var grund = S.firmenGrund(s, def.id) * D.SEK_PRO_TAG;
+      var plus = grund * wirkung * (naechste.ertrag - (jetzt ? jetzt.ertrag : 1));
+      var mehrLohn = S.leitungLohn(s, def.id, n + 1) - S.leitungLohn(s, def.id, n);
+      var netto = plus - mehrLohn;
+      var preis = S.leitungAntritt(s, def.id);
+
+      block.appendChild(UI.el('div.zeile', null, [
+        UI.el('span', { text: naechste.icon + ' ' + naechste.name + ' brächte' }),
+        UI.el('b', {
+          text: (netto >= 0 ? '+' : '−') + U.euro(Math.abs(netto), true) + ' / Tag',
+          style: { color: netto >= 0 ? 'var(--green)' : 'var(--red)' },
+        }),
+      ]));
+
+      var knopf = UI.btn(naechste.name + ' einstellen · ' + U.euro(preis, true), function () {
+        handeln(function () { return S.leitungEinstellen(s, def.id); }, self);
+      }, 'sm wide' + (s.geld >= preis && netto > 0 ? ' primary' : ' ghost'));
+      if (s.geld < preis) knopf.disabled = true;
+      block.appendChild(knopf);
+
+      if (jetzt) {
+        block.appendChild(UI.btn('Entlassen', function () {
+          handeln(function () { return S.leitungEntlassen(s, def.id); }, self);
+        }, 'sm wide ghost'));
+      }
+      return block;
     }
 
     function openFirmen() {
@@ -371,6 +496,10 @@
       });
       body.appendChild(mengen);
 
+      if (st.brancheReiter === 'alle') {
+        s.angebote.forEach(function (a) { body.appendChild(angebotKarte(a, self)); });
+      }
+
       var gezeigt = 0;
       for (i = 0; i < D.FIRMEN.length; i++) {
         var def = D.FIRMEN[i];
@@ -379,7 +508,7 @@
         body.appendChild(firmenKarte(def, lage, self));
         gezeigt++;
       }
-      if (!gezeigt) {
+      if (!gezeigt && !s.angebote.length) {
         body.appendChild(UI.empty('🏢', 'Nichts in Sicht',
           'In dieser Branche ist noch nichts zu haben.'));
       }
@@ -480,6 +609,7 @@
           ab.style.marginTop = '7px';
           karte.appendChild(ab);
         }
+        karte.appendChild(leitungBlock(def, lage, self));
       }
 
       return karte;
@@ -695,11 +825,10 @@
           + 'Gewinne beim Verkauf zählen zum steuerpflichtigen Gewinn.',
       }));
       body.appendChild(UI.el('div.kv', null, [
-        UI.el('div.kv-row', null, [
-          UI.el('div.k', { text: 'Depotwert' }),
-          UI.el('div.v', { text: U.euro(S.depotwert(s), true) }),
-        ]),
+        zeileKV('Depotwert', U.euro(S.depotwert(s), true)),
+        zeileKV('Offene Aufträge', s.auftraege.length + ' von ' + D.AUFTRAG_MAX),
       ]));
+      auftragsBuch(body, self);
 
       s.aktien.forEach(function (a) {
         var def = D.aktie(a.id);
@@ -715,6 +844,9 @@
         }, 'sm primary');
         var verkBtn = UI.btn('Verkaufen', function () {
           mengeFragen('Wie viele ' + def.kuerzel + '?', a, false, self);
+        }, 'sm ghost');
+        var limitBtn = UI.btn('⏳ Limit', function () {
+          auftragFragen(a, self);
         }, 'sm ghost');
         if (s.geld < a.kurs) kaufBtn.disabled = true;
         if (!a.stueck) verkBtn.disabled = true;
@@ -741,7 +873,150 @@
               + ' · <span style="color:' + (gewinn >= 0 ? 'var(--green)' : 'var(--red)') + '">'
               + U.eurSigned(gewinn) + '</span>',
           }) : null,
-          UI.el('div.row', { style: { gap: '6px', marginTop: '8px' } }, [kaufBtn, verkBtn]),
+          UI.el('div.row', { style: { gap: '6px', marginTop: '8px' } }, [kaufBtn, verkBtn, limitBtn]),
+        ]));
+      });
+    }
+
+    /* ------------------------------------------------- Boersenauftraege */
+
+    function zahlFeld(wert, schritt) {
+      return UI.el('input', {
+        type: 'number', value: String(wert), step: String(schritt || 1), min: '0',
+        style: {
+          width: '100%', height: '46px', background: '#0b0e15',
+          border: '1px solid var(--line)', borderRadius: '10px',
+          color: 'var(--text)', padding: '0 12px', outline: 'none', fontSize: '17px',
+        },
+      });
+    }
+
+    /* Ein Limit-Auftrag wartet auf seinen Kurs - auch wenn niemand
+       zusieht. Deshalb steht hier nur, worauf gewartet wird.
+
+       Die Zahlenfelder bekommen Punkt statt Komma: ein input[number]
+       verwirft eine deutsche Zahl stillschweigend und steht dann leer da. */
+    function auftragFragen(a, self) {
+      var s = st.s;
+      var def = D.aktie(a.id);
+      var art = a.stueck ? 'verkauf' : 'kauf';
+
+      var kursFeld = zahlFeld('', 0.01);
+      var stueckFeld = zahlFeld('1');
+      var erklaerung = UI.el('p.small.muted');
+      var kaufKnopf, verkKnopf;
+
+      function setzeKurs(f) { kursFeld.value = (a.kurs * f).toFixed(2); }
+      function hoechstens() {
+        var limit = Number(kursFeld.value) || a.kurs;
+        return art === 'kauf'
+          ? Math.max(1, Math.floor(s.geld / Math.max(0.01, limit)))
+          : Math.max(1, a.stueck);
+      }
+      function setzeStueck(teil) {
+        stueckFeld.value = String(Math.max(1, Math.floor(hoechstens() * teil)));
+      }
+
+      function sync(neu) {
+        kaufKnopf.classList.toggle('primary', art === 'kauf');
+        kaufKnopf.classList.toggle('ghost', art !== 'kauf');
+        verkKnopf.classList.toggle('primary', art === 'verkauf');
+        verkKnopf.classList.toggle('ghost', art !== 'verkauf');
+        erklaerung.textContent = art === 'kauf'
+          ? 'Gekauft wird, sobald der Kurs auf dieses Limit oder darunter fällt.'
+          : 'Verkauft wird, sobald der Kurs dieses Limit erreicht oder übersteigt.';
+        if (neu) {
+          setzeKurs(art === 'kauf' ? 0.9 : 1.1);
+          setzeStueck(0.25);
+        }
+      }
+
+      kaufKnopf = UI.btn('Kauflimit', function () { art = 'kauf'; sync(true); }, 'sm');
+      verkKnopf = UI.btn('Verkaufslimit', function () { art = 'verkauf'; sync(true); }, 'sm');
+      sync(true);
+
+      function schnell(beschriftung, fn) {
+        return UI.btn(beschriftung, fn, 'sm ghost');
+      }
+
+      var body = UI.el('div', null, [
+        UI.el('p.small.muted', {
+          text: def.name + ' steht gerade bei ' + U.euro(a.kurs)
+            + ' · im Depot: ' + U.num(a.stueck) + ' Stück',
+        }),
+        UI.el('div.row', { style: { gap: '6px', marginBottom: '14px' } }, [kaufKnopf, verkKnopf]),
+
+        UI.el('div.small.muted', { text: 'Kurs, auf den gewartet wird' }),
+        kursFeld,
+        UI.el('div.row.wrap', { style: { gap: '6px', margin: '8px 0 14px' } }, [
+          schnell('−20 %', function () { setzeKurs(0.8); }),
+          schnell('−10 %', function () { setzeKurs(0.9); }),
+          schnell('Kurs', function () { setzeKurs(1); }),
+          schnell('+10 %', function () { setzeKurs(1.1); }),
+          schnell('+20 %', function () { setzeKurs(1.2); }),
+        ]),
+
+        UI.el('div.small.muted', { text: 'Stück' }),
+        stueckFeld,
+        UI.el('div.row.wrap', { style: { gap: '6px', margin: '8px 0 4px' } }, [
+          schnell('10', function () { stueckFeld.value = '10'; }),
+          schnell('Viertel', function () { setzeStueck(0.25); }),
+          schnell('Hälfte', function () { setzeStueck(0.5); }),
+          schnell('Alles', function () { setzeStueck(1); }),
+        ]),
+        erklaerung,
+      ]);
+
+      host.modal({
+        title: 'Auftrag für ' + def.kuerzel, body: body,
+        actions: [
+          { label: 'Abbrechen', cls: 'ghost' },
+          {
+            label: 'Ins Buch legen', cls: 'primary',
+            onClick: function () {
+              var fehler = S.auftragStellen(s, a.id, art,
+                Number(kursFeld.value), Number(stueckFeld.value));
+              if (fehler) { host.sfx('error'); UI.toast(fehler, 'bad'); return; }
+              host.sfx('click');
+              UI.toast('Der Auftrag liegt im Buch.', 'good');
+              if (self && self.rebuild) self.rebuild();
+            },
+          },
+        ],
+      });
+    }
+
+    function auftragsBuch(body, self) {
+      var s = st.s;
+      if (!s.auftraege.length) return;
+      body.appendChild(UI.el('div.sec-head', null, [
+        UI.el('h2', { text: 'Offene Aufträge' }),
+      ]));
+      s.auftraege.forEach(function (auf) {
+        var def = D.aktie(auf.aktie);
+        var kurs = 0;
+        for (var i = 0; i < s.aktien.length; i++) if (s.aktien[i].id === auf.aktie) kurs = s.aktien[i].kurs;
+        var weg = auf.art === 'kauf' ? (kurs - auf.kurs) / auf.kurs : (auf.kurs - kurs) / auf.kurs;
+        body.appendChild(UI.el('div.item', null, [
+          UI.el('div.thumb', { text: auf.art === 'kauf' ? '📥' : '📤' }),
+          UI.el('div.main', null, [
+            UI.el('div.t', {
+              text: (auf.art === 'kauf' ? 'Kaufen' : 'Verkaufen') + ' · '
+                + U.num(auf.stueck) + ' ' + (def ? def.kuerzel : auf.aktie),
+            }),
+            UI.el('div.d', {
+              html: 'Limit ' + U.euro(auf.kurs) + ' · noch ' + U.num(weg * 100, 1)
+                + ' % entfernt · läuft ' + auf.restTage + ' '
+                + U.plural(auf.restTage, 'Tag', 'Tage'),
+            }),
+          ]),
+          UI.el('div.side', null, [
+            UI.btn('Streichen', function () {
+              S.auftragLoeschen(s, auf.nr);
+              host.sfx('click');
+              if (self && self.rebuild) self.rebuild();
+            }, 'sm ghost'),
+          ]),
         ]));
       });
     }
@@ -1018,97 +1293,196 @@
     /* ---------------------------------------------------------- Statistik */
 
     function openStats() {
-      drawer('Statistik', function (body) {
-        var s = st.s;
-        var rang = S.rang(s);
-        var i;
-        var naechster = null;
-        for (i = 0; i < D.RAENGE.length; i++) {
-          if (D.RAENGE[i].ab > S.vermoegen(s) || D.RAENGE[i].ansehen > S.ansehen(s)) {
-            naechster = D.RAENGE[i]; break;
-          }
-        }
+      var api = drawer('Statistik', function (body, self) { statsInhalt(body, self); });
+      nachbauen(api, function (body) { statsInhalt(body, api); });
+    }
 
-        /* Vermoegenskurve. Ein Punkt je Spieltag, hoechstens die letzten
-           sechzig - mehr sagt auf dem kleinen Bild nichts mehr aus. */
-        if (s.verlauf && s.verlauf.length > 2) {
-          var werte = s.verlauf.slice(-60).map(function (p) { return p.v; });
-          body.appendChild(UI.el('div.small.muted', { text: 'Vermögen der letzten '
-            + Math.min(60, s.verlauf.length) + ' Tage' }));
-          body.appendChild(UI.chart(werte, { height: 96, color: '#3ddc84', fill: 'rgba(61,220,132,.28)' }));
-        }
+    function statsInhalt(body, self) {
+      var reiter = st.statsReiter || 'zahlen';
+      body.appendChild(UI.tabs([
+        { id: 'zahlen', label: '📊 Zahlen' },
+        { id: 'ziele', label: '🎯 Ziele' },
+        { id: 'zeit', label: '🕑 Zeitleiste' },
+      ], function (id) { st.statsReiter = id; self.rebuild(); }, reiter));
 
-        body.appendChild(UI.el('div.kv', null, [
-          zeileKV('Rang', rang.name),
-          zeileKV('Vermögen', U.euro(S.vermoegen(s), true)),
-          zeileKV('Konto', U.euro(s.geld, true)),
-          zeileKV('Firmenwert', U.euro(S.firmenwert(s), true)),
-          zeileKV('Depot', U.euro(S.depotwert(s), true)),
-          zeileKV('Immobilien', U.euro(S.immobilienwert(s), true)),
-          (s.schuld > 0 ? zeileKV('Schulden', '− ' + U.euro(s.schuld, true)) : null),
-          zeileKV('Ansehen', String(S.ansehen(s))),
-          zeileKV('Insgesamt verdient', U.euro(s.verdientGesamt, true)),
-          zeileKV('Tipps am Schreibtisch', U.num(s.tipps)),
-          zeileKV('Spieltage', U.num(s.tag)),
+      if (reiter === 'ziele') zieleInhalt(body);
+      else if (reiter === 'zeit') zeitleisteInhalt(body);
+      else zahlenInhalt(body);
+    }
+
+    function zahlenInhalt(body) {
+      var s = st.s;
+      var i;
+      var naechster = null;
+      for (i = 0; i < D.RAENGE.length; i++) {
+        if (D.RAENGE[i].ab > S.vermoegen(s) || D.RAENGE[i].ansehen > S.ansehen(s)) {
+          naechster = D.RAENGE[i]; break;
+        }
+      }
+
+      /* Vermoegenskurve. Ein Punkt je Spieltag, hoechstens die letzten
+         sechzig - mehr sagt auf dem kleinen Bild nichts mehr aus. */
+      if (s.verlauf && s.verlauf.length > 2) {
+        var werte = s.verlauf.slice(-60).map(function (p) { return p.v; });
+        body.appendChild(UI.el('div.small.muted', { text: 'Vermögen der letzten '
+          + Math.min(60, s.verlauf.length) + ' Tage' }));
+        body.appendChild(UI.chart(werte, { height: 96, color: '#3ddc84', fill: 'rgba(61,220,132,.28)' }));
+      }
+
+      body.appendChild(UI.el('div.kv', null, [
+        zeileKV('Rang', S.rang(s).name),
+        zeileKV('Vermögen', U.euro(S.vermoegen(s), true)),
+        zeileKV('Konto', U.euro(s.geld, true)),
+        zeileKV('Firmenwert', U.euro(S.firmenwert(s), true)),
+        zeileKV('Depot', U.euro(S.depotwert(s), true)),
+        zeileKV('Immobilien', U.euro(S.immobilienwert(s), true)),
+        (s.schuld > 0 ? zeileKV('Schulden', '− ' + U.euro(s.schuld, true)) : null),
+        zeileKV('Ansehen', String(S.ansehen(s))),
+        zeileKV('Insgesamt verdient', U.euro(s.verdientGesamt, true)),
+        zeileKV('Tipps am Schreibtisch', U.num(s.tipps)),
+        zeileKV('Spieltage', U.num(s.tag)),
+      ]));
+
+      if (naechster) {
+        body.appendChild(UI.el('div.notice', {
+          style: { margin: '10px 0' },
+          html: '<b>Nächster Rang: ' + naechster.name + '</b><br>' + fehltText(naechster),
+        }));
+      }
+
+      /* Welche Branche traegt das Geschaeft? Ein Balken sagt das
+         schneller als zehn Zeilen Zahlen. */
+      var summe = 0, teile = [];
+      for (i = 0; i < D.BRANCHEN.length; i++) {
+        var br = D.BRANCHEN[i];
+        var wert = (s.stat.branchen && s.stat.branchen[br.id]) || 0;
+        if (wert > 0) { teile.push({ br: br, wert: wert }); summe += wert; }
+      }
+      if (summe > 0) {
+        teile.sort(function (a, b) { return b.wert - a.wert; });
+        body.appendChild(UI.el('div.sec-head', null, [
+          UI.el('h2', { text: 'Woher der Firmenertrag kam' }),
         ]));
-
-        if (naechster) {
-          body.appendChild(UI.el('div.notice', {
-            style: { margin: '10px 0' },
-            html: '<b>Nächster Rang: ' + naechster.name + '</b><br>' + fehltText(naechster),
+        var balken = UI.el('div.biz-anteile');
+        var legende = UI.el('div.biz-legende');
+        teile.forEach(function (t) {
+          balken.appendChild(UI.el('i', {
+            style: { width: (t.wert / summe * 100) + '%', background: t.br.farbe },
           }));
-        }
-
-        /* Welche Branche traegt das Geschaeft? Ein Balken sagt das
-           schneller als zehn Zeilen Zahlen. */
-        var summe = 0, teile = [];
-        for (i = 0; i < D.BRANCHEN.length; i++) {
-          var br = D.BRANCHEN[i];
-          var wert = (s.stat.branchen && s.stat.branchen[br.id]) || 0;
-          if (wert > 0) { teile.push({ br: br, wert: wert }); summe += wert; }
-        }
-        if (summe > 0) {
-          teile.sort(function (a, b) { return b.wert - a.wert; });
-          body.appendChild(UI.el('div.sec-head', null, [
-            UI.el('h2', { text: 'Woher der Firmenertrag kam' }),
+          var punkt = UI.el('i');
+          punkt.style.background = t.br.farbe;
+          legende.appendChild(UI.el('span', null, [
+            punkt, t.br.name + ' ' + anteilText(t.wert / summe),
           ]));
-          var balken = UI.el('div.biz-anteile');
-          var legende = UI.el('div.biz-legende');
-          teile.forEach(function (t) {
-            balken.appendChild(UI.el('i', {
-              style: { width: (t.wert / summe * 100) + '%', background: t.br.farbe },
-            }));
-            var punkt = UI.el('i');
-            punkt.style.background = t.br.farbe;
-            legende.appendChild(UI.el('span', null, [
-              punkt, t.br.name + ' ' + anteilText(t.wert / summe),
-            ]));
-          });
-          body.appendChild(balken);
-          body.appendChild(legende);
-        }
+        });
+        body.appendChild(balken);
+        body.appendChild(legende);
+      }
 
-        body.appendChild(UI.el('div.sec-head', null, [UI.el('h2', { text: 'Woher das Geld kam' })]));
-        body.appendChild(UI.el('div.kv', null, [
-          zeileKV('Firmen', U.euro(s.stat.firmenErtrag, true)),
-          zeileKV('Mieten', U.euro(s.stat.mieten, true)),
-          zeileKV('Dividenden', U.euro(s.stat.dividenden, true)),
-          zeileKV('Steuern gezahlt', U.euro(s.stat.steuern, true)),
-          zeileKV('Zinsen gezahlt', U.euro(s.stat.zinsen || 0, true)),
-          zeileKV('Werbung', U.euro(s.stat.werbung || 0, true)),
-          zeileKV('Für Luxus ausgegeben', U.euro(s.stat.luxusAusgaben, true)),
+      body.appendChild(UI.el('div.sec-head', null, [UI.el('h2', { text: 'Woher das Geld kam' })]));
+      body.appendChild(UI.el('div.kv', null, [
+        zeileKV('Firmen', U.euro(s.stat.firmenErtrag, true)),
+        zeileKV('Mieten', U.euro(s.stat.mieten, true)),
+        zeileKV('Dividenden', U.euro(s.stat.dividenden, true)),
+        zeileKV('Löhne gezahlt', U.euro(s.stat.loehne || 0, true)),
+        zeileKV('Steuern gezahlt', U.euro(s.stat.steuern, true)),
+        zeileKV('Zinsen gezahlt', U.euro(s.stat.zinsen || 0, true)),
+        zeileKV('Werbung', U.euro(s.stat.werbung || 0, true)),
+        zeileKV('Für Luxus ausgegeben', U.euro(s.stat.luxusAusgaben, true)),
+      ]));
+    }
+
+    function zieleInhalt(body) {
+      var s = st.s;
+      var geschafft = D.ZIELE.length - S.zieleOffen(s);
+
+      body.appendChild(UI.el('p.small.muted', {
+        text: 'Kleine Aufgaben mit Prämie. Sie zahlen sich selbst aus, sobald '
+          + 'sie erfüllt sind — du musst nichts abholen.',
+      }));
+      body.appendChild(UI.el('div.kv', null, [
+        zeileKV('Erreicht', geschafft + ' von ' + D.ZIELE.length),
+      ]));
+      body.appendChild(UI.el('div.biz-fort', { style: { marginBottom: '14px' } }, [
+        UI.el('i', { style: { width: (geschafft / D.ZIELE.length * 100) + '%' } }),
+      ]));
+
+      D.ZIELE.forEach(function (z) {
+        var fertig = !!s.ziele[z.id];
+        body.appendChild(UI.el('div.item' + (fertig ? '.sel' : ''), null, [
+          UI.el('div.thumb', { text: fertig ? '✓' : '🎯' }),
+          UI.el('div.main', null, [
+            UI.el('div.t', { text: z.name }),
+            UI.el('div.d', { text: z.text }),
+          ]),
+          UI.el('div.side', null, [
+            UI.el('div.p', { text: U.euro(z.lohn, true) }),
+            UI.el('div.s', {
+              text: fertig ? 'erhalten' : 'offen',
+              style: fertig ? { color: 'var(--green)' } : null,
+            }),
+          ]),
         ]));
+      });
+    }
 
-        body.appendChild(UI.el('div.sec-head', null, [UI.el('h2', { text: 'Zeitleiste' })]));
+    function zeitleisteInhalt(body) {
+      var s = st.s;
+      if (!s.meldungen.length) {
+        body.appendChild(UI.empty('🕑', 'Noch nichts passiert', 'Der erste Tag läuft gerade.'));
+        return;
+      }
+      var log = UI.el('div');
+      s.meldungen.slice().reverse().forEach(function (m) {
+        log.appendChild(UI.el('div.logline' + (m.art === 'gut' ? '.ok'
+          : m.art === 'schlecht' ? '.no' : ''), null, [
+          UI.el('div.tm', { text: 'T' + m.tag }),
+          UI.el('div', { text: m.icon + ' ' + m.text }),
+        ]));
+      });
+      body.appendChild(log);
+    }
+
+    /* ---------------------------------------------------------- Abwesenheit */
+
+    /* Was gelaufen ist, waehrend die Seite zu war. Wird einmal beim
+       Laden gezeigt und danach vergessen. */
+    function zeigeBericht() {
+      var b = st.bericht;
+      st.bericht = null;
+      if (!b || !st.s) return;
+
+      var body = UI.el('div', null, [
+        UI.el('p.small.muted', {
+          text: 'Du warst ' + U.dur(b.echtSek / 3600) + ' weg. Der Betrieb lief mit '
+            + 'halber Kraft weiter'
+            + (b.gedeckelt ? ' — höchstens ' + D.OFFLINE_MAX_TAGE + ' Spieltage lang' : '')
+            + '.',
+        }),
+        UI.el('div.kv', null, [
+          zeileKV('Vergangene Spieltage', U.num(b.tage)),
+          zeileKV('Verdient', U.euro(b.verdient, true)),
+          zeileKV('Auf dem Konto', U.eurSigned(b.kasse)),
+          b.steuer > 0 ? zeileKV('Steuern offen', U.euro(b.steuer, true)) : null,
+        ]),
+      ]);
+
+      var wichtig = b.meldungen.filter(function (m) { return m.art !== 'neutral'; });
+      if (wichtig.length) {
+        body.appendChild(UI.el('div.sec-head', null, [UI.el('h2', { text: 'Das ist passiert' })]));
         var log = UI.el('div');
-        s.meldungen.slice().reverse().slice(0, 25).forEach(function (m) {
-          log.appendChild(UI.el('div.logline' + (m.art === 'gut' ? '.ok'
-            : m.art === 'schlecht' ? '.no' : ''), null, [
+        wichtig.slice(-8).reverse().forEach(function (m) {
+          log.appendChild(UI.el('div.logline' + (m.art === 'gut' ? '.ok' : '.no'), null, [
             UI.el('div.tm', { text: 'T' + m.tag }),
             UI.el('div', { text: m.icon + ' ' + m.text }),
           ]));
         });
         body.appendChild(log);
+      }
+
+      host.modal({
+        parent: root, title: 'Während du weg warst', body: body,
+        actions: [{ label: 'Weitermachen', cls: 'primary' }],
       });
     }
 
@@ -1280,7 +1654,33 @@
             body: [
               'Aktien schwanken laufend, manche zahlen täglich Dividende. '
                 + 'Immobilien zahlen jeden Tag Miete, abzüglich Unterhalt.',
+              { ic: '⏳', text: 'Ein <b>Limit-Auftrag</b> wartet auf seinen Kurs — auch '
+                + 'während du gar nicht zusiehst.' },
               'Beides trägt dich durch eine Flaute, in der die Firmen einbrechen.',
+            ],
+          },
+          {
+            kicker: 'Zwischendurch', title: 'Leute, Gelegenheiten, Ziele',
+            art: function (c, w, h) {
+              var zeichen = ['👔', '🤝', '🎯'];
+              for (var i = 0; i < 3; i++) {
+                var x = w * (0.22 + i * 0.28), y = h * 0.5;
+                G.fillRound(c, x - w * 0.1, y - h * 0.17, w * 0.2, h * 0.34, 10, '#191f2e');
+                G.text(c, zeichen[i], x, y, {
+                  font: G.font(Math.round(h * 0.2), 400), align: 'center', baseline: 'middle',
+                });
+              }
+            },
+            body: [
+              { ic: '👔', text: 'Jeder Betrieb kann eine <b>Leitung</b> bekommen. '
+                + 'Sie bringt mehr Ertrag und kostet jeden Tag Lohn — der richtet sich '
+                + 'nach der Größe des Betriebs, nicht nach dem Umsatz. In einer Flaute '
+                + 'kann sie mehr kosten, als sie einbringt.' },
+              { ic: '🤝', text: 'Ab und zu liegt oben in der Firmenliste ein '
+                + '<b>Angebot</b>: ein Betrieb unter Preis, ein halber Ausbau, eine '
+                + 'freie Werbefläche. Es gilt nur wenige Tage.' },
+              { ic: '🎯', text: 'Unter Statistik stehen <b>Ziele</b> mit Prämie. Sie '
+                + 'zahlen sich von allein aus, sobald sie erfüllt sind.' },
             ],
           },
           {
@@ -1339,6 +1739,7 @@
       rSteuer.set(s.steuerFaellig > 0 ? U.euro(s.steuerFaellig, true) : '—');
       rSteuer.tint(s.steuerFaellig > 0 ? 'var(--red)' : '');
       bSteuer.classList.toggle('warn', s.steuerFaellig > 0);
+      punkt(bFirmen, s.angebote.length > 0);
 
       var schuld = s.schuld || 0;
       var eng = schuld > 0 && schuld > S.sicherheiten(s) * D.KREDIT.notgrenze * 0.75;
@@ -1670,6 +2071,10 @@
     if (!load(st.slot)) {
       st.s = S.create((Date.now() ^ (Math.random() * 1e9)) >>> 0);
     }
+    /* Alte Meldungen sind Geschichte, keine Neuigkeit - sie duerfen
+       beim Laden nicht als Einblendungen hereinrauschen. */
+    shownAlerts = st.s.meldungen.length;
+    host.after(zeigeBericht, 80);
     showTutorial(false);
     syncSpeeds();
     syncBar();
@@ -1743,7 +2148,7 @@
     id: 'biztycoon',
     name: 'Wirtschafts-Tycoon',
     category: 'tycoon',
-    desc: 'Vom Aushilfsjob zum Imperium — elf Branchen, Lieferketten, Börse, Bank und Finanzamt',
+    desc: 'Vom Aushilfsjob zum Imperium — elf Branchen, Lieferketten, Personal, Börse, Bank und Finanzamt',
     tags: ['wirtschaft', 'geld', 'aktien', 'immobilien', 'aufbau', 'tippen', 'business',
       'branchen', 'konjunktur', 'kredit'],
     heavy: false,

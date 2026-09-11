@@ -29,6 +29,7 @@
       karriere: 0,          // Index in D.KARRIERE
       firmen: {},           // id -> Stufe
       ausbau: {},           // id -> Anzahl gekaufter Ausbaustufen
+      leitung: {},          // id -> Stufe in D.LEITUNG (0 = niemand)
       markt: {},            // Branche -> Anzahl Werbekampagnen
       aktien: [],           // { id, kurs, verlauf[], stueck, einstand }
       immobilien: {},       // id -> Anzahl
@@ -47,9 +48,16 @@
       meldungen: [],        // Zeitleiste
       naechstesEreignis: 6 + 8,
       verlauf: [],          // je Spieltag ein Punkt fuer die Kurven
+      angebote: [],         // zeitlich begrenzte Gelegenheiten
+      naechstesAngebot: 5,
+      auftraege: [],        // Limit-Auftraege an der Boerse
+      auftragNr: 1,
+      ziele: {},            // Ziel-Id -> true, wenn erreicht
+      zaehler: { auftraege: 0, kredite: 0, steuerPuenktlich: 0 },
+      zuletzt: 0,           // echte Uhrzeit beim Speichern, fuer die Abwesenheit
 
       stat: { firmenErtrag: 0, mieten: 0, dividenden: 0, steuern: 0,
-        luxusAusgaben: 0, zinsen: 0, werbung: 0, branchen: {} },
+        luxusAusgaben: 0, zinsen: 0, werbung: 0, loehne: 0, branchen: {} },
       erreicht: {},         // Rangname -> true
     };
 
@@ -61,7 +69,9 @@
         verlauf: [kurs, kurs, kurs, kurs, kurs, kurs, kurs, kurs],
       });
     });
-    D.FIRMEN.forEach(function (f) { s.firmen[f.id] = 0; s.ausbau[f.id] = 0; });
+    D.FIRMEN.forEach(function (f) {
+      s.firmen[f.id] = 0; s.ausbau[f.id] = 0; s.leitung[f.id] = 0;
+    });
     D.IMMOBILIEN.forEach(function (i) { s.immobilien[i.id] = 0; });
 
     /* Jede Branche startet an einer anderen Stelle ihrer Konjunkturwelle.
@@ -103,14 +113,41 @@
     return f;
   };
 
-  /* Roher Ertrag einer Firma je Spielsekunde: Stufen, Meilensteine und
-     Ausbau. Branche, Markt und Ereignisse kommen erst danach dazu. */
-  S.firmenErtrag = function (s, id) {
+  /* Grundertrag einer Firma je Spielsekunde: Stufen, Meilensteine und
+     Ausbau - ohne Leitung. Die Loehne haengen genau an dieser Zahl,
+     also an der Groesse des Betriebs, nicht an seinem Tagesumsatz. */
+  S.firmenGrund = function (s, id) {
     var def = D.firma(id);
     var stufe = s.firmen[id] || 0;
     if (!def || !stufe) return 0;
     var meilen = Math.floor(stufe / D.MEILENSTEIN);
     return def.ertrag * stufe * Math.pow(2, meilen) * S.ausbauFaktor(s, id);
+  };
+
+  S.leitungFaktor = function (s, id) {
+    var n = (s.leitung && s.leitung[id]) || 0;
+    var def = D.LEITUNG[n - 1];
+    return def ? def.ertrag : 1;
+  };
+
+  /* Tageslohn der Leitung einer Firma */
+  S.leitungLohn = function (s, id, stufe) {
+    var n = stufe === undefined ? ((s.leitung && s.leitung[id]) || 0) : stufe;
+    var def = D.LEITUNG[n - 1];
+    if (!def) return 0;
+    return S.firmenGrund(s, id) * D.SEK_PRO_TAG * def.lohn;
+  };
+
+  S.loehneGesamt = function (s) {
+    var summe = 0;
+    for (var i = 0; i < D.FIRMEN.length; i++) summe += S.leitungLohn(s, D.FIRMEN[i].id);
+    return summe;
+  };
+
+  /* Roher Ertrag einschliesslich Leitung. Branche, Markt und
+     Ereignisse kommen erst danach dazu. */
+  S.firmenErtrag = function (s, id) {
+    return S.firmenGrund(s, id) * S.leitungFaktor(s, id);
   };
 
   /* Konjunktur einer Branche: zwei ueberlagerte Wellen um die 1 herum.
@@ -417,6 +454,43 @@
     return null;
   };
 
+  /* ---------------------------------------------------------- Personal */
+
+  S.leitungNaechste = function (s, id) {
+    return D.LEITUNG[(s.leitung[id] || 0)] || null;
+  };
+
+  /* Antrittskosten: zwoelf Tagesloehne der neuen Stufe */
+  S.leitungAntritt = function (s, id) {
+    var n = (s.leitung[id] || 0) + 1;
+    if (!D.LEITUNG[n - 1]) return null;
+    return Math.round(S.leitungLohn(s, id, n) * D.LEITUNG_ANTRITT);
+  };
+
+  S.leitungEinstellen = function (s, id) {
+    var def = D.firma(id);
+    if (!def) return 'Unbekannte Firma.';
+    if (!(s.firmen[id] > 0)) return 'Diesen Betrieb gibt es noch nicht.';
+    var n = (s.leitung[id] || 0) + 1;
+    var stufe = D.LEITUNG[n - 1];
+    if (!stufe) return 'Darüber sitzt niemand mehr.';
+    var preis = S.leitungAntritt(s, id);
+    if (s.geld < preis) return 'Dafür reicht das Geld nicht.';
+    s.geld -= preis;
+    s.leitung[id] = n;
+    aendern(s);
+    melden(s, 'gut', stufe.icon, def.name + ': ' + stufe.name + ' eingestellt.');
+    return null;
+  };
+
+  S.leitungEntlassen = function (s, id) {
+    var n = s.leitung[id] || 0;
+    if (!n) return 'Da ist niemand.';
+    s.leitung[id] = n - 1;
+    aendern(s);
+    return null;
+  };
+
   /* ---------------------------------------------------------- Markt */
 
   S.marktPreis = function (s, brancheId) {
@@ -463,6 +537,7 @@
     s.schuld -= betrag;
     if (s.schuld < 1) {
       s.schuld = 0;
+      s.zaehler.kredite = (s.zaehler.kredite || 0) + 1;
       melden(s, 'gut', '🏦', 'Der Kredit ist zurückgezahlt.');
     }
     return null;
@@ -559,9 +634,77 @@
     s.geld -= s.steuerFaellig;
     s.stat.steuern += s.steuerFaellig;
     melden(s, 'neutral', '🧾', U.euro(s.steuerFaellig) + ' Steuern überwiesen.');
+    if (!s.steuerOffenMonate) {
+      s.zaehler.steuerPuenktlich = (s.zaehler.steuerPuenktlich || 0) + 1;
+    }
     s.steuerFaellig = 0;
     s.steuerOffenMonate = 0;
     return null;
+  };
+
+  /* ---------------------------------------------------------- Angebote */
+
+  S.angebot = function (s, nr) {
+    for (var i = 0; i < s.angebote.length; i++) if (s.angebote[i].nr === nr) return s.angebote[i];
+    return null;
+  };
+
+  S.angebotAnnehmen = function (s, nr) {
+    var a = S.angebot(s, nr);
+    if (!a) return 'Das Angebot gibt es nicht mehr.';
+    if (s.geld < a.preis) return 'Dafür reicht das Geld nicht.';
+    var i;
+    if (a.art === 'paket') {
+      var def = D.firma(a.ziel);
+      if (!def) return 'Der Betrieb steht nicht mehr zum Verkauf.';
+      s.geld -= a.preis;
+      s.firmen[a.ziel] = (s.firmen[a.ziel] || 0) + a.menge;
+    } else if (a.art === 'ausbau') {
+      if ((s.ausbau[a.ziel] || 0) !== a.stufe) return 'Der Ausbau passt nicht mehr.';
+      s.geld -= a.preis;
+      s.ausbau[a.ziel] = a.stufe + 1;
+    } else if (a.art === 'kampagne') {
+      s.geld -= a.preis;
+      s.gewinnSeitAbrechnung -= a.preis;
+      s.stat.werbung = (s.stat.werbung || 0) + a.preis;
+      s.markt[a.ziel] = (s.markt[a.ziel] || 0) + 1;
+    } else if (a.art === 'immobilie') {
+      s.geld -= a.preis;
+      s.immobilien[a.ziel] = (s.immobilien[a.ziel] || 0) + 1;
+    } else {
+      return 'Unbekanntes Angebot.';
+    }
+    for (i = 0; i < s.angebote.length; i++) {
+      if (s.angebote[i].nr === nr) { s.angebote.splice(i, 1); break; }
+    }
+    aendern(s);
+    melden(s, 'gut', '🤝', a.titel + ' angenommen: ' + a.was + '.');
+    return null;
+  };
+
+  /* ---------------------------------------------------------- Boersenauftraege */
+
+  S.auftragStellen = function (s, aktieId, art, kurs, stueck) {
+    if (!D.aktie(aktieId)) return 'Unbekannte Aktie.';
+    if (art !== 'kauf' && art !== 'verkauf') return 'Kaufen oder verkaufen?';
+    kurs = Number(kurs); stueck = Math.floor(Number(stueck));
+    if (!(kurs > 0)) return 'Kein gültiger Kurs.';
+    if (!(stueck > 0)) return 'Mindestens ein Stück.';
+    if (s.auftraege.length >= D.AUFTRAG_MAX) {
+      return 'Mehr als ' + D.AUFTRAG_MAX + ' Aufträge nimmt die Bank nicht an.';
+    }
+    s.auftraege.push({
+      nr: s.auftragNr++, aktie: aktieId, art: art,
+      kurs: kurs, stueck: stueck, restTage: D.AUFTRAG_TAGE,
+    });
+    return null;
+  };
+
+  S.auftragLoeschen = function (s, nr) {
+    for (var i = 0; i < s.auftraege.length; i++) {
+      if (s.auftraege[i].nr === nr) { s.auftraege.splice(i, 1); return null; }
+    }
+    return 'Den Auftrag gibt es nicht mehr.';
   };
 
   /* ---------------------------------------------------------- Takt */
@@ -594,8 +737,9 @@
       s.stat.firmenErtrag += ertrag;
     }
 
-    // Kurse bewegen sich fortlaufend
+    // Kurse bewegen sich fortlaufend, danach die wartenden Auftraege
     kurse(s, sek);
+    auftraegePruefen(s);
 
     for (var t = vorherTag; t < nachherTag; t++) tagesWechsel(s);
   };
@@ -648,6 +792,20 @@
       s.stat.dividenden += div;
     }
 
+    /* Loehne. Sie richten sich nach der Groesse der Betriebe, nicht
+       nach dem Umsatz des Tages - deshalb tun sie in einer Flaute weh. */
+    var lohn = S.loehneGesamt(s);
+    if (lohn > 0) {
+      s.gewinnSeitAbrechnung -= lohn;
+      s.stat.loehne = (s.stat.loehne || 0) + lohn;
+      if (s.geld >= lohn) {
+        s.geld -= lohn;
+      } else {
+        s.geld = 0;
+        leitungGehtWeg(s);
+      }
+    }
+
     // Unterhalt der Residenz
     var wohnen = D.RESIDENZEN[s.residenz].unterhalt;
     if (wohnen > 0) {
@@ -679,6 +837,27 @@
       s.naechstesEreignis = 7 + rng.int(10);
     }
 
+    // Angebote ablaufen lassen, danach vielleicht ein neues
+    for (i = s.angebote.length - 1; i >= 0; i--) {
+      if (--s.angebote[i].restTage <= 0) s.angebote.splice(i, 1);
+    }
+    if (--s.naechstesAngebot <= 0) {
+      if (s.angebote.length < D.ANGEBOT_MAX) angebotZiehen(s, rng);
+      s.naechstesAngebot = D.ANGEBOT_ABSTAND[0]
+        + rng.int(D.ANGEBOT_ABSTAND[1] - D.ANGEBOT_ABSTAND[0] + 1);
+    }
+
+    // Auftraege verfallen lassen
+    for (i = s.auftraege.length - 1; i >= 0; i--) {
+      if (--s.auftraege[i].restTage <= 0) {
+        var weg = s.auftraege.splice(i, 1)[0];
+        var adef = D.aktie(weg.aktie);
+        melden(s, 'neutral', '📄', 'Auftrag verfallen: '
+          + (weg.art === 'kauf' ? 'Kauf' : 'Verkauf') + ' ' + U.num(weg.stueck)
+          + ' ' + (adef ? adef.kuerzel : weg.aktie) + ' zu ' + U.euro(weg.kurs) + '.');
+      }
+    }
+
     // Monatsabschluss
     if (s.tag % D.TAGE_PRO_MONAT === 0) monatsWechsel(s);
 
@@ -689,6 +868,8 @@
       e: Math.round(S.ertragGesamt(s) * D.SEK_PRO_TAG + miete + div),
     });
     if (s.verlauf.length > 120) s.verlauf.shift();
+
+    S.zielePruefen(s);
 
     // Rangaufstieg melden
     var r = S.rang(s);
@@ -759,6 +940,183 @@
     if (s.schuld < 1) s.schuld = 0;
   }
 
+  /* Wer die Loehne nicht zahlen kann, verliert seine Leute - eine
+     Stufe je Betrieb, bis es wieder passt. */
+  function leitungGehtWeg(s) {
+    var weg = 0;
+    for (var i = 0; i < D.FIRMEN.length; i++) {
+      var id = D.FIRMEN[i].id;
+      if ((s.leitung[id] || 0) > 0) { s.leitung[id]--; weg++; }
+    }
+    if (!weg) return;
+    aendern(s);
+    melden(s, 'schlecht', '📤', 'Die Löhne waren nicht gedeckt — ' + weg + ' '
+      + U.plural(weg, 'Betrieb steht', 'Betriebe stehen') + ' wieder ohne Leitung da.');
+  }
+
+  /* Wartende Limit-Auftraege. Sie greifen auch, waehrend niemand
+     zusieht - genau dafuer sind sie da. */
+  function auftraegePruefen(s) {
+    for (var i = s.auftraege.length - 1; i >= 0; i--) {
+      var a = s.auftraege[i];
+      var kurs = null;
+      for (var k = 0; k < s.aktien.length; k++) if (s.aktien[k].id === a.aktie) kurs = s.aktien[k];
+      if (!kurs) { s.auftraege.splice(i, 1); continue; }
+      var dran = a.art === 'kauf' ? kurs.kurs <= a.kurs : kurs.kurs >= a.kurs;
+      if (!dran) continue;
+      var fehler = a.art === 'kauf'
+        ? S.aktieKaufen(s, a.aktie, a.stueck)
+        : S.aktieVerkaufen(s, a.aktie, a.stueck);
+      if (fehler) continue;
+      s.auftraege.splice(i, 1);
+      s.zaehler.auftraege = (s.zaehler.auftraege || 0) + 1;
+      var def = D.aktie(a.aktie);
+      melden(s, 'gut', '📑', 'Auftrag ausgeführt: '
+        + (a.art === 'kauf' ? 'gekauft' : 'verkauft') + ' ' + U.num(a.stueck) + ' '
+        + (def ? def.kuerzel : a.aktie) + ' zu ' + U.euro(kurs.kurs) + '.');
+    }
+  }
+
+  /* ---------------------------------------------------------- Angebote */
+
+  /* Ein Angebot passt nur, wenn es etwas betrifft, das der Spieler
+     ueberhaupt gebrauchen kann. Alles andere waere Papier. */
+  function angebotZiehen(s, rng) {
+    var moeglich = [], i, f;
+    for (i = 0; i < D.ANGEBOTE.length; i++) {
+      var art = D.ANGEBOTE[i];
+      var ziele = angebotsZiele(s, art.art);
+      if (ziele.length) moeglich.push({ art: art, ziele: ziele, w: art.gewicht });
+    }
+    if (!moeglich.length) return;
+
+    var wahl = rng.weighted(moeglich);
+    var ziel = rng.pick(wahl.ziele);
+    var art2 = wahl.art;
+    var rabatt = rng.range(art2.rabatt[0], art2.rabatt[1]);
+    var dauer = D.ANGEBOT_DAUER[0]
+      + rng.int(D.ANGEBOT_DAUER[1] - D.ANGEBOT_DAUER[0] + 1);
+    var ang = {
+      nr: s.auftragNr++, art: art2.art, ziel: ziel, restTage: dauer,
+      titel: art2.titel, text: art2.text, rabatt: rabatt,
+    };
+
+    if (art2.art === 'paket') {
+      f = D.firma(ziel);
+      ang.menge = art2.menge[0] + rng.int(art2.menge[1] - art2.menge[0] + 1);
+      ang.voll = D.firmenPreisMenge(f, s.firmen[ziel] || 0, ang.menge);
+      ang.icon = f.icon;
+      ang.was = ang.menge + ' Stufen ' + f.name;
+    } else if (art2.art === 'ausbau') {
+      f = D.firma(ziel);
+      ang.stufe = s.ausbau[ziel] || 0;
+      ang.voll = D.ausbauPreis(f, ang.stufe);
+      ang.icon = f.icon;
+      ang.was = D.ausbauName(f.branche, ang.stufe) + ' für ' + f.name;
+    } else if (art2.art === 'kampagne') {
+      var br = D.branche(ziel);
+      ang.voll = S.marktPreis(s, ziel);
+      ang.icon = '📣';
+      ang.was = 'Werbekampagne ' + br.name;
+    } else {
+      var im = D.immobilie(ziel);
+      ang.voll = im.preis;
+      ang.icon = im.icon;
+      ang.was = im.name;
+    }
+
+    if (!(ang.voll > 0)) return;
+    ang.preis = Math.round(ang.voll * (1 - rabatt));
+    s.angebote.push(ang);
+    melden(s, 'gut', '🤝', ang.titel + ': ' + ang.was + ' für '
+      + U.euro(ang.preis, true) + ' statt ' + U.euro(ang.voll, true)
+      + ' — ' + dauer + ' Tage.');
+  }
+
+  function angebotsZiele(s, art) {
+    var out = [], i, def;
+    if (art === 'paket') {
+      for (i = 0; i < D.FIRMEN.length; i++) {
+        def = D.FIRMEN[i];
+        if ((s.firmen[def.id] || 0) > 0) out.push(def.id);
+      }
+    } else if (art === 'ausbau') {
+      for (i = 0; i < D.FIRMEN.length; i++) {
+        def = D.FIRMEN[i];
+        var n = s.ausbau[def.id] || 0;
+        var stufe = D.AUSBAU[n];
+        if (stufe && (s.firmen[def.id] || 0) >= stufe.abStufe) out.push(def.id);
+      }
+    } else if (art === 'kampagne') {
+      for (i = 0; i < D.BRANCHEN.length; i++) {
+        if (S.branchenMarkt(s, D.BRANCHEN[i].id) > 0) out.push(D.BRANCHEN[i].id);
+      }
+    } else {
+      for (i = 0; i < D.IMMOBILIEN.length; i++) {
+        if (D.IMMOBILIEN[i].preis <= Math.max(s.geld * 3, S.vermoegen(s) * 0.6)) {
+          out.push(D.IMMOBILIEN[i].id);
+        }
+      }
+    }
+    return out;
+  }
+
+  /* ---------------------------------------------------------- Ziele */
+
+  S.zielePruefen = function (s) {
+    for (var i = 0; i < D.ZIELE.length; i++) {
+      var z = D.ZIELE[i];
+      if (s.ziele[z.id]) continue;
+      if (!z.pruef(s, S)) continue;
+      s.ziele[z.id] = true;
+      s.geld += z.lohn;
+      s.verdientGesamt += z.lohn;
+      s.gewinnSeitAbrechnung += z.lohn;
+      melden(s, 'gut', '🎯', 'Ziel erreicht — ' + z.name + ': '
+        + U.euro(z.lohn, true) + '.');
+    }
+  };
+
+  S.zieleOffen = function (s) {
+    var n = 0;
+    for (var i = 0; i < D.ZIELE.length; i++) if (!s.ziele[D.ZIELE[i].id]) n++;
+    return n;
+  };
+
+  /* ---------------------------------------------------------- Abwesenheit */
+
+  /* Was gelaufen ist, waehrend die Seite zu war. Gedeckelt, damit
+     nicht die Laenge der Pause das Spiel entscheidet. */
+  S.nachholen = function (s, realSek) {
+    if (!(realSek > D.OFFLINE_MIN_SEK)) return null;
+    var sek = Math.min(realSek * D.OFFLINE_ANTEIL, D.OFFLINE_MAX_TAGE * D.SEK_PRO_TAG);
+    if (sek < D.SEK_PRO_TAG) return null;
+
+    var vorher = {
+      tag: s.tag, geld: s.geld, verdient: s.verdientGesamt,
+      meldungen: s.meldungen.length,
+    };
+    var tempo = s.tempo, pausiert = s.pausiert;
+    s.tempo = 1; s.pausiert = false;
+    var rest = sek;
+    while (rest > 0) {
+      var d = Math.min(2, rest);
+      S.step(s, d);
+      rest -= d;
+    }
+    s.tempo = tempo; s.pausiert = pausiert;
+
+    return {
+      echtSek: realSek,
+      tage: s.tag - vorher.tag,
+      gedeckelt: realSek * D.OFFLINE_ANTEIL > sek,
+      verdient: s.verdientGesamt - vorher.verdient,
+      kasse: s.geld - vorher.geld,
+      steuer: s.steuerFaellig,
+      meldungen: s.meldungen.slice(vorher.meldungen),
+    };
+  };
+
   function ereignisZiehen(s, rng) {
     var moeglich = [], i;
     for (i = 0; i < D.EREIGNISSE.length; i++) {
@@ -819,7 +1177,8 @@
       var rest = D.STEUER_FRIST - s.steuerOffenMonate;
       melden(s, 'schlecht', '⚠', 'Steuern noch offen — ' + U.euro(zuschlag)
         + ' Säumniszuschlag kommt dazu.'
-        + (rest > 0 ? ' Noch ' + rest + ' Monate bis zur Vollstreckung.' : ''));
+        + (rest > 0 ? ' Noch ' + rest + ' ' + U.plural(rest, 'Monat', 'Monate')
+          + ' bis zur Vollstreckung.' : ''));
       if (s.steuerOffenMonate >= D.STEUER_FRIST) vollstrecken(s);
     } else {
       s.steuerOffenMonate = 0;
@@ -849,6 +1208,9 @@
       geld: s.geld, verdientGesamt: s.verdientGesamt, tipps: s.tipps,
       tempo: s.tempo, pausiert: s.pausiert,
       karriere: s.karriere, firmen: s.firmen, ausbau: s.ausbau,
+      leitung: s.leitung, angebote: s.angebote, naechstesAngebot: s.naechstesAngebot,
+      auftraege: s.auftraege, auftragNr: s.auftragNr,
+      ziele: s.ziele, zaehler: s.zaehler, zuletzt: Date.now(),
       markt: s.markt, immobilien: s.immobilien,
       residenz: s.residenz, luxus: s.luxus, beratung: s.beratung,
       schuld: s.schuld,
@@ -879,6 +1241,7 @@
     s.karriere = raw.karriere || 0;
     if (raw.firmen) for (k in raw.firmen) if (s.firmen[k] !== undefined) s.firmen[k] = raw.firmen[k];
     if (raw.ausbau) for (k in raw.ausbau) if (s.ausbau[k] !== undefined) s.ausbau[k] = raw.ausbau[k];
+    if (raw.leitung) for (k in raw.leitung) if (s.leitung[k] !== undefined) s.leitung[k] = raw.leitung[k];
     if (raw.markt) for (k in raw.markt) if (s.markt[k] !== undefined) s.markt[k] = raw.markt[k];
     if (raw.immobilien) for (k in raw.immobilien) {
       if (s.immobilien[k] !== undefined) s.immobilien[k] = raw.immobilien[k];
@@ -914,6 +1277,13 @@
     }
     if (raw.erreicht) s.erreicht = raw.erreicht;
     if (raw.verlauf) s.verlauf = raw.verlauf;
+    if (raw.angebote) s.angebote = raw.angebote;
+    if (raw.naechstesAngebot) s.naechstesAngebot = raw.naechstesAngebot;
+    if (raw.auftraege) s.auftraege = raw.auftraege;
+    if (raw.auftragNr) s.auftragNr = raw.auftragNr;
+    if (raw.ziele) s.ziele = raw.ziele;
+    if (raw.zaehler) for (k in raw.zaehler) s.zaehler[k] = raw.zaehler[k];
+    s.zuletzt = raw.zuletzt || 0;
     if (raw.meldungen) s.meldungen = raw.meldungen;
     aendern(s);
     return s;

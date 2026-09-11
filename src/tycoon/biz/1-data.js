@@ -260,6 +260,179 @@
   };
 
 
+  /* ---------------------------------------------------------- Personal */
+
+  /* Wer einen Betrieb leitet, holt mehr heraus - kostet aber jeden Tag
+     Geld, egal wie das Geschaeft laeuft.
+
+     ertrag = Faktor auf den Ertrag der Firma
+     lohn   = Anteil des Grundertrags je Tag, also der Groesse des
+              Betriebs - nicht seines Tagesumsatzes. Genau darin liegt
+              der Haken: in einer Flaute oder in einem uebersaettigten
+              Markt verdient die Leitung weniger, als sie kostet. */
+  D.LEITUNG = [
+    { name: 'Betriebsleiter', icon: '🔑', ertrag: 1.18, lohn: 0.08,
+      text: 'Kümmert sich um den Laden, wenn du woanders bist.' },
+    { name: 'Geschäftsführer', icon: '👔', ertrag: 1.4, lohn: 0.2,
+      text: 'Verhandelt Einkaufspreise, die du nie bekommen hättest.' },
+    { name: 'Vorstand', icon: '🎩', ertrag: 1.7, lohn: 0.38,
+      text: 'Kommt zweimal im Jahr vorbei und verdoppelt trotzdem den Umsatz.' },
+  ];
+
+  /* Einstellen kostet einmalig so viele Tagesloehne. */
+  D.LEITUNG_ANTRITT = 12;
+
+  /* ---------------------------------------------------------- Angebote */
+
+  /* Zeitlich begrenzte Gelegenheiten. Sie sind der Grund, warum es sich
+     lohnt, zwischendurch in die Firmenliste zu schauen, statt nur
+     zuzusehen. Mehr als zwei liegen nie gleichzeitig an. */
+  D.ANGEBOT_MAX = 2;
+  D.ANGEBOT_ABSTAND = [6, 13];   // Spieltage zwischen zwei Gelegenheiten
+  D.ANGEBOT_DAUER = [2, 4];      // so lange steht ein Angebot
+
+  D.ANGEBOTE = [
+    { art: 'paket', gewicht: 10, rabatt: [0.32, 0.48], menge: [8, 18],
+      titel: 'Betrieb zu verkaufen',
+      text: 'Ein Mitbewerber hört auf und gibt seinen Standort ab.' },
+    { art: 'ausbau', gewicht: 7, rabatt: [0.4, 0.55],
+      titel: 'Restposten beim Ausbau',
+      text: 'Die Anlage steht schon fertig beim Lieferanten. Er will sie los.' },
+    { art: 'kampagne', gewicht: 6, rabatt: [0.4, 0.55],
+      titel: 'Freie Werbeplätze',
+      text: 'Eine abgesagte Kampagne hinterlässt gebuchte Flächen.' },
+    { art: 'immobilie', gewicht: 6, rabatt: [0.18, 0.3],
+      titel: 'Objekt aus einer Erbmasse',
+      text: 'Drei Erben, ein Notar und wenig Geduld.' },
+  ];
+
+  /* ---------------------------------------------------------- Boersenauftraege */
+
+  /* Ein Limit-Auftrag wartet auf seinen Kurs, auch wenn niemand zusieht. */
+  D.AUFTRAG_MAX = 6;             // so viele liegen gleichzeitig im Buch
+  D.AUFTRAG_TAGE = 40;           // danach verfaellt er
+
+  /* ---------------------------------------------------------- Abwesenheit */
+
+  /* Was in der Zwischenzeit passiert ist. Bewusst gedeckelt: sonst
+     entscheidet die Laenge der Pause das Spiel und nicht das Spielen. */
+  D.OFFLINE_ANTEIL = 0.5;        // so viel der echten Zeit laeuft nach
+  D.OFFLINE_MAX_TAGE = 60;       // hoechstens so viele Spieltage
+  D.OFFLINE_MIN_SEK = 90;        // darunter lohnt keine Meldung
+
+  /* ---------------------------------------------------------- Ziele */
+
+  /* Kleine Aufgaben mit Belohnung. Sie geben der Mitte des Spiels eine
+     Richtung, in der die Raenge noch weit weg sind.
+
+     pruef(s, S) bekommt den Zustand und die Simulation - die Ziele
+     rechnen damit selbst, statt dass die Simulation sie kennen muss. */
+  function firmenAnzahl(s) {
+    var n = 0;
+    for (var i = 0; i < D.FIRMEN.length; i++) if ((s.firmen[D.FIRMEN[i].id] || 0) > 0) n++;
+    return n;
+  }
+  function branchenAnzahl(s) {
+    var da = {}, n = 0;
+    for (var i = 0; i < D.FIRMEN.length; i++) {
+      var f = D.FIRMEN[i];
+      if ((s.firmen[f.id] || 0) > 0 && !da[f.branche]) { da[f.branche] = true; n++; }
+    }
+    return n;
+  }
+  function stufenSumme(s) {
+    var n = 0;
+    for (var i = 0; i < D.FIRMEN.length; i++) n += s.firmen[D.FIRMEN[i].id] || 0;
+    return n;
+  }
+  function hoechsteStufe(s) {
+    var n = 0;
+    for (var i = 0; i < D.FIRMEN.length; i++) n = Math.max(n, s.firmen[D.FIRMEN[i].id] || 0);
+    return n;
+  }
+  D.firmenAnzahl = firmenAnzahl;
+  D.branchenAnzahl = branchenAnzahl;
+  D.stufenSumme = stufenSumme;
+
+  D.ZIELE = [
+    { id: 'start', name: 'Der erste eigene Laden', lohn: 300,
+      text: 'Gründe deinen ersten Betrieb.',
+      pruef: function (s) { return firmenAnzahl(s) >= 1; } },
+    { id: 'drei', name: 'Drei Standbeine', lohn: 4000,
+      text: 'Habe Betriebe in drei verschiedenen Branchen.',
+      pruef: function (s) { return branchenAnzahl(s) >= 3; } },
+    { id: 'chef', name: 'Jemand für den Laden', lohn: 12000,
+      text: 'Stelle die erste Leitung ein.',
+      pruef: function (s) {
+        for (var k in s.leitung) if (s.leitung[k] > 0) return true;
+        return false;
+      } },
+    { id: 'verdopplung', name: 'Erste Verdopplung', lohn: 9000,
+      text: 'Bringe eine Firma auf Stufe ' + D.MEILENSTEIN + '.',
+      pruef: function (s) { return hoechsteStufe(s) >= D.MEILENSTEIN; } },
+    { id: 'ausbau', name: 'Investiert statt gewartet', lohn: 30000,
+      text: 'Kaufe die erste Ausbaustufe einer Firma.',
+      pruef: function (s) {
+        for (var k in s.ausbau) if (s.ausbau[k] > 0) return true;
+        return false;
+      } },
+    { id: 'million', name: 'Die erste Million', lohn: 60000,
+      text: 'Bringe dein Vermögen auf eine Million Euro.',
+      pruef: function (s, S) { return S.vermoegen(s) >= 1e6; } },
+    { id: 'kette', name: 'Eigene Lieferkette', lohn: 90000,
+      text: 'Beliefere eine eigene Firma zu mindestens 30 Prozent selbst.',
+      pruef: function (s, S) {
+        for (var i = 0; i < D.FIRMEN.length; i++) {
+          var f = D.FIRMEN[i];
+          if ((s.firmen[f.id] || 0) > 0 && S.lieferBonus(s, f) >= 1.3 - 1e-9) return true;
+        }
+        return false;
+      } },
+    { id: 'fuenf', name: 'Breit aufgestellt', lohn: 200000,
+      text: 'Habe Betriebe in fünf verschiedenen Branchen.',
+      pruef: function (s) { return branchenAnzahl(s) >= 5; } },
+    { id: 'boerse', name: 'Der Auftrag ging durch', lohn: 120000,
+      text: 'Lass einen Limit-Auftrag an der Börse ausführen.',
+      pruef: function (s) { return (s.zaehler.auftraege || 0) >= 1; } },
+    { id: 'hundert', name: 'Hundert Stufen', lohn: 400000,
+      text: 'Besitze insgesamt hundert Firmenstufen.',
+      pruef: function (s) { return stufenSumme(s) >= 100; } },
+    { id: 'schuldenfrei', name: 'Alles zurückgezahlt', lohn: 250000,
+      text: 'Nimm einen Kredit auf und tilge ihn vollständig.',
+      pruef: function (s) { return (s.zaehler.kredite || 0) >= 1; } },
+    { id: 'puenktlich', name: 'Ein sauberes Halbjahr', lohn: 900000,
+      text: 'Begleiche sechs Steuerbescheide, ohne in Rückstand zu geraten.',
+      pruef: function (s) { return (s.zaehler.steuerPuenktlich || 0) >= 6; } },
+    { id: 'jahr', name: 'Ein ganzes Jahr', lohn: 700000,
+      text: 'Führe dein Unternehmen ' + (12 * D.TAGE_PRO_MONAT) + ' Tage lang.',
+      pruef: function (s) { return s.tag >= 12 * D.TAGE_PRO_MONAT; } },
+    { id: 'vorstand', name: 'Ein richtiger Konzern', lohn: 2500000,
+      text: 'Setze in drei Firmen einen Vorstand ein.',
+      pruef: function (s) {
+        var n = 0;
+        for (var k in s.leitung) if (s.leitung[k] >= D.LEITUNG.length) n++;
+        return n >= 3;
+      } },
+    { id: 'marktfuehrer', name: 'Marktführer', lohn: 4000000,
+      text: 'Erweitere den Markt einer Branche mit drei Werbekampagnen.',
+      pruef: function (s) {
+        for (var k in s.markt) if (s.markt[k] >= 3) return true;
+        return false;
+      } },
+    { id: 'vollausbau', name: 'Ausgereizt', lohn: 8000000,
+      text: 'Baue eine Firma auf allen drei Stufen aus.',
+      pruef: function (s) {
+        for (var k in s.ausbau) if (s.ausbau[k] >= D.AUSBAU.length) return true;
+        return false;
+      } },
+    { id: 'alle', name: 'In jeder Branche zu Hause', lohn: 30000000,
+      text: 'Habe in allen ' + D.BRANCHEN.length + ' Branchen einen Betrieb.',
+      pruef: function (s) { return branchenAnzahl(s) >= D.BRANCHEN.length; } },
+    { id: 'milliarde', name: 'Die erste Milliarde', lohn: 120000000,
+      text: 'Bringe dein Vermögen auf eine Milliarde Euro.',
+      pruef: function (s, S) { return S.vermoegen(s) >= 1e9; } },
+  ];
+
   /* ---------------------------------------------------------- Aktien */
 
   D.AKTIEN = [

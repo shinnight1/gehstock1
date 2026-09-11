@@ -362,6 +362,116 @@ export function extraTests(SG, U, test) {
     if (!isFinite(s.geld)) throw new Error('Kasse ungültig');
   });
 
+  test('Wirtschaft: Leitung bringt Ertrag und kostet jeden Tag', () => {
+    const s = BZ.create(31);
+    s.geld = 1e9;
+    BZ.firmaKaufen(s, 'wasch', 30);
+    const ohne = BZ.firmenErtrag(s, 'wasch');
+    if (BZ.leitungLohn(s, 'wasch') !== 0) throw new Error('Lohn ohne Leitung');
+    if (BZ.leitungEinstellen(s, 'wasch')) throw new Error('Einstellen gescheitert');
+    const mit = BZ.firmenErtrag(s, 'wasch');
+    if (Math.abs(mit - ohne * BD.LEITUNG[0].ertrag) > 1e-6) throw new Error('Leitung wirkt nicht');
+    if (!(BZ.leitungLohn(s, 'wasch') > 0)) throw new Error('kein Lohn');
+    if (BZ.firmenGrund(s, 'wasch') !== ohne) throw new Error('Grundertrag verändert');
+    if (BZ.leitungEntlassen(s, 'wasch')) throw new Error('Entlassen gescheitert');
+    if (BZ.firmenErtrag(s, 'wasch') !== ohne) throw new Error('nach dem Entlassen');
+  });
+  test('Wirtschaft: nicht gedeckte Löhne kosten die Leitung', () => {
+    const s = BZ.create(37);
+    s.geld = 1e12;
+    BZ.firmaKaufen(s, 'zeitung', 60);
+    BZ.leitungEinstellen(s, 'zeitung');
+    BZ.leitungEinstellen(s, 'zeitung');
+    BZ.leitungEinstellen(s, 'zeitung');
+    if (s.leitung.zeitung !== 3) throw new Error('Vorstand sitzt nicht');
+    // Kurz vor den Tageswechsel laufen, dann die Kasse leeren
+    BZ.step(s, BD.SEK_PRO_TAG - 0.5);
+    s.geld = 0;
+    BZ.step(s, 1);
+    if (s.leitung.zeitung !== 2) throw new Error('Leitung bleibt trotz leerer Kasse');
+    if (s.geld < 0) throw new Error('Kasse ins Minus gelaufen');
+  });
+  test('Wirtschaft: ein Limit-Auftrag wartet auf seinen Kurs', () => {
+    const s = BZ.create(41);
+    s.geld = 1e6;
+    const a = s.aktien.find((x) => x.id === 'nordbahn');
+    if (BZ.auftragStellen(s, 'nordbahn', 'kauf', a.kurs * 0.5, 20)) throw new Error('Auftrag abgelehnt');
+    if (s.auftraege.length !== 1) throw new Error('nicht im Buch');
+    BZ.step(s, 1);
+    if (s.auftraege.length !== 1) throw new Error('zu früh ausgeführt');
+    a.kurs = a.kurs * 0.4;
+    BZ.step(s, 1);
+    if (s.auftraege.length !== 0) throw new Error('nicht ausgeführt');
+    if (a.stueck !== 20) throw new Error('keine Stücke im Depot');
+    if (s.zaehler.auftraege !== 1) throw new Error('nicht gezählt');
+    if (BZ.auftragStellen(s, 'nordbahn', 'kauf', 0, 5) === null) throw new Error('Kurs null erlaubt');
+  });
+  test('Wirtschaft: Angebote kommen, laufen ab und lassen sich annehmen', () => {
+    const s = BZ.create(43);
+    s.geld = 1e9;
+    BZ.firmaKaufen(s, 'zeitung', 20);
+    BZ.firmaKaufen(s, 'gemuese', 15);
+    let gesehen = null;
+    for (let tag = 0; tag < 40 && !gesehen; tag++) {
+      for (let i = 0; i < BD.SEK_PRO_TAG; i++) BZ.step(s, 1);
+      if (s.angebote.length) gesehen = s.angebote[0];
+    }
+    if (!gesehen) throw new Error('in 40 Tagen kein Angebot');
+    if (!(gesehen.preis < gesehen.voll)) throw new Error('Angebot ohne Rabatt');
+    if (!(gesehen.restTage > 0)) throw new Error('Angebot ohne Frist');
+    const geldVor = s.geld;
+    if (BZ.angebotAnnehmen(s, gesehen.nr)) throw new Error('Annehmen gescheitert');
+    if (s.geld !== geldVor - gesehen.preis) throw new Error('Preis nicht abgebucht');
+    if (BZ.angebotAnnehmen(s, gesehen.nr) === null) throw new Error('zweimal annehmbar');
+    if (s.angebote.length > BD.ANGEBOT_MAX) throw new Error('zu viele Angebote');
+  });
+  test('Wirtschaft: Ziele zahlen sich selbst aus', () => {
+    const s = BZ.create(47);
+    BZ.zielePruefen(s);
+    if (s.ziele.start) throw new Error('Ziel ohne Firma erreicht');
+    const offenVor = BZ.zieleOffen(s);
+    s.geld = 1000;
+    BZ.firmaKaufen(s, 'zeitung', 1);
+    const geldVor = s.geld;
+    BZ.zielePruefen(s);
+    if (!s.ziele.start) throw new Error('Ziel nicht erkannt');
+    const ziel = BD.ZIELE.find((z) => z.id === 'start');
+    if (Math.round(s.geld) !== Math.round(geldVor + ziel.lohn)) throw new Error('Prämie fehlt');
+    if (BZ.zieleOffen(s) !== offenVor - 1) throw new Error('Zähler stimmt nicht');
+    BZ.zielePruefen(s);
+    if (Math.round(s.geld) !== Math.round(geldVor + ziel.lohn)) throw new Error('zweimal ausgezahlt');
+  });
+  test('Wirtschaft: Abwesenheit läuft nach und ist gedeckelt', () => {
+    const s = BZ.create(53);
+    s.geld = 1e7;
+    BZ.firmaKaufen(s, 'kiosk', 25);
+    if (BZ.nachholen(s, 10) !== null) throw new Error('zehn Sekunden werden gemeldet');
+    const tagVor = s.tag, geldVor = s.geld;
+    const b = BZ.nachholen(s, 600);
+    if (!b) throw new Error('kein Bericht');
+    if (b.tage !== s.tag - tagVor) throw new Error('Tage stimmen nicht');
+    if (!(s.geld > geldVor)) throw new Error('nichts verdient');
+    if (b.tage > BD.OFFLINE_MAX_TAGE) throw new Error('Deckel greift nicht');
+    const lang = BZ.nachholen(s, 3600 * 24);
+    if (lang.tage > BD.OFFLINE_MAX_TAGE + 1) throw new Error('Deckel greift bei langer Pause nicht');
+    if (!lang.gedeckelt) throw new Error('Deckel nicht gemeldet');
+  });
+  test('Wirtschaft: Leitung, Aufträge und Ziele überstehen das Speichern', () => {
+    const s = BZ.create(59);
+    s.geld = 1e8;
+    BZ.firmaKaufen(s, 'cafe', 14);
+    BZ.leitungEinstellen(s, 'cafe');
+    BZ.auftragStellen(s, 'orion', 'verkauf', 9999, 3);
+    BZ.zielePruefen(s);
+    const back = BZ.deserialize(JSON.parse(JSON.stringify(BZ.serialize(s))));
+    if (!back) throw new Error('Laden gescheitert');
+    if (back.leitung.cafe !== s.leitung.cafe) throw new Error('Leitung verloren');
+    if (back.auftraege.length !== 1) throw new Error('Auftrag verloren');
+    if (!back.ziele.start) throw new Error('Ziel verloren');
+    if (!(back.zuletzt > 0)) throw new Error('Zeitstempel fehlt');
+    if (Math.abs(BZ.ertragGesamt(back) - BZ.ertragGesamt(s)) > 1e-6) throw new Error('Ertrag');
+  });
+
   /* --- Speicher unter file:// --- */
   test('Speicher: Spielstand-Code hin und zurück', () => {
     SG.storage.set('test:probe', { x: 42, s: 'Grüße' });
