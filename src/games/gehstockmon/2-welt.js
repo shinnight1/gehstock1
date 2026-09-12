@@ -80,10 +80,10 @@
       return g;
     }
     function pathBetween(a,b){var dx=b.x-a.x,dz=b.z-a.z,len=Math.hypot(dx,dz),m=mesh(fixed,'box','#9b9867',(a.x+b.x)/2,.025,(a.z+b.z)/2,4,.025,len);m.rotation.y=Math.atan2(dx,dz);}
-    mesh(fixed,'box','#3c4844',0,-2.35,0,900,4,840);
-    var land=mesh(fixed,'box','#739955',0,-.64,0,900,1.1,840);land.geometry=land.geometry.clone();var uv=land.geometry.getAttribute('uv');for(var ui=0;ui<uv.count;ui++)uv.setXY(ui,uv.getX(ui)*120,uv.getY(ui)*110);land.material=terrainMaterials[5];
-    R.createBiomeGround(T,scene,terrainMaterials);var waters=R.createWater(T,scene);
-    [-360,-120,120,360].forEach(function(z){pathBetween({x:-410,z:z},{x:410,z:z});});[-390,-120,120,390].forEach(function(x){pathBetween({x:x,z:-390},{x:x,z:390});});
+    var destroyIsland=R.createIsland(T,scene,terrainMaterials[5]);
+    var destroyBiomes=R.createBiomeGround(T,scene,terrainMaterials),waters=R.createWater(T,scene);
+    // Kurze geschwungene Trampelpfade statt eines rechtwinkligen Straßengitters.
+    [[-110,20,40,20],[-5,35,30,105],[100,80,140,76]].forEach(function(v){for(var p=0;p<18;p++){var t=p/18,u=(p+1)/18;pathBetween({x:v[0]+(v[2]-v[0])*t,z:v[1]+(v[3]-v[1])*t+Math.sin(t*Math.PI*2)*3},{x:v[0]+(v[2]-v[0])*u,z:v[1]+(v[3]-v[1])*u+Math.sin(u*Math.PI*2)*3});}});
     R.daten.WORLD.bridgeZ.forEach(function(z){var x=R.riverCenter(z),bridge=new T.Group();bridge.position.set(x,.12,z);fixed.add(bridge);mesh(bridge,'box','#806342',0,.15,0,22,.35,6.4);for(var side=-1;side<=1;side+=2){mesh(bridge,'box','#ba9565',0,1.1,side*3.1,22,.18,.16);for(var post=-10;post<=10;post+=5)mesh(bridge,'box','#765737',post,.7,side*3.1,.25,1.4,.25);}});
     for (var i = 0; i < R.orte.length; i++) {
       var o = R.orte[i];
@@ -104,13 +104,14 @@
         crystal.rotation.z = (c - 2) * 0.12;
       }
     }
-    for(var n=0;n<350;n++){var tx=Math.sin(n*83.17)*420,tz=Math.cos(n*47.31)*395;if(!X.walkable({x:tx,z:tz})||R.orte.some(function(o){return Math.hypot(o.x-tx,o.z-tz)<25;}))continue;tree(tx,tz,2+n%4*.7,false);if(n%3===0)mesh(fixed,'rock','#768479',tx+3,.6,tz+2,2,1.2,2);}
-    building(0, 118, 2, '#366d79');
-    var altar = mesh(fixed, 'ring', '#e4bd69', 0, 0.15, 125, 4, 4, 4, '#766132'); altar.rotation.x = Math.PI / 2;
+    for(var n=0;n<260;n++){var tx=Math.sin(n*83.17)*260,tz=Math.cos(n*47.31)*230;if(!X.walkable({x:tx,z:tz})||R.orte.some(function(o){return Math.hypot(o.x-tx,o.z-tz)<25;})||X.DUNGEONS.some(function(d){return Math.hypot(d.x-tx,d.z-tz)<10;}))continue;tree(tx,tz,2+n%4*.7,false);if(n%3===0)mesh(fixed,'rock','#768479',tx+3,.6,tz+2,2,1.2,2);}
+    building(X.SPAWN.x-10, X.SPAWN.z-7, 2, '#366d79');
+    var altar = mesh(fixed, 'ring', '#e4bd69', X.SPAWN.x, 0.15, X.SPAWN.z, 4, 4, 4, '#766132'); altar.rotation.x = Math.PI / 2;
+    X.DUNGEONS.forEach(function(d){var color=R.daten.SELTENHEITEN[d.rarity].farbe;mesh(fixed,'rock','#444b50',d.x-2,2,d.z,2,4.5,2.8);mesh(fixed,'rock','#444b50',d.x+2,2,d.z,2,4.5,2.8);mesh(fixed,'rock','#626569',d.x,4.3,d.z,5.8,1.8,3);mesh(fixed,'ring',color,d.x,2.1,d.z+.3,3.8,3.8,1,color);mesh(fixed,'box','#121724',d.x,1.8,d.z,2.6,3.5,.3);});
 
     /* Clumps, flower patches, ruins and shoreline reeds add depth to the ground. */
     for (var tuft = 0; tuft < 2100; tuft++) {
-      var tx = Math.sin(tuft * 83.17) * 440, tz = Math.cos(tuft * 47.31) * 408;
+      var tx = Math.sin(tuft * 83.17) * 274, tz = Math.cos(tuft * 47.31) * 244;
       if (!X.walkable({x:tx,z:tz}) || R.orte.some(function (o) { return Math.hypot(o.x-tx,o.z-tz)<7; })) continue;
       var kind=R.biomeAt(tx,tz),colors=kind===8?['#664354','#982f57','#38314d']:kind===7?['#6c648c','#84769b','#4b455e']:kind===6?['#c2a26e','#e0bc78','#b58b55']:kind===5?['#8f9e5e','#b5b878','#7c954f']:kind===4?['#c8dfdf','#e0eae8','#b6cfd4']:kind===2?['#56443d','#a04d32','#6e5748']:kind===3?['#607878','#647b91','#4d6169']:['#537343','#71884c','#3f673c'];
       var grass = mesh(fixed, 'cone', colors[tuft%3], tx, .24, tz, .20, .48 + tuft%3*.09, .12); grass.rotation.z = .22;grass.castShadow=false;
@@ -347,7 +348,7 @@
       var u = { id: id, monId: monId, group: g, bar: bar, maxHp: hp || 100, hp: hp || 100, home: new T.Vector3(x, 0.15, z), pulse: 0, attack: null, enemy: enemy };
       units.push(u); return u;
     }
-    var explorer = addUnit('explorer', 0, 0, 0, 125, false, 100, 'player');
+    var explorer = addUnit('explorer', 0, 0, X.SPAWN.x, X.SPAWN.z, false, 100, 'player');
     var stick = { x: 0, y: 0 }, destination = explorer.home.clone(), trail = [];
     for (var behind = 145; behind >= 0; behind--) trail.push(new T.Vector3(explorer.home.x - behind * 0.4, 0.15, explorer.home.z));
     function followOffsets(roster){var sum=0,previous=3.4;return roster.map(function(k){sum+=(previous+k.worldSize)*.45+.6;previous=k.worldSize;return Math.ceil(sum/.4);});}
@@ -406,7 +407,7 @@ p.updatedAt=info.updatedAt;p.age=Math.max(0,(serverTime-info.updatedAt)/1000);p.
       selectionRing.position.set(o.x, 0.38, o.z);
       if (center) { following = false; desiredFocus.set(o.x, 0, o.z + 3); desiredZoom = 35; }
     }
-    function overview() { following = false; desiredFocus.set(0, 0, 0); desiredZoom = 1120; }
+    function overview() { following = false; desiredFocus.set(0, 0, 0); desiredZoom = 860; }
     function follow() {
       following = true; desiredZoom = 38; desiredFocus.set(explorer.group.position.x, 0, explorer.group.position.z - 2);
       if (handlers.explore) handlers.explore();
@@ -475,7 +476,7 @@ p.updatedAt=info.updatedAt;p.age=Math.max(0,(serverTime-info.updatedAt)/1000);p.
         var f = zoom / Math.max(400, height);
         desiredFocus.x -= (Math.cos(yaw) * dx + Math.sin(yaw) * dy) * f;
         desiredFocus.z -= (-Math.sin(yaw) * dx + Math.cos(yaw) * dy) * f;
-        desiredFocus.x = T.MathUtils.clamp(desiredFocus.x, -440, 440); desiredFocus.z = T.MathUtils.clamp(desiredFocus.z, -410, 410);
+        desiredFocus.x = T.MathUtils.clamp(desiredFocus.x, -270, 270); desiredFocus.z = T.MathUtils.clamp(desiredFocus.z, -240, 240);
       }
     });
     on(canvas, 'pointerup', function (e) {
@@ -584,6 +585,7 @@ p.updatedAt=info.updatedAt;p.age=Math.max(0,(serverTime-info.updatedAt)/1000);p.
         camera.position.set(focus.x + Math.sin(yaw) * zoom * 0.75, zoom * 0.86, focus.z + Math.cos(yaw) * zoom * 0.75);
         sun.position.set(focus.x-40,70,focus.z+28);sun.target.position.set(focus.x,0,focus.z);
         var extent=Math.max(42,zoom*.75);if(Math.abs(sun.shadow.camera.right-extent)>2){sun.shadow.camera.left=sun.shadow.camera.bottom=-extent;sun.shadow.camera.right=sun.shadow.camera.top=extent;sun.shadow.camera.updateProjectionMatrix();}
+        var near=Math.max(1,zoom*.025);if(Math.abs(camera.near-near)>.01){camera.near=near;camera.updateProjectionMatrix();}
         scene.fog.density=zoom>400?.00022:.0011;camera.lookAt(focus); camera.updateMatrixWorld(); renderer.render(scene, camera);
         if (handlers.frame) handlers.frame(project, battle, explorer.group.position,Object.keys(peers).map(function(id){return {id:id,position:peers[id].group.position,info:peers[id].info};}));
       }
@@ -604,7 +606,7 @@ p.updatedAt=info.updatedAt;p.age=Math.max(0,(serverTime-info.updatedAt)/1000);p.
       pause: function (yes) { if (yes) loop.pause(true); else loop.resume(true); },
       destroy: function () {
         if (dead) return; dead = true; loop.destroy(); off.forEach(function (f) { f(); }); if (observer) observer.disconnect();
-        Object.keys(peers).forEach(removePeer);Object.keys(trainers).forEach(function(id){disposeUnit(trainers[id]);});influence.destroy();walls.destroy();waters.destroy();shadowTexture.dispose();shadowMaterial.dispose();if(sun.shadow.map)sun.shadow.map.dispose();
+        Object.keys(peers).forEach(removePeer);Object.keys(trainers).forEach(function(id){disposeUnit(trainers[id]);});influence.destroy();walls.destroy();waters.destroy();destroyIsland();destroyBiomes();shadowTexture.dispose();shadowMaterial.dispose();if(sun.shadow.map)sun.shadow.map.dispose();
         var seen = new Set(); scene.traverse(function (m) { if (m.geometry && !seen.has(m.geometry)) { seen.add(m.geometry); m.geometry.dispose(); } });
         Object.keys(geometries).forEach(function (key) { if (!seen.has(geometries[key])) geometries[key].dispose(); });
         Object.keys(materials).forEach(function (key) { materials[key].dispose(); }); plane.material.dispose();

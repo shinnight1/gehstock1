@@ -3,7 +3,7 @@
   var D = SG.gehstockmon.daten, A = SG.gehstockmon.arena = {};
   var stats = [[132,20,3],[88,29,8],[112,22,5],[96,25,11]];
   var specials = ['Schildstoß', 'Sichelstreich', 'Lebensquell', 'Runenstörung'];
-  A.stats = function (mon) { var s = stats[mon.typ],factor=[.78,1,1.09,1.18,1.38,1.65,2][mon.seltenheit]; return { hp: Math.round(s[0]*factor), ang: Math.round(s[1]*factor), tempo: s[2] }; };
+  A.stats = function (mon) { var s = stats[mon.typ],factor=[.78,1.16,1.38,1.64,1.98,2.4,3][mon.seltenheit],bonus=1+SG.gehstockmon.abenteuer.upgradeLevel(mon.upgrade)*.02; return { hp: Math.floor(Math.round(s[0]*factor)*bonus), ang: Math.floor(Math.round(s[1]*factor)*bonus), tempo: s[2] }; };
   A.moves = function (u, round) {
     return [
       { id: 'strike', name: 'Stockhieb', text: 'Zuverlässiger Angriff', damage: u.ang, enabled: true },
@@ -17,7 +17,7 @@
     return { uid: side + i, monId: mon.id, name: mon.name, role: mon.typ, maxHp: hp, hp: hp, ang: Math.round(s.ang * (1 + bonus / 2)), speed: s.tempo, powerReady: 1, charges: 2, shield: 0, weakened: false };
   }
   A.defenders = function (fieldId, saved) {
-    if (saved && saved.length) return saved.map(function (e) { return D.mon(e.id || e.monId) || D.KATALOG[0]; });
+    if (saved && saved.length) return saved.map(function (e) { return Object.assign({},D.mon(e.id || e.monId) || D.KATALOG[0],{upgrade:SG.gehstockmon.abenteuer.upgradeLevel(e.upgrade)}); });
     var roster = [['moosling','rostknirps'], ['sumpfschnapper','nebelmolch','klinge'], ['kieselkrabb','glutfuchs','donnerwidder'], ['dornenwolf','pilzhueter','nachtflatter'], ['runengolem','frostklaue','seelenqualle','obsidianrabe']];
     roster.push(['tauhupfer'],['grabesritter','vulkanmantis','frostorakel','gewittergreif'],['aetherdrache','chronoschreiter','grabesritter','frostorakel'],['endrichter','nullwyrm','chronoschreiter','aetherdrache']);
     var ids = roster[fieldId - 1].slice();

@@ -1,4 +1,5 @@
 import {data as D,economy as E,arena as A,adventure as X} from './gehstockmon-rules.mjs';
+import {activeDungeon} from './gehstockmon-dungeons.mjs';
 const fail=(message)=>{throw new Error(message);};
 export const activeArena=p=>p.arena&&p.arena.phase!=='finished';
 export const activeDuel=p=>p.duel&&['choose','won'].includes(p.duel.phase);
@@ -48,7 +49,7 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
     const encounter=X.encounters(now,world.territories).find(e=>e.id===body.encounterId);if(!encounter||encounter.kind!==(op==='gather'?'rune':'trainer'))fail('Diese Begegnung ist weitergezogen. Aktualisiere die Karte.');
     if(p.encounterClaims.includes(encounter.id))fail('Diese Begegnung hast du bereits abgeschlossen.');await nearby(encounter);
     if(op==='gather'){p.encounterClaims=p.encounterClaims.concat(encounter.id).slice(-100);p.progress.gathered++;p.gold+=10;extra.message='Rune gefunden! +10 Gold und Fortschritt für deine Quest.';}
-    else {p.truppe=validateSquad(p,body.squad);p.arena=A.create(p.truppe.map(D.mon),['blattschleicher','tauhupfer'].slice(0,p.progress.trainerWins<3?1:2).map(D.mon),{id:body.requestId,territoryId:encounter.territoryId,now});Object.assign(p.arena,{kind:'trainer',encounterId:encounter.id,title:encounter.name});}
+    else {p.truppe=validateSquad(p,body.squad);p.arena=A.create(p.truppe.map(mid=>X.mon(p,mid)),['blattschleicher','tauhupfer'].slice(0,p.progress.trainerWins<3?1:2).map(D.mon),{id:body.requestId,territoryId:encounter.territoryId,now});Object.assign(p.arena,{kind:'trainer',encounterId:encounter.id,title:encounter.name});}
   }
   if(op==='quest_claim'){const quest=X.QUESTS.find(q=>q.id===body.questId);if(!quest||p.claimedQuests.includes(quest.id)||X.progress(p,quest)<quest.goal)fail('Diese Questbelohnung ist noch nicht verfügbar.');p.claimedQuests.push(quest.id);if(quest.gold)p.gold+=quest.gold;if(quest.skin&&!p.skins.includes(quest.skin))p.skins.push(quest.skin);extra.message=quest.skin?X.skin(quest.skin).name+' freigeschaltet!':'Quest geschafft! +'+quest.gold+' Gold.';}
   if(op==='shop_buy'||op==='equip'){
@@ -60,7 +61,7 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
   if(op==='raid_start'){
     const target=world.players[body.targetId];if(!target||body.targetId===id)fail('Wähle einen anderen Spieler.');
     if(X.protected(p,now)||X.protected(target,now))fail('Anfängerschutz: Beide Spieler brauchen 24 Stunden Spielalter und mindestens 6 Mons. Nach einem Diebstahl gelten 2 Stunden Schutz.');
-    if(p.raidCooldown>now||target.raidLock?.until>now||activeArena(target)||activeDuel(target))fail('Dieser Überfall ist gerade nicht möglich.');
+    if(p.raidCooldown>now||target.raidLock?.until>now||activeArena(target)||activeDuel(target)||activeDungeon(world,target))fail('Dieser Überfall ist gerade nicht möglich.');
     if(p.eggs.length>=E.BAG_LIMIT)fail('Du brauchst einen freien Platz für ein erbeutetes Ei.');
     const targetPos=await position(body.targetId);await nearby(targetPos);const victimEgg=target.eggs.find(e=>e.startedAt!==null&&p.eggs.filter(e=>e.startedAt!==null).length<E.INCUBATORS)||target.eggs.find(e=>e.startedAt===null);if(!victimEgg)fail('Dieser Spieler trägt kein Ei, das in deine Brutstation passt.');
     p.raidCooldown=now+30*60000;p.duel={id:body.requestId,targetId:body.targetId,targetName:target.name,revision:0,round:1,phase:'choose',hp:100,enemyHp:100,weapon:p.weapon,enemyWeapon:target.weapon,enemySkin:target.skin,until:now+10*60000,message:'Gewinne zuerst das Waffenduell, danach den Mon-Kampf.'};target.raidLock={attackerId:id,eggId:victimEgg.id,until:p.duel.until};
@@ -74,7 +75,7 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
   }
   if(op==='raid_arena'){
     const d=p.duel,target=d&&world.players[d.targetId];if(!d||d.phase!=='won'||d.until<=now||target?.raidLock?.attackerId!==id)fail('Gewinne zuerst ein gültiges Waffenduell.');p.truppe=validateSquad(p,body.squad);
-    p.arena=A.create(p.truppe.map(D.mon),target.truppe.map(D.mon),{id:body.requestId,territoryId:6,now});Object.assign(p.arena,{kind:'raid',targetId:d.targetId,title:'Überfall auf '+target.name});target.raidLock.battleId=p.arena.id;d.phase='arena';
+    p.arena=A.create(p.truppe.map(mid=>X.mon(p,mid)),target.truppe.map(mid=>X.mon(target,mid)),{id:body.requestId,territoryId:6,now});Object.assign(p.arena,{kind:'raid',targetId:d.targetId,title:'Überfall auf '+target.name});target.raidLock.battleId=p.arena.id;d.phase='arena';
   }
   if(op==='raid_cancel'){const d=p.duel,target=d&&world.players[d.targetId];if(target?.raidLock?.attackerId===id)delete target.raidLock;p.duel=null;extra.message='Zurückgezogen. Kein Ei wurde gestohlen.';}
   return extra;

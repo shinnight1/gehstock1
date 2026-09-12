@@ -2,6 +2,7 @@ import { speicher } from './lib/speicher.mjs';
 import { createHash } from 'node:crypto';
 import { data as D, economy as E, arena as A, hours as H, adventure as X } from './lib/gehstockmon-rules.mjs';
 import {adventureAction,finishEncounter,expireAdventure,deliverRewards,activeArena,activeDuel} from './lib/gehstockmon-adventure.mjs';
+import {activeDungeon,settleDungeons,dungeonResult,dungeonAction} from './lib/gehstockmon-dungeons.mjs';
 
 const KEY = 'world-v2';
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -38,7 +39,7 @@ function initialWorld(now) {
 }
 function migrateMap(world, now) {
   if (world.mapVersion === D.MAP_VERSION) return;
-  if(world.mapVersion===3){world.mapVersion=D.MAP_VERSION;for(const p of Object.values(world.players)){p.spawn=X.outside(X.SPAWN,X.layout(world.territories));p.lastJoinAt=now;}return;}
+  if(world.mapVersion===3||world.mapVersion===4){world.mapVersion=D.MAP_VERSION;for(const p of Object.values(world.players)){p.spawn=X.outside(X.SPAWN,X.layout(world.territories));p.lastJoinAt=now;}return;}
   if(world.mapVersion===2){world.territories.push(...initialWorld(now).territories.slice(5));world.mapVersion=D.MAP_VERSION;return;}
   const old = clone(world.territories), biomeId = (id) => (id - 1) % 5 + 1;
   world.previousMap = { changedAt: now, territories: clone(old) };
@@ -79,6 +80,7 @@ function migrateAndSettle(world, now) {
     p.outposts = Object.fromEntries(world.territories.filter(t=>t.ownerId===id).map(t=>[t.id,E.outpost(t,now)]));
   }
   expireAdventure(world,now);
+  settleDungeons(world,now);
 }
 function validateSquad(p, squad) {
   if (!Array.isArray(squad) || squad.length !== 4 || new Set(squad).size !== 4 || squad.some((id) => typeof id !== 'string' || !p.besitz.includes(id) || !D.mon(id))) throw new GameError('Wähle vier verschiedene Mons aus deiner Sammlung.');
@@ -95,8 +97,8 @@ function protectedOwner(world, t, now) {
 function publicResult(world, id, now, extra = {}) {
   const p = world.players[id];
   return { playerId: id, serverTime: now, access: accessFor(now, extra.adminOverride === true), mapVersion: world.mapVersion, dailyDelivery:extra.joining?p.dailyDelivery||0:0,profile: D.neuerStand(p, now), arena: p.arena || null,duel:p.duel||null,spawn:p.spawn,encounters:X.encounters(now,world.territories).filter(e=>!p.encounterClaims.includes(e.id)),
-    territories: world.territories.map((t) => ({ id: t.id, ownerId: t.ownerId, ownerName: world.players[t.ownerId]?.name || t.ownerName, version: t.version, level: t.level,
-      defense: A.defenders(t.id, t.ownerId ? t.defense : null).map((k) => ({ id: k.id, name: k.name })),
+    ...dungeonResult(world,p), territories: world.territories.map((t) => ({ id: t.id, ownerId: t.ownerId, ownerName: world.players[t.ownerId]?.name || t.ownerName, version: t.version, level: t.level,
+      defense: A.defenders(t.id, t.ownerId ? t.defense : null).map((k) => ({ id: k.id, name: k.name, upgrade:k.upgrade||0 })),
       eggStock: t.ownerId === id ? t.eggStock : 0, eggAt: t.ownerId === id ? t.eggAt : null })),
     reports: world.reports.filter((r) => r.attackerId === id || r.defenderId === id).slice(-20), ...extra };
 }
@@ -118,7 +120,7 @@ async function updatePresence(db, world, id, position, timestamp, clock, bypass 
     if(!route)return json({serverTime:timestamp,access:accessFor(timestamp,bypass),position:{x:from.x,z:from.z,heading:from.heading||0},positionCorrected:true,peers:Object.values(players).filter(v=>v.id!==id).map(({credit,spawnAt,...peer})=>peer)});
     let traveled=0,cursor=from;for(const point of route){traveled+=Math.hypot(point.x-cursor.x,point.z-cursor.z);cursor=point;}
     if (!players[id] || players[id].updatedAt<=timestamp) players[id] = { id, name:p.name, x:Math.round(position.x*100)/100, z:Math.round(position.z*100)/100,
-      heading:position.heading, activity:activeArena(p)||activeDuel(p)?'arena':'map', updatedAt:timestamp,spawnAt:p.lastJoinAt,credit:Math.max(0,credit-traveled),skin:p.skin,weapon:p.weapon,squad:p.truppe.slice(),protected:X.protected(p,timestamp) };
+      heading:position.heading, activity:activeArena(p)||activeDuel(p)||activeDungeon(world,p)?'arena':'map', updatedAt:timestamp,spawnAt:p.lastJoinAt,credit:Math.max(0,credit-traveled),skin:p.skin,weapon:p.weapon,squad:p.truppe.slice(),protected:X.protected(p,timestamp) };
     requireOpen(clock(), bypass);
     const result=await db.setJSON('presence-v1',{players},entry?{onlyIfMatch:entry.etag}:{onlyIfNew:true});
     if(result.modified)return json({serverTime:timestamp,access:accessFor(timestamp,bypass),peers:Object.values(players).filter(v=>v.id!==id).map(({credit,spawnAt,...peer})=>peer)});
@@ -136,7 +138,7 @@ function settleBattle(world, p, id, now, requestId) {
       const defender = defenderId && world.players[defenderId];
       if (defender && now - defender.lastSeen >= 12 * E.HOUR) defender.lastOfflineLoss = now;
       const level = t.level; E.capture(p, t.id, now);
-      Object.assign(t, E.outpost(null, now), { level, ownerId: id, ownerName: p.name, defense: p.truppe.map((mid) => ({ id: mid })), version: t.version + 1 });
+      Object.assign(t, E.outpost(null, now), { level, ownerId: id, ownerName: p.name, defense: p.truppe.map((mid) => ({ id: mid, upgrade:X.mon(p,mid).upgrade })), version: t.version + 1 });
       b.message = 'Gebiet erobert! +40 Gold. Dein Außenposten produziert jetzt Gold und alle 2 Stunden ein Ei.';
     }
   } else b.message = b.winner === 'fled' ? 'Zurückgezogen. Das Gebiet bleibt beim Verteidiger.' : 'Deine Truppe ist zurück im Lager. Versuche andere Attacken oder eine andere Aufstellung.';
@@ -194,14 +196,16 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
         try {
           if(activeArena(p)&&mutations.includes(body.op)&&!['arena_turn','arena_flee'].includes(body.op))throw new GameError('Beende zuerst deinen Mon-Kampf.',409);
           if(activeDuel(p)&&mutations.includes(body.op)&&!['raid_turn','raid_arena','raid_cancel'].includes(body.op))throw new GameError('Beende zuerst deinen Überfall.',409);
+          if(activeDungeon(world,p)&&mutations.includes(body.op)&&!X.DUNGEON_OPS.includes(body.op))throw new GameError('Beende zuerst deine Dungeon-Expedition.',409);
           if(p.raidLock?.until>timestamp&&(['arena_start','trainer_start','raid_start','defend'].includes(body.op)||(['hatch','incubate'].includes(body.op)&&body.eggId===p.raidLock.eggId)))throw new GameError('Deine Verteidigung hält gerade einen Überfall ab. Dieses Ei bleibt bis zum Ergebnis reserviert.',409);
-          if(X.OPS.includes(body.op))Object.assign(extra,await adventureAction({world,p,id,body,now:timestamp,draw,presence:presenceStore||speicher('hgh-gehstockmon-presence'),validateSquad}));
+          if(X.DUNGEON_OPS.includes(body.op)||body.op==='mon_upgrade')Object.assign(extra,await dungeonAction({world,p,id,body,now:timestamp,presence:presenceStore||speicher('hgh-gehstockmon-presence')}));
+          else if(X.OPS.includes(body.op))Object.assign(extra,await adventureAction({world,p,id,body,now:timestamp,draw,presence:presenceStore||speicher('hgh-gehstockmon-presence'),validateSquad}));
           if (body.op === 'arena_start' || body.op === 'defend') {
             if (p.arena && p.arena.phase !== 'finished') throw new GameError('Beende zuerst deinen aktuellen Arenakampf.', 409);
             p.truppe = validateSquad(p, body.squad);
           }
           if (body.op === 'defend') {
-            for (const t of world.territories) if (t.ownerId === id) { t.defense = p.truppe.map((mid) => ({ id: mid })); t.ownerName = p.name; t.version++; }
+            for (const t of world.territories) if (t.ownerId === id) { t.defense = p.truppe.map((mid) => ({ id: mid, upgrade:X.mon(p,mid).upgrade })); t.ownerName = p.name; t.version++; }
             extra.message = 'Deine Truppe verteidigt jetzt alle deine Außenposten.';
           }
           if (body.op === 'arena_start') {
@@ -209,7 +213,7 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
             if (t.ownerId === id) throw new GameError('Dieses Gebiet gehört dir bereits.');
             if (t.version !== body.version) throw new GameError('Die Verteidigung hat sich verändert. Aktualisiere die Spielerwelt.', 409);
             if (protectedOwner(world, t, timestamp)) throw new GameError('Abwesenheitsschutz: Dieser Spieler hat bereits ein Gebiet verloren.', 409);
-            p.arena = A.create(p.truppe.map(D.mon), A.defenders(t.id, t.ownerId ? t.defense : null), { id: body.requestId, territoryId: t.id, version: t.version, level: t.level, npcTerritory: !t.ownerId, now: timestamp });
+            p.arena = A.create(p.truppe.map(mid=>X.mon(p,mid)), A.defenders(t.id, t.ownerId ? t.defense : null), { id: body.requestId, territoryId: t.id, version: t.version, level: t.level, npcTerritory: !t.ownerId, now: timestamp });
           }
           if (body.op === 'arena_turn' || body.op === 'arena_flee') {
             const b = p.arena;

@@ -72,6 +72,31 @@ Die Vorschau läuft dann unter `http://localhost:8792/#/spiel/gehstockmon` mit e
 node tools/test.mjs
 node tools/gehstockmon-tests.mjs
 node tools/gehstockmon-world-tests.mjs
+node tools/gehstockmon-adventure-tests.mjs
+node tools/gehstockmon-expansion-tests.mjs
+node tools/gehstockmon-dungeon-tests.mjs
+node tools/speicher-tests.mjs
+npm test --prefix arena
+npm run typecheck --prefix arena
 ```
 
 Die übrigen Offline-Spiele bleiben verfügbar. GehstockMon selbst erfordert eine Verbindung zum Spielserver.
+
+## GehstockMon: Dungeons und Runen
+
+Auf der Weltkarte liegen sieben Dungeon-Eingänge. Am Eingang erstellt man eine
+Gruppe oder tritt einer offenen Gruppe bei. Bis zu vier Spieler wählen je ein
+eigenes Mon und bestätigen ihre Bereitschaft. Die Gruppenleitung startet den
+gemeinsamen Bosskampf. Der Boss kündigt sein nächstes Ziel an; jede dritte Runde
+trifft ein stärkerer Angriff alle. Fehlende Aktionen werden nach 45 Sekunden zu
+Deckung, drei verpasste Runden beenden die Teilnahme. Ein erneuter Login stellt
+die aktive Expedition wieder her. Lobbys laufen nach fünf Minuten, Kämpfe nach
+20 Minuten ab.
+
+Ein Sieg bringt jedem aktiven Teilnehmer zwei oder drei Runen der gewählten
+Schwierigkeit. Nur Runen derselben Seltenheit verbessern ein eigenes Mon.
+Die fünf Stufen kosten nacheinander 1, 2, 3, 4 und 5 Runen. KP und Angriff steigen
+je Stufe um zwei Prozent, auf ganze Werte abgerundet und auf zehn Prozent begrenzt.
+Tempo, Fähigkeiten und Seltenheit ändern sich dadurch nicht. Die Verbesserungen
+gelten in Dungeons, Arenen, Trainingskämpfen und der gespeicherten Verteidigung.
+In der Developer-Testzone bleiben auch Dungeons und Runen vollständig flüchtig.

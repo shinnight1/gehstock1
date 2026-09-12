@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { data as D, fight, adventure as X } from '../netlify/functions/lib/gehstockmon-rules.mjs';
 let scene, camera, loop, listeners = new Map(), disposed = false, loopDestroyed = false;
@@ -14,9 +16,9 @@ class FakeImage { constructor() { this.naturalWidth = 256; this.naturalHeight = 
    Mit dem vollen Three.js besteht ein Test, den der Browser danach mit
    "T.Matrix4 is not a constructor" abbricht. */
 const exposed = [...fs.readFileSync('src/vendor/three-entry.js', 'utf8').matchAll(/{([^}]*)}/g)]
-  .flatMap((m) => m[1].split(',').map((name) => name.trim())).filter(Boolean)
-  .reduce((all, name) => { all[name] = name === 'mergeGeometries' ? mergeGeometries : THREE[name]; return all; }, {});
-for (const [name, value] of Object.entries(exposed)) assert.ok(value, 'src/vendor/three-entry.js reicht ' + name + ' nicht an den Browser weiter');
+  .flatMap((m) => m[1].split(',').map((name) => name.trim().split(/\s+as\s+/).pop())).filter(Boolean)
+  .reduce((all, name) => { all[name] = name === 'mergeGeometries' ? mergeGeometries : name === 'GLTFLoader' ? GLTFLoader : name === 'cloneSkinned' ? cloneSkinned : THREE[name]; return all; }, {});
+for (const [name, value] of Object.entries(exposed)) assert.notEqual(value, undefined, 'src/vendor/three-entry.js reicht ' + name + ' nicht an den Browser weiter');
 const window = { ...surface(), THREE: { ...exposed, WebGLRenderer: FakeRenderer }, devicePixelRatio: 3 };
 const document = { ...surface(), hidden: false, createElement: surface };
 const SG = { gehstockmon: { daten: D,abenteuer:X }, assets: Object.fromEntries(D.KATALOG.map((k) => [k.bild, 'data:image/webp;base64,AA=='])) };
@@ -44,7 +46,9 @@ let sprites = 0, meshes = 0; scene.traverse((o) => { if (o.isSprite) sprites++; 
 assert.equal(sprites, 5, 'one character and four follower portraits'); assert.ok(meshes < 220, 'terrain, borders and sprites stay batched: ' + meshes);
 const cells=SG.gehstockmon.influenceCells();assert.equal(cells.length,9);
 const area=(p)=>Math.abs(p.reduce((sum,a,i)=>{const b=p[(i+1)%p.length];return sum+a.x*b.z-b.x*a.z;},0)/2);
-assert.equal(cells.reduce((sum,c)=>sum+area(c),0),9*240*120,'biomes leave most of the large grass world public');
+assert.ok(cells.reduce((sum,c)=>sum+area(c),0)<area(X.coast())*.45,'most of the compact island remains public grass');
+assert.ok(scene.getObjectByName('natural-island'));assert.ok(cells.every(c=>c.length>4),'irregular territory polygons');
+for(let i=0;i<9;i++)assert.ok(scene.getObjectByName('biome-fringe-'+i),'biomes blend into the grass');
 assert.ok(camera.near>=1,'depth precision for large map');
 const territoryStates=D.FELDER.map((f)=>({id:f.id,ownerId:f.id===1?'player':null,level:1}));
 world.setTerritories(territoryStates,'player');

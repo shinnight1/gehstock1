@@ -35,6 +35,7 @@ const CSS_ORDER = [
   'styles/tycoon.css',
   'styles/gehstockmon.css',
   'styles/gehstockmon-abenteuer.css',
+  'styles/gehstockmon-dungeons.css',
 ];
 
 const CORE_ORDER = [
