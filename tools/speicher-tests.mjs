@@ -117,7 +117,7 @@ await pruefe('ein eingespieltes Backup ist sofort beschreibbar', async () => {
   /* Das Einspielskript schreibt nur den Text, keinen Stempel. Der erste
      Spielzug danach muss trotzdem durchgehen. */
   const st = speicher('hgh-gehstockmon');
-  daten.set('hgh-gehstockmon|world-v2', JSON.stringify({ version: 1, players: { x: { gold: 7 } } }));
+  daten.set('hgh:hgh-gehstockmon:world-v2', JSON.stringify({ version: 1, players: { x: { gold: 7 } } }));
   const e = await st.getWithMetadata('world-v2');
   assert.equal(e.data.players.x.gold, 7);
   const w = await st.setJSON('world-v2', { version: 2, players: {} }, { onlyIfMatch: e.etag });

@@ -2,6 +2,7 @@
 (function (SG) {
   var D = SG.gehstockmon.daten, E = SG.gehstockmon.wirtschaft = {};
   E.HOUR = 3600000; E.EGG_TIME = 2 * E.HOUR; E.HATCH_TIME = E.HOUR;
+  E.DAILY_GOLD = 150;
   E.STOCK_LIMIT = 3; E.BAG_LIMIT = 12; E.INCUBATORS = 3;
   E.LEVELS = [null,
     { name: 'Lager', income: 20, bonus: 0, cost: 120 },
@@ -12,6 +13,7 @@
   E.outpost = function (value, now) {
     var t = value || {}, captured = number(t.capturedAt, now);
     return { level: Math.max(1, Math.min(3, Math.floor(number(t.level, 1)))), capturedAt: captured,
+      dailyAt: Math.max(captured, number(t.dailyAt, now)),
       incomeAt: Math.max(captured, number(t.incomeAt, captured)), eggAt: Math.max(captured, number(t.eggAt, captured)),
       eggStock: Math.min(E.STOCK_LIMIT, Math.floor(number(t.eggStock, 0))),
       weekendAt: Math.max(captured, number(t.weekendAt, SG.gehstockmon.zeiten.REWARDS_START)) };
@@ -19,7 +21,7 @@
   var previous = D.neuerStand;
   D.neuerStand = function (save, now) {
     now = number(now, Date.now()); var st = previous(save), old = save || {};
-    st.economyVersion = 1;
+    st.economyVersion = 2; st.dailyGoldPending = Math.floor(number(old.dailyGoldPending, 0));
     st.gold = Math.floor(number(old.gold, st.essenz + 120));
     st.goldRemainder = Math.min(0.999999999, number(old.goldRemainder, 0));
     st.clockAt = number(old.clockAt, now); st.eggSerial = Math.floor(number(old.eggSerial, 0));
@@ -38,11 +40,15 @@
   };
   E.settle = function (st, post, now) {
     now = Math.max(st.clockAt || 0, now); st.clockAt = now;
-    var end = Math.max(post.incomeAt, now), earned = st.goldRemainder + (end - post.incomeAt) / E.HOUR * E.LEVELS[post.level].income;
+    var end = Math.max(post.incomeAt, now), earned = st.goldRemainder + (SG.gehstockmon.zeiten.openTime(end) - SG.gehstockmon.zeiten.openTime(post.incomeAt)) / E.HOUR * E.LEVELS[post.level].income;
     var whole = Math.floor(earned + 1e-8); st.gold += whole; st.goldRemainder = Math.max(0, earned - whole); post.incomeAt = end;
-    var H = SG.gehstockmon.zeiten, produced = H.productionTime(post.eggAt), cycles = Math.max(0, Math.floor((H.productionTime(now) - produced) / E.EGG_TIME));
+    var H = SG.gehstockmon.zeiten;
+    var days=Math.max(0,H.day(now)-H.day(post.dailyAt));
+    if(days){st.dailyGoldPending=(st.dailyGoldPending||0)+days*E.DAILY_GOLD;post.dailyAt=now;}
+    var produced = H.productionTime(post.eggAt), cycles = Math.max(0, Math.floor((H.productionTime(now) - produced) / E.EGG_TIME));
     if (cycles) { post.eggStock = Math.min(E.STOCK_LIMIT, post.eggStock + cycles); post.eggAt = H.productionAt(produced + cycles * E.EGG_TIME); }
   };
+  E.deliverDaily = function(st){var n=st.dailyGoldPending||0;st.gold+=n;st.dailyGoldPending=0;return n;};
   E.nextEggAt = function (post) { var H = SG.gehstockmon.zeiten; return H.productionAt(H.productionTime(post.eggAt) + E.EGG_TIME); };
   E.weekend = function (st, post, id, now) {
     var reward = SG.gehstockmon.zeiten.weekends(Math.max(post.capturedAt, post.weekendAt), now);
@@ -79,7 +85,7 @@
   E.hatch = function (st, id, now, random) {
     var egg = st.eggs.find(function (e) { return e.id === id; });
     if (!egg || egg.readyAt === null || now < egg.readyAt) throw new Error('Das Ei ist noch nicht fertig ausgebrütet.');
-    var pool = D.KATALOG.filter(function (k) { return st.besitz.indexOf(k.id) < 0; }), weights = [8, 5, 3, 1, .25, .05], chosen = null;
+    var pool = D.KATALOG.filter(function (k) { return st.besitz.indexOf(k.id) < 0; }), weights = [8, 5, 3.8, 3, 1, .25, .05], chosen = null;
     if (pool.length) {
       var total = pool.reduce(function (sum, k) { return sum + weights[k.seltenheit]; }, 0), pick = Math.max(0, Math.min(0.9999999, Number.isFinite(random) ? random : Math.random())) * total;
       chosen = pool[pool.length - 1]; for (var i = 0; i < pool.length; i++) { pick -= weights[pool[i].seltenheit]; if (pick < 0) { chosen = pool[i]; break; } }

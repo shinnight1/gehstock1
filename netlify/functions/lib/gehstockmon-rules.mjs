@@ -199,6 +199,12 @@ const SG = { rules: {} };
     var basis = D.KREATUREN[v[2]];
     D.KATALOG.push({ id: v[0], name: v[1], typ: v[2], seltenheit: v[3], bild: 'gm-' + v[4], lore: v[5], rolle: basis.rolle, hp: basis.hp, ang: basis.ang, tempo: basis.tempo, faeh: basis.faeh, mono: basis.mono });
   });
+  // IDs bleiben stabil: gespeicherte Sammlungen behalten alle Mons.
+  D.SELTENHEITEN.splice(2,0,{name:'Außergewöhnlich',farbe:'#69dcad',rang:3,text:'Erwachte Naturkraft · seltene Mutationen'});
+  D.SELTENHEITEN.forEach(function(r,i){r.rang=i+1;});
+  D.KATALOG.forEach(function(k){if(k.seltenheit>=2)k.seltenheit++;if(['donnerwidder','frostklaue','dornenwolf','obsidianrabe','korallenwacht','duenenschakal','bernsteinkaefer'].indexOf(k.id)>=0)k.seltenheit=2;});
+  D.MON_SIZES=[3.8,3.2,3.4,2.7,1.25,1.55,1.2,1.25,2.1,1.7,1.2,1.2,3.4,3.1,2.8,2.6,1.6,1.5,3.2,4.6,3.6,5,4.6,2.4,2.1,4.6,5.5,5.8,4.3,5.5,1.2,1,2.6,1.7,4.5,3.5,3.9,3.8,5.8,4.2,6.8,7.5];
+  D.KATALOG.forEach(function(k,i){k.spriteIndex=i;k.worldSize=D.MON_SIZES[i];});
   D.mon = function (id) { return D.KATALOG.find(function (k) { return k.id === id; }) || null; };
   D.STARTER = ['moosling','glutfuchs','nebelmolch','rostknirps'];
   D.neuerStand = function (save) {
@@ -224,7 +230,7 @@ const SG = { rules: {} };
     if (st.essenz < 60) return null;
     var pool = D.KATALOG.filter(function (k) { return st.besitz.indexOf(k.id) < 0; });
     if (!pool.length) return null;
-    var weights = [8, 5, 3, 1, .25, .05], total = pool.reduce(function (sum, k) { return sum + weights[k.seltenheit]; }, 0);
+    var weights = [8, 5, 3.8, 3, 1, .25, .05], total = pool.reduce(function (sum, k) { return sum + weights[k.seltenheit]; }, 0);
     var pick = Math.max(0, Math.min(0.9999999, Number.isFinite(random) ? random : Math.random())) * total;
     var chosen = pool[pool.length - 1];
     for (var i = 0; i < pool.length; i++) { pick -= weights[pool[i].seltenheit]; if (pick < 0) { chosen = pool[i]; break; } }
@@ -235,17 +241,18 @@ const SG = { rules: {} };
 /* Eine große Insel mit genau einer Festung je Biom. */
 (function (SG) {
   var D = SG.gehstockmon.daten;
-  D.MAP_VERSION = 3;
+  D.MAP_VERSION = 4;
+  D.WORLD = {halfWidth:450,halfDepth:420,bridgeZ:[-350,-240,-120,0,120,240,350]};
   D.BIOME = [
-    { x:-52,z:42,farbe:'#547d4b',dach:'#a24e34',biom:'Mooswacht',terrain:'Smaragdwald' },
-    { x:52,z:43,farbe:'#3e7772',dach:'#497f92',biom:'Flüsterufer',terrain:'Flussland' },
-    { x:65,z:-42,farbe:'#796452',dach:'#a95037',biom:'Aschenklippen',terrain:'Vulkanland' },
-    { x:-12,z:-62,farbe:'#586584',dach:'#65518c',biom:'Nebelwald',terrain:'Geisterwald' },
-    { x:-72,z:-32,farbe:'#a6bbb9',dach:'#b98841',biom:'Frostkrone',terrain:'Schneegebirge' },
-    { x:0,z:52,farbe:'#8aa653',dach:'#cda95c',biom:'Tauwiese',terrain:'Blütenauen',difficulty:'Einsteiger' },
-    { x:84,z:4,farbe:'#ba8d5c',dach:'#9d4940',biom:'Sonnengrab',terrain:'Bernsteinwüste',difficulty:'Sehr schwer' },
-    { x:-30,z:-1,farbe:'#675780',dach:'#779aba',biom:'Donnergrat',terrain:'Sturmheide',difficulty:'Extrem' },
-    { x:28,z:-35,farbe:'#452d4e',dach:'#c64e74',biom:'Weltenschlund',terrain:'Leerenbruch',difficulty:'Endspiel' }
+    { x:-240,z:240,farbe:'#547d4b',dach:'#a24e34',biom:'Mooswacht',terrain:'Smaragdwald' },
+    { x:240,z:240,farbe:'#3e7772',dach:'#497f92',biom:'Flüsterufer',terrain:'Flussland' },
+    { x:240,z:0,farbe:'#796452',dach:'#a95037',biom:'Aschenklippen',terrain:'Vulkanland' },
+    { x:0,z:-240,farbe:'#586584',dach:'#65518c',biom:'Nebelwald',terrain:'Geisterwald' },
+    { x:-240,z:-240,farbe:'#a6bbb9',dach:'#b98841',biom:'Frostkrone',terrain:'Schneegebirge' },
+    { x:0,z:240,farbe:'#8aa653',dach:'#cda95c',biom:'Tauwiese',terrain:'Blütenauen',difficulty:'Einsteiger' },
+    { x:240,z:-240,farbe:'#ba8d5c',dach:'#9d4940',biom:'Sonnengrab',terrain:'Bernsteinwüste',difficulty:'Sehr schwer' },
+    { x:-240,z:0,farbe:'#675780',dach:'#779aba',biom:'Donnergrat',terrain:'Sturmheide',difficulty:'Extrem' },
+    { x:0,z:0,farbe:'#452d4e',dach:'#c64e74',biom:'Weltenschlund',terrain:'Leerenbruch',difficulty:'Endspiel' }
   ];
   D.FELDER=D.FELDER.slice(0,5);
   for(var i=5;i<9;i++)D.FELDER.push({id:i+1,feinde:JSON.parse(JSON.stringify(D.FELDER[i===5?0:4].feinde)),lehre:i===5?'Ein sicherer erster Schritt.':'Baue eine starke Truppe auf.'});
@@ -256,6 +263,7 @@ const SG = { rules: {} };
 (function (SG) {
   var D = SG.gehstockmon.daten, E = SG.gehstockmon.wirtschaft = {};
   E.HOUR = 3600000; E.EGG_TIME = 2 * E.HOUR; E.HATCH_TIME = E.HOUR;
+  E.DAILY_GOLD = 150;
   E.STOCK_LIMIT = 3; E.BAG_LIMIT = 12; E.INCUBATORS = 3;
   E.LEVELS = [null,
     { name: 'Lager', income: 20, bonus: 0, cost: 120 },
@@ -266,6 +274,7 @@ const SG = { rules: {} };
   E.outpost = function (value, now) {
     var t = value || {}, captured = number(t.capturedAt, now);
     return { level: Math.max(1, Math.min(3, Math.floor(number(t.level, 1)))), capturedAt: captured,
+      dailyAt: Math.max(captured, number(t.dailyAt, now)),
       incomeAt: Math.max(captured, number(t.incomeAt, captured)), eggAt: Math.max(captured, number(t.eggAt, captured)),
       eggStock: Math.min(E.STOCK_LIMIT, Math.floor(number(t.eggStock, 0))),
       weekendAt: Math.max(captured, number(t.weekendAt, SG.gehstockmon.zeiten.REWARDS_START)) };
@@ -273,7 +282,7 @@ const SG = { rules: {} };
   var previous = D.neuerStand;
   D.neuerStand = function (save, now) {
     now = number(now, Date.now()); var st = previous(save), old = save || {};
-    st.economyVersion = 1;
+    st.economyVersion = 2; st.dailyGoldPending = Math.floor(number(old.dailyGoldPending, 0));
     st.gold = Math.floor(number(old.gold, st.essenz + 120));
     st.goldRemainder = Math.min(0.999999999, number(old.goldRemainder, 0));
     st.clockAt = number(old.clockAt, now); st.eggSerial = Math.floor(number(old.eggSerial, 0));
@@ -292,11 +301,15 @@ const SG = { rules: {} };
   };
   E.settle = function (st, post, now) {
     now = Math.max(st.clockAt || 0, now); st.clockAt = now;
-    var end = Math.max(post.incomeAt, now), earned = st.goldRemainder + (end - post.incomeAt) / E.HOUR * E.LEVELS[post.level].income;
+    var end = Math.max(post.incomeAt, now), earned = st.goldRemainder + (SG.gehstockmon.zeiten.openTime(end) - SG.gehstockmon.zeiten.openTime(post.incomeAt)) / E.HOUR * E.LEVELS[post.level].income;
     var whole = Math.floor(earned + 1e-8); st.gold += whole; st.goldRemainder = Math.max(0, earned - whole); post.incomeAt = end;
-    var H = SG.gehstockmon.zeiten, produced = H.productionTime(post.eggAt), cycles = Math.max(0, Math.floor((H.productionTime(now) - produced) / E.EGG_TIME));
+    var H = SG.gehstockmon.zeiten;
+    var days=Math.max(0,H.day(now)-H.day(post.dailyAt));
+    if(days){st.dailyGoldPending=(st.dailyGoldPending||0)+days*E.DAILY_GOLD;post.dailyAt=now;}
+    var produced = H.productionTime(post.eggAt), cycles = Math.max(0, Math.floor((H.productionTime(now) - produced) / E.EGG_TIME));
     if (cycles) { post.eggStock = Math.min(E.STOCK_LIMIT, post.eggStock + cycles); post.eggAt = H.productionAt(produced + cycles * E.EGG_TIME); }
   };
+  E.deliverDaily = function(st){var n=st.dailyGoldPending||0;st.gold+=n;st.dailyGoldPending=0;return n;};
   E.nextEggAt = function (post) { var H = SG.gehstockmon.zeiten; return H.productionAt(H.productionTime(post.eggAt) + E.EGG_TIME); };
   E.weekend = function (st, post, id, now) {
     var reward = SG.gehstockmon.zeiten.weekends(Math.max(post.capturedAt, post.weekendAt), now);
@@ -333,7 +346,7 @@ const SG = { rules: {} };
   E.hatch = function (st, id, now, random) {
     var egg = st.eggs.find(function (e) { return e.id === id; });
     if (!egg || egg.readyAt === null || now < egg.readyAt) throw new Error('Das Ei ist noch nicht fertig ausgebrütet.');
-    var pool = D.KATALOG.filter(function (k) { return st.besitz.indexOf(k.id) < 0; }), weights = [8, 5, 3, 1, .25, .05], chosen = null;
+    var pool = D.KATALOG.filter(function (k) { return st.besitz.indexOf(k.id) < 0; }), weights = [8, 5, 3.8, 3, 1, .25, .05], chosen = null;
     if (pool.length) {
       var total = pool.reduce(function (sum, k) { return sum + weights[k.seltenheit]; }, 0), pick = Math.max(0, Math.min(0.9999999, Number.isFinite(random) ? random : Math.random())) * total;
       chosen = pool[pool.length - 1]; for (var i = 0; i < pool.length; i++) { pick -= weights[pool[i].seltenheit]; if (pick < 0) { chosen = pool[i]; break; } }
@@ -372,6 +385,9 @@ const SG = { rules: {} };
     for (var i = 0; i <= 7; i++) if (H.CLOSE[H.weekday(d + i)] && H.at(d + i, 7) > t) { next = H.at(d + i, 7); break; }
     return { open: open, serverTime: t, timeZone: H.ZONE, closesAt: open ? H.at(d, close) : null, nextOpenAt: next };
   };
+  // Nur geöffnete Stunden zählen; ganze Wochen werden ohne Tages-Schleife addiert.
+  H.openTime = function(t){var d=H.day(t),monday=d-((H.weekday(d)+6)%7),total=Math.floor(monday/7)*33*HOUR;
+    for(var day=monday;day<=d;day++){var close=H.CLOSE[H.weekday(day)];if(close)total+=Math.max(0,Math.min(t,H.at(day,close))-H.at(day,7));}return total;};
   H.format = function (t) { return new Intl.DateTimeFormat('de-DE', { timeZone: H.ZONE, weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }).format(new Date(t)); };
   // Virtuelle Produktionszeit lässt Samstag und Sonntag aus. Die Zeitumstellung
   // liegt ebenfalls am Sonntag und verändert daher keine Eier-Produktionsstunde.
@@ -390,9 +406,11 @@ const SG = { rules: {} };
 (function(SG){
   var D=SG.gehstockmon.daten,E=SG.gehstockmon.wirtschaft,X=SG.gehstockmon.abenteuer={};
   X.OPS=['survey','gather','trainer_start','quest_claim','shop_buy','equip','raid_start','raid_turn','raid_arena','raid_cancel'];
-  X.SPAWN={x:0,z:17};X.SPAWN_TIME=30*60000;
+  X.SPAWN={x:0,z:125};X.SPAWN_TIME=60*60000;
   X.SKINS=[{id:'wanderer',name:'Wanderer',color:'#ffffff',price:0},{id:'waldlaeufer',name:'Waldläufer',color:'#8ee6ad',price:150},{id:'frostwanderer',name:'Frostwanderer',color:'#83cfff',price:300},{id:'aschenritter',name:'Ascheritter',color:'#ff9576',price:500},{id:'trainermeister',name:'Trainermeister',color:'#ffe07b',quest:'trainer3'},{id:'runensucher',name:'Runensucher',color:'#bd90ff',quest:'gather6'},{id:'weltenwanderer',name:'Weltenwanderer',color:'#71ffe3',quest:'visit9'}];
+  X.SKINS.push({id:'knochenkoenig',name:'Knochenkönig',color:'#f0dfb5',price:2400},{id:'leerenreaper',name:'Leerenschnitter',color:'#ad79ff',price:5000},{id:'drachenritter',name:'Drachenritter',color:'#ff6254',price:8000});
   X.WEAPONS=[{id:'gehstock',name:'Reisestock',attack:20,price:0},{id:'eisenspeer',name:'Eisenspeer',attack:24,price:200},{id:'runenklinge',name:'Runenklinge',attack:28,price:450},{id:'sturmhammer',name:'Sturmhammer',attack:32,price:800}];
+  X.WEAPONS.push({id:'titanenlanze',name:'Titanenlanze',attack:37,price:2500},{id:'weltenbrecher',name:'Weltenbrecher',attack:43,price:6500});
   X.QUESTS=[{id:'trainer1',name:'Der erste Trainingssieg',stat:'trainerWins',goal:1,gold:80},{id:'trainer3',name:'Mit Geduld zum Meister',stat:'trainerWins',goal:3,skin:'trainermeister'},{id:'visit3',name:'Drei Horizonte',stat:'visited',goal:3,gold:120},{id:'visit9',name:'Die ganze Insel',stat:'visited',goal:9,skin:'weltenwanderer'},{id:'gather6',name:'Runensuche',stat:'gathered',goal:6,skin:'runensucher'},{id:'hatch1',name:'Ein neuer Begleiter',stat:'hatched',goal:1,gold:100},{id:'upgrade1',name:'Ein sicherer Rückzugsort',stat:'upgrades',goal:1,gold:100}];
   X.skin=function(id){return X.SKINS.find(function(v){return v.id===id;})||X.SKINS[0];};
   X.weapon=function(id){return X.WEAPONS.find(function(v){return v.id===id;})||X.WEAPONS[0];};
@@ -411,9 +429,14 @@ const SG = { rules: {} };
   };
   X.progress=function(p,q){return q.stat==='visited'?p.visited.length:p.progress[q.stat]||0;};
   X.protected=function(p,now){return now-p.joinedAt<24*E.HOUR||p.besitz.length<6||p.raidShield>now;};
-  X.cells=function(){return D.BIOME.map(function(site,index){var polygon=[];for(var i=0;i<96;i++){var a=i*Math.PI*2/96;polygon.push({x:Math.cos(a)*123,z:Math.sin(a)*115});}
-    D.BIOME.forEach(function(other,j){if(j===index)return;var nx=other.x-site.x,nz=other.z-site.z,c=(other.x*other.x+other.z*other.z-site.x*site.x-site.z*site.z)/2,out=[];
-      for(var p=0;p<polygon.length;p++){var a=polygon[p],b=polygon[(p+1)%polygon.length],da=a.x*nx+a.z*nz-c,db=b.x*nx+b.z*nz-c;if(da<=0)out.push(a);if((da<=0)!==(db<=0)){var t=da/(da-db);out.push({x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t});}}polygon=out;});return polygon;});};
+  X.riverCenter=function(z){return 110+Math.sin(z*.012)*14;};
+  X.onLand=function(p){return Number.isFinite(p.x)&&Number.isFinite(p.z)&&Math.abs(p.x)<D.WORLD.halfWidth-2&&Math.abs(p.z)<D.WORLD.halfDepth-2;};
+  X.waterAt=function(p){return Math.abs(p.x-X.riverCenter(p.z))<5.3&&!D.WORLD.bridgeZ.some(function(z){return Math.abs(p.z-z)<2.6;});};
+  X.walkable=function(p){return X.onLand(p)&&!X.waterAt(p);};
+  X.landTravel=function(a,b){if(!X.walkable(a)||!X.walkable(b))return false;var n=Math.ceil(Math.hypot(b.x-a.x,b.z-a.z)/2);for(var i=1;i<n;i++)if(!X.walkable({x:a.x+(b.x-a.x)*i/n,z:a.z+(b.z-a.z)*i/n}))return false;return true;};
+  // Nur waagerechte Nachbarn teilen Grenzen. Breite öffentliche Graskorridore
+  // zwischen den Reihen bleiben selbst bei acht gleich besetzten Gebieten frei.
+  X.cells=function(){return D.BIOME.map(function(b){return[{x:b.x-120,z:b.z-60},{x:b.x+120,z:b.z-60},{x:b.x+120,z:b.z+60},{x:b.x-120,z:b.z+60}];});};
   function pointKey(p){return p.x.toFixed(3)+','+p.z.toFixed(3);}
   X.layout=function(territories){var cells=X.cells(),edges={},parents=cells.map(function(c,i){return i;});
     function root(i){while(parents[i]!==i)i=parents[i];return i;}
@@ -426,25 +449,35 @@ const SG = { rules: {} };
       g.edges=g.edges.map(function(e){return{a:{x:center.x+(e.a.x-center.x)*inset,z:center.z+(e.a.z-center.z)*inset},b:{x:center.x+(e.b.x-center.x)*inset,z:center.z+(e.b.z-center.z)*inset}};});
       var candidates=g.edges.filter(function(e){return Math.hypot(e.a.x-e.b.x,e.a.z-e.b.z)>10;});candidates.sort(function(a,b){return Math.hypot((a.a.x+a.b.x)/2,(a.a.z+a.b.z)/2)-Math.hypot((b.a.x+b.b.x)/2,(b.a.z+b.b.z)/2);});
       var edge=candidates[0]||g.edges[0],mx=(edge.a.x+edge.b.x)/2,mz=(edge.a.z+edge.b.z)/2,len=Math.hypot(edge.b.x-edge.a.x,edge.b.z-edge.a.z),dx=(edge.b.x-edge.a.x)/len,dz=(edge.b.z-edge.a.z)/len,nx=-dz,nz=dx;
+      if(Math.abs(mx-X.riverCenter(mz))<14){mx+=dx*24;mz+=dz*24;}
       if((mx-center.x)*nx+(mz-center.z)*nz<0){nx=-nx;nz=-nz;}g.gate={x:mx,z:mz,dx:dx,dz:dz,nx:nx,nz:nz,edge:edge};g.center=center;return g;
     });};
   X.inside=function(p,g){var inside=false;g.edges.forEach(function(e){var a=e.a,b=e.b;if((a.z>p.z)!==(b.z>p.z)&&p.x<(b.x-a.x)*(p.z-a.z)/(b.z-a.z)+a.x)inside=!inside;});return inside;};
   function crosses(a,b,c,d){var rx=b.x-a.x,rz=b.z-a.z,sx=d.x-c.x,sz=d.z-c.z,den=rx*sz-rz*sx;if(Math.abs(den)<1e-8)return false;var u=((c.x-a.x)*rz-(c.z-a.z)*rx)/den,t=((c.x-a.x)*sz-(c.z-a.z)*sx)/den;return t>=0&&t<=1&&u>=0&&u<=1;}
-  X.canTravel=function(layout,from,to,id){return layout.every(function(g){return g.edges.every(function(e){if(e===g.gate.edge){var q=g.gate,left={x:q.x-q.dx*3,z:q.z-q.dz*3},right={x:q.x+q.dx*3,z:q.z+q.dz*3};if(crosses(from,to,e.a,left)||crosses(from,to,right,e.b))return false;return g.ownerId===id||!crosses(from,to,left,right);}return!crosses(from,to,e.a,e.b);});});};
+  function pointDistance(p,a,b){var dx=b.x-a.x,dz=b.z-a.z,l=dx*dx+dz*dz,t=l?Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.z-a.z)*dz)/l)):0;return Math.hypot(p.x-a.x-t*dx,p.z-a.z-t*dz);}
+  function touches(a,b,c,d){return crosses(a,b,c,d)||Math.min(pointDistance(a,c,d),pointDistance(b,c,d),pointDistance(c,a,b),pointDistance(d,a,b))<1.1;}
+  X.canTravel=function(layout,from,to,id){return X.landTravel(from,to)&&layout.every(function(g){return g.edges.every(function(e){if(e===g.gate.edge){var q=g.gate,left={x:q.x-q.dx*3,z:q.z-q.dz*3},right={x:q.x+q.dx*3,z:q.z+q.dz*3};if(touches(from,to,e.a,left)||touches(from,to,right,e.b))return false;return g.ownerId===id||!touches(from,to,left,right);}return!touches(from,to,e.a,e.b);});});};
   X.outside=function(point,layout){var p={x:point.x,z:point.z};for(var i=0;i<layout.length+1;i++){var g=layout.find(function(g){return X.inside(p,g);});if(!g)break;p={x:g.gate.x+g.gate.nx*4,z:g.gate.z+g.gate.nz*4};}return p;};
   /* Sichtgraph um Mauer-Ecken: dieselben Wege für Klicknavigation und Positionsprüfung. */
   X.route=function(layout,from,to,id,limit){limit=limit||Infinity;if(layout.some(function(g){return g.ownerId!==id&&X.inside(to,g);}))return null;
     if(X.canTravel(layout,from,to,id))return Math.hypot(to.x-from.x,to.z-from.z)<=limit?[to]:null;
-    var nodes=[from,to],seen={};function add(p){var k=pointKey(p);if(seen[k]||Math.hypot(p.x/123,p.z/115)>1||layout.some(function(g){return g.ownerId!==id&&X.inside(p,g);}))return;seen[k]=true;nodes.push(p);}
-    layout.forEach(function(g){g.edges.forEach(function(e){[e.a,e.b].forEach(function(p){var dx=p.x-g.center.x,dz=p.z-g.center.z,l=Math.hypot(dx,dz);add({x:p.x+dx/l*1.4,z:p.z+dz/l*1.4});});});var q=g.gate;[-1,1].forEach(function(s){add({x:q.x+q.nx*4*s,z:q.z+q.nz*4*s});});});
+    var nodes=[from,to],seen={};function add(p){var k=pointKey(p);if(seen[k]||!X.walkable(p)||layout.some(function(g){return g.ownerId!==id&&X.inside(p,g);}))return;seen[k]=true;nodes.push(p);}
+    layout.forEach(function(g){g.edges.forEach(function(e){[e.a,e.b].forEach(function(p){var dx=p.x-g.center.x,dz=p.z-g.center.z,l=Math.hypot(dx,dz);add({x:p.x+dx/l*2.5,z:p.z+dz/l*2.5});});});var q=g.gate;[-1,1].forEach(function(s){add({x:q.x+q.nx*4*s,z:q.z+q.nz*4*s});});});
+    D.WORLD.bridgeZ.forEach(function(z){[-1,1].forEach(function(side){add({x:X.riverCenter(z)+side*10,z:z});});});
     var dist=nodes.map(function(){return Infinity;}),prev=[],done={};dist[0]=0;
     for(var n=0;n<nodes.length;n++){var at=-1;for(var i=0;i<nodes.length;i++)if(!done[i]&&(at<0||dist[i]<dist[at]))at=i;if(at<0||dist[at]>limit||!Number.isFinite(dist[at]))break;if(at===1){var path=[];while(at!==0){path.unshift(nodes[at]);at=prev[at];}return path;}done[at]=true;
       for(var j=0;j<nodes.length;j++){if(done[j])continue;var d=dist[at]+Math.hypot(nodes[at].x-nodes[j].x,nodes[at].z-nodes[j].z);if(d<dist[j]&&d<=limit&&X.canTravel(layout,nodes[at],nodes[j],id)){dist[j]=d;prev[j]=at;}}
     }return null;
   };
+  X.encounterPosition=function(e,now){if(e.kind!=='trainer')return{x:e.x,z:e.z};var t=(now-e.epochAt)/1000,ease=(Math.sin(t*.055+e.phase)+1)/2;return{x:e.homeX+(e.patrolX-e.homeX)*ease,z:e.homeZ+(e.patrolZ-e.homeZ)*ease};};
   X.encounters=function(now,territories){var epoch=Math.floor(now/X.SPAWN_TIME),seed=(epoch*7919+49217)>>>0,layout=X.layout(territories),out=[];
     function random(){seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;}
-    for(var i=0;i<8;i++){var angle=random()*Math.PI*2,radius=20+random()*78,p=i===0?{x:8,z:21}:{x:Math.cos(angle)*radius,z:Math.sin(angle)*radius};p=X.outside(p,layout);if(out.some(function(e){return Math.hypot(e.x-p.x,e.z-p.z)<6;})){var origin=p;for(var offset=0;offset<36;offset++){var angle=offset*2.4,radius=6+Math.floor(offset/8)*3,candidate={x:origin.x+Math.cos(angle)*radius,z:origin.z+Math.sin(angle)*radius};if(Math.hypot(candidate.x/123,candidate.z/115)<.97&&!layout.some(function(g){return X.inside(candidate,g);})&&!out.some(function(e){return Math.hypot(e.x-candidate.x,e.z-candidate.z)<6;})){p=candidate;break;}}}var biome=0,best=Infinity;D.BIOME.forEach(function(b,j){var d=Math.hypot(b.x-p.x,b.z-p.z);if(d<best){best=d;biome=j;}});out.push({id:epoch+':'+i,kind:i<4?'trainer':'rune',name:i<4?['Trainerin Mira','Wandertrainer Bo','Trainerin Fen','Runentrainer Ivo'][i]:'Verlorene Rune',x:p.x,z:p.z,territoryId:biome+1,expiresAt:(epoch+1)*X.SPAWN_TIME});}return out;};
+    for(var i=0;i<8;i++){var p;for(var tries=0;tries<200;tries++){p={x:(random()-.5)*790,z:(random()-.5)*730};if(X.canTravel(layout,p,p,'public')&&!layout.some(function(g){return X.inside(p,g);})&&!out.some(function(e){return Math.hypot(e.x-p.x,e.z-p.z)<30;}))break;}
+      var goal={x:p.x,z:p.z};if(i<2)for(var attempt=0;attempt<30;attempt++){var a=random()*Math.PI*2,candidate={x:p.x+Math.cos(a)*48,z:p.z+Math.sin(a)*48};if(X.canTravel(layout,p,candidate,'public')){goal=candidate;break;}}
+      if(i<2&&goal.x===p.x&&goal.z===p.z){p={x:-390+i*50,z:120};goal={x:p.x+35,z:p.z};}
+      var biome=0;D.BIOME.forEach(function(b,j){if(Math.hypot(b.x-p.x,b.z-p.z)<Math.hypot(D.BIOME[biome].x-p.x,D.BIOME[biome].z-p.z))biome=j;});
+      var e={id:epoch+':'+i,kind:i<2?'trainer':'rune',name:i<2?['Trainerin Mira','Wandertrainer Bo'][i]:'Verlorene Rune',skinIndex:10+i%2,homeX:p.x,homeZ:p.z,patrolX:goal.x,patrolZ:goal.z,phase:random()*6.28,epochAt:epoch*X.SPAWN_TIME,x:p.x,z:p.z,territoryId:biome+1,expiresAt:(epoch+1)*X.SPAWN_TIME};Object.assign(e,X.encounterPosition(e,now));out.push(e);
+    }return out;};
 })(SG);
 
 /* Rundenkampf: genau ein aktives Mon pro Seite, jede Spieleraktion ist explizit. */
@@ -452,7 +485,7 @@ const SG = { rules: {} };
   var D = SG.gehstockmon.daten, A = SG.gehstockmon.arena = {};
   var stats = [[132,20,3],[88,29,8],[112,22,5],[96,25,11]];
   var specials = ['Schildstoß', 'Sichelstreich', 'Lebensquell', 'Runenstörung'];
-  A.stats = function (mon) { var s = stats[mon.typ],factor=[.78,1,1.18,1.38,1.65,2][mon.seltenheit]; return { hp: Math.round(s[0]*factor), ang: Math.round(s[1]*factor), tempo: s[2] }; };
+  A.stats = function (mon) { var s = stats[mon.typ],factor=[.78,1,1.09,1.18,1.38,1.65,2][mon.seltenheit]; return { hp: Math.round(s[0]*factor), ang: Math.round(s[1]*factor), tempo: s[2] }; };
   A.moves = function (u, round) {
     return [
       { id: 'strike', name: 'Stockhieb', text: 'Zuverlässiger Angriff', damage: u.ang, enabled: true },
@@ -476,7 +509,7 @@ const SG = { rules: {} };
     var o = options || {};
     return { id: o.id || 'local', territoryId: o.territoryId || 1, territoryVersion: o.version || 1,
       level: o.level || 1, revision: 0, round: 1, phase: 'choose', winner: null, settled: false,
-      teams: [roster.map(function (k,i) { return unit(k,'wir',i,0); }), enemies.map(function (k,i) { return unit(k,'sie',i,SG.gehstockmon.wirtschaft.LEVELS[o.level || 1].bonus); })],
+      teams: [roster.map(function (k,i) { return unit(k,'wir',i,0); }), enemies.map(function (k,i) { return unit(k,'sie',i,SG.gehstockmon.wirtschaft.LEVELS[o.level || 1].bonus+(o.npcTerritory?(o.territoryId===9?.65:o.territoryId===8?.4:0):0)); })],
       active: [0,0], events: [], startedAt: o.now || Date.now(), lastActionAt: o.now || Date.now() };
   };
   function active(s, side) { return s.teams[side][s.active[side]]; }

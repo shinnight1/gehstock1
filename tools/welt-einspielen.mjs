@@ -62,7 +62,7 @@ for (const store of stores) {
     try { JSON.parse(text); }
     catch { console.log('  KEIN JSON: ' + eintrag.datei); fehler++; continue; }
 
-    const d = store + '|' + eintrag.key;
+    const d = 'hgh:' + store + ':' + eintrag.key;
     if (probe) { console.log('  wuerde schreiben: ' + d + '  ' + (text.length / 1024).toFixed(1) + ' KB'); geschrieben++; continue; }
     try {
       await r.set(d, text);

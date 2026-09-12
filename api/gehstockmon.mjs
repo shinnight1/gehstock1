@@ -1,4 +1,4 @@
-/* Vercel findet Funktionen unter api/. Der Code selbst bleibt dort, wo
-   Netlify ihn erwartet - so laeuft ein Stand auf beiden Plattformen und
-   der Rueckfallweg bleibt offen. */
-export { default } from '../netlify/functions/gehstockmon.mjs';
+import handler from '../netlify/functions/gehstockmon.mjs';
+export const POST = handler;
+export const OPTIONS = handler;
+export const GET = handler;

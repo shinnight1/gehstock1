@@ -7,3 +7,5 @@
 .gm-map-legend{top:155px}.gm-overview .gm-map-pin{min-width:130px;max-width:185px;padding:5px 8px;gap:6px}.gm-overview .gm-pin-text{display:block;min-width:0}.gm-overview .gm-pin-name{display:block;font-size:12px!important}.gm-overview .gm-pin-owner{display:block;font-size:10px;max-width:130px}.gm-overview .gm-pin-number{width:23px;height:23px;font-size:13px}
 .gm-overview .gm-encounter-pin .gm-skin-preview{display:none}.gm-overview .gm-encounter-pin.trainer{font-size:16px;width:28px;height:28px;background:#173b43;border:1px solid #d7b675}
 @media(max-width:500px){.gm-map-legend{top:176px;left:10px}.gm-camera-controls{top:185px}.gm-brand{max-width:195px}.gm-hours-label{font-size:11px;white-space:nowrap}.gm-overview .gm-map-pin{min-width:104px;max-width:135px}.gm-overview .gm-pin-number{display:none}.gm-overview .gm-pin-owner{max-width:118px}}
+
+.gm-encounter-pin.trainer{width:36px;height:30px;font-size:18px;background:#19343ed9;border:1px solid #dbbc76;border-radius:8px}.gm-skin-preview{background:none;border-radius:0}.gm-skin-preview canvas{object-fit:contain}

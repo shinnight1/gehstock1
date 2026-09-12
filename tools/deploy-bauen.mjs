@@ -196,5 +196,5 @@ console.log('  dist/              ' + mb(groesse(DIST)));
 if (fs.existsSync(ARENA_ZIEL)) {
   console.log('  dist/games/arena/  ' + mb(groesse(ARENA_ZIEL)));
 }
-console.log('\nHochladen mit:  npx netlify deploy --prod');
+console.log('\nVeröffentlichen mit:  vercel --prod');
 console.log('Die Arena liegt danach unter  /games/arena/\n');

@@ -2,13 +2,13 @@
 (function(SG){var R=SG.gehstockmon,X=R.abenteuer,D=R.daten;
   R.mountAdventure=function(c){var el=c.el,button=c.button,drawer=c.drawer,duel=null,pins=[],encounters=[];
     function state(){return c.state();}
-    function player(skin,weapon){var p=el('div',undefined,'gm-skin-preview');p.style.setProperty('--skin',X.skin(skin).color);var canvas=el('canvas');canvas.width=canvas.height=128;canvas.setAttribute('aria-label',X.skin(skin).name);p.appendChild(canvas);var image=new Image();image.onload=function(){var ctx=canvas.getContext('2d');ctx.imageSmoothingEnabled=false;ctx.drawImage(image,0,0,128,128);var pixels=ctx.getImageData(0,0,128,128),a=pixels.data,color=X.skin(skin).color.match(/[a-f0-9]{2}/gi).map(function(v){return parseInt(v,16)/255;});for(var i=0;i<a.length;i+=4){if(a[i]-a[i+1]>35&&a[i+2]-a[i+1]>35)a[i+3]=0;else for(var j=0;j<3;j++)a[i+j]*=color[j];}ctx.putImageData(pixels,0,0);};image.src=SG.assets['gm-player-pixel'];p.appendChild(el('b',{gehstock:'⌁',eisenspeer:'♜',runenklinge:'⚔',sturmhammer:'⚒'}[weapon]||'✦','gm-weapon-icon'));return p;}
+    function player(skin,weapon){var p=el('div',undefined,'gm-skin-preview');p.style.setProperty('--skin',X.skin(skin).color);var canvas=el('canvas');canvas.width=canvas.height=128;canvas.setAttribute('aria-label',X.skin(skin).name);p.appendChild(canvas);R.drawAtlas(canvas,'skins',R.skinIndex(skin));p.appendChild(el('b',{gehstock:'⌁',eisenspeer:'♜',runenklinge:'⚔',sturmhammer:'⚒'}[weapon]||'✦','gm-weapon-icon'));return p;}
     function run(op,data,view){var request=c.request(op,data);if(duel)showDuel();request.then(function(res){c.apply(res);if(res.arena&&res.arena.phase!=='finished')c.arena(res.arena,true);else if(res.duel)showDuel();else if(view==='shop')shop();else if(view==='adventure')adventure();else c.closeCombat();if(res.message)c.notify(res.message);}).catch(function(error){c.error(error);if(duel)showDuel();});}
-    function approach(e){c.closeDrawer();var w=c.world();if(w&&w.walkToPoint)w.walkToPoint(e);c.notify('Du läufst zu '+e.name+'. Tippe dort erneut auf die Begegnung.');}
-    function encounter(e){if(!c.open(e.name,'encounter'))return;var s=state(),at=c.world().position(),near=Math.hypot(at.x-e.x,at.z-e.z)<8;
+    function approach(e){e=Object.assign({},e,X.encounterPosition(e,c.now()));c.closeDrawer();var w=c.world();if(w&&w.walkToPoint)w.walkToPoint(e);c.notify('Du läufst zu '+e.name+'. Tippe dort erneut auf die Begegnung.');}
+    function encounter(e){var live=X.encounterPosition(e,c.now());e=Object.assign({},e,live);if(!c.open(e.name,'encounter'))return;var s=state(),at=c.world().position(),near=Math.hypot(at.x-e.x,at.z-e.z)<8;
       if(e.kind==='trainer'){drawer.appendChild(player('trainermeister','gehstock'));drawer.appendChild(el('p','Ein freundliches Training gegen einfache Mons. Ein Sieg bringt 1 Ei und 25 Gold. Du verlierst bei einer Niederlage nichts.'));}
       else drawer.appendChild(el('p','Sammle diese Rune für 10 Gold und den Runensucher-Skin.'));
-      drawer.appendChild(el('p','Ort: '+D.FELDER[e.territoryId-1].biom+' · Begegnungen wechseln alle 30 Minuten.'));
+      drawer.appendChild(el('p','Ort: '+D.FELDER[e.territoryId-1].biom+' · Zwei Wandertrainer ziehen stündlich weiter.'));
       drawer.appendChild(button(near?(e.kind==='trainer'?'Training starten':'Rune einsammeln'):'Hingehen',function(){if(!near){approach(e);return;}run(e.kind==='trainer'?'trainer_start':'gather',{encounterId:e.id,squad:s.truppe},'adventure');},'gm-button gm-primary'));
     }
     function adventure(){if(!c.open('Abenteuer & Quests','adventure'))return;var s=state();drawer.appendChild(el('p','Starte mit Trainerkämpfen und der Tauwiese in den Blütenauen. Trainer schenken dir Eier; stärkere Mons helfen beim Erobern.','gm-beginner-tip'));
@@ -31,8 +31,8 @@
     }
     return{adventure:adventure,shop:shop,rival:rival,showDuel:showDuel,active:function(){return !!duel&&duel.phase!=='arena';},clear:function(){duel=null;},
       refresh:function(view){if(view==='shop')shop();if(view==='adventure')adventure();},
-      apply:function(res){duel=res.duel||null;encounters=res.encounters||[];pins.forEach(function(p){p.node.remove();});pins=encounters.map(function(e){var node=button(e.kind==='trainer'?'⚔':'✦',function(){encounter(e);},'gm-encounter-pin '+e.kind);node.title=e.name;node.setAttribute('aria-label',e.name);if(e.kind==='trainer')node.appendChild(player('trainermeister','gehstock'));node.appendChild(el('span',e.name));c.layer.appendChild(node);return{node:node,e:e};});},
-      frame:function(project,hidden,overview){pins.forEach(function(p){var point=project({x:p.e.x,z:p.e.z,y:1.5});p.node.hidden=hidden||!point.visible||!point.near&&!overview;p.node.style.transform='translate('+point.x+'px,'+point.y+'px) translate(-50%,-100%)';});}
+      apply:function(res){duel=res.duel||null;encounters=res.encounters||[];if(c.world()&&c.world().setEncounters)c.world().setEncounters(encounters,res.serverTime);pins.forEach(function(p){p.node.remove();});pins=encounters.map(function(e){var node=button(e.kind==='trainer'?'⚔':'✦',function(){encounter(e);},'gm-encounter-pin '+e.kind);node.title=e.name;node.setAttribute('aria-label',e.name);node.appendChild(el('span',e.name));c.layer.appendChild(node);return{node:node,e:e};});},
+      frame:function(project,hidden,overview){pins.forEach(function(p){var at=X.encounterPosition(p.e,c.now()),point=project({x:at.x,z:at.z,y:p.e.kind==='trainer'?4.7:1.5});p.node.hidden=hidden||!point.visible||!point.near&&!overview;p.node.style.transform='translate('+point.x+'px,'+point.y+'px) translate(-50%,-100%)';});}
     };
   };
 })(SG);

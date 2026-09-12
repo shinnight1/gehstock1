@@ -13,7 +13,7 @@ function adminBypass(body) {
 }
 function accessFor(timestamp, bypass) {
   const access = H.access(timestamp);
-  if (bypass && !access.open) return { ...access, open: true, adminOverride: true, closesAt: timestamp + 365 * 24 * 60 * 60 * 1000 };
+  if (bypass) return { ...access, open: true, adminOverride: true, closesAt: timestamp + 365 * 24 * 60 * 60 * 1000 };
   return access;
 }
 function requireOpen(timestamp, bypass = false) {
@@ -38,6 +38,7 @@ function initialWorld(now) {
 }
 function migrateMap(world, now) {
   if (world.mapVersion === D.MAP_VERSION) return;
+  if(world.mapVersion===3){world.mapVersion=D.MAP_VERSION;for(const p of Object.values(world.players)){p.spawn=X.outside(X.SPAWN,X.layout(world.territories));p.lastJoinAt=now;}return;}
   if(world.mapVersion===2){world.territories.push(...initialWorld(now).territories.slice(5));world.mapVersion=D.MAP_VERSION;return;}
   const old = clone(world.territories), biomeId = (id) => (id - 1) % 5 + 1;
   world.previousMap = { changedAt: now, territories: clone(old) };
@@ -93,7 +94,7 @@ function protectedOwner(world, t, now) {
 }
 function publicResult(world, id, now, extra = {}) {
   const p = world.players[id];
-  return { playerId: id, serverTime: now, access: accessFor(now, extra.adminOverride === true), mapVersion: world.mapVersion, profile: D.neuerStand(p, now), arena: p.arena || null,duel:p.duel||null,spawn:p.spawn,encounters:X.encounters(now,world.territories).filter(e=>!p.encounterClaims.includes(e.id)),
+  return { playerId: id, serverTime: now, access: accessFor(now, extra.adminOverride === true), mapVersion: world.mapVersion, dailyDelivery:extra.joining?p.dailyDelivery||0:0,profile: D.neuerStand(p, now), arena: p.arena || null,duel:p.duel||null,spawn:p.spawn,encounters:X.encounters(now,world.territories).filter(e=>!p.encounterClaims.includes(e.id)),
     territories: world.territories.map((t) => ({ id: t.id, ownerId: t.ownerId, ownerName: world.players[t.ownerId]?.name || t.ownerName, version: t.version, level: t.level,
       defense: A.defenders(t.id, t.ownerId ? t.defense : null).map((k) => ({ id: k.id, name: k.name })),
       eggStock: t.ownerId === id ? t.eggStock : 0, eggAt: t.ownerId === id ? t.eggAt : null })),
@@ -105,7 +106,7 @@ async function updatePresence(db, world, id, position, timestamp, clock, bypass 
   const p = world.players[id];
   if (!p) throw new GameError('Betritt zuerst die Spielerwelt.',409);
   if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.z) || !Number.isFinite(position.heading)
-      || Math.hypot(position.x/123,position.z/115)>1.01 || Math.abs(position.heading)>Math.PI+0.01) throw new GameError('Ungültige Kartenposition.');
+      || !X.onLand(position) || Math.abs(position.heading)>Math.PI+0.01) throw new GameError('Ungültige Kartenposition.');
   for (let attempt=0;attempt<8;attempt++) {
     const entry=await db.getWithMetadata('presence-v1',{type:'json',consistency:'strong'});
     const players=Object.fromEntries(Object.entries(entry?.data.players||{}).filter(([pid,v])=>world.players[pid]&&timestamp-v.updatedAt<15000));
@@ -117,7 +118,7 @@ async function updatePresence(db, world, id, position, timestamp, clock, bypass 
     if(!route)return json({serverTime:timestamp,access:accessFor(timestamp,bypass),position:{x:from.x,z:from.z,heading:from.heading||0},positionCorrected:true,peers:Object.values(players).filter(v=>v.id!==id).map(({credit,spawnAt,...peer})=>peer)});
     let traveled=0,cursor=from;for(const point of route){traveled+=Math.hypot(point.x-cursor.x,point.z-cursor.z);cursor=point;}
     if (!players[id] || players[id].updatedAt<=timestamp) players[id] = { id, name:p.name, x:Math.round(position.x*100)/100, z:Math.round(position.z*100)/100,
-      heading:position.heading, activity:activeArena(p)||activeDuel(p)?'arena':'map', updatedAt:timestamp,spawnAt:p.lastJoinAt,credit:Math.max(0,credit-traveled),skin:p.skin,weapon:p.weapon,protected:X.protected(p,timestamp) };
+      heading:position.heading, activity:activeArena(p)||activeDuel(p)?'arena':'map', updatedAt:timestamp,spawnAt:p.lastJoinAt,credit:Math.max(0,credit-traveled),skin:p.skin,weapon:p.weapon,squad:p.truppe.slice(),protected:X.protected(p,timestamp) };
     requireOpen(clock(), bypass);
     const result=await db.setJSON('presence-v1',{players},entry?{onlyIfMatch:entry.etag}:{onlyIfNew:true});
     if(result.modified)return json({serverTime:timestamp,access:accessFor(timestamp,bypass),peers:Object.values(players).filter(v=>v.id!==id).map(({credit,spawnAt,...peer})=>peer)});
@@ -145,19 +146,29 @@ function settleBattle(world, p, id, now, requestId) {
 }
 
 /* Each turn, egg and upgrade is authoritative and atomically persisted. */
-export function createHandler({ store, presenceStore, now = Date.now, random = Math.random } = {}) {
+export function createHandler({ store, presenceStore, now = Date.now, random = Math.random, sandbox = false } = {}) {
   return async function handle(request) {
     if (request.method !== 'POST') return json({ error: 'POST erforderlich.' }, 405);
     try {
-      if (Number(request.headers.get('content-length') || 0) > 24000) throw new GameError('Anfrage zu groß.', 413);
-      const raw = await request.text(); if (raw.length > 24000) throw new GameError('Anfrage zu groß.', 413);
+      if (Number(request.headers.get('content-length') || 0) > 240000) throw new GameError('Anfrage zu groß.', 413);
+      const raw = await request.text(); if (raw.length > 240000) throw new GameError('Anfrage zu groß.', 413);
       let body; try { body = JSON.parse(raw); } catch { throw new GameError('Ungültige Anfrage.'); }
       if (!body || !validCode(body.code)) throw new GameError('Bitte melde dich im Hideout an.', 401);
       if (!['join','world','presence',...mutations].includes(body.op)) throw new GameError('Diese Spielaktion wird nicht mehr unterstützt. Lade das Spiel neu.');
       if (mutations.includes(body.op) && (typeof body.requestId !== 'string' || body.requestId.length < 8 || body.requestId.length > 80)) throw new GameError('Aktionskennung fehlt.');
       const id = createHash('sha256').update('gehstockmon-player:' + body.code).digest('hex').slice(0, 24), timestamp = now();
       const bypass = adminBypass(body);
+      // Die Testzone erhält ausschließlich flüchtigen Zustand aus diesem Tab.
+      // Keine echte Datenbank und keine echte Anwesenheit werden gelesen/geschrieben.
+      if(bypass&&!sandbox){
+        function memory(initial){let value=initial?clone(initial):null,version=0;return{getWithMetadata:async()=>value?{data:clone(value),etag:String(version)}:null,setJSON:async(key,next,options)=>{if(options?.onlyIfMatch!==undefined&&options.onlyIfMatch!==String(version)||options?.onlyIfNew&&value)return{modified:false};value=clone(next);version++;return{modified:true};},read:()=>value};}
+        const testStore=memory(body.testState),testPresence=memory(body.testPresence);
+        const isolated=createHandler({store:testStore,presenceStore:testPresence,now,random,sandbox:true});
+        const result=await isolated(new Request(request.url,{method:'POST',body:JSON.stringify(body)})),payload=await result.json();
+        return json({...payload,testState:testStore.read(),testPresence:testPresence.read(),sandbox:true},result.status);
+      }
       requireOpen(timestamp, bypass);
+      if(body.adminOverride===true&&!bypass)throw new GameError('Die Testzone benötigt ein echtes Admin-Konto und den richtigen Testcode.',403);
       const name = typeof body.name === 'string' ? body.name.trim().replace(/[\u0000-\u001f]/g, '').slice(0, 30) : '';
       const db = store || speicher('hgh-gehstockmon'), draw = random();
       if (body.op === 'presence') {
@@ -173,12 +184,13 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
           if (body.op !== 'join') throw new GameError('Betritt zuerst die Spielerwelt.', 409);
           if (Object.keys(world.players).length >= 110) throw new GameError('Diese Welt ist voll.', 409);
           world.players[id] = { ...D.neuerStand(null, timestamp), name: name || 'Wanderer', lastSeen: timestamp, lastOfflineLoss: 0 };
+          if(sandbox){world.players[id].besitz=D.KATALOG.map(k=>k.id);world.players[id].gold=50000;}
         }
         const p = world.players[id]; p.name = name || p.name; p.lastSeen = timestamp;
-        if(body.op==='join'){p.lastJoinAt=timestamp;p.spawn=X.outside(X.SPAWN,X.layout(world.territories));}
+        if(body.op==='join'){p.dailyDelivery=E.deliverDaily(p);p.lastJoinAt=timestamp;p.spawn=X.outside(X.SPAWN,X.layout(world.territories));}
         const receipts = p.actionReceipts || [], receipt = receipts.find((r) => r.id === body.requestId && r.op === body.op);
         if (receipt) return json(publicResult(world, id, timestamp, { ...receipt.extra, duplicate: true, adminOverride: bypass }));
-        let extra = {};
+        let extra = {joining:body.op==='join'};
         try {
           if(activeArena(p)&&mutations.includes(body.op)&&!['arena_turn','arena_flee'].includes(body.op))throw new GameError('Beende zuerst deinen Mon-Kampf.',409);
           if(activeDuel(p)&&mutations.includes(body.op)&&!['raid_turn','raid_arena','raid_cancel'].includes(body.op))throw new GameError('Beende zuerst deinen Überfall.',409);
@@ -197,7 +209,7 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
             if (t.ownerId === id) throw new GameError('Dieses Gebiet gehört dir bereits.');
             if (t.version !== body.version) throw new GameError('Die Verteidigung hat sich verändert. Aktualisiere die Spielerwelt.', 409);
             if (protectedOwner(world, t, timestamp)) throw new GameError('Abwesenheitsschutz: Dieser Spieler hat bereits ein Gebiet verloren.', 409);
-            p.arena = A.create(p.truppe.map(D.mon), A.defenders(t.id, t.ownerId ? t.defense : null), { id: body.requestId, territoryId: t.id, version: t.version, level: t.level, now: timestamp });
+            p.arena = A.create(p.truppe.map(D.mon), A.defenders(t.id, t.ownerId ? t.defense : null), { id: body.requestId, territoryId: t.id, version: t.version, level: t.level, npcTerritory: !t.ownerId, now: timestamp });
           }
           if (body.op === 'arena_turn' || body.op === 'arena_flee') {
             const b = p.arena;

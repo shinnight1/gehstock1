@@ -4,7 +4,7 @@
 
 Eine Spielesammlung für das iPad: 25 Spiele, drei ausgebaute Tycoons und
 ein mitgeliefertes Fremdspiel.
-Läuft als Webseite über Netlify. Viele Spiele funktionieren auch ohne Internet
+Läuft als Webseite über Vercel. Viele Spiele funktionieren auch ohne Internet
 auf dem **Home-Bildschirm** oder in der mitgelieferten HTML-Einzeldatei.
 GehstockMon und Online-Mehrspieler benötigen den gemeinsamen Spielserver.
 
@@ -17,7 +17,7 @@ GehstockMon und Online-Mehrspieler benötigen den gemeinsamen Spielserver.
 | Spiele | 29 (20 Basisspiele, 5 mit Online-Modus, 3 Tycoons, 1 eigene Seite) |
 | Technik | reines JavaScript, kein Framework, keine Abhängigkeit im Spiel |
 | Offline | Home-Bildschirm (iPad) oder eine einzelne HTML-Datei (Mac/PC/Android) |
-| Online | Raum-Codes über eine Netlify-Funktion (nur für 5 Spiele) |
+| Online | Raum-Codes über eine Serverfunktion (nur für 5 Spiele) |
 | Verbindung | eine je Gerät, trägt Spiel · Chat · Verwaltung · alles andere |
 | Intern | Gruppenchat mit Bildern und Abstimmungen, Admin-Raum mit Protokoll, Bildschirme, Tarnung, Nachrichtendienst, Besprechungen |
 | Werkzeug | Entwicklerkonsole mit Selbsttest und Laufzeitmessung (#/dev) |
@@ -25,57 +25,60 @@ GehstockMon und Online-Mehrspieler benötigen den gemeinsamen Spielserver.
 
 ---
 
-## Veröffentlichen mit Netlify
+## Veröffentlichen mit Vercel
 
-### Weg 1: Ordner hochladen (am schnellsten)
+Die Seite liegt unter [gehstock1.vercel.app](https://gehstock1.vercel.app).
+Veröffentlicht wird aus dem Projektordner heraus:
 
-1. `node build.mjs` ausführen — das erzeugt den Ordner `dist/`.
-2. Auf [app.netlify.com/drop](https://app.netlify.com/drop) den Ordner **`dist`**
-   ins Fenster ziehen.
+```bash
+git pull
+vercel --prod
+```
 
-Fertig. Die Seite ist sofort online.
+Mehr ist es nicht. Vercel baut selbst und liest dafür `vercel.json`:
 
-> **Achtung — der Online-Mehrspieler läuft so nicht.** Beim Drag-and-drop wird
-> nur `dist/` hochgeladen; `netlify/functions/room.mjs` bleibt zurück. Ein
-> Raum-Code lässt sich dann nicht erstellen, weil `/api/room` keine Funktion
-> findet und stattdessen eine HTML-Seite ausliefert. Das Hideout erkennt das
-> und sagt es. Auch GehstockMon benötigt seine Funktion unter
-> `netlify/functions/gehstockmon.mjs` und ist bei rein statischem Upload nicht spielbar.
->
-> Für den Mehrspieler braucht es **Weg 2** — oder einmal die Netlify-CLI aus
-> dem Projektordner heraus:
->
-> ```bash
-> npx netlify deploy --prod
-> ```
+| Einstellung | Wert |
+|---|---|
+| Build command | `npm ci --prefix arena && node tools/deploy-bauen.mjs` |
+| Output directory | `dist` |
+| Serverfunktionen | `api/room.mjs`, `api/gehstockmon.mjs` |
+| Laufzeit je Aufruf | 30 Sekunden — die Warteschleife hält 7,5 |
 
-### Weg 2: Mit Git verbinden (empfohlen)
+Der Ordner `api/` enthält nur Verweise. Die Logik liegt weiterhin unter
+`netlify/functions/`, damit die Tests und der lokale Server unverändert
+laufen.
 
-1. Das Projekt in ein Git-Repository legen und zu GitHub schieben.
-2. In Netlify **Add new site → Import an existing project** wählen und das
-   Repository verbinden.
-3. Netlify liest `netlify.toml` und weiß dann schon alles:
+Geht etwas schief, holt `vercel rollback` die vorherige Veröffentlichung
+sofort zurück — ohne neuen Build.
 
-   | Einstellung | Wert |
-   |---|---|
-   | Build command | `npm ci --prefix arena && node tools/deploy-bauen.mjs` |
-   | Publish directory | `dist` |
-   | Functions directory | `netlify/functions` |
+> **Ein Push allein veröffentlicht nichts.** Wer das möchte, verbindet das
+> Repository einmalig mit `vercel git connect`; danach baut jeder Push auf
+> `main` die Seite neu.
 
-4. **Deploy site** drücken.
+### Wo die Spielstände liegen
 
-Nach dem ersten Deploy einmal in den Site-Einstellungen prüfen, dass
-**Blobs** aktiviert ist (Netlify macht das normalerweise von selbst) — darüber
-laufen die Online-Räume.
+Spielerwelt, Verwaltung, Pixelkarte und die Online-Räume liegen in einer
+Redis-Datenbank (Upstash, Frankfurt), die im Vercel-Projekt unter **Storage**
+hängt. Welcher Speicher gilt, entscheidet `netlify/functions/lib/speicher.mjs`
+anhand der Umgebung: Liegen die Redis-Zugangsdaten vor, ist es Redis, sonst
+sind es die Netlify-Blobs. Derselbe Code läuft damit auf beiden Plattformen,
+und der Rückweg bleibt offen.
+
+Die alte Adresse `gehstock.netlify.app` steht noch als Rückweg, hat aber ihre
+eigene, getrennte Spielerwelt. Dort wird nicht mehr veröffentlicht und nicht
+mehr gespielt — sonst laufen die beiden Welten auseinander.
 
 ---
 
 ## Was wo liegt
 
 ```
-build.mjs              Bündelt alles: dist/ für Netlify + Offline-Einzeldatei
-netlify.toml           Build-Einstellungen und Kopfzeilen
+build.mjs              Bündelt alles: dist/ für die Website + Offline-Einzeldatei
+vercel.json            Build-Einstellungen und Kopfzeilen
+api/                   die zwei Endpunkte — verweisen nur weiter
 netlify/functions/     room.mjs — das Relais: Räume, Chat, Verwaltung, alles
+                       lib/speicher.mjs — Redis oder Blobs, je nach Umgebung
+netlify.toml           der Rückweg: Einstellungen der alten Adresse
 src/
   index.html           Gerüst (eine einzige Seite)
   styles/              Aussehen
@@ -122,7 +125,7 @@ wenn in der Offline-Datei irgendein externer Verweis auftaucht.
 node tools/serve.mjs
 ```
 Startet [http://localhost:8787](http://localhost:8787) mit einem nachgebauten
-Online-Relais — so lässt sich der Mehrspieler auch ohne Netlify testen.
+Online-Relais — so lässt sich der Mehrspieler auch ohne Veröffentlichung testen.
 
 ```bash
 node tools/test.mjs
@@ -266,7 +269,7 @@ Dame und Eins.**
 Im Spiel über *Modus wechseln* → **Online mit Raum-Code**. Eine Person erstellt
 einen Raum und gibt den sechsstelligen Code weiter, die anderen treten damit bei.
 
-So funktioniert es technisch: Netlify hostet nur statische Dateien, es gibt also
+So funktioniert es technisch: Die Seite wird statisch ausgeliefert, es gibt also
 keinen dauerhaften Spielserver. Alle Online-Spiele hier sind rundenbasiert,
 deshalb genügt ein winziges Relais. Der Server kennt **keine Spielregeln** — er
 speichert nur die Liste der Züge und einen Zufallskern. Jeder Client spielt
@@ -277,7 +280,7 @@ in Schul-WLANs, in denen andere Verfahren blockiert sind.
 ### Eine Verbindung je Gerät
 
 Früher hielt jedes iPad **drei** Anfragen gleichzeitig offen: eine fürs Spiel,
-eine für den Chat, eine für die Verwaltung. Netlify lässt aber nur wenige
+eine für den Chat, eine für die Verwaltung. Es dürfen aber nur wenige
 Funktionen parallel laufen — ab drei Leuten standen die Anfragen Schlange und
 ein Zug brauchte Sekunden. Dazu kam ein Fehler, der noch schwerer wog: die
 Warteschleife des Spiels **schrieb** den Raum zurück, um Anwesenheit zu merken.
@@ -294,10 +297,10 @@ Verwaltung, Anwesenheit, Bildschirme, Befehle. Gewartet wird über die Operation
 | Warteschleife liest | ein einziges kleines Dokument (`welt`) — je Kanal nur eine Zahl |
 | Große Dokumente | erst, wenn sich eine dieser Zahlen ändert |
 | Schreibvorgänge | lesen · ändern · schreiben · **zurücklesen**; stimmt die eigene Marke nicht, von vorn — so geht kein Zug mehr verloren |
-| Gemessene Zustellung | 3–40 ms lokal; über Netlify kommt die Laufzeit zum Blob-Speicher dazu |
+| Gemessene Zustellung | 3–40 ms lokal; veröffentlicht kommt die Laufzeit zur Datenbank dazu |
 
 Nebeneffekt: ein Drittel der Anfragen bedeutet auch ein Drittel des
-Netlify-Kontingents. Beim kostenlosen Plan zählt vor allem die Laufzeit der
+Kontingents. Beim kostenlosen Plan zählt vor allem die Laufzeit der
 Funktionen — eine Dauerverbindung je Gerät statt drei verdreifacht die Zeit,
 die ihr spielen könnt, bevor irgendetwas an eine Grenze stößt.
 
@@ -305,7 +308,7 @@ Ohne Netz bleiben für dieselben Spiele **Computergegner** und der **Modus zu
 zweit am selben iPad**.
 
 **Wenn das Erstellen eines Raum-Codes fehlschlägt:** Dann antwortet `/api/room`
-mit einer HTML-Seite statt mit Daten — die Netlify-Funktion ist nicht
+mit einer HTML-Seite statt mit Daten — die Serverfunktion ist nicht
 erreichbar. Zwei Ursachen kommen praktisch immer in Frage: `dist/` wurde per
 Drag-and-drop hochgeladen (siehe oben), oder die Seite läuft lokal auf einem
 gewöhnlichen Statik-Server. Zum lokalen Testen deshalb `node tools/serve.mjs`
@@ -457,7 +460,7 @@ sieht aus wie ein Fehler — und im Protokoll soll ja stehen, was weg ist. Genau
 dort landet sie auch, mitsamt ihrem Text.
 
 > **Zwei Grenzen.** Der Chat braucht das Relais: in der Offline-Datei gibt es
-> ihn nicht, und auf einer Netlify-Seite ohne Funktion auch nicht — dort steht
+> ihn nicht, und auf einer Seite ohne Serverfunktion auch nicht — dort steht
 > dann ein Hinweis statt des Chats. Und: der Server kennt keine Rollen. Er
 > prüft nur, dass die Anfrage ankommt. Die Tür davor ist der Zugangscode; wer
 > die Adresse des Relais kennt, könnte am Hideout vorbei schreiben.
@@ -491,7 +494,7 @@ Zwei Feinheiten, die in der Praxis wehtaten:
   zurückspielen. Solange eigene Änderungen unterwegs sind, gilt deshalb der
   lokale Stand.
 
-Ohne Relais (Offline-Datei, Netlify ohne Funktion) fällt alles auf den
+Ohne Relais (Offline-Datei, Seite ohne Serverfunktion) fällt alles auf den
 Gerätespeicher zurück — dann gilt eben wieder nur lokal, was lokal gesetzt
 wurde.
 
@@ -840,7 +843,7 @@ die passende Reihe schreiben, sonst nichts.
 > läuft die Seite unter `file://` und hat damit keinen Ursprung, den YouTube
 > gelten lässt — eingebettet bliebe der Abspieler schwarz. Er sagt das dann
 > auch und bietet den Weg zu YouTube an. Auf dem iPad heißt das: die Seite
-> über Netlify aufrufen und auf den Home-Bildschirm legen, nicht die
+> über die veröffentlichte Adresse aufrufen und auf den Home-Bildschirm legen, nicht die
 > Offline-Datei aus der Dateien-App öffnen.
 
 ---

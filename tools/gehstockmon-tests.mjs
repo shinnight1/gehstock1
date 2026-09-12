@@ -38,7 +38,7 @@ await test('Map migration preserves eggs, collection and earned income and choos
   store.data.territories=old;delete store.data.mapVersion;
   const p=store.data.players[a.playerId];p.besitz=['bollwerk','klinge','waerter','spaeher'];p.truppe=p.besitz.slice();p.eggs=[{id:'legacy-egg',territoryId:24,producedAt:stamp-E.HOUR,startedAt:stamp-E.HOUR,readyAt:stamp}];
   p.arena=A.create(p.truppe.map(D.mon),A.defenders(1),{territoryId:21,now:stamp});
-  const migrated=await call(h,ca,'world');assert.equal(migrated.territories.length,9);assert.equal(migrated.territories[0].ownerId,b.playerId);assert.equal(migrated.territories[0].level,2);assert.equal(migrated.profile.gold,200);assert.deepEqual(migrated.profile.besitz,p.besitz);assert.equal(migrated.profile.eggs[0].territoryId,4);assert.equal(migrated.profile.eggs[0].readyAt,stamp);assert.equal(migrated.arena.winner,'map_changed');assert.equal(migrated.arena.territoryId,1);assert.equal(store.data.previousMap.territories.length,25);
+  const migrated=await call(h,ca,'world');assert.equal(migrated.territories.length,9);assert.equal(migrated.territories[0].ownerId,b.playerId);assert.equal(migrated.territories[0].level,2);assert.equal(migrated.profile.gold,180);assert.deepEqual(migrated.profile.besitz,p.besitz);assert.equal(migrated.profile.eggs[0].territoryId,4);assert.equal(migrated.profile.eggs[0].readyAt,stamp);assert.equal(migrated.arena.winner,'map_changed');assert.equal(migrated.arena.territoryId,1);assert.equal(store.data.previousMap.territories.length,25);
   const repeated=await call(h,ca,'world');assert.equal(repeated.profile.gold,migrated.profile.gold);assert.equal((await call(h,ca,'arena_start',{territoryId:24,version:1,squad:p.truppe})).status,400);
 });
 await test('Presence shares positions, expires departures and cannot change progression or impersonate players',async()=>{
@@ -47,7 +47,7 @@ await test('Presence shares positions, expires departures and cannot change prog
   const a=await call(h,ca,'join'),b=await call(h,cb,'join'),snapshot=JSON.stringify(store.data);
   const pair=await Promise.all([call(h,ca,'presence',{position:{...a.spawn,heading:1},playerId:b.playerId}),call(h,cb,'presence',{position:{...b.spawn,heading:-1}})]);
   assert.ok(pair.every(r=>r.status===200));assert.equal(Object.keys(presence.data.players).length,2);
-  let r=await call(h,ca,'presence',{position:{...a.spawn,heading:1}});assert.equal(r.peers.length,1);assert.equal(r.peers[0].id,b.playerId);assert.equal(r.peers[0].x,b.spawn.x);assert.ok(!('code' in r.peers[0])&&!('profile' in r.peers[0]));assert.equal(JSON.stringify(store.data),snapshot);
+  let r=await call(h,ca,'presence',{position:{...a.spawn,heading:1}});assert.equal(r.peers.length,1);assert.equal(r.peers[0].id,b.playerId);assert.deepEqual(r.peers[0].squad,b.profile.truppe,'presence includes only the authoritative squad');assert.equal(r.peers[0].x,b.spawn.x);assert.ok(!('code' in r.peers[0])&&!('profile' in r.peers[0]));assert.equal(JSON.stringify(store.data),snapshot);
   assert.equal((await call(h,ca,'presence',{position:{x:9999,z:1,heading:0}})).status,400);assert.equal((await call(h,ca,'presence',{position:{x:'0',z:1,heading:0}})).status,400);
   time+=15001;r=await call(h,ca,'presence',{position:{...a.spawn,heading:1}});assert.equal(r.peers.length,0);assert.equal(Object.keys(presence.data.players).length,1);
 });
@@ -75,8 +75,8 @@ await test('Admin developer code opens the closed island only for an admin accou
   const normal=await call(h,cb,'join',{adminOverride:true,adminCode:'3141'});assert.equal(normal.status,423);assert.equal(store.data,null);
   const typo=await call(h,ca,'join',{adminOverride:true,adminCode:'3140'});assert.equal(typo.status,423);assert.equal(store.data,null);
   const admin=await call(h,ca,'join',{adminOverride:true,adminCode:'3141'});assert.equal(admin.status,200);assert.equal(admin.access.open,true);assert.equal(admin.access.adminOverride,true);
-  const fight=await call(h,ca,'arena_start',{adminOverride:true,adminCode:'3141',territoryId:1,version:1,squad:D.neuerStand().truppe});
-  assert.equal(fight.status,200);assert.ok(store.data.players[admin.playerId].arena,'in der Testzone wird auch gekämpft');
+  const fight=await call(h,ca,'arena_start',{adminOverride:true,adminCode:'3141',testState:admin.testState,territoryId:1,version:1,squad:D.neuerStand().truppe});
+  assert.equal(fight.status,200);assert.equal(store.data,null,'Testzone schreibt niemals in den Spielspeicher');assert.ok(fight.testState.players[admin.playerId].arena,'flüchtiger Testkampf');
   assert.equal((await call(h,ca,'world')).status,423,'ohne Testzone bleibt die Insel zu');
 });
 await test('Each completed weekend gives two eggs per held post once, preserving overflow and ownership rewards',async()=>{

@@ -24,7 +24,9 @@
 
 import { createHash } from 'node:crypto';
 
-const redisAn = () => !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+const redisUrl = () => process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
+const redisToken = () => process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
+const redisAn = () => !!(redisUrl() && redisToken());
 
 /* ------------------------------------------------------------------
    Der Stempel ist der Inhalt selbst
@@ -64,8 +66,8 @@ async function redis() {
        hineingegeben wurde - dann stimmt kein Hash mehr. Alles bleibt
        deshalb von Hand ein String. */
     redisClient = new Redis({
-      url: process.env.KV_REST_API_URL,
-      token: process.env.KV_REST_API_TOKEN,
+      url: redisUrl(),
+      token: redisToken(),
       automaticDeserialization: false,
     });
   }
@@ -75,7 +77,9 @@ async function redis() {
 /* Alles eines Stores liegt unter einem gemeinsamen Namensraum, damit die
    drei Stores sich in einer Redis-Datenbank nicht ins Gehege kommen. */
 function redisStore(name, verbindung = redis) {
-  const d = (key) => name + '|' + key;
+  // Namensraum der bestehenden Vercel-Spielerwelt beibehalten.
+  const prefix = 'hgh:' + name + ':';
+  const d = (key) => prefix + key;
 
   async function text(key) {
     const r = await verbindung();
@@ -111,9 +115,15 @@ function redisStore(name, verbindung = redis) {
       return { modified: Number(ok) === 1, etag: stempelVon(neu) };
     },
 
+    async list() {
+      const r = await verbindung(); let cursor = '0', found = [];
+      do { const [next, keys] = await r.scan(cursor, { match: prefix + '*', count: 500 }); cursor = String(next); found.push(...keys); } while (cursor !== '0');
+      return { blobs: found.filter(k => !k.endsWith(':v')).map(k => ({ key: k.slice(prefix.length) })) };
+    },
+
     async delete(key) {
       const r = await verbindung();
-      await r.del(d(key));
+      await r.del(d(key), d(key) + ':v');
     },
   };
 }
@@ -137,6 +147,7 @@ export function speicher(name) {
       get: async (k, o) => (await hol()).get(k, o),
       getWithMetadata: async (k, o) => (await hol()).getWithMetadata(k, o),
       setJSON: async (k, v, o) => (await hol()).setJSON(k, v, o),
+      list: async (o) => (await hol()).list(o),
       delete: async (k) => (await hol()).delete(k),
     };
   })();
@@ -152,3 +163,6 @@ export const speicherArt = () => (redisAn() ? 'redis' : 'netlify-blobs');
 export const _redisStore = (name, client) => redisStore(name, async () => client);
 export const _stempelVon = stempelVon;
 export const _CAS = CAS;
+
+// Beide Aufrufer verwenden dieselbe, bereits befüllte Welt.
+export const getStore = (input) => speicher(typeof input === 'string' ? input : input.name);

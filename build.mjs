@@ -1,7 +1,7 @@
 /* Build fuer "Herr Gehstocks Hideout"
  *
  * Erzeugt:
- *   dist/index.html                                  Online-Seite (Netlify)
+ *   dist/index.html                                  Online-Seite (Vercel)
  *   dist/assets/app.<hash>.css|js                    gebuendelt, cachebar
  *   dist/offline/Herr-Gehstocks-Hideout-Offline.html Einzeldatei fuer die Dateien-App
  *   dist/manifest.webmanifest, dist/sw.js, Icons
