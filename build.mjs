@@ -132,13 +132,19 @@ function collectJs() {
   return files;
 }
 
-/* Bilder und Modelle aus src/assets/ als Daten-URI einbetten.
+/* Bilder aus src/assets/ als Daten-URI einbetten.
    Damit bleibt auch die Offline-Einzeldatei ohne externe Verweise. */
 const BILD_TYP = {
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
   '.webp': 'image/webp', '.gif': 'image/gif',
-  '.glb': 'model/gltf-binary',
 };
+
+/* Die Spielermodelle sind die Ausnahme: sie wiegen zusammen rund
+   viereinhalb Megabyte und wuerden die Offline-Einzeldatei auf das
+   Doppelte treiben. Sie gehen daher als eigene Dateien neben die Seite
+   und werden im Spiel bei Bedarf geholt. Wer die Einzeldatei offline
+   oeffnet, sieht weiterhin die gewohnten Bilder. */
+const MODELL_PRAEFIX = 'gm-skin-';
 
 function bundleAssets() {
   const dir = path.join(SRC, 'assets');
@@ -146,6 +152,7 @@ function bundleAssets() {
   let bytes = 0;
   if (exists(dir)) {
     for (const f of fs.readdirSync(dir).sort()) {
+      if (f.startsWith(MODELL_PRAEFIX)) continue;
       const typ = BILD_TYP[path.extname(f).toLowerCase()];
       if (!typ) continue;
       const buf = fs.readFileSync(path.join(dir, f));
@@ -157,6 +164,40 @@ function bundleAssets() {
   const code = '\n/* ==== assets ==== */\n'
     + '(function (SG) { SG.assets = ' + JSON.stringify(out) + '; })(SG);\n';
   return { code, count: Object.keys(out).length, bytes };
+}
+
+/* Legt Modell und Grundfarbe je Skin gehasht nach dist/assets/ und gibt dem
+   Spiel eine Tabelle mit den Adressen. Offline steht die Tabelle zwar auch
+   im Bundle, die Dateien daneben fehlen dort aber - dann bleibt das Spiel
+   beim Bild. */
+function bundleSkins() {
+  const dir = path.join(SRC, 'assets');
+  const tabelle = {};
+  const dateien = [];
+  let bytes = 0;
+  if (exists(dir)) {
+    for (const f of fs.readdirSync(dir).sort()) {
+      if (!f.startsWith(MODELL_PRAEFIX)) continue;
+      const endung = path.extname(f).toLowerCase();
+      if (endung !== '.glb' && endung !== '.webp') continue;
+      const buf = fs.readFileSync(path.join(dir, f));
+      bytes += buf.length;
+      const rumpf = path.basename(f, endung);
+      const skin = rumpf.slice(MODELL_PRAEFIX.length).replace(/-textur$/, '');
+      const name = rumpf + '.' + hash(buf.toString('latin1')) + endung;
+      fs.writeFileSync(path.join(DIST, 'assets', name), buf);
+      (tabelle[skin] || (tabelle[skin] = {}))[endung === '.glb' ? 'modell' : 'textur'] = 'assets/' + name;
+      dateien.push('assets/' + name);
+    }
+  }
+  /* Ein Skin ohne beides ist unbrauchbar - lieber gar nicht anbieten, als im
+     Spiel ein Modell ohne Haut zu zeigen. */
+  for (const skin of Object.keys(tabelle)) {
+    if (!tabelle[skin].modell || !tabelle[skin].textur) delete tabelle[skin];
+  }
+  const code = '\n/* ==== Spielermodelle ==== */\n'
+    + '(function (SG) { SG.skinDateien = ' + JSON.stringify(tabelle) + '; })(SG);\n';
+  return { code, dateien, count: Object.keys(tabelle).length, bytes };
 }
 
 function bundleJs(files, assets) {
@@ -175,7 +216,10 @@ function bundleJs(files, assets) {
     parts.push('\n/* ' + rel + ' */\n' + abziehen(quelle));
     // Direkt hinter den Namensraum: SG.assets muss stehen, bevor das
     // erste Modul darauf zugreift.
-    if (rel === 'core/namespace.js' && assets) parts.push(assets.code);
+    if (rel === 'core/namespace.js' && assets) {
+      parts.push(assets.code);
+      if (assets.skins) parts.push(assets.skins.code);
+    }
   }
 
   /* Der Abzug oben ist zeilenweise und kennt keine Zeichenketten. Er ist
@@ -371,6 +415,8 @@ function build() {
   const cssPaket = bundleCss();
   const css = cssPaket.code;
   const assets = bundleAssets();
+  const skins = bundleSkins();
+  assets.skins = skins;
   const jsPaket = bundleJs(jsFiles, assets);
   const three = buildSync({ entryPoints: [path.join(SRC, 'vendor/three-entry.js')], bundle: true, minify: true, format: 'iife', target: 'safari15', write: false, legalComments: 'inline' }).outputFiles[0].text;
   const js = three + '\n' + jsPaket.code;
@@ -492,7 +538,7 @@ function build() {
     '/* Beigaben: eigene Seiten, die neben dem Hideout liegen und erst nach',
     '   dem Hideout gebaut werden - tools/deploy-bauen.mjs traegt sie hier',
     '   ein. Ohne sie fehlt zum Beispiel die Arena, sobald das Netz weg ist. */',
-    'const EXTRAS = [];',
+    'const EXTRAS = ' + JSON.stringify(skins.dateien) + ';',
     "self.addEventListener('install', function (e) {",
     '  e.waitUntil(caches.open(CACHE).then(function (c) {',
     '    /* Der Kern muss vollstaendig sein: fehlt davon etwas, ist die Seite',
@@ -566,6 +612,7 @@ function build() {
   log('  Offline-Einzeldatei: ' + kb(offSize) + '  (Budget 2048.0 kB)');
   if (externCount) log('  Eigene Seiten      : ' + externCount + ' (nicht in der Offline-Datei)');
   if (assets.count) log('  Eingebettete Bilder: ' + assets.count + ' (' + kb(assets.bytes) + ')');
+  if (skins.count) log('  Spielermodelle      : ' + skins.count + ' (' + kb(skins.bytes) + ', daneben statt eingebettet)');
   log('');
   const adm = ersterAdminCode();
   log('  Erster Admin-Code  : ' + adm.code);

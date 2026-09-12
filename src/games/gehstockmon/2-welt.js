@@ -187,23 +187,28 @@
       img.src = SG.assets[key] || SG.assets['gm-bollwerk'];
       return texture;
     }
-    /* Der Spieler ist als einziges Wesen ein echtes Modell statt eines Bildes.
-       Es steckt als Daten-URI im Bundle und wird aus dem Speicher ausgepackt,
-       nie ueber das Netz geladen - sonst waere die Offline-Datei kaputt.
-       Bis das Modell steht, und falls es klemmt, bleibt das Bild sichtbar. */
-    /* Die Vorlage schaut quer zu ihrer eigenen Laufrichtung, deshalb die
-       Vierteldrehung: das Spiel dreht die Figurengruppe nach atan2(dx, dz),
-       und dazu muss das Modell bei null nach +z blicken. Sie geht nach links,
-       nicht nach rechts - andersherum liefe die Figur rueckwaerts. */
-    var MODELL_HOEHE = 2.9, MODELL_TEMPO = 1.55, MODELL_DREHUNG = -Math.PI / 2;
-    var vorlage = null, wartend = [], figuren = [], modellFehlt = false;
-    var modellSkala = 1, modellBoden = 0;
+    /* Die Leute in der Welt sind echte Modelle statt Bilder. Anders als die
+       uebrigen Bilder stecken sie nicht im Bundle, sondern liegen als eigene
+       Dateien daneben: zusammen wiegen sie viereinhalb Megabyte und wuerden
+       die Offline-Einzeldatei sonst verdoppeln. Wer sie offline oeffnet,
+       bekommt darum weiter die gewohnten Bilder zu sehen - und auch online
+       bleibt das Bild stehen, solange ein Modell laedt oder fehlt.
 
-    function modellTextur() {
+       Geladen wird je Skin einmal und erst, wenn ihn jemand traegt. */
+    var MODELL_HOEHE = 2.9, MODELL_TAKT = 1.55, MODELL_DREHUNG = -Math.PI / 2;
+    var vorlagen = {}, figuren = [];
+
+    function skinName(index) {
+      var liste = X.SKINS || [];
+      if (!liste.length) return null;
+      return (liste[index] || liste[index % liste.length]).id;
+    }
+
+    function modellTextur(adresse) {
       var haut = new T.Texture(), bild = new Image();
       haut.flipY = false; haut.colorSpace = T.SRGBColorSpace;
       bild.onload = function () { if (!dead) { haut.image = bild; haut.needsUpdate = true; } };
-      bild.src = SG.assets['gm-spieler-textur'] || '';
+      bild.src = adresse;
       return haut;
     }
 
@@ -244,57 +249,122 @@
       return clips;
     }
 
-    function ladeModell() {
-      var quelle = SG.assets['gm-spieler'];
-      if (modellFehlt || vorlage) return;
-      if (!quelle || !T.GLTFLoader) { modellFehlt = true; return; }
-      vorlage = 'laedt';
-      var roh = atob(quelle.slice(quelle.indexOf(',') + 1)), speicher = new Uint8Array(roh.length);
-      for (var i = 0; i < roh.length; i++) speicher[i] = roh.charCodeAt(i);
-      var haut = modellTextur();
-      new T.GLTFLoader().parse(speicher.buffer, '', function (glb) {
-        if (dead) return;
-        glb.scene.traverse(function (teil) {
-          if (!teil.isMesh) return;
-          teil.castShadow = true; teil.frustumCulled = false;
-          teil.material = new T.MeshStandardMaterial({ map: haut, roughness: 0.62, metalness: 0, side: T.FrontSide });
-        });
-        /* Der Massstab kommt aus dem Modell selbst, nicht aus einer Zahl im
-           Blender-Skript: eine Skalierung am Skelett laesst das Netz
-           auseinanderfliegen, weil die Bindematrizen davon nichts wissen. */
-        var huelle = new T.Box3().setFromObject(glb.scene), hoch = huelle.max.y - huelle.min.y;
-        modellSkala = hoch > 0.01 ? MODELL_HOEHE / hoch : 1;
-        modellBoden = -huelle.min.y * modellSkala;
-        vorlage = { szene: glb.scene, clips: ortsfest(glb.scene, glb.animations) };
-        wartend.splice(0).forEach(anziehen);
-      }, function (fehler) { vorlage = null; modellFehlt = true; wartend.length = 0;
-        console.warn('GehstockMon: das Spielermodell liess sich nicht lesen, das Bild bleibt stehen.', fehler); });
+    /* Wo steht die Figur wirklich? Tripo setzt die Ruhehaltung nicht immer
+       ueber den Ursprung - beim Drachenritter liegt sie fast eine Koerper-
+       breite daneben, also ausserhalb des eigenen Rings. Gemessen wird die
+       Mitte zwischen den Fuessen im Verlauf des Stehens; als Fuesse gelten
+       alle Knochen dicht ueber dem Boden, damit die Messung nicht an den
+       Namen eines bestimmten Skeletts haengt. */
+    function standpunkt(szene, clips, huelle) {
+      var hoch = huelle.max.y - huelle.min.y, unten = [], hilf = new T.Vector3();
+      szene.updateMatrixWorld(true);
+      szene.traverse(function (teil) {
+        if (teil.isBone && teil.getWorldPosition(hilf).y - huelle.min.y < hoch * 0.15) unten.push(teil);
+      });
+      var clip = clips.filter(function (c) { return c.name === 'stehen'; })[0] || clips[0];
+      if (!unten.length || !clip) return { x: 0, z: 0 };
+      var mixer = new T.AnimationMixer(szene), proben = 12, sx = 0, sz = 0;
+      mixer.clipAction(clip).play();
+      for (var i = 0; i < proben; i++) {
+        mixer.setTime(clip.duration * i / proben);
+        szene.updateMatrixWorld(true);
+        var mx = 0, mz = 0;
+        unten.forEach(function (b) { b.getWorldPosition(hilf); mx += hilf.x; mz += hilf.z; });
+        sx += mx / unten.length; sz += mz / unten.length;
+      }
+      mixer.stopAllAction();
+      return { x: sx / proben, z: sz / proben };
     }
 
-    /* Haengt das Modell in eine bereits bestehende Figurengruppe und laesst
-       das Bild darunter verschwinden. Umgeschaltet wird spaeter allein nach
-       der gelaufenen Strecke - das gilt fuer den Spieler wie fuer die
-       anderen Leute in der Welt, ohne dass eine Stelle es melden muesste. */
-    function anziehen(gruppe) {
-      if (!vorlage || vorlage === 'laedt') { if (wartend.indexOf(gruppe) < 0) wartend.push(gruppe); ladeModell(); return; }
-      var koerper = T.cloneSkinned(vorlage.szene);
-      koerper.scale.setScalar(modellSkala);
-      koerper.position.y = modellBoden;
-      koerper.rotation.y = MODELL_DREHUNG;
-      gruppe.add(koerper);
-      if (gruppe.userData.portrait) gruppe.userData.portrait.visible = false;
-      var mixer = new T.AnimationMixer(koerper), spuren = {};
-      vorlage.clips.forEach(function (clip) {
-        var takt = mixer.clipAction(clip);
-        takt.setLoop(T.LoopRepeat, Infinity); takt.enabled = true;
-        takt.setEffectiveWeight(clip.name === 'stehen' ? 1 : 0).play();
-        if (clip.name === 'laufen') takt.setEffectiveTimeScale(MODELL_TEMPO);
-        spuren[clip.name] = takt;
+    /* Holt die Vorlage eines Skins und meldet sie an alle, die inzwischen
+       darauf warten. Ein Fehlschlag wird gemerkt, damit nicht bei jedem
+       Schritt erneut angefragt wird. */
+    function modellHolen(skin, fertig) {
+      var eintrag = vorlagen[skin];
+      if (eintrag) {
+        if (eintrag.szene) fertig(eintrag);
+        else if (!eintrag.aus) eintrag.wartend.push(fertig);
+        return;
+      }
+      var quelle = SG.skinDateien && SG.skinDateien[skin];
+      if (!quelle || !T.GLTFLoader || typeof fetch !== 'function') return;
+      eintrag = vorlagen[skin] = { wartend: [fertig], aus: false };
+      var haut = modellTextur(quelle.textur);
+      fetch(quelle.modell).then(function (antwort) {
+        if (!antwort.ok) throw new Error(antwort.status + ' fuer ' + quelle.modell);
+        return antwort.arrayBuffer();
+      }).then(function (speicher) {
+        if (dead) return;
+        new T.GLTFLoader().parse(speicher, '', function (glb) {
+          if (dead) return;
+          glb.scene.traverse(function (teil) {
+            if (!teil.isMesh) return;
+            teil.castShadow = true; teil.frustumCulled = false;
+            teil.material = new T.MeshStandardMaterial({ map: haut, roughness: 0.62, metalness: 0, side: T.FrontSide });
+          });
+          /* Der Massstab kommt aus dem Modell selbst, nicht aus einer Zahl im
+             Blender-Skript: eine Skalierung am Skelett laesst das Netz
+             auseinanderfliegen, weil die Bindematrizen davon nichts wissen. */
+          var huelle = new T.Box3().setFromObject(glb.scene), hoch = huelle.max.y - huelle.min.y;
+          eintrag.skala = hoch > 0.01 ? MODELL_HOEHE / hoch : 1;
+          eintrag.boden = -huelle.min.y * eintrag.skala;
+          eintrag.szene = glb.scene;
+          eintrag.clips = ortsfest(glb.scene, glb.animations);
+          eintrag.haut = haut;
+          eintrag.stand = standpunkt(glb.scene, eintrag.clips, huelle);
+          eintrag.wartend.splice(0).forEach(function (ruf) { ruf(eintrag); });
+        }, misslungen);
+      }).catch(misslungen);
+      function misslungen(fehler) {
+        eintrag.aus = true; eintrag.wartend.length = 0;
+        console.warn('GehstockMon: das Modell fuer "' + skin + '" liess sich nicht laden, das Bild bleibt stehen.', fehler);
+      }
+    }
+
+    /* Haengt einer Figurengruppe das Modell ihres Skins an und laesst das Bild
+       darunter verschwinden. Ein Wechsel nimmt das alte wieder heraus. */
+    function anziehen(gruppe, skin) {
+      if (!skin || gruppe.userData.skin === skin) return;
+      gruppe.userData.skin = skin;
+      modellHolen(skin, function (vorlage) {
+        if (dead || !gruppe.parent || gruppe.userData.skin !== skin) return;
+        ausziehen(gruppe);
+        /* Der Traeger stellt die Figur hin und dreht sie, das Modell darin
+           sitzt um seine eigene Schieflage zurueckgerueckt. Getrennt, weil
+           das Zurueckruecken sonst mit der Blickrichtung mitwandern wuerde. */
+        var traeger = new T.Group();
+        traeger.scale.setScalar(vorlage.skala);
+        traeger.position.y = vorlage.boden;
+        traeger.rotation.y = MODELL_DREHUNG;
+        var koerper = T.cloneSkinned(vorlage.szene);
+        koerper.position.set(-vorlage.stand.x, 0, -vorlage.stand.z);
+        traeger.add(koerper);
+        gruppe.add(traeger);
+        if (gruppe.userData.portrait) gruppe.userData.portrait.visible = false;
+        var mixer = new T.AnimationMixer(koerper), spuren = {};
+        vorlage.clips.forEach(function (clip) {
+          var takt = mixer.clipAction(clip);
+          takt.setLoop(T.LoopRepeat, Infinity); takt.enabled = true;
+          takt.setEffectiveWeight(clip.name === 'stehen' ? 1 : 0).play();
+          /* Die Vorlagen bringen Schritte von einer bis zweieinhalb Sekunden
+             mit. Auf einen gemeinsamen Takt gebracht laufen alle Skins gleich
+             schnell, egal welche Bewegung Tripo ihnen gegeben hat. */
+          if (clip.name === 'laufen') takt.setEffectiveTimeScale(clip.duration * MODELL_TAKT);
+          spuren[clip.name] = takt;
+        });
+        var figur = { gruppe: gruppe, traeger: traeger, koerper: koerper, mixer: mixer,
+                      spuren: spuren, zuletzt: gruppe.position.clone(), anteil: 0 };
+        gruppe.userData.figur = figur; figuren.push(figur);
       });
-      var figur = { gruppe: gruppe, koerper: koerper, mixer: mixer, spuren: spuren,
-                    zuletzt: gruppe.position.clone(), anteil: 0 };
-      gruppe.userData.figur = figur; figuren.push(figur);
-      return figur;
+    }
+
+    function ausziehen(gruppe) {
+      var alt = gruppe.userData.figur;
+      if (!alt) return;
+      alt.mixer.stopAllAction();
+      figuren = figuren.filter(function (f) { return f !== alt; });
+      gruppe.remove(alt.traeger);
+      gruppe.userData.figur = null;
     }
 
     /* Ueberblenden zwischen Stehen und Laufen. Der Anteil wandert weich, damit
@@ -314,9 +384,9 @@
            niemand, und als Bild brauchten sie es auch nie. */
         if (laeuft) {
           var ziel = Math.atan2(schrittWeg.x, schrittWeg.z) - f.gruppe.rotation.y + MODELL_DREHUNG;
-          var weg = (ziel - f.koerper.rotation.y + Math.PI) % (Math.PI * 2);
+          var weg = (ziel - f.traeger.rotation.y + Math.PI) % (Math.PI * 2);
           if (weg < 0) weg += Math.PI * 2;
-          f.koerper.rotation.y += (weg - Math.PI) * Math.min(1, dt * 12);
+          f.traeger.rotation.y += (weg - Math.PI) * Math.min(1, dt * 12);
         }
         f.anteil += ((laeuft ? 1 : 0) - f.anteil) * Math.min(1, dt * 9);
         if (f.spuren.laufen) f.spuren.laufen.setEffectiveWeight(f.anteil);
@@ -337,7 +407,7 @@
       var ring = mesh(g, 'ring', color, 0, 0.09, 0, 1.3, 1.3, 1.3); ring.rotation.x = Math.PI / 2;
       var shadow=new T.Mesh(geometries.shadow,shadowMaterial);shadow.rotation.x=-Math.PI/2;shadow.position.y=.02;shadow.scale.set(2.4,1.5,1);g.add(shadow);
       g.userData = { portrait: portrait, ring: ring, rarity: rarity };
-      if (monId === 'player') anziehen(g);
+      if (monId === 'player') anziehen(g, 'wanderer');
       return g;
     }
     function addUnit(id, role, rarity, x, z, enemy, hp, monId) {
@@ -374,7 +444,7 @@
     }
     function disposeUnit(u) {
       u.group.traverse(function (part) { if (part.isSprite) { part.material.dispose(); spriteMaterials = spriteMaterials.filter(function (m) { return m !== part.material; }); } });
-      if (u.group.userData.figur) { u.group.userData.figur.mixer.stopAllAction(); figuren = figuren.filter(function (f) { return f.gruppe !== u.group; }); }
+      ausziehen(u.group);
       scene.remove(u.group);
     }
     function removePeer(id){var p=peers[id];if(!p)return;(p.followers||[]).forEach(disposeUnit);disposeUnit(p);p.texture.dispose();delete peers[id];}
@@ -388,7 +458,7 @@
           p=peers[info.id]={group:g,texture:texture,from:g.position.clone(),to:g.position.clone(),elapsed:0,duration:1,updatedAt:0,followers:[],trail:initialTrail};
         }
         if(p.updatedAt!==info.updatedAt){p.from.copy(p.group.position);p.to.set(info.x,.15,info.z);p.duration=T.MathUtils.clamp((info.updatedAt-p.updatedAt)/1000,.15,3);p.elapsed=0;if(p.from.distanceTo(p.to)>45){p.group.position.copy(p.to);p.from.copy(p.to);}}
-        var skin=info.skin||'wanderer';if(p.skin!==skin){p.texture.dispose();p.texture=spriteTexture(skin==='wanderer'?'gm-player-pixel':'skin-'+R.skinIndex(skin),'#ffffff').clone();p.texture.needsUpdate=true;p.group.userData.portrait.material.map=p.texture;p.skin=skin;}
+        var skin=info.skin||'wanderer';if(p.skin!==skin){p.texture.dispose();p.texture=spriteTexture(skin==='wanderer'?'gm-player-pixel':'skin-'+R.skinIndex(skin),'#ffffff').clone();p.texture.needsUpdate=true;p.group.userData.portrait.material.map=p.texture;p.skin=skin;anziehen(p.group,skin);}
         var squad=(info.squad||[]).filter(function(id){return !!R.daten.mon(id);}).slice(0,4),squadKey=squad.join(',');if(p.squadKey!==squadKey){p.followers.forEach(disposeUnit);p.followers=squad.map(function(id,i){var mon=R.daten.mon(id),g=creature(mon.typ,mon.seltenheit,false,id);g.name='peer-mon-'+info.id+'-'+id;g.position.copy(p.group.position);scene.add(g);return{group:g};});p.offsets=followOffsets(squad.map(R.daten.mon));p.squadKey=squadKey;}
 p.updatedAt=info.updatedAt;p.age=Math.max(0,(serverTime-info.updatedAt)/1000);p.heading=info.heading||0;p.info=info;
       });Object.keys(peers).forEach(function(id){if(!keep[id])removePeer(id);});
@@ -595,8 +665,8 @@ p.updatedAt=info.updatedAt;p.age=Math.max(0,(serverTime-info.updatedAt)/1000);p.
       select: select, overview: overview, follow: follow, setHeld: setHeld, setSquad: setSquad, setTerritories: setTerritories, setPeers: setPeers, startBattle: startBattle, endBattle: endBattle, step: step, project: project,
       position:function(){return {x:explorer.group.position.x,z:explorer.group.position.z,heading:explorer.group.rotation.y};},
       setPosition:setPosition,walkToPoint:walkToPoint,entrance:walls.entrance,
-      setAppearance:function(skin){if(explorer.skin===skin)return;explorer.skin=skin;explorer.group.userData.portrait.material.map=spriteTexture(skin==='wanderer'?'gm-player-pixel':'skin-'+R.skinIndex(skin),'#ffffff');explorer.group.userData.ring.material=mat(X.skin(skin).color);},
-      setEncounters:function(list,serverTime){encounterClock=serverTime-time*1000;var keep={};list.filter(function(e){return e.kind==='trainer';}).forEach(function(e){keep[e.id]=true;var p=trainers[e.id];if(!p){var g=creature(0,0,false,'player'),texture=spriteTexture('skin-'+e.skinIndex,'#ffffff');g.userData.portrait.material.map=texture;g.userData.portrait.scale.set(4.5,4.5,1);g.name='trainer-'+e.id;scene.add(g);p=trainers[e.id]={group:g};}p.info=e;});Object.keys(trainers).forEach(function(id){if(!keep[id]){disposeUnit(trainers[id]);delete trainers[id];}});},
+      setAppearance:function(skin){if(explorer.skin===skin)return;explorer.skin=skin;explorer.group.userData.portrait.material.map=spriteTexture(skin==='wanderer'?'gm-player-pixel':'skin-'+R.skinIndex(skin),'#ffffff');explorer.group.userData.ring.material=mat(X.skin(skin).color);anziehen(explorer.group,skin);},
+      setEncounters:function(list,serverTime){encounterClock=serverTime-time*1000;var keep={};list.filter(function(e){return e.kind==='trainer';}).forEach(function(e){keep[e.id]=true;var p=trainers[e.id];if(!p){var g=creature(0,0,false,'player'),texture=spriteTexture('skin-'+e.skinIndex,'#ffffff');g.userData.portrait.material.map=texture;g.userData.portrait.scale.set(4.5,4.5,1);g.name='trainer-'+e.id;scene.add(g);anziehen(g,skinName(e.skinIndex));p=trainers[e.id]={group:g};}p.info=e;});Object.keys(trainers).forEach(function(id){if(!keep[id]){disposeUnit(trainers[id]);delete trainers[id];}});},
       zoom: function (delta) { desiredZoom = T.MathUtils.clamp(desiredZoom + delta, 20, 1250); },
       rotate: function (delta) { yaw += delta; },
       move: function (x, y) { if (inputBlocked || battle) return; stick.x = x; stick.y = y; },
@@ -610,8 +680,8 @@ p.updatedAt=info.updatedAt;p.age=Math.max(0,(serverTime-info.updatedAt)/1000);p.
         var seen = new Set(); scene.traverse(function (m) { if (m.geometry && !seen.has(m.geometry)) { seen.add(m.geometry); m.geometry.dispose(); } });
         Object.keys(geometries).forEach(function (key) { if (!seen.has(geometries[key])) geometries[key].dispose(); });
         Object.keys(materials).forEach(function (key) { materials[key].dispose(); }); plane.material.dispose();
-        figuren.forEach(function (f) { f.mixer.stopAllAction(); }); figuren = []; wartend = [];
-        if (vorlage && vorlage !== 'laedt') vorlage.szene.traverse(function (teil) { if (teil.isMesh && teil.material.map) teil.material.map.dispose(); });
+        figuren.forEach(function (f) { f.mixer.stopAllAction(); }); figuren = [];
+        Object.keys(vorlagen).forEach(function (skin) { var v = vorlagen[skin]; if (v.haut) v.haut.dispose(); });
         spriteMaterials.forEach(function (m) { m.dispose(); });
         Object.keys(spriteTextures).forEach(function (key) { spriteTextures[key].dispose(); });
         groundTextures.forEach(function(texture){texture.dispose();});terrainMaterials.forEach(function(material){material.dispose();});
