@@ -6,11 +6,17 @@
   function art(mon) { return UI.el('img.gm-portrait',{src:SG.assets[mon.bild],alt:mon.name,draggable:false}); }
   function copy(value) { return JSON.parse(JSON.stringify(value)); }
   function duration(ms) { var m=Math.max(0,Math.ceil(ms/60000));return m>=60?Math.floor(m/60)+' Std. '+m%60+' Min.':m+' Min.'; }
+  /* Die Testzone haelt nur bis zum Schliessen des Tabs: ein Neuladen soll den Admin
+     nicht aussperren, ein fremder Browser bekommt sie nicht geschenkt. */
+  function adminKey() { return 'hgh:gm-admin:'+(SG.auth.aktuell?SG.auth.aktuell.code:'guest'); }
+  function adminSaved() { try{return sessionStorage.getItem(adminKey())==='1';}catch(e){return false;} }
+  function saveAdmin(on) { try{if(on)sessionStorage.setItem(adminKey(),'1');else sessionStorage.removeItem(adminKey());}catch(e){} }
   function mount(host) {
     var st=D.neuerStand(null), online=null, connected=false, world, dead=false, busy=false, animating=false, drawerView=null;
     var selected=6, battle=null, visual=null, lastNear=null, lastPoll=0, timeOffset=0, tickCount=0, animationToken=0, requestEpoch=0, polling=false;
     var peerList=[],peerLabels={},presenceBusy=false,lastPresence=0,lastPresenceReply=0;
-    var access=null,closeTimer=null,adminHits=0,adminResetTimer=null;
+    var access=null,closeTimer=null,adminHits=0,adminResetTimer=null,adminNotice=null;
+    R.adminOverride=adminSaved();
     var root=el('div',undefined,'gm-shell');host.root.classList.add('gm-game');host.stage.appendChild(root);
     var worldBox=el('div',undefined,'gm-world');root.appendChild(worldBox);
     var hud=el('div',undefined,'gm-hud'),brand=el('div',undefined,'gm-brand');
@@ -153,17 +159,21 @@
       hoursLabel.textContent=next.adminOverride?'Developer-Testzone geöffnet':next.open?'Heute geöffnet bis '+new Intl.DateTimeFormat('de-DE',{timeZone:H.ZONE,hour:'2-digit',minute:'2-digit'}).format(new Date(next.closesAt))+' Uhr':'';
       if(next.open&&!next.adminOverride)closeTimer=host.after(function(){if(!dead)showClosed(H.access(Math.max(now(),next.closesAt)));},Math.max(0,next.closesAt-next.serverTime));
     }
-    function showAdminMenu(card){
+    function showAdminMenu(card,message){
       if(root.querySelector('.gm-admin-menu'))return;
-      var menu=el('div',undefined,'gm-admin-menu');menu.appendChild(el('strong','Developer-Testzone'));menu.appendChild(el('p','Admin-Code eingeben, um die Insel auch während der Ruhezeit zu öffnen.'));
-      var input=el('input',{type:'text',inputMode:'numeric',maxLength:4,placeholder:'Vierstelliger Code','aria-label':'Vierstelliger Admin-Code'});menu.appendChild(input);
-      var feedback=el('p','','gm-admin-feedback');var unlock=button('Testzone öffnen',function(){if(input.value==='3141'){R.adminOverride=true;menu.remove();notify('Developer-Testzone aktiviert.');connectWorld();}else{feedback.textContent='Der Code ist nicht korrekt.';input.value='';input.focus();}} ,'gm-button gm-primary');menu.appendChild(unlock);menu.appendChild(feedback);card.appendChild(menu);input.focus();
+      var menu=el('div',undefined,'gm-admin-menu');menu.appendChild(el('strong','Developer-Testzone'));menu.appendChild(el('p','Admin-Code eingeben, um die Insel auch während der Ruhezeit zu öffnen. Das geht nur mit einem Admin-Zugang des Hideouts.'));
+      var input=UI.el('input',{type:'text',inputMode:'numeric',maxLength:4,placeholder:'Vierstelliger Code','aria-label':'Vierstelliger Admin-Code'});menu.appendChild(input);
+      var feedback=el('p',message||'','gm-admin-feedback');
+      var unlock=button('Testzone öffnen',function(){if(input.value!=='3141'){feedback.textContent='Der Code ist nicht korrekt.';input.value='';input.focus();return;}R.adminOverride=true;saveAdmin(true);adminNotice=null;menu.remove();notify('Developer-Testzone aktiviert.');connectWorld();},'gm-button gm-primary');
+      input.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();unlock.click();}});
+      menu.appendChild(unlock);menu.appendChild(feedback);card.appendChild(menu);input.focus();
     }
     function showClosed(next){
       if(dead)return;if(next.open)next=Object.assign({},next,{open:false,closesAt:null,nextOpenAt:next.serverTime});setAccess(next);requestEpoch++;animationToken++;animating=false;connected=false;joyEnd();closeDrawer();adventures.clear();battle=null;visual=null;arenaBox.hidden=true;root.classList.remove('gm-arena-open','gm-overview');applyPeers([],next.serverTime);showConnection();
       UI.clear(connectionBox);var card=el('div',undefined,'gm-connection-card gm-closed-card');card.appendChild(el('span','GEHSTOCKMON · ÖFFNUNGSZEITEN','gm-eyebrow'));var title=el('h2');title.appendChild(el('span','Die ','gm-closed-title-prefix'));var island=el('button','Insel','gm-hidden-admin-trigger');island.type='button';island.setAttribute('aria-label','Insel');island.addEventListener('click',function(){adminHits++;if(adminResetTimer)host.cancel(adminResetTimer);adminResetTimer=host.after(function(){adminHits=0;},1800);if(adminHits>=5){adminHits=0;showAdminMenu(card);}});title.appendChild(island);title.appendChild(el('span',' ruht gerade.','gm-closed-title-suffix'));card.appendChild(title);card.appendChild(el('p','Wieder offen: '+H.format(next.nextOpenAt)+' Uhr.','gm-next-opening'));
       var list=el('ul',undefined,'gm-hours-list');H.LABELS.forEach(function(line){list.appendChild(el('li',line));});card.appendChild(list);card.appendChild(el('p','Deutsche Ortszeit · Sommerzeit wird automatisch berücksichtigt.'));
       card.appendChild(el('p','Am Wochenende erhältst du 2 Eier pro eigenem Außenposten. Sie kommen beim nächsten Eintritt nach dem Wochenende in deine Bruttasche. Bei voller Tasche bleiben sie reserviert.'));card.appendChild(el('p','Dein Fortschritt bleibt gespeichert. Zur Öffnungszeit verbindet sich das Spiel automatisch.'));connectionBox.appendChild(card);
+      if(adminNotice){var hint=adminNotice;adminNotice=null;showAdminMenu(card,hint);}
     }
     function showConnection(message){if(dead)return;connected=false;joyEnd();connectionBox.hidden=false;root.classList.add('gm-disconnected');if(world)world.pause(true);syncInput();UI.clear(connectionBox);
       var card=el('div',undefined,'gm-connection-card');card.appendChild(el('span','GEHSTOCKMON · ONLINE','gm-eyebrow'));card.appendChild(el('h2',message?'Verbindung zur Spielerwelt unterbrochen':'Spielerwelt wird geladen …'));
@@ -171,7 +181,7 @@
       if(message){card.appendChild(el('p','Dein Fortschritt bleibt auf dem Server gespeichert.'));var retry=button(R.online.pending()?'Offene Aktion prüfen':'Erneut verbinden',connectWorld,'gm-button gm-primary');retry.disabled=busy;card.appendChild(retry);}
       connectionBox.appendChild(card);
     }
-    function onlineError(err){if(dead)return;if(err.status===423&&err.access){showClosed(err.access);return;}if(!connected||!online||!err.status||err.status===401||err.status>=500||err.status===408||err.status===429){showConnection(err.message||'Der Server ist nicht erreichbar.');return;}notify(err.message);if(battle)renderArena(false);}
+    function onlineError(err){if(dead)return;if(err.status===423&&R.adminOverride){R.adminOverride=false;saveAdmin(false);adminNotice='Dieser Hideout-Zugang ist kein Admin-Zugang. Die Insel bleibt geschlossen.';}if(err.status===423&&err.access){showClosed(err.access);return;}if(!connected||!online||!err.status||err.status===401||err.status>=500||err.status===408||err.status===429){showConnection(err.message||'Der Server ist nicht erreichbar.');return;}notify(err.message);if(battle)renderArena(false);}
     function connectWorld(){if(dead||busy)return;showConnection();requestOnline('join').then(function(res){if(dead)return;if(R.online.pending())return requestOnline('resume');return res;}).then(function(res){if(dead||!res)return;applyOnline(res);if(res.arena&&(res.arena.phase!=='finished'||battle||res.action&&res.action.op==='arena_turn'||res.action&&res.action.op==='arena_flee'))showArena(res.arena,false);else if(battle){battle=null;visual=null;arenaBox.hidden=true;root.classList.remove('gm-arena-open');if(world)world.pause(false);update();}}).catch(onlineError);}
     function resumeOnline(){if(busy)return;requestOnline(R.online.pending()?'resume':'world').then(function(res){applyOnline(res);if(dueling())adventures.showDuel();else if(res.arena)showArena(res.arena,false);else{showOnline();notify(res.message||'Aktueller Stand geladen.');}}).catch(onlineError);}
     function showOnline(){if(!openDrawer('Die Spielerwelt','online'))return;drawer.appendChild(el('p','Du teilst diese Welt mit allen Hideout-Spielern. Erobere Gebiete von Spielern und Computergegnern. Deine gespeicherten Mons verteidigen auch, wenn du offline bist.'));

@@ -73,7 +73,11 @@ await test('Closed server rejects every operation and spoofed client clocks with
 await test('Admin developer code opens the closed island only for an admin account',async()=>{
   const time=Date.parse('2026-09-19T12:00:00+02:00'),store=memoryStore(),presence=memoryStore(),h=createHandler({store,presenceStore:presence,now:()=>time});
   const normal=await call(h,cb,'join',{adminOverride:true,adminCode:'3141'});assert.equal(normal.status,423);assert.equal(store.data,null);
+  const typo=await call(h,ca,'join',{adminOverride:true,adminCode:'3140'});assert.equal(typo.status,423);assert.equal(store.data,null);
   const admin=await call(h,ca,'join',{adminOverride:true,adminCode:'3141'});assert.equal(admin.status,200);assert.equal(admin.access.open,true);assert.equal(admin.access.adminOverride,true);
+  const fight=await call(h,ca,'arena_start',{adminOverride:true,adminCode:'3141',territoryId:1,version:1,squad:D.neuerStand().truppe});
+  assert.equal(fight.status,200);assert.ok(store.data.players[admin.playerId].arena,'in der Testzone wird auch gekämpft');
+  assert.equal((await call(h,ca,'world')).status,423,'ohne Testzone bleibt die Insel zu');
 });
 await test('Each completed weekend gives two eggs per held post once, preserving overflow and ownership rewards',async()=>{
   let time=Date.parse('2026-09-11T07:00:00+02:00');const store=memoryStore(),h=createHandler({store,now:()=>time});const a=await call(h,ca,'join');await call(h,cb,'join');
