@@ -8,16 +8,28 @@ const clone = (value) => JSON.parse(JSON.stringify(value));
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' } });
 const mutations = ['arena_start', 'arena_turn', 'arena_flee', 'collect', 'incubate', 'hatch', 'upgrade', 'defend',...X.OPS];
 class GameError extends Error { constructor(message, status = 400) { super(message); this.status = status; } }
-function requireOpen(timestamp) {
+function adminBypass(body) {
+  return body && body.adminOverride === true && body.adminCode === '3141' && roleForCode(body.code) === 'A';
+}
+function accessFor(timestamp, bypass) {
   const access = H.access(timestamp);
+  if (bypass && !access.open) return { ...access, open: true, adminOverride: true, closesAt: timestamp + 365 * 24 * 60 * 60 * 1000 };
+  return access;
+}
+function requireOpen(timestamp, bypass = false) {
+  const access = accessFor(timestamp, bypass);
   if (!access.open) { const error = new GameError('GehstockMon ist gerade geschlossen.', 423); error.access = access; throw error; }
   return access;
 }
 function validCode(value) {
-  if (typeof value !== 'string' || !/^\d{4}$/.test(value)) return false;
+  return roleForCode(value) !== null;
+}
+function roleForCode(value) {
+  if (typeof value !== 'string' || !/^\d{4}$/.test(value)) return null;
   const text = 'code:' + value + ':gehstock:hideout:2026:kellergewoelbe'; let h = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = (h + (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24)) >>> 0; }
-  return h % 97 === 0;
+  if (h % 97 !== 0) return null;
+  return ['S', 'K', 'A'][Math.floor(h / 97) % 3];
 }
 function initialWorld(now) {
   return { version: 1, mapVersion: D.MAP_VERSION, players: {}, reports: [], territories: D.FELDER.map((f) => ({ id: f.id, ownerId: null,
@@ -81,7 +93,7 @@ function protectedOwner(world, t, now) {
 }
 function publicResult(world, id, now, extra = {}) {
   const p = world.players[id];
-  return { playerId: id, serverTime: now, access: H.access(now), mapVersion: world.mapVersion, profile: D.neuerStand(p, now), arena: p.arena || null,duel:p.duel||null,spawn:p.spawn,encounters:X.encounters(now,world.territories).filter(e=>!p.encounterClaims.includes(e.id)),
+  return { playerId: id, serverTime: now, access: accessFor(now, extra.adminOverride === true), mapVersion: world.mapVersion, profile: D.neuerStand(p, now), arena: p.arena || null,duel:p.duel||null,spawn:p.spawn,encounters:X.encounters(now,world.territories).filter(e=>!p.encounterClaims.includes(e.id)),
     territories: world.territories.map((t) => ({ id: t.id, ownerId: t.ownerId, ownerName: world.players[t.ownerId]?.name || t.ownerName, version: t.version, level: t.level,
       defense: A.defenders(t.id, t.ownerId ? t.defense : null).map((k) => ({ id: k.id, name: k.name })),
       eggStock: t.ownerId === id ? t.eggStock : 0, eggAt: t.ownerId === id ? t.eggAt : null })),
@@ -89,7 +101,7 @@ function publicResult(world, id, now, extra = {}) {
 }
 
 // Anwesenheit ist kurzlebig und unabhängig von Gold, Eiern und Kampfaktionen.
-async function updatePresence(db, world, id, position, timestamp, clock) {
+async function updatePresence(db, world, id, position, timestamp, clock, bypass = false) {
   const p = world.players[id];
   if (!p) throw new GameError('Betritt zuerst die Spielerwelt.',409);
   if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.z) || !Number.isFinite(position.heading)
@@ -102,13 +114,13 @@ async function updatePresence(db, world, id, position, timestamp, clock) {
     if(layout.some(g=>g.ownerId!==id&&X.inside(from,g)))from=X.outside(from,layout);
     const credit=previous?Math.min(33,(previous.credit||0)+Math.max(0,timestamp-previous.updatedAt)/1000*11):33,distance=Math.hypot(position.x-from.x,position.z-from.z);
     const route=distance<=credit+.05?X.route(layout,from,position,id,credit+.05):null;
-    if(!route)return json({serverTime:timestamp,access:H.access(timestamp),position:{x:from.x,z:from.z,heading:from.heading||0},positionCorrected:true,peers:Object.values(players).filter(v=>v.id!==id).map(({credit,spawnAt,...peer})=>peer)});
+    if(!route)return json({serverTime:timestamp,access:accessFor(timestamp,bypass),position:{x:from.x,z:from.z,heading:from.heading||0},positionCorrected:true,peers:Object.values(players).filter(v=>v.id!==id).map(({credit,spawnAt,...peer})=>peer)});
     let traveled=0,cursor=from;for(const point of route){traveled+=Math.hypot(point.x-cursor.x,point.z-cursor.z);cursor=point;}
     if (!players[id] || players[id].updatedAt<=timestamp) players[id] = { id, name:p.name, x:Math.round(position.x*100)/100, z:Math.round(position.z*100)/100,
       heading:position.heading, activity:activeArena(p)||activeDuel(p)?'arena':'map', updatedAt:timestamp,spawnAt:p.lastJoinAt,credit:Math.max(0,credit-traveled),skin:p.skin,weapon:p.weapon,protected:X.protected(p,timestamp) };
-    requireOpen(clock());
+    requireOpen(clock(), bypass);
     const result=await db.setJSON('presence-v1',{players},entry?{onlyIfMatch:entry.etag}:{onlyIfNew:true});
-    if(result.modified)return json({serverTime:timestamp,access:H.access(timestamp),peers:Object.values(players).filter(v=>v.id!==id).map(({credit,spawnAt,...peer})=>peer)});
+    if(result.modified)return json({serverTime:timestamp,access:accessFor(timestamp,bypass),peers:Object.values(players).filter(v=>v.id!==id).map(({credit,spawnAt,...peer})=>peer)});
   }
   throw new GameError('Die Mitspieler werden gerade aktualisiert.',409);
 }
@@ -144,13 +156,14 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
       if (!['join','world','presence',...mutations].includes(body.op)) throw new GameError('Diese Spielaktion wird nicht mehr unterstützt. Lade das Spiel neu.');
       if (mutations.includes(body.op) && (typeof body.requestId !== 'string' || body.requestId.length < 8 || body.requestId.length > 80)) throw new GameError('Aktionskennung fehlt.');
       const id = createHash('sha256').update('gehstockmon-player:' + body.code).digest('hex').slice(0, 24), timestamp = now();
-      requireOpen(timestamp);
+      const bypass = adminBypass(body);
+      requireOpen(timestamp, bypass);
       const name = typeof body.name === 'string' ? body.name.trim().replace(/[\u0000-\u001f]/g, '').slice(0, 30) : '';
       const db = store || getStore({ name: 'hgh-gehstockmon', consistency: 'strong' }), draw = random();
       if (body.op === 'presence') {
         const entry=await db.getWithMetadata(KEY,{type:'json',consistency:'strong'});
         if(!entry)throw new GameError('Betritt zuerst die Spielerwelt.',409);
-        return await updatePresence(presenceStore||getStore({name:'hgh-gehstockmon-presence',consistency:'strong'}),entry.data,id,body.position,timestamp,now);
+        return await updatePresence(presenceStore||getStore({name:'hgh-gehstockmon-presence',consistency:'strong'}),entry.data,id,body.position,timestamp,now,bypass);
       }
       for (let attempt = 0; attempt < 8; attempt++) {
         const entry = await db.getWithMetadata(KEY, { type: 'json', consistency: 'strong' });
@@ -164,7 +177,7 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
         const p = world.players[id]; p.name = name || p.name; p.lastSeen = timestamp;
         if(body.op==='join'){p.lastJoinAt=timestamp;p.spawn=X.outside(X.SPAWN,X.layout(world.territories));}
         const receipts = p.actionReceipts || [], receipt = receipts.find((r) => r.id === body.requestId && r.op === body.op);
-        if (receipt) return json(publicResult(world, id, timestamp, { ...receipt.extra, duplicate: true }));
+        if (receipt) return json(publicResult(world, id, timestamp, { ...receipt.extra, duplicate: true, adminOverride: bypass }));
         let extra = {};
         try {
           if(activeArena(p)&&mutations.includes(body.op)&&!['arena_turn','arena_flee'].includes(body.op))throw new GameError('Beende zuerst deinen Mon-Kampf.',409);
@@ -207,9 +220,9 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
         } catch (err) { if (err instanceof GameError) throw err; throw new GameError(err.message); }
         if (mutations.includes(body.op)) p.actionReceipts = receipts.concat({ id: body.requestId, op: body.op, extra }).slice(-40);
         world.version++;
-        requireOpen(now());
+        requireOpen(now(), bypass);
         const write = await db.setJSON(KEY, world, entry ? { onlyIfMatch: entry.etag } : { onlyIfNew: true });
-        if (write.modified) return json(publicResult(world, id, timestamp, extra));
+        if (write.modified) return json(publicResult(world, id, timestamp, { ...extra, adminOverride: bypass }));
       }
       throw new GameError('Die Welt wird gerade verändert. Bitte versuche es erneut.', 409);
     } catch (err) {

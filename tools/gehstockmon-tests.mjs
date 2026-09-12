@@ -70,6 +70,11 @@ await test('Closed server rejects every operation and spoofed client clocks with
   const lateStore=memoryStore();let checks=0;const late=createHandler({store:lateStore,now:()=>Date.parse('2026-09-21T12:59:59.999+02:00')+(checks++?1:0)});
   assert.equal((await call(late,ca,'join')).status,423);assert.equal(lateStore.data,null,'a request crossing closing time cannot commit');
 });
+await test('Admin developer code opens the closed island only for an admin account',async()=>{
+  const time=Date.parse('2026-09-19T12:00:00+02:00'),store=memoryStore(),presence=memoryStore(),h=createHandler({store,presenceStore:presence,now:()=>time});
+  const normal=await call(h,cb,'join',{adminOverride:true,adminCode:'3141'});assert.equal(normal.status,423);assert.equal(store.data,null);
+  const admin=await call(h,ca,'join',{adminOverride:true,adminCode:'3141'});assert.equal(admin.status,200);assert.equal(admin.access.open,true);assert.equal(admin.access.adminOverride,true);
+});
 await test('Each completed weekend gives two eggs per held post once, preserving overflow and ownership rewards',async()=>{
   let time=Date.parse('2026-09-11T07:00:00+02:00');const store=memoryStore(),h=createHandler({store,now:()=>time});const a=await call(h,ca,'join');await call(h,cb,'join');
   const p=store.data.players[a.playerId];for(const t of store.data.territories)Object.assign(t,{ownerId:a.playerId,...E.outpost(null,time)});

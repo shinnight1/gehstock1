@@ -10,7 +10,7 @@
     var st=D.neuerStand(null), online=null, connected=false, world, dead=false, busy=false, animating=false, drawerView=null;
     var selected=6, battle=null, visual=null, lastNear=null, lastPoll=0, timeOffset=0, tickCount=0, animationToken=0, requestEpoch=0, polling=false;
     var peerList=[],peerLabels={},presenceBusy=false,lastPresence=0,lastPresenceReply=0;
-    var access=null,closeTimer=null;
+    var access=null,closeTimer=null,adminHits=0,adminResetTimer=null;
     var root=el('div',undefined,'gm-shell');host.root.classList.add('gm-game');host.stage.appendChild(root);
     var worldBox=el('div',undefined,'gm-world');root.appendChild(worldBox);
     var hud=el('div',undefined,'gm-hud'),brand=el('div',undefined,'gm-brand');
@@ -150,12 +150,18 @@
       if(!next)return;
       if(access&&!access.open&&next.open&&next.serverTime<access.serverTime){var err=new Error('GehstockMon ist gerade geschlossen.');err.status=423;err.access=access;throw err;}
       access=next;timeOffset=next.serverTime-Date.now();if(closeTimer)host.cancel(closeTimer);
-      hoursLabel.textContent=next.open?'Heute geöffnet bis '+new Intl.DateTimeFormat('de-DE',{timeZone:H.ZONE,hour:'2-digit',minute:'2-digit'}).format(new Date(next.closesAt))+' Uhr':'';
-      if(next.open)closeTimer=host.after(function(){if(!dead)showClosed(H.access(Math.max(now(),next.closesAt)));},Math.max(0,next.closesAt-next.serverTime));
+      hoursLabel.textContent=next.adminOverride?'Developer-Testzone geöffnet':next.open?'Heute geöffnet bis '+new Intl.DateTimeFormat('de-DE',{timeZone:H.ZONE,hour:'2-digit',minute:'2-digit'}).format(new Date(next.closesAt))+' Uhr':'';
+      if(next.open&&!next.adminOverride)closeTimer=host.after(function(){if(!dead)showClosed(H.access(Math.max(now(),next.closesAt)));},Math.max(0,next.closesAt-next.serverTime));
+    }
+    function showAdminMenu(card){
+      if(root.querySelector('.gm-admin-menu'))return;
+      var menu=el('div',undefined,'gm-admin-menu');menu.appendChild(el('strong','Developer-Testzone'));menu.appendChild(el('p','Admin-Code eingeben, um die Insel auch während der Ruhezeit zu öffnen.'));
+      var input=el('input',{type:'text',inputMode:'numeric',maxLength:4,placeholder:'Vierstelliger Code','aria-label':'Vierstelliger Admin-Code'});menu.appendChild(input);
+      var feedback=el('p','','gm-admin-feedback');var unlock=button('Testzone öffnen',function(){if(input.value==='3141'){R.adminOverride=true;menu.remove();notify('Developer-Testzone aktiviert.');connectWorld();}else{feedback.textContent='Der Code ist nicht korrekt.';input.value='';input.focus();}} ,'gm-button gm-primary');menu.appendChild(unlock);menu.appendChild(feedback);card.appendChild(menu);input.focus();
     }
     function showClosed(next){
       if(dead)return;if(next.open)next=Object.assign({},next,{open:false,closesAt:null,nextOpenAt:next.serverTime});setAccess(next);requestEpoch++;animationToken++;animating=false;connected=false;joyEnd();closeDrawer();adventures.clear();battle=null;visual=null;arenaBox.hidden=true;root.classList.remove('gm-arena-open','gm-overview');applyPeers([],next.serverTime);showConnection();
-      UI.clear(connectionBox);var card=el('div',undefined,'gm-connection-card gm-closed-card');card.appendChild(el('span','GEHSTOCKMON · ÖFFNUNGSZEITEN','gm-eyebrow'));card.appendChild(el('h2','Die Insel ruht gerade.'));card.appendChild(el('p','Wieder offen: '+H.format(next.nextOpenAt)+' Uhr.','gm-next-opening'));
+      UI.clear(connectionBox);var card=el('div',undefined,'gm-connection-card gm-closed-card');card.appendChild(el('span','GEHSTOCKMON · ÖFFNUNGSZEITEN','gm-eyebrow'));var title=el('h2');title.appendChild(el('span','Die ','gm-closed-title-prefix'));var island=el('button','Insel','gm-hidden-admin-trigger');island.type='button';island.setAttribute('aria-label','Insel');island.addEventListener('click',function(){adminHits++;if(adminResetTimer)host.cancel(adminResetTimer);adminResetTimer=host.after(function(){adminHits=0;},1800);if(adminHits>=5){adminHits=0;showAdminMenu(card);}});title.appendChild(island);title.appendChild(el('span',' ruht gerade.','gm-closed-title-suffix'));card.appendChild(title);card.appendChild(el('p','Wieder offen: '+H.format(next.nextOpenAt)+' Uhr.','gm-next-opening'));
       var list=el('ul',undefined,'gm-hours-list');H.LABELS.forEach(function(line){list.appendChild(el('li',line));});card.appendChild(list);card.appendChild(el('p','Deutsche Ortszeit · Sommerzeit wird automatisch berücksichtigt.'));
       card.appendChild(el('p','Am Wochenende erhältst du 2 Eier pro eigenem Außenposten. Sie kommen beim nächsten Eintritt nach dem Wochenende in deine Bruttasche. Bei voller Tasche bleiben sie reserviert.'));card.appendChild(el('p','Dein Fortschritt bleibt gespeichert. Zur Öffnungszeit verbindet sich das Spiel automatisch.'));connectionBox.appendChild(card);
     }

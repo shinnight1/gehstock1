@@ -25,7 +25,7 @@
       var ctrl = new AbortController(), timer = setTimeout(function () { ctrl.abort(); }, op==='presence'?5000:15000);
       return fetch('/api/gehstockmon', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store', signal: ctrl.signal,
-        body: JSON.stringify(Object.assign({}, data, { op: op, code: code, name: SG.auth.aktuell.name || 'Wanderer' }))
+        body: JSON.stringify(Object.assign({}, data, { op: op, code: code, name: SG.auth.aktuell.name || 'Wanderer', adminOverride: SG.gehstockmon.adminOverride === true, adminCode: SG.gehstockmon.adminOverride === true ? '3141' : undefined }))
       }).then(function (res) {
         if ((res.headers.get('content-type') || '').indexOf('json') < 0) throw new Error('Der Spielserver ist hier noch nicht erreichbar. Bitte öffne die veröffentlichte Hideout-Website.');
         return res.json().then(function (result) {
