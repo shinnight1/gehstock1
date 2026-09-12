@@ -1,6 +1,6 @@
 /* GehstockMon: echte 3D-Welt und Wiedergabe der gemeinsamen Kampfmaschine. */
 (function (SG) {
-  var R = SG.gehstockmon;
+  var R = SG.gehstockmon, X=R.abenteuer;
   R.orte = R.daten.BIOME;
 
   R.createWorld = function (host, container, handlers) {
@@ -35,7 +35,7 @@
     var groundTextures = [], terrainMaterials = [], upgrades = new T.Group(), upgradeKey = '', gates=[], peers={}; scene.add(upgrades);
     var shadowTexture=R.contactShadow(T),shadowMaterial=new T.MeshBasicMaterial({map:shadowTexture,transparent:true,depthWrite:false,toneMapped:false});
     geometries.shadow=new T.PlaneGeometry(1,1);
-    for (var terrainKind = 0; terrainKind < 5; terrainKind++) {
+    for (var terrainKind = 0; terrainKind < R.orte.length; terrainKind++) {
       var terrainTexture = R.groundTexture(T, terrainKind);terrainTexture.anisotropy=4; groundTextures.push(terrainTexture);
       terrainMaterials.push(new T.MeshStandardMaterial({ map: terrainTexture, roughness: 1, metalness: 0, color: '#edf0e4' }));
     }
@@ -58,8 +58,8 @@
       var biome=R.biomeAt(x,z);spectral=biome===3;
       var g = new T.Group(); g.position.set(x, 0, z); g.rotation.y = x * 0.9; fixed.add(g);
       mesh(g, 'cylinder', '#514536', 0, size * 0.45, 0, size * 0.23, size * 0.9, size * 0.23);
-      if(biome===2){var branch=mesh(g,'cylinder','#423c3a',.4,size*.65,0,size*.14,size*.8,size*.14);branch.rotation.z=-.7;return;}
-      for (var j = 0; j < 3; j++) mesh(g, biome===1?'sphere':'cone', biome===4?['#749692','#c4d9d6','#e1eeea'][j]:spectral ? ['#3a405f', '#4d5379', '#626b85'][j] : ['#224936', '#326449', '#4b8050'][j], 0, size * (0.85 + j * 0.3), 0, size * (1.05 - j * 0.22), size * 0.85, size * (1.05 - j * 0.22));
+      if(biome===2||biome===6||biome===8){var branch=mesh(g,'cylinder',biome===8?'#2c223c':'#796044',.4,size*.65,0,size*.14,size*.8,size*.14);branch.rotation.z=-.7;if(biome===8)mesh(g,'rock','#df4c83',0,size*1.3,0,.4,.8,.4,'#7e2348');return;}
+      for (var j = 0; j < 3; j++) mesh(g, biome===1||biome===5?'sphere':'cone', biome===5?['#668754','#a4b86f','#d3c39a'][j]:biome===7?['#433953','#685771','#928295'][j]:biome===4?['#749692','#c4d9d6','#e1eeea'][j]:spectral ? ['#3a405f', '#4d5379', '#626b85'][j] : ['#224936', '#326449', '#4b8050'][j], 0, size * (0.85 + j * 0.3), 0, size * (1.05 - j * 0.22), size * 0.85, size * (1.05 - j * 0.22));
     }
     function building(x, z, level, color) {
       var g = new T.Group(); g.position.set(x, 0.1, z); fixed.add(g);
@@ -98,27 +98,15 @@
     for (var ui = 0; ui < uv.count; ui++) uv.setXY(ui, uv.getX(ui) * 42, uv.getY(ui) * 42);
     land.material = terrainMaterials[0];
     R.createBiomeGround(T,scene,terrainMaterials);var waters=R.createWater(T,scene);
-    for (var p = 0; p < R.orte.length; p++) {
-      var start = p < 5 ? 0 : p < 15 ? 5 : 15, count = p < 5 ? 5 : 10;
-      pathBetween(R.orte[p], R.orte[start + (p - start + 1) % count]);
-      if (p >= 15 && p % 2 === 0) pathBetween(R.orte[p], R.orte[p - 10]);
-      if (p >= 5 && p < 15 && p % 2 === 0) pathBetween(R.orte[p], R.orte[p % 5]);
-    }
+    var paths={};R.orte.forEach(function(a,i){R.orte.map(function(b,j){return{point:b,id:j,d:Math.hypot(a.x-b.x,a.z-b.z)};}).filter(function(b){return b.id!==i;}).sort(function(a,b){return a.d-b.d;}).slice(0,2).forEach(function(b){var key=[i,b.id].sort().join(':');if(!paths[key]){paths[key]=true;pathBetween(a,b.point);}});});
     pathBetween({ x: 0, z: 0 }, R.orte[0]);
     for (var i = 0; i < R.orte.length; i++) {
       var o = R.orte[i];
       var clearing = mesh(fixed, 'land', o.farbe, o.x, 0.05, o.z, 18, 0.22, 17);
       clearing.geometry = clearing.geometry.clone(); var clearingUv = clearing.geometry.getAttribute('uv');
       for (var cu = 0; cu < clearingUv.count; cu++) clearingUv.setXY(cu, clearingUv.getX(cu) * 4, clearingUv.getY(cu) * 4);
-      clearing.material = terrainMaterials[i % 5];
+      clearing.material = terrainMaterials[i];
       building(o.x, o.z - 2.8, 1, o.dach);
-      mesh(fixed,'box','#858d81',o.x-6,1.1,o.z-2,1,2.2,13);mesh(fixed,'box','#858d81',o.x+6,1.1,o.z-2,1,2.2,13);
-      mesh(fixed,'box','#858d81',o.x,1.1,o.z-8,12,2.2,1);
-      [-1,1].forEach(function(side){mesh(fixed,'box','#858d81',o.x+side*4.5,1.1,o.z+4.5,3,2.2,1);mesh(fixed,'cylinder','#a0aa9a',o.x+side*2.8,1.65,o.z+4.5,1.1,3.3,1.1);mesh(fixed,'cone',o.dach,o.x+side*2.8,3.65,o.z+4.5,1.6,1,1.6);});
-      var gate={id:i+1,own:false,open:0,leaves:[]};
-      [-1,1].forEach(function(side){var pivot=new T.Group();pivot.position.set(o.x+side*2.35,.15,o.z+4.5);scene.add(pivot);pivot.name='gate-'+(i+1)+'-'+side;
-        mesh(pivot,'box','#755239',-side*1.17,1.15,0,2.34,2.3,.24);mesh(pivot,'box','#c2a36c',-side*1.17,1.85,.14,2.25,.13,.1);mesh(pivot,'box','#c2a36c',-side*1.17,.5,.14,2.25,.13,.1);gate.leaves.push(pivot);});
-      gates.push(gate);
       for (var j = 0; j < 7; j++) {
         var angle = j * 0.88 + i;
         tree(o.x + Math.cos(angle) * 8, o.z + Math.sin(angle) * 7.8, 2.2 + (j % 3) * 0.5, i % 5 === 3);
@@ -143,12 +131,13 @@
     for (var tuft = 0; tuft < 1400; tuft++) {
       var tx = Math.sin(tuft * 83.17) * 117, tz = Math.cos(tuft * 47.31) * 108;
       if (Math.hypot(tx / 123, tz / 115) > .97 || R.orte.some(function (o) { return Math.hypot(o.x-tx,o.z-tz)<7; })) continue;
-      var kind=R.biomeAt(tx,tz),colors=kind===4?['#c8dfdf','#e0eae8','#b6cfd4']:kind===2?['#56443d','#a04d32','#6e5748']:kind===3?['#607878','#647b91','#4d6169']:['#537343','#71884c','#3f673c'];
+      var kind=R.biomeAt(tx,tz),colors=kind===8?['#664354','#982f57','#38314d']:kind===7?['#6c648c','#84769b','#4b455e']:kind===6?['#c2a26e','#e0bc78','#b58b55']:kind===5?['#8f9e5e','#b5b878','#7c954f']:kind===4?['#c8dfdf','#e0eae8','#b6cfd4']:kind===2?['#56443d','#a04d32','#6e5748']:kind===3?['#607878','#647b91','#4d6169']:['#537343','#71884c','#3f673c'];
       var grass = mesh(fixed, 'cone', colors[tuft%3], tx, .24, tz, .20, .48 + tuft%3*.09, .12); grass.rotation.z = .22;grass.castShadow=false;
       if (tuft % 13 === 0) mesh(fixed, 'sphere', kind===4?'#e1ece7':kind===2?'#d87542':kind===3?'#99acc7':tuft%2 ? '#d3b269' : '#bccba1', tx, .35, tz, .25, .18, .25);
     }
     R.orte.forEach(function (o, i) {
-      if(i%5===2){for(var r=0;r<4;r++){mesh(fixed,'rock','#81776b',o.x+11+r*.7,.8+r*.3,o.z-7-r,2.8,2+r,2.4);mesh(fixed,'cylinder','#a1987e',o.x-11+r*1.7,1.2,o.z-5,1,2.4+(r%2),1);}}
+      if(i===6||i===8){for(var r=0;r<7;r++){mesh(fixed,'rock',i===8?'#342638':'#c8a574',o.x+11+r*.7,.8+r*.6,o.z-7-r,3.8,3+r,3.4);mesh(fixed,'cylinder',i===8?'#56415c':'#a1987e',o.x-11+r*1.7,1.2,o.z-5,1,2.4+(r%2),1);}if(i===8){var voidRing=mesh(fixed,'ring','#ff4e86',o.x,.5,o.z+9,10,10,10,'#be2851');voidRing.rotation.x=Math.PI/2;}}
+      if(i===7){for(var bolt=0;bolt<6;bolt++)mesh(fixed,'cone','#a9b4df',o.x-11+bolt*4,2,o.z-8,1,4+bolt%2,1,'#605ba4');}
       if(i%5===1){mesh(fixed,'land','#438b95',o.x-10,.12,o.z-8,7,.1,4);for(var reed=0;reed<8;reed++)mesh(fixed,'cone','#899860',o.x-13+reed*.8,.65,o.z-6,.2,1.3,.2);}
       if(i%5===4){for(var snow=0;snow<4;snow++)mesh(fixed,'rock','#c2d0cb',o.x+8+snow,1,o.z+5-snow,2.6,2,2.2);}
     });
@@ -167,10 +156,11 @@
       if (merged) { var m = new T.Mesh(merged, b.material);m.castShadow=b.shadow;m.receiveShadow=true; fixed.add(m); }
       b.list.forEach(function (g) { g.dispose(); });
     });
-    var influence = R.createInfluence(T, scene);
+    var influence = R.createInfluence(T, scene), walls=R.createWalls(T,scene), selfId=null, route=[];
     function setTerritories(territories, playerId) {
       influence.set(territories, playerId);
-      gates.forEach(function(g,i){g.own=territories[i].ownerId===playerId;var o=R.orte[i];if(!g.own&&explorer&&Math.abs(explorer.group.position.x-o.x)<6&&explorer.group.position.z>o.z-8&&explorer.group.position.z<o.z+4.5){explorer.group.position.set(o.x,.15,o.z+7);clearInput();}});
+      selfId=playerId;walls.set(territories,playerId);
+      if(explorer&&walls.layout.some(function(g){return g.ownerId!==playerId&&X.inside(explorer.group.position,g);}))setPosition(X.outside(explorer.group.position,walls.layout));
       var key=territories.map(function(t){return t.level;}).join(',');if(key===upgradeKey)return;upgradeKey=key;
       upgrades.children.slice().forEach(function(m){upgrades.remove(m);m.geometry.dispose();});
       territories.forEach(function(t,i){var o=R.orte[i];if(t.level<2)return;
@@ -224,7 +214,7 @@
       var key = monId === 'player' ? 'gm-player-pixel' : k ? k.bild : SG.gehstockmon.daten.KREATUREN[role].bild;
       var material = new T.SpriteMaterial({ map: spriteTexture(key, color), transparent: true, depthWrite: false, toneMapped: false });
       spriteMaterials.push(material);
-      var portrait = new T.Sprite(material), size = monId === 'player' ? 3.4 : 2.1 + rarity * 0.17;
+      var portrait = new T.Sprite(material), size = monId === 'player' ? 3.4 : 1.9 + rarity * 0.08;
       portrait.scale.set(size, size, 1); portrait.position.y = size * 0.52; g.add(portrait);
       if (monId === 'player') { portrait.center.set(0.5, 0); portrait.position.y = 0; }
       var ring = mesh(g, 'ring', color, 0, 0.09, 0, 1.3, 1.3, 1.3); ring.rotation.x = Math.PI / 2;
@@ -252,6 +242,7 @@
     }
     setSquad(SG.gehstockmon.daten.STARTER.map(SG.gehstockmon.daten.mon));
     var selectionRing = mesh(scene, 'ring', '#ffd281', -14, 0.38, 12, 18.6, 18.6, 0.4, '#79613b'); selectionRing.rotation.x = Math.PI / 2;
+    selectionRing.geometry=new T.TorusGeometry(.5,.009,6,48);
     var ray = new T.Raycaster(), pointer = new T.Vector2();
     var plane = new T.Mesh(new T.PlaneGeometry(300, 300), new T.MeshBasicMaterial({ visible: false }));
     plane.rotation.x = -Math.PI / 2; scene.add(plane); plane.updateMatrixWorld();
@@ -275,15 +266,14 @@
           p=peers[info.id]={group:g,texture:texture,from:g.position.clone(),to:g.position.clone(),elapsed:0,duration:1,updatedAt:0};
         }
         if(p.updatedAt!==info.updatedAt){p.from.copy(p.group.position);p.to.set(info.x,.15,info.z);p.duration=T.MathUtils.clamp((info.updatedAt-p.updatedAt)/1000,.15,3);p.elapsed=0;if(p.from.distanceTo(p.to)>45){p.group.position.copy(p.to);p.from.copy(p.to);}}
-        p.updatedAt=info.updatedAt;p.age=Math.max(0,(serverTime-info.updatedAt)/1000);p.heading=info.heading||0;p.info=info;
+        p.group.userData.portrait.material.color.set(X.skin(info.skin).color);p.updatedAt=info.updatedAt;p.age=Math.max(0,(serverTime-info.updatedAt)/1000);p.heading=info.heading||0;p.info=info;
       });Object.keys(peers).forEach(function(id){if(!keep[id])removePeer(id);});
     }
     function canStep(x,z){
-      return gates.every(function(g,i){var o=R.orte[i],p=explorer.group.position,inside=Math.abs(x-o.x)<6.4&&z>o.z-8.4&&z<o.z+4.8,was=Math.abs(p.x-o.x)<6.4&&p.z>o.z-8.4&&p.z<o.z+4.8;
-        if(!inside&&!was)return true;if(inside&&was)return g.own;
-        return g.own&&g.open>.65&&Math.abs(x-o.x)<2.25&&Math.max(z,p.z)>=o.z+4.8;
-      });
+      return X.canTravel(walls.layout,explorer.group.position,{x:x,z:z},selfId);
     }
+    function setPosition(p){explorer.group.position.set(p.x,.15,p.z);clearInput();trail=[];for(var behind=35;behind>=0;behind--)trail.push(new T.Vector3(p.x-behind*.4*Math.cos(yaw),.15,p.z+behind*.4*Math.sin(yaw)));units.forEach(function(u){if(u.id.indexOf('camp')===0){var n=Number(u.id.slice(4));u.group.position.copy(trail[Math.max(0,trail.length-1-(n+1)*5)]);}});}
+    function walkToPoint(p){if(inputBlocked||battle)return;var g=walls.layout.find(function(g){return g.ownerId!==selfId&&X.inside(p,g);});if(g)p=walls.entrance(g.fields[0]);route=X.route(walls.layout,explorer.group.position,p,selfId)||[];if(route.length){var next=route.shift();destination.set(next.x,.15,next.z);}follow();}
     function setHeld(ids) {
       held = ids.slice();
       flags.forEach(function (f, i) { f.material = mat(held.indexOf(i + 1) >= 0 ? '#5baea1' : '#c35644'); });
@@ -343,7 +333,7 @@
     }
     var pointers = {}, dragged = false, pinch = 0, prev = null, keys = {}, off = [];
     function on(el, event, fn, opts) { el.addEventListener(event, fn, opts); off.push(function () { el.removeEventListener(event, fn, opts); }); }
-    function clearInput() { pointers = {}; keys = {}; pinch = 0; prev = null; dragged = true; stick.x = 0; stick.y = 0; explorer.group.position.y = 0.15; destination.copy(explorer.group.position); }
+    function clearInput() { pointers = {}; keys = {}; pinch = 0; prev = null; dragged = true; route=[];stick.x = 0; stick.y = 0; explorer.group.position.y = 0.15; destination.copy(explorer.group.position); }
     function distance() { var pts = Object.keys(pointers).map(function (k) { return pointers[k]; }); return pts.length < 2 ? 0 : Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y); }
     on(canvas, 'pointerdown', function (e) {
       if (contextLost || inputBlocked) return;
@@ -372,7 +362,7 @@
       if (tap && !battle && !inputBlocked) {
         var pt = groundAt(e.clientX, e.clientY);
         if (!pt || Math.hypot(pt.x / 126, pt.z / 118) > 0.97) return;
-        destination.set(pt.x, 0.15, pt.z); follow();
+        walkToPoint(pt);
         var nearest = -1, best = 9;
         R.orte.forEach(function (o, i) { var d = Math.hypot(o.x - pt.x, o.z - pt.z); if (d < best) { best = d; nearest = i; } });
         if (nearest >= 0) { select(nearest + 1, false); if (handlers.select) handlers.select(nearest + 1); }
@@ -401,7 +391,7 @@
       update: function (dt) {
         if (dead || contextLost) return; time += dt;
         waters.update(time);
-        gates.forEach(function(g,i){var o=R.orte[i],near=Math.hypot(explorer.group.position.x-o.x,explorer.group.position.z-o.z)<14;g.open+=((g.own&&near?1:0)-g.open)*Math.min(1,dt*5);g.leaves[0].rotation.y=-g.open*Math.PI*.47;g.leaves[1].rotation.y=g.open*Math.PI*.47;});
+        walls.update(dt,explorer.group.position);
         Object.keys(peers).forEach(function(id){var p=peers[id];p.age+=dt;if(p.age>=15){removePeer(id);return;}p.elapsed+=dt;p.group.position.lerpVectors(p.from,p.to,Math.min(1,p.elapsed/p.duration));
           var walking=p.elapsed<p.duration&&p.from.distanceTo(p.to)>.15;p.group.position.y=.15+(walking?Math.abs(Math.sin(time*10))*.12:0);
           var across=Math.cos(yaw)*Math.sin(p.heading)-Math.sin(yaw)*Math.cos(p.heading);if(Math.abs(across)>.1){p.texture.repeat.x=across>0?-1:1;p.texture.offset.x=across>0?1:0;}
@@ -410,6 +400,7 @@
         var vx = stick.x + (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0);
         var vz = stick.y + (keys.s || keys.arrowdown ? 1 : 0) - (keys.w || keys.arrowup ? 1 : 0);
         if ((vx || vz) && !battle && !inputBlocked) {
+          route=[];
           var strength = Math.max(1, Math.hypot(vx, vz)); vx /= strength; vz /= strength;
           if (!following) follow();
           var nx = explorer.group.position.x + (Math.cos(yaw) * vx + Math.sin(yaw) * vz) * dt * 11;
@@ -429,6 +420,7 @@
             }
           } else {
             explorer.group.position.y = 0.15;
+            if(route.length){var next=route.shift();destination.set(next.x,.15,next.z);}
           }
         }
         if (following && !battle) desiredFocus.set(explorer.group.position.x, 0, explorer.group.position.z - 2);
@@ -472,16 +464,18 @@
     return {
       select: select, overview: overview, follow: follow, setHeld: setHeld, setSquad: setSquad, setTerritories: setTerritories, setPeers: setPeers, startBattle: startBattle, endBattle: endBattle, step: step, project: project,
       position:function(){return {x:explorer.group.position.x,z:explorer.group.position.z,heading:explorer.group.rotation.y};},
+      setPosition:setPosition,walkToPoint:walkToPoint,entrance:walls.entrance,
+      setAppearance:function(skin){explorer.group.userData.portrait.material.color.set(X.skin(skin).color);explorer.group.userData.ring.material=mat(X.skin(skin).color);},
       zoom: function (delta) { desiredZoom = T.MathUtils.clamp(desiredZoom + delta, 20, 245); },
       rotate: function (delta) { yaw += delta; },
       move: function (x, y) { if (inputBlocked || battle) return; stick.x = x; stick.y = y; },
       blockInput: function (yes) { inputBlocked = yes; if (yes) clearInput(); },
-      walkTo: function (id) { if (inputBlocked || battle) return; var o = R.orte[id - 1]; destination.set(o.x, 0.15, o.z + 6); follow(); },
-      distanceTo: function (id) { var o = R.orte[id - 1]; return Math.hypot(explorer.group.position.x - o.x, explorer.group.position.z - o.z); },
+      walkTo: function (id) { walkToPoint(walls.entrance(id)); },
+      distanceTo: function (id) { var o = walls.entrance(id); return Math.hypot(explorer.group.position.x - o.x, explorer.group.position.z - o.z); },
       pause: function (yes) { if (yes) loop.pause(true); else loop.resume(true); },
       destroy: function () {
         if (dead) return; dead = true; loop.destroy(); off.forEach(function (f) { f(); }); if (observer) observer.disconnect();
-        Object.keys(peers).forEach(removePeer);influence.destroy();waters.destroy();shadowTexture.dispose();shadowMaterial.dispose();if(sun.shadow.map)sun.shadow.map.dispose();
+        Object.keys(peers).forEach(removePeer);influence.destroy();walls.destroy();waters.destroy();shadowTexture.dispose();shadowMaterial.dispose();if(sun.shadow.map)sun.shadow.map.dispose();
         var seen = new Set(); scene.traverse(function (m) { if (m.geometry && !seen.has(m.geometry)) { seen.add(m.geometry); m.geometry.dispose(); } });
         Object.keys(geometries).forEach(function (key) { if (!seen.has(geometries[key])) geometries[key].dispose(); });
         Object.keys(materials).forEach(function (key) { materials[key].dispose(); }); plane.material.dispose();

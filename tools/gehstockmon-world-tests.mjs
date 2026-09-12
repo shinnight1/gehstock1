@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { data as D, fight } from '../netlify/functions/lib/gehstockmon-rules.mjs';
+import { data as D, fight, adventure as X } from '../netlify/functions/lib/gehstockmon-rules.mjs';
 let scene, camera, loop, listeners = new Map(), disposed = false, loopDestroyed = false;
 let keyedPixels;
 function surface() { return { className: '', style: {}, setAttribute() {}, appendChild() {}, remove() {}, focus() {}, tabIndex: 0, addEventListener(name, fn) { listeners.set(name, fn); }, removeEventListener(name, fn) { if (listeners.get(name) === fn) listeners.delete(name); }, getBoundingClientRect() { return { x: 0, y: 0, left: 0, top: 0, width: 1180, height: 768 }; }, getContext() { return { clearRect() {}, save() {}, restore() {}, beginPath() {}, moveTo() {}, lineTo() {}, quadraticCurveTo() {}, closePath() {}, clip() {}, drawImage() {}, stroke() {}, createRadialGradient(){return{addColorStop(){}};}, fillRect() {}, createImageData(w,h) { return { data: new Uint8ClampedArray(w*h*4) }; }, getImageData() { return { data: new Uint8ClampedArray([255, 0, 255, 255, 40, 95, 84, 255, 160, 98, 30, 255]) }; }, putImageData(pixels) { keyedPixels = pixels.data; } }; } }; }
@@ -12,16 +12,17 @@ class FakeRenderer { constructor() { this.domElement = surface(); this.shadowMap
 class FakeImage { constructor() { this.naturalWidth = 256; this.naturalHeight = 256; } set src(value) { this.onload?.(); } }
 const window = { ...surface(), THREE: { ...THREE, WebGLRenderer: FakeRenderer, mergeGeometries }, devicePixelRatio: 3 };
 const document = { ...surface(), hidden: false, createElement: surface };
-const SG = { gehstockmon: { daten: D }, assets: Object.fromEntries(D.KATALOG.map((k) => [k.bild, 'data:image/webp;base64,AA=='])) };
+const SG = { gehstockmon: { daten: D,abenteuer:X }, assets: Object.fromEntries(D.KATALOG.map((k) => [k.bild, 'data:image/webp;base64,AA=='])) };
 SG.assets['gm-player-pixel'] = 'data:image/webp;base64,AA==';
 const ctx = vm.createContext({ SG, window, document, Image: FakeImage, console, Set, ResizeObserver: class { observe() {} disconnect() {} } });
 vm.runInContext(fs.readFileSync('src/games/gehstockmon/2-landschaft.js', 'utf8'), ctx);
+vm.runInContext(fs.readFileSync('src/games/gehstockmon/2-revier.js','utf8'),ctx);
 vm.runInContext(fs.readFileSync('src/games/gehstockmon/2-welt.js', 'utf8'), ctx);
 const host = { loop(options) { loop = options; return { start() {}, pause() {}, resume() {}, destroy() { loopDestroyed = true; } }; } };
 const world = SG.gehstockmon.createWorld(host, surface(), {});
 loop.render(); assert.ok(scene.isScene); assert.ok(camera.isPerspectiveCamera);
-assert.equal(SG.gehstockmon.orte.length, 5);
-for(let i=0;i<5;i++){const ground=scene.getObjectByName('biome-ground-'+i);assert.ok(ground?.receiveShadow);assert.equal(ground.material.map.name,'ground-'+i);}
+assert.equal(SG.gehstockmon.orte.length, 9);
+for(let i=0;i<9;i++){const ground=scene.getObjectByName('biome-ground-'+i);assert.ok(ground?.receiveShadow);assert.equal(ground.material.map.name,'ground-'+i);}
 assert.ok(scene.children.some(l=>l.isDirectionalLight&&l.castShadow),'sun casts real shadows');
 const river=scene.getObjectByName('meandering-river');assert.ok(river);assert.ok(river.geometry.attributes.normal.getY(0)>.99,'water faces upward');assert.ok(scene.getObjectByName('ocean'));
 const original = scene.children.find((g) => g.type === 'Group' && g.children.some((c) => c.isSprite));
@@ -33,7 +34,7 @@ assert.equal(playerTexture.generateMipmaps, false); assert.equal(playerSprite.ce
 assert.deepEqual([...keyedPixels], [255, 0, 255, 0, 40, 95, 84, 255, 160, 98, 30, 255], 'background transparent while teal clothing and gold stay opaque');
 let sprites = 0, meshes = 0; scene.traverse((o) => { if (o.isSprite) sprites++; if (o.isMesh) meshes++; });
 assert.equal(sprites, 5, 'one character and four follower portraits'); assert.ok(meshes < 220, 'terrain, borders and sprites stay batched: ' + meshes);
-const cells=SG.gehstockmon.influenceCells();assert.equal(cells.length,5);
+const cells=SG.gehstockmon.influenceCells();assert.equal(cells.length,9);
 const area=(p)=>Math.abs(p.reduce((sum,a,i)=>{const b=p[(i+1)%p.length];return sum+a.x*b.z-b.x*a.z;},0)/2);
 assert.ok(Math.abs(cells.reduce((sum,c)=>sum+area(c),0)-Math.PI*123*115)<40,'influence cells cover island without overlapping area');
 assert.ok(camera.near>=1,'depth precision for large map');
@@ -66,13 +67,12 @@ assert.ok(original.position.distanceTo(stoppedAt) < 0.01, 'opening a menu stops 
 world.blockInput(false); for (let i = 0; i < 120; i++) loop.update(1 / 60);
 assert.ok(original.position.distanceTo(stoppedAt) < 0.01, 'closing a menu does not resume stale input');
 const roster = [D.mon('weltenfresser'), D.mon('waerter'), D.mon('bollwerk'), D.mon('spaeher')]; world.setSquad(roster); loop.render();
-// Only the owner opens the gate and can walk into the fortress.
-world.rotate(-.63);const fort=D.BIOME[0];original.position.set(fort.x,.15,fort.z+7);world.blockInput(true);world.blockInput(false);
-world.setTerritories(territoryStates,'player');for(let i=0;i<120;i++)loop.update(1/60);
-const gate=scene.getObjectByName('gate-1--1');assert.ok(Math.abs(gate.rotation.y)>1);
-world.move(0,-1);for(let i=0;i<30;i++)loop.update(1/60);world.move(0,0);assert.ok(original.position.z<fort.z+4,'owner passes open gate');
-territoryStates[0].ownerId='other';world.setTerritories(territoryStates,'player');for(let i=0;i<120;i++)loop.update(1/60);assert.ok(Math.abs(gate.rotation.y)<.01);
-world.move(0,-1);for(let i=0;i<60;i++)loop.update(1/60);world.move(0,0);assert.ok(original.position.z>=fort.z+4.8,'closed rival gate blocks entry');
+// Owner gates open; adjacent territories merge and changed ownership ejects the visitor.
+world.rotate(-.63);var layout=X.layout(territoryStates),g=layout.find(g=>g.fields.includes(1)),entry=world.entrance(1);world.setPosition(entry);
+for(let i=0;i<120;i++)loop.update(1/60);const gate=scene.getObjectByName('territory-gate-'+g.id);assert.ok(gate.position.y>8,'owner gate lifts');
+world.walkToPoint({x:g.gate.x-g.gate.nx*4,z:g.gate.z-g.gate.nz*4});for(let i=0;i<120;i++)loop.update(1/60);assert.ok(X.inside(world.position(),g),'owner enters through gate');
+territoryStates[0].ownerId='other';world.setTerritories(territoryStates,'player');assert.ok(!X.inside(world.position(),g),'ownership change moves visitor outside');
+const adjacent=territoryStates.find(t=>t.id!==1&&X.layout(territoryStates.map(v=>({...v,ownerId:v.id===1||v.id===t.id?'shared':null}))).length===8);assert.ok(adjacent);territoryStates[0].ownerId=adjacent.ownerId='player';world.setTerritories(territoryStates,'player');assert.equal(scene.getObjectByName('territory-walls').children.filter(m=>m.name.startsWith('territory-gate-')).length,8,'neighbors have one shared gate and perimeter');
 // Remote pixel sprites interpolate independently and release their textures.
 world.setPeers([{id:'friend',name:'Friend',x:10,z:10,heading:1,updatedAt:10000,activity:'map'}],10000);
 const peer=scene.getObjectByName('peer-friend');assert.ok(peer);const peerTexture=peer.userData.portrait.material.map;assert.notEqual(peerTexture,playerTexture);
