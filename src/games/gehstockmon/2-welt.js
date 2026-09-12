@@ -192,8 +192,9 @@
        Bis das Modell steht, und falls es klemmt, bleibt das Bild sichtbar. */
     /* Die Vorlage schaut quer zu ihrer eigenen Laufrichtung, deshalb die
        Vierteldrehung: das Spiel dreht die Figurengruppe nach atan2(dx, dz),
-       und dazu muss das Modell bei null nach +z blicken. */
-    var MODELL_HOEHE = 2.9, MODELL_TEMPO = 1.55, MODELL_DREHUNG = Math.PI / 2;
+       und dazu muss das Modell bei null nach +z blicken. Sie geht nach links,
+       nicht nach rechts - andersherum liefe die Figur rueckwaerts. */
+    var MODELL_HOEHE = 2.9, MODELL_TEMPO = 1.55, MODELL_DREHUNG = -Math.PI / 2;
     var vorlage = null, wartend = [], figuren = [], modellFehlt = false;
     var modellSkala = 1, modellBoden = 0;
 
@@ -211,7 +212,12 @@
        ueber die Karte schiebt, liefe sie damit aus ihrem eigenen Ring und
        Schatten heraus. Herausgerechnet wird nur der geradlinige Anteil, das
        Wippen bleibt - und weil Anfang und Ende danach gleich stehen, schliesst
-       sich die Schleife sauber. */
+       sich die Schleife sauber.
+
+       Die halbe Schrittweite im Abzug haelt die Figur dabei mittig ueber
+       ihrem Kreis. Ohne sie friert die Bewegung auf ihrem Anfangswert ein,
+       und der liegt einen halben Schritt hinter der Ruhelage - die Figur
+       liefe sichtbar hinter ihrem eigenen Schatten her. */
     function ortsfest(clips) {
       clips.forEach(function (clip) {
         clip.tracks.forEach(function (spur) {
@@ -221,7 +227,7 @@
           for (var achse = 0; achse < 3; achse++) {
             var drift = werte[(anzahl - 1) * 3 + achse] - werte[achse];
             if (Math.abs(drift) < 1e-6) continue;
-            for (var i = 0; i < anzahl; i++) werte[i * 3 + achse] -= drift * i / (anzahl - 1);
+            for (var i = 0; i < anzahl; i++) werte[i * 3 + achse] -= drift * (i / (anzahl - 1) - 0.5);
           }
         });
       });
