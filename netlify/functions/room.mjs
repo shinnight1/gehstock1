@@ -33,7 +33,7 @@
    die Liste der Zuege, jeder Client rechnet sie selbst nach.
    ------------------------------------------------------------------ */
 
-import { getStore } from '@netlify/blobs';
+import { getStore } from './lib/speicher.mjs';
 
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // ohne 0/O/1/I
 const ROOM_TTL_MS = 20 * 60 * 1000;                    // 20 Minuten ohne Aktivitaet
