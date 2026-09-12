@@ -210,24 +210,33 @@
        Huefte wandert im Laufschritt gut zweieinhalb Koerperlaengen nach vorn,
        im Stehen driftet sie langsam zur Seite. Wo das Spiel die Figur selbst
        ueber die Karte schiebt, liefe sie damit aus ihrem eigenen Ring und
-       Schatten heraus. Herausgerechnet wird nur der geradlinige Anteil, das
-       Wippen bleibt - und weil Anfang und Ende danach gleich stehen, schliesst
-       sich die Schleife sauber.
+       Schatten heraus.
 
-       Die halbe Schrittweite im Abzug haelt die Figur dabei mittig ueber
-       ihrem Kreis. Ohne sie friert die Bewegung auf ihrem Anfangswert ein,
-       und der liegt einen halben Schritt hinter der Ruhelage - die Figur
-       liefe sichtbar hinter ihrem eigenen Schatten her. */
-    function ortsfest(clips) {
+       Auf einer Achse, die wandert, bleibt deshalb nur das Wippen stehen:
+       der geradlinige Anteil geht heraus, und anschliessend wird die Spur auf
+       die Ruhelage ihres Knochens gesetzt. Das zweite ist noetig, weil die
+       Laufschleife als Ganzes rund anderthalb Laengen neben der Ruhelage
+       liegt - ohne diesen Schritt liefe die Figur weit neben ihrem Kreis.
+       Achsen ohne Wanderung bleiben unberuehrt, damit die Laufhaltung so
+       bleibt, wie sie gebaut wurde. */
+    function ortsfest(szene, clips) {
       clips.forEach(function (clip) {
         clip.tracks.forEach(function (spur) {
           if (spur.name.slice(-9) !== '.position') return;
+          var knochen = szene.getObjectByName(spur.name.slice(0, -9));
           var werte = spur.values, anzahl = werte.length / 3;
-          if (anzahl < 2) return;
+          if (!knochen || anzahl < 2) return;
+          var ruhe = [knochen.position.x, knochen.position.y, knochen.position.z];
           for (var achse = 0; achse < 3; achse++) {
             var drift = werte[(anzahl - 1) * 3 + achse] - werte[achse];
             if (Math.abs(drift) < 1e-6) continue;
-            for (var i = 0; i < anzahl; i++) werte[i * 3 + achse] -= drift * (i / (anzahl - 1) - 0.5);
+            var summe = 0, i;
+            for (i = 0; i < anzahl; i++) {
+              werte[i * 3 + achse] -= drift * i / (anzahl - 1);
+              summe += werte[i * 3 + achse];
+            }
+            var versatz = summe / anzahl - ruhe[achse];
+            for (i = 0; i < anzahl; i++) werte[i * 3 + achse] -= versatz;
           }
         });
       });
@@ -255,7 +264,7 @@
         var huelle = new T.Box3().setFromObject(glb.scene), hoch = huelle.max.y - huelle.min.y;
         modellSkala = hoch > 0.01 ? MODELL_HOEHE / hoch : 1;
         modellBoden = -huelle.min.y * modellSkala;
-        vorlage = { szene: glb.scene, clips: ortsfest(glb.animations) };
+        vorlage = { szene: glb.scene, clips: ortsfest(glb.scene, glb.animations) };
         wartend.splice(0).forEach(anziehen);
       }, function (fehler) { vorlage = null; modellFehlt = true; wartend.length = 0;
         console.warn('GehstockMon: das Spielermodell liess sich nicht lesen, das Bild bleibt stehen.', fehler); });
