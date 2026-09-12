@@ -13,18 +13,18 @@ class Element{
 export async function checkUi(D,E,A,handler,code,clock,otherCode){
   const legacy={gold:999999,besitz:D.KATALOG.map(k=>k.id),geschafft:[1,2,3]};
   const values=new Map([['stand',legacy],['arena-v1',{invalid:'legacy fight'}],['online-squad',['moosling']]]),timers=new Map(),storage={get:(k,d)=>values.has(k)?structuredClone(values.get(k)):d,set:(k,v)=>values.set(k,structuredClone(v)),del:k=>values.delete(k)};
-  let definition,timerId=0,blocked=false,pauses=[],latest,unreachable=true,loseResponse=false,requests=[],visiblePeers=[],worldFrame,delayReply=false,releaseReply;
+  let position={x:0,z:17},definition,timerId=0,blocked=false,pauses=[],latest,unreachable=true,loseResponse=false,requests=[],visiblePeers=[],worldFrame,delayReply=false,releaseReply;
   const stage=new Element('div'),root=new Element('div');root.appendChild(stage);
-  const world={setHeld(){},setSquad(){},setTerritories(){},setPeers:list=>visiblePeers=list,position:()=>({x:-10,z:17,heading:0}),select(){},follow(){},overview(){},distanceTo:()=>0,blockInput:yes=>{blocked=yes;},move(){},pause:yes=>pauses.push(yes),destroy(){}};
+  const world={setHeld(){},setSquad(){},setTerritories(){},setPeers:list=>visiblePeers=list,position:()=>({...position,heading:0}),setPosition:p=>position=p,select(){},follow(){},overview(){},distanceTo:()=>0,blockInput:yes=>{blocked=yes;},move(){},pause:yes=>pauses.push(yes),destroy(){}};
   const SG={gehstockmon:{daten:D,wirtschaft:E,arena:A,orte:D.BIOME,createWorld:(host,container,handlers)=>{worldFrame=handlers.frame;return world;}},util:{},storage,auth:{aktuell:{code,name:'UI Test'}},offline:false,env:{},assets:{},register:def=>{definition=def;}};
   const document={createElement:tag=>new Element(tag),addEventListener(){},removeEventListener(){},hidden:false};
   const listeners={};
-  const context=vm.createContext({SG,document,window:{addEventListener:(k,fn)=>listeners[k]=fn,removeEventListener:k=>delete listeners[k]},Date:class extends Date{static now(){return clock.value;}},AbortController,setTimeout,clearTimeout,fetch:async(url,opts)=>{
+  const context=vm.createContext({SG,document,Image:class {},window:{addEventListener:(k,fn)=>listeners[k]=fn,removeEventListener:k=>delete listeners[k]},Date:class extends Date{static now(){return clock.value;}},AbortController,setTimeout,clearTimeout,fetch:async(url,opts)=>{
     requests.push(JSON.parse(opts.body));if(unreachable)throw new TypeError('Server nicht erreichbar');
     const response=await handler(new Request('http://localhost'+url,opts));if(response.ok){const data=await response.clone().json();if(data.profile)latest=data;}
     if(loseResponse){loseResponse=false;throw new TypeError('Antwort verloren');}if(delayReply){delayReply=false;await new Promise(resolve=>releaseReply=resolve);}return response;
   }});
-  for(const file of['src/core/ui.js','src/games/gehstockmon/1-zeiten.js','src/games/gehstockmon/2-online.js','src/games/gehstockmon/3-ui.js'])vm.runInContext(fs.readFileSync(file,'utf8'),context);
+  for(const file of['src/core/ui.js','src/games/gehstockmon/1-zeiten.js','src/games/gehstockmon/1-zusatz.js','src/games/gehstockmon/2-online.js','src/games/gehstockmon/2-abenteuer-ui.js','src/games/gehstockmon/3-ui.js'])vm.runInContext(fs.readFileSync(file,'utf8'),context);
   const mount=()=>definition.mount({stage,root,store:storage,onLeave(){},sfx(){},after:(fn,ms)=>{timers.set(++timerId,{fn,at:clock.value+ms});return timerId;},cancel:id=>timers.delete(id)});
   let game=mount();
   const find=fn=>{const e=root.all().find(e=>e.visible&&fn(e));assert.ok(e,'control exists');return e;};
@@ -44,10 +44,10 @@ export async function checkUi(D,E,A,handler,code,clock,otherCode){
   unreachable=false;click('Erneut verbinden');await flush();assert.equal(requests.at(-1).op,'join');assert.equal(root.querySelector('.gm-connection').hidden,true);assert.equal(blocked,false);
   assert.ok(!root.textContent.includes('lokalen Kampagne'));assert.equal(latest.profile.gold,180);
   await handler(new Request('http://localhost/api/gehstockmon',{method:'POST',body:JSON.stringify({code:otherCode,name:'Mitspieler',op:'join'})}));
-  await handler(new Request('http://localhost/api/gehstockmon',{method:'POST',body:JSON.stringify({code:otherCode,op:'presence',position:{x:-12,z:18,heading:0}})}));
+  await handler(new Request('http://localhost/api/gehstockmon',{method:'POST',body:JSON.stringify({code:otherCode,op:'presence',position:{x:0,z:17,heading:0}})}));
   advance(2200);await flush();assert.equal(visiblePeers.length,1);assert.equal(visiblePeers[0].name,'Mitspieler');
   worldFrame(()=>({x:200,y:200,near:true,visible:true}),false,null,visiblePeers.map(info=>({id:info.id,position:info,info})));assert.equal(root.querySelector('.gm-peer-label').hidden,false);assert.equal(root.querySelector('.gm-peer-label').textContent,'Mitspieler');
-  click('⚔ Arena betreten');await flush();assert.ok(blocked);assert.equal(pauses.at(-1),true);
+  find(e=>e.attrs['aria-label']===D.FELDER[0].name+' auswählen').fire('click');click('⚔ Arena betreten');await flush();assert.ok(blocked);assert.equal(pauses.at(-1),true);
   let b=latest.arena;for(let turn=0;b.phase!=='finished'&&turn<90;turn++){chooseMove(b);await flush();advance(5000);await flush();b=latest.arena;}
   assert.equal(b.winner,'wir');assert.equal(latest.territories[0].ownerId,latest.playerId);click('Zurück zur Karte');assert.equal(blocked,false);assert.equal(pauses.at(-1),false);
   click('⌖ Weltkarte');assert.ok(root.all().some(e=>e.classList.contains('gm-pin-owner')&&e.textContent==='Besitzer: UI Test'),'map names the territory owner');find(e=>e.attrs['aria-label']===D.FELDER[0].name+' auswählen').fire('click');

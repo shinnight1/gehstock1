@@ -34,6 +34,7 @@ const CSS_ORDER = [
   'styles/games.css',
   'styles/tycoon.css',
   'styles/gehstockmon.css',
+  'styles/gehstockmon-abenteuer.css',
 ];
 
 const CORE_ORDER = [
@@ -357,8 +358,8 @@ function build() {
   fs.mkdirSync(serverRulesDir, { recursive: true });
   // Zeilenenden vereinheitlichen: Git legt die Quellen je nach Rechner mit CRLF oder LF ab,
   // die erzeugte Datei soll aber ueberall gleich aussehen.
-  const serverRules = ['1-daten.js', '1-sammlung.js', '1-weltkarte.js', '1-wirtschaft.js', '1-zeiten.js', '2-arena.js', '2-kampf.js'].map((f) => read(path.join(SRC, 'games/gehstockmon', f)).replace(/\r\n?/g, '\n')).join('\n');
-  fs.writeFileSync(path.join(serverRulesDir, 'gehstockmon-rules.mjs'), '/* Generated from the shared browser rules by build.mjs. */\nconst SG = { rules: {} };\n' + serverRules + '\nexport const data = SG.gehstockmon.daten;\nexport const economy = SG.gehstockmon.wirtschaft;\nexport const hours = SG.gehstockmon.zeiten;\nexport const arena = SG.gehstockmon.arena;\nexport const fight = SG.rules.gehstockmon.kaempfe;\n');
+  const serverRules = ['1-daten.js', '1-sammlung.js', '1-weltkarte.js', '1-wirtschaft.js', '1-zeiten.js', '1-zusatz.js', '2-arena.js', '2-kampf.js'].map((f) => read(path.join(SRC, 'games/gehstockmon', f)).replace(/\r\n?/g, '\n')).join('\n');
+  fs.writeFileSync(path.join(serverRulesDir, 'gehstockmon-rules.mjs'), '/* Generated from the shared browser rules by build.mjs. */\nconst SG = { rules: {} };\n' + serverRules + '\nexport const data = SG.gehstockmon.daten;\nexport const economy = SG.gehstockmon.wirtschaft;\nexport const hours = SG.gehstockmon.zeiten;\nexport const adventure = SG.gehstockmon.abenteuer;\nexport const arena = SG.gehstockmon.arena;\nexport const fight = SG.rules.gehstockmon.kaempfe;\n');
   fs.rmSync(DIST, { recursive: true, force: true });
   fs.mkdirSync(path.join(DIST, 'assets'), { recursive: true });
   fs.mkdirSync(path.join(DIST, 'offline'), { recursive: true });

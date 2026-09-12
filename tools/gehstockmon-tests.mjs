@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-import { data as D, economy as E, arena as A, hours as H } from '../netlify/functions/lib/gehstockmon-rules.mjs';
+import { data as D, economy as E, arena as A, hours as H, adventure as X } from '../netlify/functions/lib/gehstockmon-rules.mjs';
 import { createHandler } from '../netlify/functions/gehstockmon.mjs';
 let passed=0,sequence=0;
 async function test(name,fn){await fn();passed++;console.log('ok',name);}
@@ -12,13 +12,13 @@ async function call(handler,code,op,data={}){const response=await handler(new Re
 function action(b){const u=b.teams[0][b.active[0]],e=b.teams[1][b.active[1]];if(b.phase==='replace')return{kind:'switch',slot:b.teams[0].findIndex((k)=>k.hp>0)};if(u.charges>0&&((u.role===2&&u.hp<u.maxHp*.67)||(u.role===1&&e.hp<=e.maxHp*.35)||(u.role===3&&!e.weakened)))return{kind:'move',move:'special'};return{kind:'move',move:b.round>=u.powerReady?'power':'strike'};}
 async function win(handler,code,territoryId=1){let r=await call(handler,code,'world');r=await call(handler,code,'arena_start',{territoryId,version:r.territories[territoryId-1].version,squad:r.profile.truppe});assert.equal(r.status,200);for(let i=0;r.arena.phase!=='finished'&&i<80;i++){r=await call(handler,code,'arena_turn',{battleId:r.arena.id,revision:r.arena.revision,action:action(r.arena)});assert.equal(r.status,200,r.error);}assert.equal(r.arena.winner,'wir');return r;}
 
-await test('30 distinct images, five biomes and chosen 2h/1h timers',()=>{assert.equal(D.KATALOG.length,30);assert.equal(new Set(D.KATALOG.map(k=>k.id)).size,30);assert.equal(D.FELDER.length,5);assert.equal(new Set(D.BIOME.map(b=>b.terrain)).size,5);for(const k of D.KATALOG)assert.ok(fs.existsSync('src/assets/'+k.bild+'.webp'));assert.equal(E.EGG_TIME,7200000);assert.equal(E.HATCH_TIME,3600000);});
+await test('42 distinct images, nine biomes and chosen 2h/1h timers',()=>{assert.equal(D.KATALOG.length,42);assert.equal(new Set(D.KATALOG.map(k=>k.id)).size,42);assert.equal(D.FELDER.length,9);assert.equal(new Set(D.BIOME.map(b=>b.terrain)).size,9);for(const k of D.KATALOG)assert.ok(fs.existsSync('src/assets/'+k.bild+'.webp'));assert.equal(E.EGG_TIME,7200000);assert.equal(E.HATCH_TIME,3600000);});
 await test('Old saves keep collection and migrate currency once',()=>{const old={essenz:240,geschafft:[1,3],besitz:['moosling']};const p=D.neuerStand(old,stamp);assert.equal(p.gold,360);assert.ok(p.besitz.includes('moosling'));assert.equal(p.outposts[1].eggAt,stamp);p.gold=10;assert.equal(D.neuerStand(p,stamp+100).gold,10);assert.equal(D.neuerStand(p,stamp+100).outposts[1].eggAt,stamp);});
 await test('Income, exact egg threshold, fractional time and backwards clocks',()=>{const p=D.neuerStand(null,stamp);E.capture(p,1,stamp);const post=p.outposts[1],gold=p.gold;E.tick(p,stamp+E.EGG_TIME-1);assert.equal(post.eggStock,0);E.tick(p,stamp+E.EGG_TIME);assert.equal(post.eggStock,1);assert.equal(p.gold,gold+40);E.tick(p,stamp);E.tick(p,stamp+E.EGG_TIME);assert.equal(p.gold,gold+40);E.tick(p,stamp+20*E.HOUR);assert.equal(post.eggStock,3);assert.equal(post.eggAt,stamp+20*E.HOUR);});
 await test('Upgrade settles elapsed time at old income and changes defense',()=>{const p=D.neuerStand(null,stamp);E.capture(p,1,stamp);const before=p.gold,post=p.outposts[1];E.upgrade(p,post,stamp+E.HOUR);assert.equal(p.gold,before+20-120);assert.equal(post.level,2);E.tick(p,stamp+2*E.HOUR);assert.equal(p.gold,before+20-120+35);assert.equal(E.LEVELS[2].bonus,.12);});
 await test('Egg collection, incubation slots and hatching cannot skip time',()=>{const p=D.neuerStand(null,stamp);E.capture(p,1,stamp);E.tick(p,stamp+6*E.HOUR);assert.equal(E.collect(p,p.outposts[1],1,stamp+6*E.HOUR),3);for(const egg of p.eggs)E.incubate(p,egg.id,stamp+6*E.HOUR);const id=p.eggs[0].id;assert.throws(()=>E.hatch(p,id,stamp+7*E.HOUR-1,.2),/noch nicht/);const mon=E.hatch(p,id,stamp+7*E.HOUR,.2);assert.ok(mon);assert.equal(p.besitz.length,5);assert.throws(()=>E.hatch(p,id,stamp+7*E.HOUR,.2));assert.equal(p.eggs.length,2);});
-await test('All missing Mons hatch without duplicates; complete collection yields gold',()=>{const p=D.neuerStand(null,stamp);for(let i=0;i<27;i++){p.eggs=[{id:'egg'+i,territoryId:1,startedAt:stamp,readyAt:stamp+E.HOUR,producedAt:stamp}];E.hatch(p,'egg'+i,stamp+E.HOUR,.5);}assert.equal(new Set(p.besitz).size,30);assert.equal(p.gold,255);});
-await test('Common starters can capture their first biome; stronger Mons can clear all five',()=>{const starters=D.neuerStand().truppe.map(D.mon);assert.ok(starters.every(k=>k.seltenheit===0));assert.ok(A.stats(D.mon('glutfuchs')).ang<A.stats(D.mon('sonnenkoenig')).ang);for(const f of D.FELDER){const team=f.id===1?starters:['titanenkrone','sonnenkoenig','sternengeweih','leerenwyrm'].map(D.mon);let b=A.create(team,A.defenders(f.id),{territoryId:f.id,level:1});for(let i=0;b.phase!=='finished'&&i<80;i++)b=A.turn(b,action(b));assert.equal(b.winner,'wir',f.name);}const old=['bollwerk','klinge','waerter','spaeher'];assert.deepEqual(D.neuerStand({besitz:old,truppe:old}).besitz,old);});
+await test('All missing Mons hatch without duplicates; complete collection yields gold',()=>{const p=D.neuerStand(null,stamp);for(let i=0;i<D.KATALOG.length-3;i++){p.eggs=[{id:'egg'+i,territoryId:1,startedAt:stamp,readyAt:stamp+E.HOUR,producedAt:stamp}];E.hatch(p,'egg'+i,stamp+E.HOUR,.5);}assert.equal(new Set(p.besitz).size,42);assert.equal(p.gold,255);});
+await test('Common starters can capture their first biome; stronger Mons can clear all five',()=>{const starters=D.neuerStand().truppe.map(D.mon);assert.ok(starters.every(k=>k.seltenheit===0));assert.ok(A.stats(D.mon('glutfuchs')).ang<A.stats(D.mon('sonnenkoenig')).ang);for(const f of D.FELDER.slice(0,5)){const team=f.id===1?starters:['titanenkrone','sonnenkoenig','sternengeweih','leerenwyrm'].map(D.mon);let b=A.create(team,A.defenders(f.id),{territoryId:f.id,level:1});for(let i=0;b.phase!=='finished'&&i<80;i++)b=A.turn(b,action(b));assert.equal(b.winner,'wir',f.name);}const old=['bollwerk','klinge','waerter','spaeher'];assert.deepEqual(D.neuerStand({besitz:old,truppe:old}).besitz,old);});
 await test('Invalid moves are immutable; power cooldown blocks repeated use',()=>{let b=A.create(D.KATALOG.slice(0,4),A.defenders(1),{}),before=JSON.stringify(b);assert.throws(()=>A.turn(b,{kind:'move',move:'delete-enemy'}));assert.equal(JSON.stringify(b),before);b=A.turn(b,{kind:'move',move:'power'});assert.throws(()=>A.turn(b,{kind:'move',move:'power'}),/nicht verfügbar/);assert.equal(b.revision,1);});
 await test('Fainted enemies do not retaliate and forced switching is free',()=>{let b=A.create([D.mon('spaeher'),D.mon('klinge')],[D.mon('bollwerk')],{});b.teams[1][0].hp=1;const hp=b.teams[0][0].hp;b=A.turn(b,{kind:'move',move:'strike'});assert.equal(b.winner,'wir');assert.equal(b.teams[0][0].hp,hp);b=A.create([D.mon('bollwerk'),D.mon('klinge')],[D.mon('spaeher')],{});b.teams[0][0].hp=1;b=A.turn(b,{kind:'move',move:'strike'});assert.equal(b.phase,'replace');const round=b.round;b=A.turn(b,{kind:'switch',slot:1});assert.equal(b.round,round);assert.equal(b.teams[0][1].hp,b.teams[0][1].maxHp);});
 await test('Invalid authentication and legacy summon cannot mutate the world',async()=>{const store=memoryStore(),h=createHandler({store,now:()=>stamp});assert.equal((await call(h,'bad','join')).status,401);assert.equal(store.data,null);assert.equal((await call(h,ca,'summon')).status,400);assert.equal(store.data,null);});
@@ -38,18 +38,18 @@ await test('Map migration preserves eggs, collection and earned income and choos
   store.data.territories=old;delete store.data.mapVersion;
   const p=store.data.players[a.playerId];p.besitz=['bollwerk','klinge','waerter','spaeher'];p.truppe=p.besitz.slice();p.eggs=[{id:'legacy-egg',territoryId:24,producedAt:stamp-E.HOUR,startedAt:stamp-E.HOUR,readyAt:stamp}];
   p.arena=A.create(p.truppe.map(D.mon),A.defenders(1),{territoryId:21,now:stamp});
-  const migrated=await call(h,ca,'world');assert.equal(migrated.territories.length,5);assert.equal(migrated.territories[0].ownerId,b.playerId);assert.equal(migrated.territories[0].level,2);assert.equal(migrated.profile.gold,200);assert.deepEqual(migrated.profile.besitz,p.besitz);assert.equal(migrated.profile.eggs[0].territoryId,4);assert.equal(migrated.profile.eggs[0].readyAt,stamp);assert.equal(migrated.arena.winner,'map_changed');assert.equal(migrated.arena.territoryId,1);assert.equal(store.data.previousMap.territories.length,25);
+  const migrated=await call(h,ca,'world');assert.equal(migrated.territories.length,9);assert.equal(migrated.territories[0].ownerId,b.playerId);assert.equal(migrated.territories[0].level,2);assert.equal(migrated.profile.gold,200);assert.deepEqual(migrated.profile.besitz,p.besitz);assert.equal(migrated.profile.eggs[0].territoryId,4);assert.equal(migrated.profile.eggs[0].readyAt,stamp);assert.equal(migrated.arena.winner,'map_changed');assert.equal(migrated.arena.territoryId,1);assert.equal(store.data.previousMap.territories.length,25);
   const repeated=await call(h,ca,'world');assert.equal(repeated.profile.gold,migrated.profile.gold);assert.equal((await call(h,ca,'arena_start',{territoryId:24,version:1,squad:p.truppe})).status,400);
 });
 await test('Presence shares positions, expires departures and cannot change progression or impersonate players',async()=>{
   let time=stamp;const store=memoryStore(),presence=memoryStore(),h=createHandler({store,presenceStore:presence,now:()=>time});
   assert.equal((await call(h,ca,'presence',{position:{x:0,z:0,heading:0}})).status,409);
   const a=await call(h,ca,'join'),b=await call(h,cb,'join'),snapshot=JSON.stringify(store.data);
-  const pair=await Promise.all([call(h,ca,'presence',{position:{x:-10,z:17,heading:1},playerId:b.playerId}),call(h,cb,'presence',{position:{x:12,z:8,heading:-1}})]);
+  const pair=await Promise.all([call(h,ca,'presence',{position:{...a.spawn,heading:1},playerId:b.playerId}),call(h,cb,'presence',{position:{...b.spawn,heading:-1}})]);
   assert.ok(pair.every(r=>r.status===200));assert.equal(Object.keys(presence.data.players).length,2);
-  let r=await call(h,ca,'presence',{position:{x:-9,z:17,heading:1}});assert.equal(r.peers.length,1);assert.equal(r.peers[0].id,b.playerId);assert.equal(r.peers[0].x,12);assert.ok(!('code' in r.peers[0])&&!('profile' in r.peers[0]));assert.equal(JSON.stringify(store.data),snapshot);
+  let r=await call(h,ca,'presence',{position:{...a.spawn,heading:1}});assert.equal(r.peers.length,1);assert.equal(r.peers[0].id,b.playerId);assert.equal(r.peers[0].x,b.spawn.x);assert.ok(!('code' in r.peers[0])&&!('profile' in r.peers[0]));assert.equal(JSON.stringify(store.data),snapshot);
   assert.equal((await call(h,ca,'presence',{position:{x:9999,z:1,heading:0}})).status,400);assert.equal((await call(h,ca,'presence',{position:{x:'0',z:1,heading:0}})).status,400);
-  time+=15001;r=await call(h,ca,'presence',{position:{x:-9,z:17,heading:1}});assert.equal(r.peers.length,0);assert.equal(Object.keys(presence.data.players).length,1);
+  time+=15001;r=await call(h,ca,'presence',{position:{...a.spawn,heading:1}});assert.equal(r.peers.length,0);assert.equal(Object.keys(presence.data.players).length,1);
 });
 await test('Berlin opening boundaries include Friday, block weekends and follow daylight saving',()=>{
   for(const [day,close] of [[14,13],[15,13],[16,14],[17,15],[18,13]]) {
@@ -62,7 +62,7 @@ await test('Berlin opening boundaries include Friday, block weekends and follow 
 await test('Closed server rejects every operation and spoofed client clocks without changing stores',async()=>{
   let time=Date.parse('2026-09-18T12:59:59+02:00');const store=memoryStore(),presence=memoryStore(),h=createHandler({store,presenceStore:presence,now:()=>time});await call(h,ca,'join');
   const before=JSON.stringify(store.data);time+=1000;
-  for(const op of ['join','world','presence','arena_start','arena_turn','arena_flee','collect','incubate','hatch','upgrade','defend']) {
+  for(const op of ['join','world','presence','arena_start','arena_turn','arena_flee','collect','incubate','hatch','upgrade','defend',...X.OPS]) {
     const r=await call(h,ca,op,{serverTime:stamp,now:stamp,position:{x:0,z:0,heading:0}});assert.equal(r.status,423,op);assert.equal(r.access.open,false);assert.equal(r.profile,undefined);
   }
   assert.equal(JSON.stringify(store.data),before);assert.equal(presence.data,null);
@@ -70,18 +70,27 @@ await test('Closed server rejects every operation and spoofed client clocks with
   const lateStore=memoryStore();let checks=0;const late=createHandler({store:lateStore,now:()=>Date.parse('2026-09-21T12:59:59.999+02:00')+(checks++?1:0)});
   assert.equal((await call(late,ca,'join')).status,423);assert.equal(lateStore.data,null,'a request crossing closing time cannot commit');
 });
+await test('Admin developer code opens the closed island only for an admin account',async()=>{
+  const time=Date.parse('2026-09-19T12:00:00+02:00'),store=memoryStore(),presence=memoryStore(),h=createHandler({store,presenceStore:presence,now:()=>time});
+  const normal=await call(h,cb,'join',{adminOverride:true,adminCode:'3141'});assert.equal(normal.status,423);assert.equal(store.data,null);
+  const typo=await call(h,ca,'join',{adminOverride:true,adminCode:'3140'});assert.equal(typo.status,423);assert.equal(store.data,null);
+  const admin=await call(h,ca,'join',{adminOverride:true,adminCode:'3141'});assert.equal(admin.status,200);assert.equal(admin.access.open,true);assert.equal(admin.access.adminOverride,true);
+  const fight=await call(h,ca,'arena_start',{adminOverride:true,adminCode:'3141',territoryId:1,version:1,squad:D.neuerStand().truppe});
+  assert.equal(fight.status,200);assert.ok(store.data.players[admin.playerId].arena,'in der Testzone wird auch gekämpft');
+  assert.equal((await call(h,ca,'world')).status,423,'ohne Testzone bleibt die Insel zu');
+});
 await test('Each completed weekend gives two eggs per held post once, preserving overflow and ownership rewards',async()=>{
   let time=Date.parse('2026-09-11T07:00:00+02:00');const store=memoryStore(),h=createHandler({store,now:()=>time});const a=await call(h,ca,'join');await call(h,cb,'join');
   const p=store.data.players[a.playerId];for(const t of store.data.territories)Object.assign(t,{ownerId:a.playerId,...E.outpost(null,time)});
   p.eggs=Array.from({length:11},(_,i)=>({id:'saved-'+i,territoryId:1,producedAt:time,startedAt:time,readyAt:time+E.HOUR}));
   time=Date.parse('2026-09-14T07:00:00+02:00');const results=await Promise.all([call(h,ca,'join'),call(h,ca,'join')]);
-  assert.equal(results.reduce((sum,r)=>sum+(r.weekendDelivery||0),0),1);let r=await call(h,ca,'world');assert.equal(r.profile.eggs.length,12);assert.equal(Object.values(r.profile.weekendEggs).reduce((a,b)=>a+b,0),9);assert.equal(r.profile.eggs[0].readyAt,Date.parse('2026-09-11T08:00:00+02:00'));
-  r=await call(h,ca,'hatch',{eggId:'saved-0',requestId:'weekend-hatch-once'});assert.equal(r.weekendDelivery,1);assert.equal(r.profile.eggs.length,12);assert.equal(Object.values(r.profile.weekendEggs).reduce((a,b)=>a+b,0),8);
+  assert.equal(results.reduce((sum,r)=>sum+(r.weekendDelivery||0),0),1);let r=await call(h,ca,'world');assert.equal(r.profile.eggs.length,12);assert.equal(Object.values(r.profile.weekendEggs).reduce((a,b)=>a+b,0),17);assert.equal(r.profile.eggs[0].readyAt,Date.parse('2026-09-11T08:00:00+02:00'));
+  r=await call(h,ca,'hatch',{eggId:'saved-0',requestId:'weekend-hatch-once'});assert.equal(r.weekendDelivery,1);assert.equal(r.profile.eggs.length,12);assert.equal(Object.values(r.profile.weekendEggs).reduce((a,b)=>a+b,0),16);
   const retry=await call(h,ca,'hatch',{eggId:'saved-0',requestId:'weekend-hatch-once'});assert.equal(retry.duplicate,true);assert.deepEqual(retry.profile.weekendEggs,r.profile.weekendEggs);
   const other=await call(h,cb,'world');assert.equal(other.profile.eggs.length,0);assert.deepEqual(other.profile.weekendEggs,{});
   // Previously earned gifts belong to the old owner even if a territory changes later.
   store.data.territories[0].ownerId=other.playerId;Object.assign(store.data.territories[0],E.outpost(null,time));
-  time=Date.parse('2026-09-28T07:00:00+02:00');r=await call(h,ca,'join');assert.equal(Object.values(r.profile.weekendEggs).reduce((a,b)=>a+b,0),24);
+  time=Date.parse('2026-09-28T07:00:00+02:00');r=await call(h,ca,'join');assert.equal(Object.values(r.profile.weekendEggs).reduce((a,b)=>a+b,0),48);
   const b=await call(h,cb,'join');assert.equal(b.profile.eggs.length,4);assert.equal((await call(h,cb,'join')).profile.eggs.length,4);
 });
 await test('Weekend replaces normal egg production, retains partial cycles and ignores DST length',()=>{
