@@ -43,12 +43,23 @@ Der Schutz vor Konflikten ist allein der Ablauf oben.
 
 ## Veröffentlichen
 
-Netlify hängt am Branch `main`. Jeder Push baut die Seite neu und stellt sie live.
-Es gibt keinen getrennten Veröffentlichungsschritt. Rechne bei jedem Push damit,
-dass die Änderung sofort für alle Spieler sichtbar ist.
+Die Seite liegt auf Vercel unter `gehstock1.vercel.app`. Veröffentlicht wird von
+Hand aus dem Projektordner:
 
-Die Build- und Testbefehle stehen in `ONLINE-START.md`. Vor einem Push, der die
-Seite verändert, `node tools/test.mjs` laufen lassen.
+```sh
+vercel --prod
+```
+
+Ein Push allein ändert an der Website nichts mehr. Wer will, dass er es wieder
+tut, verbindet das Repository einmalig mit `vercel git connect`.
+
+Vercel baut selbst; `vercel.json` trägt Build, Ausgabeordner und Kopfzeilen. Vor
+einem Deploy, der die Seite verändert, `node tools/test.mjs` laufen lassen. Die
+übrigen Build- und Testbefehle stehen in `ONLINE-START.md`.
+
+Die alte Adresse `gehstock.netlify.app` bleibt vorerst als Rückweg stehen. Dorthin
+wird **nicht** mehr veröffentlicht: Beide Seiten haben eigene, getrennte
+Spielerwelten, und ein Deploy dorthin lässt die Spielstände auseinanderlaufen.
 
 ## Berichten
 
