@@ -12,3 +12,7 @@ Hideout-Komplett-Online.zip
 .env*
 
 backup/
+
+# Vollstaendiger zweiter Klon des Projekts, den das Paket-Werkzeug anlegt.
+# Ohne diese Zeile haengt ihn "git add ." als kaputten Submodul-Verweis ein.
+gehstock1/
