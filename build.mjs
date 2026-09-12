@@ -131,11 +131,12 @@ function collectJs() {
   return files;
 }
 
-/* Bilder aus src/assets/ als Daten-URI einbetten.
+/* Bilder und Modelle aus src/assets/ als Daten-URI einbetten.
    Damit bleibt auch die Offline-Einzeldatei ohne externe Verweise. */
 const BILD_TYP = {
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
   '.webp': 'image/webp', '.gif': 'image/gif',
+  '.glb': 'model/gltf-binary',
 };
 
 function bundleAssets() {

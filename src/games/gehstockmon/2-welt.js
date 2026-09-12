@@ -186,6 +186,129 @@
       img.src = SG.assets[key] || SG.assets['gm-bollwerk'];
       return texture;
     }
+    /* Der Spieler ist als einziges Wesen ein echtes Modell statt eines Bildes.
+       Es steckt als Daten-URI im Bundle und wird aus dem Speicher ausgepackt,
+       nie ueber das Netz geladen - sonst waere die Offline-Datei kaputt.
+       Bis das Modell steht, und falls es klemmt, bleibt das Bild sichtbar. */
+    /* Die Vorlage schaut quer zu ihrer eigenen Laufrichtung, deshalb die
+       Vierteldrehung: das Spiel dreht die Figurengruppe nach atan2(dx, dz),
+       und dazu muss das Modell bei null nach +z blicken. */
+    var MODELL_HOEHE = 2.9, MODELL_TEMPO = 1.55, MODELL_DREHUNG = Math.PI / 2;
+    var vorlage = null, wartend = [], figuren = [], modellFehlt = false;
+    var modellSkala = 1, modellBoden = 0;
+
+    function modellTextur() {
+      var haut = new T.Texture(), bild = new Image();
+      haut.flipY = false; haut.colorSpace = T.SRGBColorSpace;
+      bild.onload = function () { if (!dead) { haut.image = bild; haut.needsUpdate = true; } };
+      bild.src = SG.assets['gm-spieler-textur'] || '';
+      return haut;
+    }
+
+    /* Die Vorlagen aus Tripo tragen ihre Fortbewegung in der Animation: die
+       Huefte wandert im Laufschritt gut zweieinhalb Koerperlaengen nach vorn,
+       im Stehen driftet sie langsam zur Seite. Wo das Spiel die Figur selbst
+       ueber die Karte schiebt, liefe sie damit aus ihrem eigenen Ring und
+       Schatten heraus. Herausgerechnet wird nur der geradlinige Anteil, das
+       Wippen bleibt - und weil Anfang und Ende danach gleich stehen, schliesst
+       sich die Schleife sauber. */
+    function ortsfest(clips) {
+      clips.forEach(function (clip) {
+        clip.tracks.forEach(function (spur) {
+          if (spur.name.slice(-9) !== '.position') return;
+          var werte = spur.values, anzahl = werte.length / 3;
+          if (anzahl < 2) return;
+          for (var achse = 0; achse < 3; achse++) {
+            var drift = werte[(anzahl - 1) * 3 + achse] - werte[achse];
+            if (Math.abs(drift) < 1e-6) continue;
+            for (var i = 0; i < anzahl; i++) werte[i * 3 + achse] -= drift * i / (anzahl - 1);
+          }
+        });
+      });
+      return clips;
+    }
+
+    function ladeModell() {
+      var quelle = SG.assets['gm-spieler'];
+      if (modellFehlt || vorlage) return;
+      if (!quelle || !T.GLTFLoader) { modellFehlt = true; return; }
+      vorlage = 'laedt';
+      var roh = atob(quelle.slice(quelle.indexOf(',') + 1)), speicher = new Uint8Array(roh.length);
+      for (var i = 0; i < roh.length; i++) speicher[i] = roh.charCodeAt(i);
+      var haut = modellTextur();
+      new T.GLTFLoader().parse(speicher.buffer, '', function (glb) {
+        if (dead) return;
+        glb.scene.traverse(function (teil) {
+          if (!teil.isMesh) return;
+          teil.castShadow = true; teil.frustumCulled = false;
+          teil.material = new T.MeshStandardMaterial({ map: haut, roughness: 0.62, metalness: 0, side: T.FrontSide });
+        });
+        /* Der Massstab kommt aus dem Modell selbst, nicht aus einer Zahl im
+           Blender-Skript: eine Skalierung am Skelett laesst das Netz
+           auseinanderfliegen, weil die Bindematrizen davon nichts wissen. */
+        var huelle = new T.Box3().setFromObject(glb.scene), hoch = huelle.max.y - huelle.min.y;
+        modellSkala = hoch > 0.01 ? MODELL_HOEHE / hoch : 1;
+        modellBoden = -huelle.min.y * modellSkala;
+        vorlage = { szene: glb.scene, clips: ortsfest(glb.animations) };
+        wartend.splice(0).forEach(anziehen);
+      }, function (fehler) { vorlage = null; modellFehlt = true; wartend.length = 0;
+        console.warn('GehstockMon: das Spielermodell liess sich nicht lesen, das Bild bleibt stehen.', fehler); });
+    }
+
+    /* Haengt das Modell in eine bereits bestehende Figurengruppe und laesst
+       das Bild darunter verschwinden. Umgeschaltet wird spaeter allein nach
+       der gelaufenen Strecke - das gilt fuer den Spieler wie fuer die
+       anderen Leute in der Welt, ohne dass eine Stelle es melden muesste. */
+    function anziehen(gruppe) {
+      if (!vorlage || vorlage === 'laedt') { if (wartend.indexOf(gruppe) < 0) wartend.push(gruppe); ladeModell(); return; }
+      var koerper = T.cloneSkinned(vorlage.szene);
+      koerper.scale.setScalar(modellSkala);
+      koerper.position.y = modellBoden;
+      koerper.rotation.y = MODELL_DREHUNG;
+      gruppe.add(koerper);
+      if (gruppe.userData.portrait) gruppe.userData.portrait.visible = false;
+      var mixer = new T.AnimationMixer(koerper), spuren = {};
+      vorlage.clips.forEach(function (clip) {
+        var takt = mixer.clipAction(clip);
+        takt.setLoop(T.LoopRepeat, Infinity); takt.enabled = true;
+        takt.setEffectiveWeight(clip.name === 'stehen' ? 1 : 0).play();
+        if (clip.name === 'laufen') takt.setEffectiveTimeScale(MODELL_TEMPO);
+        spuren[clip.name] = takt;
+      });
+      var figur = { gruppe: gruppe, koerper: koerper, mixer: mixer, spuren: spuren,
+                    zuletzt: gruppe.position.clone(), anteil: 0 };
+      gruppe.userData.figur = figur; figuren.push(figur);
+      return figur;
+    }
+
+    /* Ueberblenden zwischen Stehen und Laufen. Der Anteil wandert weich, damit
+       ein kurzes Stocken an einer Mauer die Beine nicht zucken laesst. */
+    var schrittWeg = new T.Vector3();
+    function figurenSchritt(dt) {
+      for (var i = figuren.length - 1; i >= 0; i--) {
+        var f = figuren[i];
+        if (!f.gruppe.parent) { figuren.splice(i, 1); continue; }
+        schrittWeg.subVectors(f.gruppe.position, f.zuletzt);
+        var strecke = schrittWeg.length();
+        f.zuletzt.copy(f.gruppe.position);
+        var laeuft = dt > 0 && strecke / dt > 0.9;
+        /* Blickrichtung aus der gelaufenen Strecke. Die eigene Figur dreht
+           das Spiel schon an der Gruppe - fuer die kommt hier nur die
+           Vierteldrehung heraus. Die anderen Leute in der Welt dreht
+           niemand, und als Bild brauchten sie es auch nie. */
+        if (laeuft) {
+          var ziel = Math.atan2(schrittWeg.x, schrittWeg.z) - f.gruppe.rotation.y + MODELL_DREHUNG;
+          var weg = (ziel - f.koerper.rotation.y + Math.PI) % (Math.PI * 2);
+          if (weg < 0) weg += Math.PI * 2;
+          f.koerper.rotation.y += (weg - Math.PI) * Math.min(1, dt * 12);
+        }
+        f.anteil += ((laeuft ? 1 : 0) - f.anteil) * Math.min(1, dt * 9);
+        if (f.spuren.laufen) f.spuren.laufen.setEffectiveWeight(f.anteil);
+        if (f.spuren.stehen) f.spuren.stehen.setEffectiveWeight(1 - f.anteil);
+        f.mixer.update(dt);
+      }
+    }
+
     function creature(role, rarity, enemy, monId) {
       var g = new T.Group(), k = SG.gehstockmon.daten.mon(monId);
       var color = enemy ? '#f38976' : SG.gehstockmon.daten.SELTENHEITEN[rarity].farbe;
@@ -197,7 +320,9 @@
       { portrait.center.set(0.5, 0); portrait.position.y = 0; }
       var ring = mesh(g, 'ring', color, 0, 0.09, 0, 1.3, 1.3, 1.3); ring.rotation.x = Math.PI / 2;
       var shadow=new T.Mesh(geometries.shadow,shadowMaterial);shadow.rotation.x=-Math.PI/2;shadow.position.y=.02;shadow.scale.set(2.4,1.5,1);g.add(shadow);
-      g.userData = { portrait: portrait, ring: ring, rarity: rarity }; return g;
+      g.userData = { portrait: portrait, ring: ring, rarity: rarity };
+      if (monId === 'player') anziehen(g);
+      return g;
     }
     function addUnit(id, role, rarity, x, z, enemy, hp, monId) {
       var g = creature(role, rarity, enemy, monId); scene.add(g); g.position.set(x, 0.15, z);
@@ -233,6 +358,7 @@
     }
     function disposeUnit(u) {
       u.group.traverse(function (part) { if (part.isSprite) { part.material.dispose(); spriteMaterials = spriteMaterials.filter(function (m) { return m !== part.material; }); } });
+      if (u.group.userData.figur) { u.group.userData.figur.mixer.stopAllAction(); figuren = figuren.filter(function (f) { return f.gruppe !== u.group; }); }
       scene.remove(u.group);
     }
     function removePeer(id){var p=peers[id];if(!p)return;(p.followers||[]).forEach(disposeUnit);disposeUnit(p);p.texture.dispose();delete peers[id];}
@@ -372,13 +498,14 @@ p.updatedAt=info.updatedAt;p.age=Math.max(0,(serverTime-info.updatedAt)/1000);p.
     var loop = host.loop({
       update: function (dt) {
         if (dead || contextLost) return; time += dt;
+        figurenSchritt(dt);
         waters.update(time);
         Object.keys(trainers).forEach(function(id){var p=trainers[id],at=X.encounterPosition(p.info,encounterClock+time*1000);p.group.position.set(at.x,.15+Math.abs(Math.sin(time*6))*.1,at.z);p.group.visible=!battle;});
         walls.update(dt,explorer.group.position);
         Object.keys(peers).forEach(function(id){var p=peers[id];p.age+=dt;if(p.age>=15){removePeer(id);return;}p.elapsed+=dt;p.group.position.lerpVectors(p.from,p.to,Math.min(1,p.elapsed/p.duration));
           if(p.trail[p.trail.length-1].distanceTo(p.group.position)>.38){p.trail.push(p.group.position.clone());if(p.trail.length>160)p.trail.shift();}
           p.followers.forEach(function(f,i){var at=p.trail[Math.max(0,p.trail.length-1-p.offsets[i])];f.group.position.lerp(at,Math.min(1,dt*7));f.group.position.y=.15+Math.sin(time*6+i)*.06;});
-          var walking=p.elapsed<p.duration&&p.from.distanceTo(p.to)>.15;p.group.position.y=.15+(walking?Math.abs(Math.sin(time*10))*.12:0);
+          var walking=p.elapsed<p.duration&&p.from.distanceTo(p.to)>.15;p.group.position.y=.15+(walking&&!p.group.userData.figur?Math.abs(Math.sin(time*10))*.12:0);
           var across=Math.cos(yaw)*Math.sin(p.heading)-Math.sin(yaw)*Math.cos(p.heading);if(Math.abs(across)>.1){p.texture.repeat.x=across>0?-1:1;p.texture.offset.x=across>0?1:0;}
         });
         if (keys.q) yaw += dt; if (keys.e) yaw -= dt;
@@ -397,7 +524,8 @@ p.updatedAt=info.updatedAt;p.age=Math.max(0,(serverTime-info.updatedAt)/1000);p.
           if (dist > 0.1) {
             var move = Math.min(dist, dt * 11),nextX=explorer.group.position.x+dx/dist*move,nextZ=explorer.group.position.z+dz/dist*move;
             if(canStep(nextX,nextZ)){explorer.group.position.x=nextX;explorer.group.position.z=nextZ;}
-            explorer.group.rotation.y = Math.atan2(dx, dz); explorer.group.position.y = 0.15 + Math.abs(Math.sin(time * 10)) * 0.12;
+            explorer.group.rotation.y = Math.atan2(dx, dz);
+            explorer.group.position.y = 0.15 + (explorer.group.userData.figur ? 0 : Math.abs(Math.sin(time * 10)) * 0.12);
             var across = Math.cos(yaw) * dx - Math.sin(yaw) * dz;
             if (Math.abs(across) > dist * 0.12) {
               var playerMap = explorer.group.userData.portrait.material.map, right = across > 0;
@@ -465,6 +593,8 @@ p.updatedAt=info.updatedAt;p.age=Math.max(0,(serverTime-info.updatedAt)/1000);p.
         var seen = new Set(); scene.traverse(function (m) { if (m.geometry && !seen.has(m.geometry)) { seen.add(m.geometry); m.geometry.dispose(); } });
         Object.keys(geometries).forEach(function (key) { if (!seen.has(geometries[key])) geometries[key].dispose(); });
         Object.keys(materials).forEach(function (key) { materials[key].dispose(); }); plane.material.dispose();
+        figuren.forEach(function (f) { f.mixer.stopAllAction(); }); figuren = []; wartend = [];
+        if (vorlage && vorlage !== 'laedt') vorlage.szene.traverse(function (teil) { if (teil.isMesh && teil.material.map) teil.material.map.dispose(); });
         spriteMaterials.forEach(function (m) { m.dispose(); });
         Object.keys(spriteTextures).forEach(function (key) { spriteTextures[key].dispose(); });
         groundTextures.forEach(function(texture){texture.dispose();});terrainMaterials.forEach(function(material){material.dispose();});
