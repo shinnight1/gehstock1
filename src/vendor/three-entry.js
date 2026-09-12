@@ -2,5 +2,5 @@ import { Scene, Color, FogExp2, PerspectiveCamera, WebGLRenderer, HemisphereLigh
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 window.THREE = { Scene, Color, FogExp2, PerspectiveCamera, WebGLRenderer, HemisphereLight, DirectionalLight, Group, Mesh, MeshStandardMaterial, MeshBasicMaterial, BoxGeometry, CylinderGeometry, ConeGeometry, SphereGeometry, IcosahedronGeometry, TorusGeometry, PlaneGeometry, BufferGeometry, Float32BufferAttribute, PointsMaterial, Points, Vector2, Vector3, Raycaster, MathUtils, SRGBColorSpace, ACESFilmicToneMapping, mergeGeometries };
 
-import { Sprite, SpriteMaterial, CanvasTexture, NearestFilter, RepeatWrapping, DoubleSide, PCFSoftShadowMap } from 'three';
-Object.assign(window.THREE, { Sprite, SpriteMaterial, CanvasTexture, NearestFilter, RepeatWrapping, DoubleSide, PCFSoftShadowMap });
+import { Sprite, SpriteMaterial, CanvasTexture, NearestFilter, RepeatWrapping, DoubleSide, PCFSoftShadowMap, Matrix4, Quaternion } from 'three';
+Object.assign(window.THREE, { Sprite, SpriteMaterial, CanvasTexture, NearestFilter, RepeatWrapping, DoubleSide, PCFSoftShadowMap, Matrix4, Quaternion });

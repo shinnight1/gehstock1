@@ -10,7 +10,14 @@ let keyedPixels;
 function surface() { return { className: '', style: {}, setAttribute() {}, appendChild() {}, remove() {}, focus() {}, tabIndex: 0, addEventListener(name, fn) { listeners.set(name, fn); }, removeEventListener(name, fn) { if (listeners.get(name) === fn) listeners.delete(name); }, getBoundingClientRect() { return { x: 0, y: 0, left: 0, top: 0, width: 1180, height: 768 }; }, getContext() { return { clearRect() {}, save() {}, restore() {}, beginPath() {}, moveTo() {}, lineTo() {}, quadraticCurveTo() {}, closePath() {}, clip() {}, drawImage() {}, stroke() {}, createRadialGradient(){return{addColorStop(){}};}, fillRect() {}, createImageData(w,h) { return { data: new Uint8ClampedArray(w*h*4) }; }, getImageData() { return { data: new Uint8ClampedArray([255, 0, 255, 255, 40, 95, 84, 255, 160, 98, 30, 255]) }; }, putImageData(pixels) { keyedPixels = pixels.data; } }; } }; }
 class FakeRenderer { constructor() { this.domElement = surface(); this.shadowMap={}; } setPixelRatio() {} setSize() {} render(s, c) { scene = s; camera = c; } dispose() { disposed = true; } forceContextLoss() {} }
 class FakeImage { constructor() { this.naturalWidth = 256; this.naturalHeight = 256; } set src(value) { this.onload?.(); } }
-const window = { ...surface(), THREE: { ...THREE, WebGLRenderer: FakeRenderer, mergeGeometries }, devicePixelRatio: 3 };
+/* Nur die Namen, die der gebaute Browser-Bundle wirklich auf window.THREE legt.
+   Mit dem vollen Three.js besteht ein Test, den der Browser danach mit
+   "T.Matrix4 is not a constructor" abbricht. */
+const exposed = [...fs.readFileSync('src/vendor/three-entry.js', 'utf8').matchAll(/{([^}]*)}/g)]
+  .flatMap((m) => m[1].split(',').map((name) => name.trim())).filter(Boolean)
+  .reduce((all, name) => { all[name] = name === 'mergeGeometries' ? mergeGeometries : THREE[name]; return all; }, {});
+for (const [name, value] of Object.entries(exposed)) assert.ok(value, 'src/vendor/three-entry.js reicht ' + name + ' nicht an den Browser weiter');
+const window = { ...surface(), THREE: { ...exposed, WebGLRenderer: FakeRenderer }, devicePixelRatio: 3 };
 const document = { ...surface(), hidden: false, createElement: surface };
 const SG = { gehstockmon: { daten: D,abenteuer:X }, assets: Object.fromEntries(D.KATALOG.map((k) => [k.bild, 'data:image/webp;base64,AA=='])) };
 SG.assets['gm-player-pixel'] = 'data:image/webp;base64,AA==';
