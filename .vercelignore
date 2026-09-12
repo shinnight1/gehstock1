@@ -1,0 +1,11 @@
+# Grosse Dateien, die im Deploy nichts zu suchen haben.
+node_modules
+arena/node_modules
+dist
+backup
+.netlify
+.local
+*.zip
+*.log
+gehstock1
+art
