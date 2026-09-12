@@ -7,13 +7,20 @@
     "build": "node build.mjs",
     "dev": "node tools/serve.mjs",
     "test": "node tools/test.mjs",
-    "paket": "node tools/github-paket.mjs"
+    "paket": "node tools/github-paket.mjs",
+    "test:speicher": "node tools/speicher-tests.mjs",
+    "sichern": "node tools/welt-sichern.mjs",
+    "einspielen": "node tools/welt-einspielen.mjs"
   },
   "dependencies": {
-    "@netlify/blobs": "^11.0.3"
+    "@netlify/blobs": "^11.0.3",
+    "@upstash/redis": "^1.38.4"
   },
   "devDependencies": {
     "esbuild": "^0.25.9",
     "three": "^0.180.0"
+  },
+  "engines": {
+    "node": ">=22.12"
   }
 }

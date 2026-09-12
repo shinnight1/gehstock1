@@ -1,4 +1,4 @@
-import { getStore } from '@netlify/blobs';
+import { speicher } from './lib/speicher.mjs';
 import { createHash } from 'node:crypto';
 import { data as D, economy as E, arena as A, hours as H, adventure as X } from './lib/gehstockmon-rules.mjs';
 import {adventureAction,finishEncounter,expireAdventure,deliverRewards,activeArena,activeDuel} from './lib/gehstockmon-adventure.mjs';
@@ -159,11 +159,11 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
       const bypass = adminBypass(body);
       requireOpen(timestamp, bypass);
       const name = typeof body.name === 'string' ? body.name.trim().replace(/[\u0000-\u001f]/g, '').slice(0, 30) : '';
-      const db = store || getStore({ name: 'hgh-gehstockmon', consistency: 'strong' }), draw = random();
+      const db = store || speicher('hgh-gehstockmon'), draw = random();
       if (body.op === 'presence') {
         const entry=await db.getWithMetadata(KEY,{type:'json',consistency:'strong'});
         if(!entry)throw new GameError('Betritt zuerst die Spielerwelt.',409);
-        return await updatePresence(presenceStore||getStore({name:'hgh-gehstockmon-presence',consistency:'strong'}),entry.data,id,body.position,timestamp,now,bypass);
+        return await updatePresence(presenceStore||speicher('hgh-gehstockmon-presence'),entry.data,id,body.position,timestamp,now,bypass);
       }
       for (let attempt = 0; attempt < 8; attempt++) {
         const entry = await db.getWithMetadata(KEY, { type: 'json', consistency: 'strong' });
@@ -183,7 +183,7 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
           if(activeArena(p)&&mutations.includes(body.op)&&!['arena_turn','arena_flee'].includes(body.op))throw new GameError('Beende zuerst deinen Mon-Kampf.',409);
           if(activeDuel(p)&&mutations.includes(body.op)&&!['raid_turn','raid_arena','raid_cancel'].includes(body.op))throw new GameError('Beende zuerst deinen Überfall.',409);
           if(p.raidLock?.until>timestamp&&(['arena_start','trainer_start','raid_start','defend'].includes(body.op)||(['hatch','incubate'].includes(body.op)&&body.eggId===p.raidLock.eggId)))throw new GameError('Deine Verteidigung hält gerade einen Überfall ab. Dieses Ei bleibt bis zum Ergebnis reserviert.',409);
-          if(X.OPS.includes(body.op))Object.assign(extra,await adventureAction({world,p,id,body,now:timestamp,draw,presence:presenceStore||getStore({name:'hgh-gehstockmon-presence',consistency:'strong'}),validateSquad}));
+          if(X.OPS.includes(body.op))Object.assign(extra,await adventureAction({world,p,id,body,now:timestamp,draw,presence:presenceStore||speicher('hgh-gehstockmon-presence'),validateSquad}));
           if (body.op === 'arena_start' || body.op === 'defend') {
             if (p.arena && p.arena.phase !== 'finished') throw new GameError('Beende zuerst deinen aktuellen Arenakampf.', 409);
             p.truppe = validateSquad(p, body.squad);
