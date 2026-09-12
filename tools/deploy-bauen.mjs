@@ -46,8 +46,33 @@ laufe(path.join(ROOT, 'build.mjs'), []);
 const vite = path.join(ARENA, 'node_modules', 'vite', 'bin', 'vite.js');
 
 if (!fs.existsSync(vite)) {
-  console.log('\n[33mArena uebersprungen:[0m in arena/ fehlen die '
-    + 'Abhaengigkeiten.\nEinmalig nachholen mit:  cd arena && npm install\n');
+  /* Abbrechen, nicht ueberspringen.
+
+     Frueher stand hier eine gelbe Zeile und der Build lief weiter mit
+     Erfolgsmeldung. Das Ergebnis war eine Seite, auf der alles
+     funktioniert - ausser /games/arena/, das als "Page not found" von
+     Netlify erscheint. Die Ursache steht dann irgendwo mitten im
+     Protokoll, waehrend ganz unten "Fertig" steht.
+
+     Ein Build, der die Haelfte ausliefert und Erfolg meldet, ist
+     schlimmer als einer, der abbricht: beim Abbruch bleibt die alte,
+     heile Fassung online.
+
+     Wer bewusst ohne Arena bauen will, sagt das ausdruecklich. */
+  if (!process.argv.includes('--ohne-arena')) {
+    console.error([
+      '',
+      'Abbruch: in arena/ fehlen die Abhaengigkeiten, die Arena liesse',
+      'sich nicht bauen.',
+      '',
+      '  Nachholen mit:   npm ci --prefix arena',
+      '  Bewusst ohne:    node tools/deploy-bauen.mjs --ohne-arena',
+      '',
+    ].join('\n'));
+    process.exit(1);
+  }
+  console.log('\nArena uebersprungen - ausdruecklich verlangt.'
+    + ' /games/arena/ fehlt in dieser Ausgabe.\n');
 } else {
   schritt('Arena bauen');
   // Vite nimmt das Wurzelverzeichnis als Positionsargument.
@@ -72,6 +97,56 @@ if (!fs.existsSync(vite)) {
 
   schritt('Arena in den Offline-Vorrat des Service Workers legen');
   arenaInSw();
+}
+
+/* Immer, auch ohne Arena: gerade dann, wenn etwas fehlt, soll die
+   Seite erklaeren koennen, was fehlt. */
+vierhundertvier();
+
+/* Eine eigene Seite fuer Adressen, die es nicht gibt.
+
+   Ohne sie zeigt Netlify seine Standardseite: "Looks like you've
+   followed a broken link". Die sagt dem Spieler nichts und dem
+   Entwickler noch weniger - sie sieht aus, als waere die ganze Seite
+   kaputt, obwohl nur ein Pfad fehlt. Genau diese Verwechslung hat
+   schon einmal Zeit gekostet.
+
+   Bewusst ohne Bilder, Schriften und Bundle: sie muss auch dann
+   stehen, wenn vom Rest der Ausgabe etwas fehlt. Das ist der einzige
+   Fall, in dem sie ueberhaupt jemand zu sehen bekommt. */
+function vierhundertvier() {
+  const seite = [
+    '<!doctype html>',
+    '<html lang="de">',
+    '<head>',
+    '<meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width,initial-scale=1">',
+    '<title>Diese Seite gibt es nicht</title>',
+    '<style>',
+    'html,body{height:100%}',
+    'body{margin:0;display:grid;place-items:center;background:#0b1020;',
+    'color:#e2e8f0;font:16px/1.6 system-ui,sans-serif;padding:24px}',
+    'main{max-width:32rem;text-align:center}',
+    'h1{font-size:1.6rem;margin:0 0 .6rem}',
+    'p{margin:.6rem 0;color:#94a3b8}',
+    'a{display:inline-block;margin-top:1.4rem;padding:.7rem 1.4rem;',
+    'border-radius:.6rem;background:#2563eb;color:#fff;text-decoration:none;',
+    'font-weight:600}',
+    'code{color:#cbd5e1}',
+    '</style>',
+    '</head>',
+    '<body><main>',
+    '<h1>Diese Adresse gibt es hier nicht</h1>',
+    '<p>Die Seite selbst läuft. Nur der Pfad, den du aufgerufen hast,',
+    ' steht nicht in dieser Ausgabe.</p>',
+    '<p>Wenn das ein Spiel sein sollte, das es sonst gibt, ist beim',
+    ' letzten Hochladen etwas unvollständig geblieben.</p>',
+    '<a href="/">Zurück zum Hideout</a>',
+    '</main></body>',
+    '</html>',
+    '',
+  ].join('\n');
+  fs.writeFileSync(path.join(DIST, '404.html'), seite, 'utf8');
 }
 
 /* Die Arena wird nach dem Hideout gebaut - build.mjs kann ihre Dateien
