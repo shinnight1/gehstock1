@@ -1,4 +1,5 @@
 import {data as D, arena as A, adventure as X} from './gehstockmon-rules.mjs';
+import {wochenschritt} from './gehstockmon-adventure.mjs';
 
 const fail = message => { throw new Error(message); };
 export const activeDungeon = (world, p) => {
@@ -14,7 +15,7 @@ function finish(world, room, winner, now) {
   for (const member of room.players) {
     member.reward = winner === 'players' && !member.left && member.contributions > 0 ? dungeon.reward : 0;
     const p = world.players[member.id];
-    if (p && member.reward) p.runes[dungeon.rarity] = Math.min(9999, p.runes[dungeon.rarity] + member.reward);
+    if (p && member.reward) { p.runes[dungeon.rarity] = Math.min(9999, p.runes[dungeon.rarity] + member.reward); wochenschritt(world, p, member.id, 'tiefe', now); }
   }
   room.message = winner === 'players' ? 'Boss besiegt! Eure Runen wurden gutgeschrieben.' : winner === 'expired' ? 'Die Expedition ist abgelaufen. Es gibt keine Runen.' : 'Die Gruppe zieht sich zurück. Eure Mons erholen sich vollständig.';
   room.revision++;

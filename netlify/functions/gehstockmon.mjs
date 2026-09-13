@@ -1,7 +1,7 @@
 import { speicher } from './lib/speicher.mjs';
 import { createHash } from 'node:crypto';
 import { data as D, economy as E, arena as A, hours as H, adventure as X } from './lib/gehstockmon-rules.mjs';
-import {adventureAction,finishEncounter,expireAdventure,deliverRewards,activeArena,activeDuel,weltprojekte} from './lib/gehstockmon-adventure.mjs';
+import {adventureAction,finishEncounter,expireAdventure,deliverRewards,activeArena,activeDuel,weltprojekte,wochenschritt} from './lib/gehstockmon-adventure.mjs';
 import {activeDungeon,settleDungeons,dungeonResult,dungeonAction} from './lib/gehstockmon-dungeons.mjs';
 
 const KEY = 'world-v2';
@@ -229,7 +229,7 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
             else { E.upgrade(p,t,timestamp); p.progress.upgrades++;t.version++; extra.message = E.LEVELS[t.level].name + ' fertig: mehr Einkommen und stärkere Verteidigung.'; }
           }
           if (body.op === 'incubate') { E.incubate(p,body.eggId,timestamp); extra.message = 'Die Brutzeit hat begonnen: 1 Stunde.'; }
-          if (body.op === 'hatch') { const mon = E.hatch(p,body.eggId,timestamp,draw);p.progress.hatched++; extra.monId = mon && mon.id; extra.message = mon ? mon.name + ' ist geschlüpft!' : 'Sammlung vollständig! Das Ei bringt dir 75 Gold.'; }
+          if (body.op === 'hatch') { const mon = E.hatch(p,body.eggId,timestamp,draw);p.progress.hatched++; wochenschritt(world, p, id, 'eier', timestamp); extra.monId = mon && mon.id; extra.message = mon ? mon.name + ' ist geschlüpft!' : 'Sammlung vollständig! Das Ei bringt dir 75 Gold.'; }
           deliverRewards(p,timestamp);
           const weekendEggs = activeArena(p)||activeDuel(p)?0:E.deliverWeekend(p, timestamp);
           if (weekendEggs) extra.weekendDelivery = weekendEggs;

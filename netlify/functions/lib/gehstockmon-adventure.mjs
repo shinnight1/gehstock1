@@ -17,7 +17,7 @@ export function finishEncounter(world,p,id,now){
   b.settled=true;
   if(b.kind==='trainer'){
     if(b.winner==='wir'&&!p.encounterClaims.includes(b.encounterId)){
-      p.encounterClaims=p.encounterClaims.concat(b.encounterId).slice(-100);p.progress.trainerWins++;p.gold+=25;
+      p.encounterClaims=p.encounterClaims.concat(b.encounterId).slice(-100);p.progress.trainerWins++;p.gold+=25;wochenschritt(world,p,id,'trainer',now);
       if(p.eggs.length<E.BAG_LIMIT){egg(p,b.territoryId,now);b.message='Training gewonnen! Ein Ei und 25 Gold gehören dir.';}
       else {p.rewardEggs=p.rewardEggs||{};p.rewardEggs[b.territoryId]=(p.rewardEggs[b.territoryId]||0)+1;b.message='Training gewonnen! 25 Gold; dein Ei wartet auf Platz in der Tasche.';}
     }else b.message='Das Training ist beendet. Du verlierst weder Gold noch Eier. Probiere andere Attacken.';
@@ -52,16 +52,42 @@ export function zerhacker(world,now){
   }
   return world.zerhacker;
 }
+/* Die Wochenaufgabe wird wie der Zerhacker jede Woche neu gesetzt. */
+export function wochenaufgabe(world,now){
+  const woche=X.zerhackerWoche(now);
+  if(!world.wochenaufgabe||world.wochenaufgabe.woche!==woche)
+    world.wochenaufgabe={woche,stand:0,beitraege:{},erfuelltAm:null};
+  return world.wochenaufgabe;
+}
+/* Zaehlt einen Beitrag, wenn er zur laufenden Aufgabe passt, und schuettet
+   beim Erreichen an alle aus, die mitgeholfen haben. */
+export function wochenschritt(world,p,id,art,now,anzahl=1){
+  const ziel=X.wochenziel(now);
+  if(!ziel||ziel.id!==art)return null;
+  const a=wochenaufgabe(world,now);
+  if(a.erfuelltAm)return null;
+  a.stand+=anzahl;a.beitraege[id]=(a.beitraege[id]||0)+anzahl;
+  if(a.stand<ziel.ziel)return null;
+  a.erfuelltAm=now;
+  for(const [pid,anteil] of Object.entries(a.beitraege)){
+    const wer=world.players[pid];if(!wer)continue;
+    wer.gold+=ziel.lohn+Math.round(ziel.lohn*anteil/Math.max(1,a.stand));
+  }
+  return 'Die Wochenaufgabe "'+ziel.name+'" ist geschafft! Alle Beteiligten haben ihren Lohn erhalten.';
+}
+
 /* Was der Client von beidem sehen darf. Die Spenderliste wird auf die groessten
    zehn gekuerzt - mehr passt ohnehin nicht auf die Tafel. */
 export function weltprojekte(world,id,now){
-  const bau=leuchtturm(world),z=zerhacker(world,now),namen=(eintraege)=>
+  const bau=leuchtturm(world),z=zerhacker(world,now),a=wochenaufgabe(world,now),ziel=X.wochenziel(now),namen=(eintraege)=>
     Object.entries(eintraege).sort((a,b)=>b[1]-a[1]).slice(0,10)
       .map(([pid,wert])=>({name:world.players[pid]?.name||'Unbekannt',wert,selbst:pid===id}));
   return {leuchtturm:{gold:bau.gold,ziel:X.LEUCHTTURM.ziel,fertig:X.leuchtturmFertig(bau),
                       fertigAm:bau.fertigAm,eigen:bau.spender[id]||0,tafel:namen(bau.spender)},
           zerhacker:{hp:z.hp,maxHp:z.maxHp,besiegtAm:z.besiegtAm,eigen:z.beitraege[id]||0,
-                     tafel:namen(z.beitraege),bereitAb:world.players[id]?.zerhackerBereitAb||0}};
+                     tafel:namen(z.beitraege),vorrat:X.zerhackerVorrat(world.players[id],now),vorratMax:X.ZERHACKER.vorratMax,naechsterIn:X.zerhackerWartezeit(world.players[id],now)},
+          wochenaufgabe:{name:ziel.name,was:ziel.was,stand:Math.min(a.stand,ziel.ziel),ziel:ziel.ziel,
+                         erfuellt:!!a.erfuelltAm,eigen:a.beitraege[id]||0,tafel:namen(a.beitraege)}};
 }
 
 export function deliverRewards(p,now){if(activeArena(p)||activeDuel(p))return;for(const [id,n]of Object.entries(p.rewardEggs||{})){const count=Math.min(n,E.BAG_LIMIT-p.eggs.length);for(let i=0;i<count;i++)egg(p,Number(id),now);p.rewardEggs[id]-=count;if(!p.rewardEggs[id])delete p.rewardEggs[id];}}
@@ -76,7 +102,7 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
   if(op==='gather'||op==='trainer_start'){
     const encounter=X.encounters(now,world.territories).find(e=>e.id===body.encounterId);if(!encounter||encounter.kind!==(op==='gather'?'rune':'trainer'))fail('Diese Begegnung ist weitergezogen. Aktualisiere die Karte.');
     if(p.encounterClaims.includes(encounter.id))fail('Diese Begegnung hast du bereits abgeschlossen.');await nearby(encounter);
-    if(op==='gather'){p.encounterClaims=p.encounterClaims.concat(encounter.id).slice(-100);p.progress.gathered++;p.gold+=10;extra.message='Rune gefunden! +10 Gold und Fortschritt für deine Quest.';}
+    if(op==='gather'){p.encounterClaims=p.encounterClaims.concat(encounter.id).slice(-100);p.progress.gathered++;p.gold+=10;extra.message=wochenschritt(world,p,id,'runen',now)||'Rune gefunden! +10 Gold und Fortschritt für deine Quest.';}
     else {p.truppe=validateSquad(p,body.squad);p.arena=A.create(p.truppe.map(mid=>X.mon(p,mid)),['blattschleicher','tauhupfer'].slice(0,p.progress.trainerWins<3?1:2).map(D.mon),{id:body.requestId,territoryId:encounter.territoryId,now});Object.assign(p.arena,{kind:'trainer',encounterId:encounter.id,title:encounter.name});}
   }
   if(op==='leuchtturm_spenden'){
@@ -95,12 +121,12 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
   if(op==='zerhacker_schlagen'){
     const z=zerhacker(world,now);
     if(z.hp<=0)fail('Der Zerhacker ist fuer diese Woche erledigt.');
-    if((p.zerhackerBereitAb||0)>now)fail('Deine Truppe sammelt sich noch.');
+    if(X.zerhackerVorrat(p,now)<1)fail('Deine Truppe sammelt sich noch. In wenigen Minuten hast du wieder einen Schlag.');
     if(!p.truppe||!p.truppe.length)fail('Stelle zuerst eine Truppe auf.');
     await nearby(X.zerhackerOrt(now),X.ZERHACKER.reichweite);
     const schaden=Math.min(z.hp,X.zerhackerSchaden(p));
     z.hp-=schaden;z.beitraege[id]=(z.beitraege[id]||0)+schaden;
-    p.zerhackerBereitAb=now+X.ZERHACKER.abklingen;
+    X.zerhackerVerbrauchen(p,now);
     extra.message='Treffer! '+schaden+' Schaden am Zerhacker.';
     if(z.hp<=0&&!z.verteilt){
       z.verteilt=true;z.besiegtAm=now;

@@ -422,8 +422,40 @@ const SG = { rules: {} };
      seine Lebenskraft dagegen ist echter Weltzustand - daran schlagen alle
      gemeinsam. Sein Rundkurs meidet die Mitte, damit er nicht dauernd im
      Startplatz steht. */
-  X.ZERHACKER={runde:11*60000,radius:150,grundKraft:60000,proSpieler:25000,
-               abklingen:3*60000,schadenJeStufe:800,beuteRunen:6,beuteGold:400,reichweite:22};
+  /* Die Zahlen sind auf eine Handvoll Leute mit kurzen Schulpausen gerechnet:
+     rund zwanzig Schlaege pro Kopf und Woche sollen reichen. Statt einer
+     starren Sperre nach jedem Schlag fuellt sich ein Vorrat - wer zwei Tage
+     weg war, kommt mit vollem Beutel zurueck und haut sie am Stueck raus. */
+  X.ZERHACKER={runde:11*60000,radius:150,grundKraft:10000,proSpieler:6000,
+               nachschub:10*60000,vorratMax:12,
+               schadenJeStufe:800,beuteRunen:6,beuteGold:400,reichweite:22};
+  /* Jede Woche eine gemeinsame Aufgabe, an der alle zusammen zaehlen. Anders
+     als der Zerhacker verlangt sie keine Wartezeit und keinen Weg zu einem
+     bestimmten Ort - jeder Beitrag zaehlt sofort, auch der aus fuenf Minuten
+     Pause. Welche dran ist, ergibt sich aus der Wochennummer. */
+  X.WOCHENZIELE=[
+    {id:'runen',  name:'Runensuche',    was:'Verlorene Runen einsammeln', ziel:30, lohn:200},
+    {id:'trainer',name:'Trainingslager',was:'Wandertrainer besiegen',     ziel:15, lohn:250},
+    {id:'eier',   name:'Brutzeit',      was:'Eier ausbrueten',            ziel:20, lohn:200},
+    {id:'tiefe',  name:'Tiefenzug',     was:'Dungeonbosse bezwingen',     ziel:8,  lohn:300}
+  ];
+  X.wochenziel=function(now){return X.WOCHENZIELE[X.zerhackerWoche(now)%X.WOCHENZIELE.length];};
+
+  X.zerhackerVorrat=function(p,now){
+    var seit=now-((p&&p.zerhackerStand)||0);
+    return Math.max(0,Math.min(X.ZERHACKER.vorratMax,Math.floor(seit/X.ZERHACKER.nachschub)));
+  };
+  /* Verbraucht einen Schlag. Ein lange unberuehrter Stand wird erst auf den
+     vollen Beutel gezogen, sonst sammelte sich Guthaben ohne Grenze an. */
+  /* Wie lange bis zum naechsten Schlag - fuer die Anzeige. */
+  X.zerhackerWartezeit=function(p,now){
+    var Z=X.ZERHACKER;if(X.zerhackerVorrat(p,now)>=Z.vorratMax)return 0;
+    return Z.nachschub-(now-((p&&p.zerhackerStand)||0))%Z.nachschub;
+  };
+  X.zerhackerVerbrauchen=function(p,now){
+    var Z=X.ZERHACKER,voll=now-Z.vorratMax*Z.nachschub;
+    p.zerhackerStand=Math.max(p.zerhackerStand||0,voll)+Z.nachschub;
+  };
   /* Wochennummer, die montags umspringt: der 1.1.1970 war ein Donnerstag,
      drei Tage Versatz ruecken den Wechsel auf Montag. */
   X.zerhackerWoche=function(now){return Math.floor((now+3*86400000)/(7*86400000));};

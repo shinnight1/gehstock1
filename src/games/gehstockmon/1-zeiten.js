@@ -25,10 +25,17 @@
   H.openTime = function(t){var d=H.day(t),monday=d-((H.weekday(d)+6)%7),total=Math.floor(monday/7)*33*HOUR;
     for(var day=monday;day<=d;day++){var close=H.CLOSE[H.weekday(day)];if(close)total+=Math.max(0,Math.min(t,H.at(day,close))-H.at(day,7));}return total;};
   H.format = function (t) { return new Intl.DateTimeFormat('de-DE', { timeZone: H.ZONE, weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }).format(new Date(t)); };
-  // Virtuelle Produktionszeit lässt Samstag und Sonntag aus. Die Zeitumstellung
-  // liegt ebenfalls am Sonntag und verändert daher keine Eier-Produktionsstunde.
-  H.productionTime = function (t) { var d = H.day(t), weekday = mod(d + 3, 7); return (Math.floor((d + 3) / 7) * 5 + Math.min(weekday, 5)) * DAY + (weekday < 5 ? t - H.at(d, 0) : 0); };
-  H.productionAt = function (v) { var days = Math.floor(v / DAY), d = Math.floor(days / 5) * 7 + mod(days, 5) - 3; return H.at(d, 0) + mod(v, DAY); };
+  // Eier sammeln dieselben geöffneten Stunden wie Gold. Die Umkehrfunktion
+  // liefert den Fertigzeitpunkt auch über Nächte, Wochenenden und Zeitumstellungen.
+  H.productionTime = H.openTime;
+  H.productionAt = function (v) {
+    var week=Math.floor(v/(33*HOUR)),monday=week*7+4,left=v-week*33*HOUR;
+    if(left===0)return H.at(monday-3,13);
+    for(var i=0;i<5;i++){var span=(H.CLOSE[H.weekday(monday+i)]-7)*HOUR;
+      if(left<=span)return H.at(monday+i,7)+left;left-=span;
+    }
+    return H.at(monday+4,13);
+  };
   H.weekends = function (since, until) {
     since = Math.max(since, H.REWARDS_START); if (until <= since) return { count: 0, through: since };
     var day = H.day(since), saturday = day + mod(6 - H.weekday(day), 7);

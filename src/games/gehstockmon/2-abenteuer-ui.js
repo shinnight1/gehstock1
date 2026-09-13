@@ -23,6 +23,8 @@
       if (z && z.hp > 0) projektLeiste.appendChild(balken('Zerhacker', z.hp, z.maxHp, '#f2705a', zeigeZerhacker));
       else if (z) projektLeiste.appendChild(balken('Zerhacker erlegt', 1, 1, '#81d2a3', zeigeZerhacker));
       if (l && !l.fertig) projektLeiste.appendChild(balken('Leuchtturm', l.gold, l.ziel, '#f0b429', zeigeLeuchtturm));
+      var a = projekte && projekte.wochenaufgabe;
+      if (a) projektLeiste.appendChild(balken(a.name, a.stand, a.ziel, a.erfuellt ? '#81d2a3' : '#89cce5', zeigeWoche));
       projektLeiste.hidden = !projektLeiste.childNodes.length;
     }
     function tafel(eintraege, einheit) {
@@ -61,10 +63,12 @@
       if (l && l.fertig && ziel) drawer.appendChild(el('p', 'Der Leuchtturm meldet: ' + ziel.text
         + ', etwa ' + ziel.weit + ' Schritte entfernt.'));
       else if (ziel) drawer.appendChild(el('p', 'Wo er gerade steckt, weiss niemand genau - dafuer muesste erst der Leuchtturm stehen.'));
-      var wartet = Math.max(0, Math.ceil((z.bereitAb - c.now()) / 1000));
+      drawer.appendChild(el('p', 'Deine Schlaege: ' + z.vorrat + ' von ' + z.vorratMax
+        + (z.vorrat < z.vorratMax ? ' · der naechste in ' + Math.ceil((z.naechsterIn || 0) / 60000) + ' Minuten' : ' · Beutel voll')));
+      var wartet = !z.vorrat;
       var w = c.world(), ort = w && w.zerhackerOrt && w.zerhackerOrt();
       var nah = ort && w.position && Math.hypot(w.position().x - ort.x, w.position().z - ort.z) < X.ZERHACKER.reichweite;
-      var knopf = button(wartet ? 'Deine Truppe sammelt sich (' + wartet + ' s)' : nah ? 'Zuschlagen' : 'Hingehen', function () {
+      var knopf = button(wartet ? 'Kein Schlag uebrig' : nah ? 'Zuschlagen (' + z.vorrat + ')' : 'Hingehen', function () {
         if (wartet) return;
         if (!nah) { c.closeDrawer(); if (w && w.walkToPoint) w.walkToPoint(ort); c.notify('Du machst dich auf den Weg zum Zerhacker.'); return; }
         run('zerhacker_schlagen', {}, 'zerhacker');
@@ -74,6 +78,16 @@
       drawer.appendChild(el('h3', 'Wer zugeschlagen hat'));
       drawer.appendChild(tafel(z.tafel, 'Schaden'));
     }
+    function zeigeWoche() {
+      var a = projekte && projekte.wochenaufgabe; if (!a || !c.open(a.name, 'woche')) return;
+      drawer.appendChild(el('p', a.was + ' - diese Woche zaehlt jeder Beitrag von euch allen auf dasselbe Ziel. '
+        + 'Es gibt nichts zu warten und keinen Weg zu laufen: was du ohnehin tust, zaehlt mit.'));
+      drawer.appendChild(el('p', a.stand + ' von ' + a.ziel + (a.eigen ? ' · dein Anteil: ' + a.eigen : '')));
+      if (a.erfuellt) drawer.appendChild(el('p', 'Geschafft. Am Montag wartet die naechste Aufgabe.'));
+      drawer.appendChild(el('h3', 'Wer mitgeholfen hat'));
+      drawer.appendChild(tafel(a.tafel, 'Stueck'));
+    }
+
     function zeigeLeuchtturm() {
       var l = projekte && projekte.leuchtturm; if (!l || !c.open('Leuchtturm', 'leuchtturm')) return;
       if (l.fertig) {
@@ -96,7 +110,7 @@
     }
 
     function player(skin,weapon){var p=el('div',undefined,'gm-skin-preview');p.style.setProperty('--skin',X.skin(skin).color);var canvas=el('canvas');canvas.width=canvas.height=128;canvas.setAttribute('aria-label',X.skin(skin).name);p.appendChild(canvas);R.drawAtlas(canvas,'skins',R.skinIndex(skin));p.appendChild(el('b',{gehstock:'⌁',eisenspeer:'♜',runenklinge:'⚔',sturmhammer:'⚒'}[weapon]||'✦','gm-weapon-icon'));return p;}
-    function run(op,data,view){var request=c.request(op,data);if(duel)showDuel();request.then(function(res){c.apply(res);if(res.arena&&res.arena.phase!=='finished')c.arena(res.arena,true);else if(res.duel)showDuel();else if(view==='shop')shop();else if(view==='adventure')adventure();else if(view==='leuchtturm')zeigeLeuchtturm();else if(view==='zerhacker')zeigeZerhacker();else c.closeCombat();if(res.message)c.notify(res.message);}).catch(function(error){c.error(error);if(duel)showDuel();});}
+    function run(op,data,view){var request=c.request(op,data);if(duel)showDuel();request.then(function(res){c.apply(res);if(res.arena&&res.arena.phase!=='finished')c.arena(res.arena,true);else if(res.duel)showDuel();else if(view==='shop')shop();else if(view==='adventure')adventure();else if(view==='leuchtturm')zeigeLeuchtturm();else if(view==='zerhacker')zeigeZerhacker();else if(view==='woche')zeigeWoche();else c.closeCombat();if(res.message)c.notify(res.message);}).catch(function(error){c.error(error);if(duel)showDuel();});}
     function approach(e){e=Object.assign({},e,X.encounterPosition(e,c.now()));c.closeDrawer();var w=c.world();if(w&&w.walkToPoint)w.walkToPoint(e);c.notify('Du läufst zu '+e.name+'. Tippe dort erneut auf die Begegnung.');}
     function encounter(e){var live=X.encounterPosition(e,c.now());e=Object.assign({},e,live);if(!c.open(e.name,'encounter'))return;var s=state(),at=c.world().position(),near=Math.hypot(at.x-e.x,at.z-e.z)<8;
       if(e.kind==='trainer'){drawer.appendChild(player('trainermeister','gehstock'));drawer.appendChild(el('p','Ein freundliches Training gegen einfache Mons. Ein Sieg bringt 1 Ei und 25 Gold. Du verlierst bei einer Niederlage nichts.'));}
