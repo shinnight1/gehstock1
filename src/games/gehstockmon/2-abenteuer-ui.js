@@ -34,6 +34,18 @@
       });
       return liste;
     }
+    /* Das ist der Dienst, den der Leuchtturm leistet: er sagt, wohin man
+       laufen muss. Ohne ihn bleibt nur die Suche. */
+    function peilung() {
+      var w = c.world(), ort = w && w.zerhackerOrt && w.zerhackerOrt();
+      if (!ort || !w.position) return null;
+      var mir = w.position(), dx = ort.x - mir.x, dz = ort.z - mir.z;
+      var weit = Math.round(Math.hypot(dx, dz));
+      var richtungen = ['Norden', 'Nordosten', 'Osten', 'Suedosten', 'Sueden', 'Suedwesten', 'Westen', 'Nordwesten'];
+      var achtel = Math.round(Math.atan2(dx, dz) / (Math.PI / 4));
+      return { text: richtungen[((achtel % 8) + 8) % 8], weit: weit };
+    }
+
     function zeigeZerhacker() {
       var z = projekte && projekte.zerhacker; if (!z || !c.open('Gehstockhassender Zerhacker', 'zerhacker')) return;
       if (z.hp <= 0) {
@@ -45,6 +57,10 @@
       drawer.appendChild(el('p', 'Ein Wesen, das jeden Gehstock hasst, zieht diese Woche seine Bahn ueber die Insel. Es faellt nur, wenn viele gemeinsam zuschlagen - jeder Treffer zaehlt auf dasselbe Ziel.'));
       drawer.appendChild(el('p', 'Lebenskraft: ' + z.hp.toLocaleString('de-DE') + ' von ' + z.maxHp.toLocaleString('de-DE')
         + (z.eigen ? ' · dein Anteil: ' + z.eigen.toLocaleString('de-DE') : '')));
+      var l = projekte && projekte.leuchtturm, ziel = peilung();
+      if (l && l.fertig && ziel) drawer.appendChild(el('p', 'Der Leuchtturm meldet: ' + ziel.text
+        + ', etwa ' + ziel.weit + ' Schritte entfernt.'));
+      else if (ziel) drawer.appendChild(el('p', 'Wo er gerade steckt, weiss niemand genau - dafuer muesste erst der Leuchtturm stehen.'));
       var wartet = Math.max(0, Math.ceil((z.bereitAb - c.now()) / 1000));
       var w = c.world(), ort = w && w.zerhackerOrt && w.zerhackerOrt();
       var nah = ort && w.position && Math.hypot(w.position().x - ort.x, w.position().z - ort.z) < X.ZERHACKER.reichweite;
@@ -61,9 +77,11 @@
     function zeigeLeuchtturm() {
       var l = projekte && projekte.leuchtturm; if (!l || !c.open('Leuchtturm', 'leuchtturm')) return;
       if (l.fertig) {
-        drawer.appendChild(el('p', 'Der Leuchtturm steht. Sein Licht zeigt allen, wo der Zerhacker gerade umherzieht.'));
+        drawer.appendChild(el('p', 'Der Leuchtturm steht. Sein Licht peilt den Zerhacker an: im Fenster zu ihm stehen jetzt Richtung und Entfernung.'));
+        var ziel = peilung();
+        if (ziel) drawer.appendChild(el('p', 'Gerade im ' + ziel.text + ', etwa ' + ziel.weit + ' Schritte entfernt.'));
       } else {
-        drawer.appendChild(el('p', 'Am Startplatz steht ein Geruest. Wer Gold hineinsteckt, baut mit - und steht danach fuer immer auf der Tafel. Ist der Turm fertig, sieht jeder auf der Insel, wo der Zerhacker umherzieht.'));
+        drawer.appendChild(el('p', 'An der Kueste steht ein Geruest. Wer Gold hineinsteckt, baut mit - und steht danach fuer immer auf der Tafel. Ist der Turm fertig, peilt sein Licht den Zerhacker an, und jeder sieht Richtung und Entfernung, statt die halbe Insel abzusuchen.'));
         drawer.appendChild(el('p', l.gold.toLocaleString('de-DE') + ' von ' + l.ziel.toLocaleString('de-DE') + ' Gold verbaut'
           + (l.eigen ? ' · dein Anteil: ' + l.eigen.toLocaleString('de-DE') : '')));
         var s = state();
