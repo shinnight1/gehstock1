@@ -286,7 +286,7 @@
         else if (!eintrag.aus) eintrag.wartend.push(fertig);
         return;
       }
-      var quelle = SG.skinDateien && SG.skinDateien[skin];
+      var quelle = SG.modelle && SG.modelle[skin];
       if (!quelle || !T.GLTFLoader || typeof fetch !== 'function') return;
       eintrag = vorlagen[skin] = { wartend: [fertig], aus: false };
       var haut = modellTextur(quelle.textur);
@@ -305,13 +305,13 @@
           /* Der Massstab kommt aus dem Modell selbst, nicht aus einer Zahl im
              Blender-Skript: eine Skalierung am Skelett laesst das Netz
              auseinanderfliegen, weil die Bindematrizen davon nichts wissen. */
-          var huelle = new T.Box3().setFromObject(glb.scene), hoch = huelle.max.y - huelle.min.y;
-          eintrag.skala = hoch > 0.01 ? MODELL_HOEHE / hoch : 1;
-          eintrag.boden = -huelle.min.y * eintrag.skala;
+          var huelle = new T.Box3().setFromObject(glb.scene);
+          eintrag.hoch = Math.max(0.01, huelle.max.y - huelle.min.y);
+          eintrag.unten = huelle.min.y;
           eintrag.szene = glb.scene;
           eintrag.clips = ortsfest(glb.scene, glb.animations);
           eintrag.haut = haut;
-          eintrag.stand = standpunkt(glb.scene, eintrag.clips, huelle);
+          eintrag.stand = eintrag.clips.length ? standpunkt(glb.scene, eintrag.clips, huelle) : { x: 0, z: 0 };
           eintrag.wartend.splice(0).forEach(function (ruf) { ruf(eintrag); });
         }, misslungen);
       }).catch(misslungen);
@@ -323,18 +323,19 @@
 
     /* Haengt einer Figurengruppe das Modell ihres Skins an und laesst das Bild
        darunter verschwinden. Ein Wechsel nimmt das alte wieder heraus. */
-    function anziehen(gruppe, skin) {
+    function anziehen(gruppe, skin, wunschHoehe) {
       if (!skin || gruppe.userData.skin === skin) return;
       gruppe.userData.skin = skin;
+      var hoehe = wunschHoehe || MODELL_HOEHE;
       modellHolen(skin, function (vorlage) {
         if (dead || !gruppe.parent || gruppe.userData.skin !== skin) return;
         ausziehen(gruppe);
         /* Der Traeger stellt die Figur hin und dreht sie, das Modell darin
            sitzt um seine eigene Schieflage zurueckgerueckt. Getrennt, weil
            das Zurueckruecken sonst mit der Blickrichtung mitwandern wuerde. */
-        var traeger = new T.Group();
-        traeger.scale.setScalar(vorlage.skala);
-        traeger.position.y = vorlage.boden;
+        var traeger = new T.Group(), skala = hoehe / vorlage.hoch;
+        traeger.scale.setScalar(skala);
+        traeger.position.y = -vorlage.unten * skala;
         traeger.rotation.y = MODELL_DREHUNG;
         var koerper = T.cloneSkinned(vorlage.szene);
         koerper.position.set(-vorlage.stand.x, 0, -vorlage.stand.z);
@@ -355,6 +356,19 @@
         var figur = { gruppe: gruppe, traeger: traeger, koerper: koerper, mixer: mixer,
                       spuren: spuren, zuletzt: gruppe.position.clone(), anteil: 0 };
         gruppe.userData.figur = figur; figuren.push(figur);
+      });
+    }
+
+    /* Ein Bauwerk hat weder Skelett noch Bewegung - es wird nur hingestellt. */
+    function bauwerk(elternteil, name, hoehe, x, z, drehung) {
+      modellHolen(name, function (vorlage) {
+        if (dead || !elternteil.parent && elternteil !== scene) return;
+        var koerper = vorlage.szene.clone(true), skala = hoehe / vorlage.hoch;
+        koerper.scale.setScalar(skala);
+        koerper.position.set(x, -vorlage.unten * skala, z);
+        koerper.rotation.y = drehung || 0;
+        koerper.traverse(function (teil) { if (teil.isMesh) { teil.castShadow = true; teil.receiveShadow = true; } });
+        elternteil.add(koerper);
       });
     }
 
@@ -419,6 +433,31 @@
       units.push(u); return u;
     }
     var explorer = addUnit('explorer', 0, 0, X.SPAWN.x, X.SPAWN.z, false, 100, 'player');
+    /* Der gehstockhassende Zerhacker zieht seine Bahn ueber die Insel. Er ist
+       eine Figur wie jede andere, nur groesser - Laufen und Stehen wechseln
+       von selbst, weil figurenSchritt seine Strecke misst. */
+    var zerhacker = { gruppe: new T.Group(), lebt: true, stand: null };
+    zerhacker.gruppe.name = 'zerhacker';
+    zerhacker.gruppe.position.set(X.ZERHACKER.radius, 0.15, 0);
+    scene.add(zerhacker.gruppe);
+    var zerhackerRing = mesh(zerhacker.gruppe, 'ring', '#f2705a', 0, 0.12, 0, 3.4, 3.4, 3.4);
+    zerhackerRing.rotation.x = Math.PI / 2;
+    anziehen(zerhacker.gruppe, 'zerhacker', 7.5);
+
+    /* Der Leuchtturm steht am Startplatz, sobald ihn alle zusammen bezahlt
+       haben. Vorher steht dort nur das Geruest. */
+    var leuchtturmGebaut = false, geruest = new T.Group();
+    scene.add(geruest);
+    (function () {
+      var L = X.LEUCHTTURM;
+      for (var pfosten = 0; pfosten < 4; pfosten++) {
+        var winkel = pfosten / 4 * Math.PI * 2;
+        mesh(geruest, 'box', '#8a6f4a', L.x + Math.cos(winkel) * 2.6, 2.4, L.z + Math.sin(winkel) * 2.6, 0.35, 4.8, 0.35);
+      }
+      mesh(geruest, 'box', '#8a6f4a', L.x, 4.9, L.z, 6, 0.3, 6);
+      mesh(geruest, 'box', '#6d5738', L.x, 0.2, L.z, 6.4, 0.4, 6.4);
+    })();
+
     var stick = { x: 0, y: 0 }, destination = explorer.home.clone(), trail = [];
     for (var behind = 145; behind >= 0; behind--) trail.push(new T.Vector3(explorer.home.x - behind * 0.4, 0.15, explorer.home.z));
     function followOffsets(roster){var sum=0,previous=3.4;return roster.map(function(k){sum+=(previous+k.worldSize)*.45+.6;previous=k.worldSize;return Math.ceil(sum/.4);});}
@@ -586,6 +625,12 @@ p.updatedAt=info.updatedAt;p.age=Math.max(0,(serverTime-info.updatedAt)/1000);p.
         if (dead || contextLost) return; time += dt;
         figurenSchritt(dt);
         waters.update(time);
+        if (zerhacker.lebt) {
+          var jetzt = encounterClock + time * 1000, bahn = X.zerhackerOrt(jetzt);
+          zerhacker.gruppe.position.x = bahn.x; zerhacker.gruppe.position.z = bahn.z;
+          zerhacker.gruppe.rotation.y = bahn.heading;
+        }
+        zerhacker.gruppe.visible = zerhacker.lebt && !battle;
         Object.keys(trainers).forEach(function(id){var p=trainers[id],at=X.encounterPosition(p.info,encounterClock+time*1000);p.group.position.set(at.x,.15+Math.abs(Math.sin(time*6))*.1,at.z);p.group.visible=!battle;});
         walls.update(dt,explorer.group.position);
         Object.keys(peers).forEach(function(id){var p=peers[id];p.age+=dt;if(p.age>=15){removePeer(id);return;}p.elapsed+=dt;p.group.position.lerpVectors(p.from,p.to,Math.min(1,p.elapsed/p.duration));
@@ -666,6 +711,23 @@ p.updatedAt=info.updatedAt;p.age=Math.max(0,(serverTime-info.updatedAt)/1000);p.
       position:function(){return {x:explorer.group.position.x,z:explorer.group.position.z,heading:explorer.group.rotation.y};},
       setPosition:setPosition,walkToPoint:walkToPoint,entrance:walls.entrance,
       setAppearance:function(skin){if(explorer.skin===skin)return;explorer.skin=skin;explorer.group.userData.portrait.material.map=spriteTexture(skin==='wanderer'?'gm-player-pixel':'skin-'+R.skinIndex(skin),'#ffffff');explorer.group.userData.ring.material=mat(X.skin(skin).color);anziehen(explorer.group,skin);},
+      /* Meldet, wie es um die beiden Weltprojekte steht. */
+      setProjekte:function(stand){
+        if (!stand) return;
+        /* Die Bahn des Zerhackers haengt an der Serveruhr. Sie kommt sonst nur
+           mit den Begegnungen herein - ohne die stuende er an der falschen
+           Stelle. */
+        if (stand.serverTime) encounterClock = stand.serverTime - time * 1000;
+        if (stand.zerhacker) {
+          zerhacker.lebt = stand.zerhacker.hp > 0;
+          zerhacker.stand = stand.zerhacker;
+        }
+        if (stand.leuchtturm && stand.leuchtturm.fertig && !leuchtturmGebaut) {
+          leuchtturmGebaut = true; geruest.visible = false;
+          bauwerk(scene, 'leuchtturm', 21, X.LEUCHTTURM.x, X.LEUCHTTURM.z, 0.6);
+        }
+      },
+      zerhackerOrt:function(){return {x:zerhacker.gruppe.position.x,z:zerhacker.gruppe.position.z,lebt:zerhacker.lebt};},
       setEncounters:function(list,serverTime){encounterClock=serverTime-time*1000;var keep={};list.filter(function(e){return e.kind==='trainer';}).forEach(function(e){keep[e.id]=true;var p=trainers[e.id];if(!p){var g=creature(0,0,false,'player'),texture=spriteTexture('skin-'+e.skinIndex,'#ffffff');g.userData.portrait.material.map=texture;g.userData.portrait.scale.set(4.5,4.5,1);g.name='trainer-'+e.id;scene.add(g);anziehen(g,skinName(e.skinIndex));p=trainers[e.id]={group:g};}p.info=e;});Object.keys(trainers).forEach(function(id){if(!keep[id]){disposeUnit(trainers[id]);delete trainers[id];}});},
       zoom: function (delta) { desiredZoom = T.MathUtils.clamp(desiredZoom + delta, 20, 1250); },
       rotate: function (delta) { yaw += delta; },

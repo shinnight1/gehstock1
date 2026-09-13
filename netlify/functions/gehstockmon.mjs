@@ -1,7 +1,7 @@
 import { speicher } from './lib/speicher.mjs';
 import { createHash } from 'node:crypto';
 import { data as D, economy as E, arena as A, hours as H, adventure as X } from './lib/gehstockmon-rules.mjs';
-import {adventureAction,finishEncounter,expireAdventure,deliverRewards,activeArena,activeDuel} from './lib/gehstockmon-adventure.mjs';
+import {adventureAction,finishEncounter,expireAdventure,deliverRewards,activeArena,activeDuel,weltprojekte} from './lib/gehstockmon-adventure.mjs';
 import {activeDungeon,settleDungeons,dungeonResult,dungeonAction} from './lib/gehstockmon-dungeons.mjs';
 
 const KEY = 'world-v2';
@@ -97,7 +97,7 @@ function protectedOwner(world, t, now) {
 function publicResult(world, id, now, extra = {}) {
   const p = world.players[id];
   return { playerId: id, serverTime: now, access: accessFor(now, extra.adminOverride === true), mapVersion: world.mapVersion, dailyDelivery:extra.joining?p.dailyDelivery||0:0,profile: D.neuerStand(p, now), arena: p.arena || null,duel:p.duel||null,spawn:p.spawn,encounters:X.encounters(now,world.territories).filter(e=>!p.encounterClaims.includes(e.id)),
-    ...dungeonResult(world,p), territories: world.territories.map((t) => ({ id: t.id, ownerId: t.ownerId, ownerName: world.players[t.ownerId]?.name || t.ownerName, version: t.version, level: t.level,
+    ...dungeonResult(world,p), ...weltprojekte(world,id,now), territories: world.territories.map((t) => ({ id: t.id, ownerId: t.ownerId, ownerName: world.players[t.ownerId]?.name || t.ownerName, version: t.version, level: t.level,
       defense: A.defenders(t.id, t.ownerId ? t.defense : null).map((k) => ({ id: k.id, name: k.name, upgrade:k.upgrade||0 })),
       eggStock: t.ownerId === id ? t.eggStock : 0, eggAt: t.ownerId === id ? t.eggAt : null })),
     reports: world.reports.filter((r) => r.attackerId === id || r.defenderId === id).slice(-20), ...extra };

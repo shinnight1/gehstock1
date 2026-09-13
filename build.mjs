@@ -144,7 +144,7 @@ const BILD_TYP = {
    Doppelte treiben. Sie gehen daher als eigene Dateien neben die Seite
    und werden im Spiel bei Bedarf geholt. Wer die Einzeldatei offline
    oeffnet, sieht weiterhin die gewohnten Bilder. */
-const MODELL_PRAEFIX = 'gm-skin-';
+const MODELL_PRAEFIX = 'gm-modell-';
 
 function bundleAssets() {
   const dir = path.join(SRC, 'assets');
@@ -166,7 +166,7 @@ function bundleAssets() {
   return { code, count: Object.keys(out).length, bytes };
 }
 
-/* Legt Modell und Grundfarbe je Skin gehasht nach dist/assets/ und gibt dem
+/* Legt Modell und Grundfarbe gehasht nach dist/assets/ und gibt dem
    Spiel eine Tabelle mit den Adressen. Offline steht die Tabelle zwar auch
    im Bundle, die Dateien daneben fehlen dort aber - dann bleibt das Spiel
    beim Bild. */
@@ -183,10 +183,10 @@ function bundleSkins() {
       const buf = fs.readFileSync(path.join(dir, f));
       bytes += buf.length;
       const rumpf = path.basename(f, endung);
-      const skin = rumpf.slice(MODELL_PRAEFIX.length).replace(/-textur$/, '');
+      const name0 = rumpf.slice(MODELL_PRAEFIX.length).replace(/-textur$/, '');
       const name = rumpf + '.' + hash(buf.toString('latin1')) + endung;
       fs.writeFileSync(path.join(DIST, 'assets', name), buf);
-      (tabelle[skin] || (tabelle[skin] = {}))[endung === '.glb' ? 'modell' : 'textur'] = 'assets/' + name;
+      (tabelle[name0] || (tabelle[name0] = {}))[endung === '.glb' ? 'modell' : 'textur'] = 'assets/' + name;
       dateien.push('assets/' + name);
     }
   }
@@ -196,7 +196,7 @@ function bundleSkins() {
     if (!tabelle[skin].modell || !tabelle[skin].textur) delete tabelle[skin];
   }
   const code = '\n/* ==== Spielermodelle ==== */\n'
-    + '(function (SG) { SG.skinDateien = ' + JSON.stringify(tabelle) + '; })(SG);\n';
+    + '(function (SG) { SG.modelle = ' + JSON.stringify(tabelle) + '; })(SG);\n';
   return { code, dateien, count: Object.keys(tabelle).length, bytes };
 }
 
@@ -612,7 +612,7 @@ function build() {
   log('  Offline-Einzeldatei: ' + kb(offSize) + '  (Budget 2048.0 kB)');
   if (externCount) log('  Eigene Seiten      : ' + externCount + ' (nicht in der Offline-Datei)');
   if (assets.count) log('  Eingebettete Bilder: ' + assets.count + ' (' + kb(assets.bytes) + ')');
-  if (skins.count) log('  Spielermodelle      : ' + skins.count + ' (' + kb(skins.bytes) + ', daneben statt eingebettet)');
+  if (skins.count) log('  Modelle daneben     : ' + skins.count + ' (' + kb(skins.bytes) + ')');
   log('');
   const adm = ersterAdminCode();
   log('  Erster Admin-Code  : ' + adm.code);

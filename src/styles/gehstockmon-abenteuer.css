@@ -9,3 +9,15 @@
 @media(max-width:500px){.gm-map-legend{top:176px;left:10px}.gm-camera-controls{top:185px}.gm-brand{max-width:195px}.gm-hours-label{font-size:11px;white-space:nowrap}.gm-overview .gm-map-pin{min-width:104px;max-width:135px}.gm-overview .gm-pin-number{display:none}.gm-overview .gm-pin-owner{max-width:118px}}
 
 .gm-encounter-pin.trainer{width:36px;height:30px;font-size:18px;background:#19343ed9;border:1px solid #dbbc76;border-radius:8px}.gm-skin-preview{background:none;border-radius:0}.gm-skin-preview canvas{object-fit:contain}
+
+/* Die gemeinsamen Weltprojekte ueber der Karte. */
+.gm-projekte{position:absolute;left:50%;top:8px;transform:translateX(-50%);display:flex;gap:8px;z-index:6;pointer-events:none}
+.gm-projekt{pointer-events:auto;display:flex;flex-direction:column;gap:3px;min-width:132px;padding:6px 10px;border-radius:12px;
+  background:rgba(12,18,24,.82);border:1px solid #2f4653;color:#dce8ef;font:600 11px/1.2 inherit;text-align:left}
+.gm-projekt b{font-size:11px;letter-spacing:.02em}
+.gm-projekt small{font-size:10px;color:#9fb5c2}
+.gm-projekt-spur{display:block;height:5px;border-radius:3px;background:#20303a;overflow:hidden}
+.gm-projekt-spur i{display:block;height:100%;border-radius:3px;transition:width .4s ease}
+.gm-tafel{margin:6px 0 0;padding-left:20px;font-size:12px;color:#b9cdd8}
+.gm-tafel .gm-selbst{color:#f0b429;font-weight:700}
+@media (max-width:560px){.gm-projekte{top:4px;gap:5px}.gm-projekt{min-width:104px;padding:5px 8px}}

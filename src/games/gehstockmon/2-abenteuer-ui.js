@@ -1,9 +1,84 @@
 /* Abenteuer, Ausrüstung und das zweistufige Spielerduell. */
 (function(SG){var R=SG.gehstockmon,X=R.abenteuer,D=R.daten;
-  R.mountAdventure=function(c){var el=c.el,button=c.button,drawer=c.drawer,duel=null,pins=[],encounters=[],dungeons=R.mountDungeons(c);
+  R.mountAdventure=function(c){var el=c.el,button=c.button,drawer=c.drawer,duel=null,pins=[],encounters=[],dungeons=R.mountDungeons(c),projekte=null,projektLeiste=null;
     function state(){return c.state();}
+    /* Die Leiste ueber der Karte zeigt, woran die Insel gerade gemeinsam
+       arbeitet: die Lebenskraft des Zerhackers und die Hoehe des Leuchtturms.
+       Beide Balken sind anklickbar und fuehren zum jeweiligen Fenster. */
+    function balken(titel, wert, ziel, farbe, beim_klick) {
+      var kasten = button('', beim_klick, 'gm-projekt');
+      var anteil = Math.max(0, Math.min(1, ziel ? wert / ziel : 0));
+      kasten.appendChild(el('b', titel));
+      var spur = el('span', undefined, 'gm-projekt-spur'), fuellung = el('i');
+      fuellung.style.width = Math.round(anteil * 100) + '%';
+      fuellung.style.background = farbe;
+      spur.appendChild(fuellung); kasten.appendChild(spur);
+      kasten.appendChild(el('small', Math.round(anteil * 100) + ' %'));
+      return kasten;
+    }
+    function zeigeProjekte() {
+      if (!projektLeiste) { projektLeiste = el('div', undefined, 'gm-projekte'); c.layer.appendChild(projektLeiste); }
+      projektLeiste.textContent = '';
+      var z = projekte && projekte.zerhacker, l = projekte && projekte.leuchtturm;
+      if (z && z.hp > 0) projektLeiste.appendChild(balken('Zerhacker', z.hp, z.maxHp, '#f2705a', zeigeZerhacker));
+      else if (z) projektLeiste.appendChild(balken('Zerhacker erlegt', 1, 1, '#81d2a3', zeigeZerhacker));
+      if (l && !l.fertig) projektLeiste.appendChild(balken('Leuchtturm', l.gold, l.ziel, '#f0b429', zeigeLeuchtturm));
+      projektLeiste.hidden = !projektLeiste.childNodes.length;
+    }
+    function tafel(eintraege, einheit) {
+      var liste = el('ol', undefined, 'gm-tafel');
+      (eintraege || []).forEach(function (v) {
+        var zeile = el('li', v.name + ' · ' + v.wert + ' ' + einheit);
+        if (v.selbst) zeile.className = 'gm-selbst';
+        liste.appendChild(zeile);
+      });
+      return liste;
+    }
+    function zeigeZerhacker() {
+      var z = projekte && projekte.zerhacker; if (!z || !c.open('Gehstockhassender Zerhacker', 'zerhacker')) return;
+      if (z.hp <= 0) {
+        drawer.appendChild(el('p', 'Er ist erlegt. Am Montag steht der naechste vor der Insel.'));
+        drawer.appendChild(el('h3', 'Wer zugeschlagen hat'));
+        drawer.appendChild(tafel(z.tafel, 'Schaden'));
+        return;
+      }
+      drawer.appendChild(el('p', 'Ein Wesen, das jeden Gehstock hasst, zieht diese Woche seine Bahn ueber die Insel. Es faellt nur, wenn viele gemeinsam zuschlagen - jeder Treffer zaehlt auf dasselbe Ziel.'));
+      drawer.appendChild(el('p', 'Lebenskraft: ' + z.hp.toLocaleString('de-DE') + ' von ' + z.maxHp.toLocaleString('de-DE')
+        + (z.eigen ? ' · dein Anteil: ' + z.eigen.toLocaleString('de-DE') : '')));
+      var wartet = Math.max(0, Math.ceil((z.bereitAb - c.now()) / 1000));
+      var w = c.world(), ort = w && w.zerhackerOrt && w.zerhackerOrt();
+      var nah = ort && w.position && Math.hypot(w.position().x - ort.x, w.position().z - ort.z) < X.ZERHACKER.reichweite;
+      var knopf = button(wartet ? 'Deine Truppe sammelt sich (' + wartet + ' s)' : nah ? 'Zuschlagen' : 'Hingehen', function () {
+        if (wartet) return;
+        if (!nah) { c.closeDrawer(); if (w && w.walkToPoint) w.walkToPoint(ort); c.notify('Du machst dich auf den Weg zum Zerhacker.'); return; }
+        run('zerhacker_schlagen', {}, 'zerhacker');
+      }, 'gm-button gm-primary');
+      knopf.disabled = !!wartet;
+      drawer.appendChild(knopf);
+      drawer.appendChild(el('h3', 'Wer zugeschlagen hat'));
+      drawer.appendChild(tafel(z.tafel, 'Schaden'));
+    }
+    function zeigeLeuchtturm() {
+      var l = projekte && projekte.leuchtturm; if (!l || !c.open('Leuchtturm', 'leuchtturm')) return;
+      if (l.fertig) {
+        drawer.appendChild(el('p', 'Der Leuchtturm steht. Sein Licht zeigt allen, wo der Zerhacker gerade umherzieht.'));
+      } else {
+        drawer.appendChild(el('p', 'Am Startplatz steht ein Geruest. Wer Gold hineinsteckt, baut mit - und steht danach fuer immer auf der Tafel. Ist der Turm fertig, sieht jeder auf der Insel, wo der Zerhacker umherzieht.'));
+        drawer.appendChild(el('p', l.gold.toLocaleString('de-DE') + ' von ' + l.ziel.toLocaleString('de-DE') + ' Gold verbaut'
+          + (l.eigen ? ' · dein Anteil: ' + l.eigen.toLocaleString('de-DE') : '')));
+        var s = state();
+        [50, 250, 1000].forEach(function (betrag) {
+          var b = button(betrag + ' Gold geben', function () { run('leuchtturm_spenden', { betrag: betrag }, 'leuchtturm'); }, 'gm-button');
+          b.disabled = s.gold < betrag;
+          drawer.appendChild(b);
+        });
+      }
+      drawer.appendChild(el('h3', 'Die Tafel am Sockel'));
+      drawer.appendChild(tafel(l.tafel, 'Gold'));
+    }
+
     function player(skin,weapon){var p=el('div',undefined,'gm-skin-preview');p.style.setProperty('--skin',X.skin(skin).color);var canvas=el('canvas');canvas.width=canvas.height=128;canvas.setAttribute('aria-label',X.skin(skin).name);p.appendChild(canvas);R.drawAtlas(canvas,'skins',R.skinIndex(skin));p.appendChild(el('b',{gehstock:'⌁',eisenspeer:'♜',runenklinge:'⚔',sturmhammer:'⚒'}[weapon]||'✦','gm-weapon-icon'));return p;}
-    function run(op,data,view){var request=c.request(op,data);if(duel)showDuel();request.then(function(res){c.apply(res);if(res.arena&&res.arena.phase!=='finished')c.arena(res.arena,true);else if(res.duel)showDuel();else if(view==='shop')shop();else if(view==='adventure')adventure();else c.closeCombat();if(res.message)c.notify(res.message);}).catch(function(error){c.error(error);if(duel)showDuel();});}
+    function run(op,data,view){var request=c.request(op,data);if(duel)showDuel();request.then(function(res){c.apply(res);if(res.arena&&res.arena.phase!=='finished')c.arena(res.arena,true);else if(res.duel)showDuel();else if(view==='shop')shop();else if(view==='adventure')adventure();else if(view==='leuchtturm')zeigeLeuchtturm();else if(view==='zerhacker')zeigeZerhacker();else c.closeCombat();if(res.message)c.notify(res.message);}).catch(function(error){c.error(error);if(duel)showDuel();});}
     function approach(e){e=Object.assign({},e,X.encounterPosition(e,c.now()));c.closeDrawer();var w=c.world();if(w&&w.walkToPoint)w.walkToPoint(e);c.notify('Du läufst zu '+e.name+'. Tippe dort erneut auf die Begegnung.');}
     function encounter(e){var live=X.encounterPosition(e,c.now());e=Object.assign({},e,live);if(!c.open(e.name,'encounter'))return;var s=state(),at=c.world().position(),near=Math.hypot(at.x-e.x,at.z-e.z)<8;
       if(e.kind==='trainer'){drawer.appendChild(player('trainermeister','gehstock'));drawer.appendChild(el('p','Ein freundliches Training gegen einfache Mons. Ein Sieg bringt 1 Ei und 25 Gold. Du verlierst bei einer Niederlage nichts.'));}
@@ -31,7 +106,7 @@
     }
     return{dungeons:dungeons.menu,dungeonActive:dungeons.active,adventure:adventure,shop:shop,rival:rival,showDuel:showDuel,active:function(){return dungeons.active()||!!duel&&duel.phase!=='arena';},clear:function(){duel=null;dungeons.clear();},
       refresh:function(view){if(view==='dungeons')dungeons.menu();if(view==='shop')shop();if(view==='adventure')adventure();},
-      apply:function(res){dungeons.apply(res);duel=res.duel||null;encounters=res.encounters||[];if(c.world()&&c.world().setEncounters)c.world().setEncounters(encounters,res.serverTime);pins.forEach(function(p){p.node.remove();});pins=encounters.map(function(e){var node=button(e.kind==='trainer'?'⚔':'✦',function(){encounter(e);},'gm-encounter-pin '+e.kind);node.title=e.name;node.setAttribute('aria-label',e.name);node.appendChild(el('span',e.name));c.layer.appendChild(node);return{node:node,e:e};});},
+      apply:function(res){dungeons.apply(res);duel=res.duel||null;encounters=res.encounters||[];projekte=res;if(c.world()&&c.world().setProjekte)c.world().setProjekte(res);zeigeProjekte();if(c.world()&&c.world().setEncounters)c.world().setEncounters(encounters,res.serverTime);pins.forEach(function(p){p.node.remove();});pins=encounters.map(function(e){var node=button(e.kind==='trainer'?'⚔':'✦',function(){encounter(e);},'gm-encounter-pin '+e.kind);node.title=e.name;node.setAttribute('aria-label',e.name);node.appendChild(el('span',e.name));c.layer.appendChild(node);return{node:node,e:e};});},
       frame:function(project,hidden,overview){dungeons.frame(project,hidden,overview);pins.forEach(function(p){var at=X.encounterPosition(p.e,c.now()),point=project({x:at.x,z:at.z,y:p.e.kind==='trainer'?4.7:1.5});p.node.hidden=hidden||!point.visible||!point.near&&!overview;p.node.style.transform='translate('+point.x+'px,'+point.y+'px) translate(-50%,-100%)';});}
     };
   };

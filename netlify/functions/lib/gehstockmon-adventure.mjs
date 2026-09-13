@@ -36,6 +36,34 @@ export function finishEncounter(world,p,id,now){
   }
   return false;
 }
+/* Der Leuchtturm wird einmal gebaut und bleibt dann stehen. */
+export function leuchtturm(world){
+  if(!world.leuchtturm)world.leuchtturm={gold:0,spender:{},fertigAm:null};
+  return world.leuchtturm;
+}
+/* Der Zerhacker wird jede Woche neu gesetzt. Seine Lebenskraft waechst mit der
+   Zahl der Leute in der Welt, damit er weder in einer Stunde faellt noch
+   ewig steht. */
+export function zerhacker(world,now){
+  const woche=X.zerhackerWoche(now);
+  if(!world.zerhacker||world.zerhacker.woche!==woche){
+    const kraft=X.zerhackerKraft(Object.keys(world.players||{}).length);
+    world.zerhacker={woche,hp:kraft,maxHp:kraft,beitraege:{},besiegtAm:null,verteilt:false};
+  }
+  return world.zerhacker;
+}
+/* Was der Client von beidem sehen darf. Die Spenderliste wird auf die groessten
+   zehn gekuerzt - mehr passt ohnehin nicht auf die Tafel. */
+export function weltprojekte(world,id,now){
+  const bau=leuchtturm(world),z=zerhacker(world,now),namen=(eintraege)=>
+    Object.entries(eintraege).sort((a,b)=>b[1]-a[1]).slice(0,10)
+      .map(([pid,wert])=>({name:world.players[pid]?.name||'Unbekannt',wert,selbst:pid===id}));
+  return {leuchtturm:{gold:bau.gold,ziel:X.LEUCHTTURM.ziel,fertig:X.leuchtturmFertig(bau),
+                      fertigAm:bau.fertigAm,eigen:bau.spender[id]||0,tafel:namen(bau.spender)},
+          zerhacker:{hp:z.hp,maxHp:z.maxHp,besiegtAm:z.besiegtAm,eigen:z.beitraege[id]||0,
+                     tafel:namen(z.beitraege),bereitAb:world.players[id]?.zerhackerBereitAb||0}};
+}
+
 export function deliverRewards(p,now){if(activeArena(p)||activeDuel(p))return;for(const [id,n]of Object.entries(p.rewardEggs||{})){const count=Math.min(n,E.BAG_LIMIT-p.eggs.length);for(let i=0;i<count;i++)egg(p,Number(id),now);p.rewardEggs[id]-=count;if(!p.rewardEggs[id])delete p.rewardEggs[id];}}
 export async function adventureAction({world,p,id,body,now,draw,presence,validateSquad}){
   const op=body.op,extra={};
@@ -50,6 +78,45 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
     if(p.encounterClaims.includes(encounter.id))fail('Diese Begegnung hast du bereits abgeschlossen.');await nearby(encounter);
     if(op==='gather'){p.encounterClaims=p.encounterClaims.concat(encounter.id).slice(-100);p.progress.gathered++;p.gold+=10;extra.message='Rune gefunden! +10 Gold und Fortschritt für deine Quest.';}
     else {p.truppe=validateSquad(p,body.squad);p.arena=A.create(p.truppe.map(mid=>X.mon(p,mid)),['blattschleicher','tauhupfer'].slice(0,p.progress.trainerWins<3?1:2).map(D.mon),{id:body.requestId,territoryId:encounter.territoryId,now});Object.assign(p.arena,{kind:'trainer',encounterId:encounter.id,title:encounter.name});}
+  }
+  if(op==='leuchtturm_spenden'){
+    const bau=leuchtturm(world),betrag=Math.floor(Number(body.betrag));
+    if(X.leuchtturmFertig(bau))fail('Der Leuchtturm steht bereits.');
+    if(!Number.isFinite(betrag)||betrag<X.LEUCHTTURM.mindestens)fail('Mindestens '+X.LEUCHTTURM.mindestens+' Gold.');
+    if(betrag>p.gold)fail('So viel Gold hast du nicht.');
+    const rest=X.LEUCHTTURM.ziel-bau.gold,gibt=Math.min(betrag,rest);
+    p.gold-=gibt;bau.gold+=gibt;bau.spender[id]=(bau.spender[id]||0)+gibt;
+    if(X.leuchtturmFertig(bau)&&!bau.fertigAm){
+      bau.fertigAm=now;
+      log(world,p,id,null,'vollendet den Leuchtturm. Er wacht jetzt ueber die ganze Insel.',now);
+      extra.message='Der Leuchtturm steht! Von nun an siehst du, wo der Zerhacker umherzieht.';
+    }else extra.message=gibt+' Gold verbaut. Noch '+(X.LEUCHTTURM.ziel-bau.gold)+' Gold bis zur Spitze.';
+  }
+  if(op==='zerhacker_schlagen'){
+    const z=zerhacker(world,now);
+    if(z.hp<=0)fail('Der Zerhacker ist fuer diese Woche erledigt.');
+    if((p.zerhackerBereitAb||0)>now)fail('Deine Truppe sammelt sich noch.');
+    if(!p.truppe||!p.truppe.length)fail('Stelle zuerst eine Truppe auf.');
+    await nearby(X.zerhackerOrt(now),X.ZERHACKER.reichweite);
+    const schaden=Math.min(z.hp,X.zerhackerSchaden(p));
+    z.hp-=schaden;z.beitraege[id]=(z.beitraege[id]||0)+schaden;
+    p.zerhackerBereitAb=now+X.ZERHACKER.abklingen;
+    extra.message='Treffer! '+schaden+' Schaden am Zerhacker.';
+    if(z.hp<=0&&!z.verteilt){
+      z.verteilt=true;z.besiegtAm=now;
+      /* Die Beute richtet sich nach dem Anteil, den jemand beigetragen hat -
+         wer nur einmal zugeschlagen hat, geht aber auch nicht leer aus. */
+      const gesamt=Object.values(z.beitraege).reduce((a,b)=>a+b,0)||1;
+      for(const [pid,anteil] of Object.entries(z.beitraege)){
+        const wer=world.players[pid];if(!wer)continue;
+        const teil=anteil/gesamt;
+        wer.gold+=Math.max(50,Math.round(X.ZERHACKER.beuteGold*teil*Object.keys(z.beitraege).length));
+        const runen=Math.max(1,Math.round(X.ZERHACKER.beuteRunen*teil*Object.keys(z.beitraege).length));
+        wer.runes[5]=Math.min(9999,(wer.runes[5]||0)+runen);
+      }
+      log(world,p,id,null,'streckt den gehstockhassenden Zerhacker nieder.',now);
+      extra.message='Der Zerhacker ist gefallen! Alle Beteiligten haben ihre Beute erhalten.';
+    }
   }
   if(op==='quest_claim'){const quest=X.QUESTS.find(q=>q.id===body.questId);if(!quest||p.claimedQuests.includes(quest.id)||X.progress(p,quest)<quest.goal)fail('Diese Questbelohnung ist noch nicht verfügbar.');p.claimedQuests.push(quest.id);if(quest.gold)p.gold+=quest.gold;if(quest.skin&&!p.skins.includes(quest.skin))p.skins.push(quest.skin);extra.message=quest.skin?X.skin(quest.skin).name+' freigeschaltet!':'Quest geschafft! +'+quest.gold+' Gold.';}
   if(op==='shop_buy'||op==='equip'){

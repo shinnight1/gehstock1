@@ -11,8 +11,8 @@ Bewegung enthaelt, wird am Namen der Aktion erkannt, nicht am Dateinamen.
 Je Skin entstehen zwei Dateien in src/assets/, die der Build als Daten-URI
 einbettet:
 
-    gm-skin-<id>.glb           Netz, Skelett und die beiden Bewegungen
-    gm-skin-<id>-textur.webp   die Grundfarbe
+    gm-modell-<id>.glb           Netz, Skelett und die beiden Bewegungen
+    gm-modell-<id>-textur.webp   die Grundfarbe
 
 Was hier bewusst NICHT passiert: skalieren. Eine Skalierung am Skelett laesst
 das Netz im Spiel auseinanderfliegen, weil die Bindematrizen der Knochen
@@ -44,8 +44,8 @@ def aktion_von(pfad):
     return neu[0], [o for k, o in bpy.data.objects.items() if k not in alte_objekte]
 
 
-def baue(ordner, skin):
-    fbx = sorted(glob.glob(os.path.join(ordner, "*.fbx")))
+def baue(ordner, skin, lauf=None, stehen=None):
+    fbx = [lauf, stehen] if lauf else sorted(glob.glob(os.path.join(ordner, "*.fbx")))
     if len(fbx) != 2:
         raise SystemExit(skin + ": erwartet werden genau zwei FBX-Dateien")
 
@@ -117,7 +117,7 @@ def baue(ordner, skin):
     # Die Grundfarbe kommt als eigene Datei neben das Modell, nicht hinein:
     # three laedt eingebettete Bilder ueber blob:-Adressen, und die sind in der
     # Offline-Einzeldatei unter file:// nicht verlaesslich.
-    aus_tex = os.path.join(ZIEL, "gm-skin-" + skin + "-textur.webp")
+    aus_tex = os.path.join(ZIEL, "gm-modell-" + skin + "-textur.webp")
     bild = bpy.data.images[bildname]
     bild.scale(TEXTUR, TEXTUR)
     bild.file_format = 'WEBP'
@@ -147,7 +147,7 @@ def baue(ordner, skin):
             streifen.action_slot = aktion.slots[0]
     rep["takte"] = {a.name: round(a.frame_range[1] - a.frame_range[0]) for a in (stehen, laufen)}
 
-    aus = os.path.join(ZIEL, "gm-skin-" + skin + ".glb")
+    aus = os.path.join(ZIEL, "gm-modell-" + skin + ".glb")
     bpy.ops.object.select_all(action='DESELECT')
     bpy.ops.export_scene.gltf(
         filepath=aus, export_format='GLB',
@@ -164,6 +164,15 @@ def baue(ordner, skin):
 
 
 bericht = []
+
+# Eine einzelne Figur ausserhalb der Ordnerstruktur:
+#     -- --figur <kennung> <lauf.fbx> <stehen.fbx>
+if mit and mit[0] == "--figur":
+    bericht.append(baue(None, mit[1], mit[2], mit[3]))
+    print("###JSON###")
+    print(json.dumps(bericht, ensure_ascii=False))
+    raise SystemExit(0)
+
 for ordner in sorted(glob.glob(os.path.join(WURZEL, "*"))):
     if not os.path.isdir(ordner):
         continue

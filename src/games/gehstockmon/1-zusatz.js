@@ -2,9 +2,41 @@
 (function(SG){
   var D=SG.gehstockmon.daten,E=SG.gehstockmon.wirtschaft,X=SG.gehstockmon.abenteuer={};
   X.DUNGEON_OPS=['dungeon_create','dungeon_join','dungeon_ready','dungeon_start','dungeon_turn','dungeon_leave'];
-  X.OPS=['survey','gather','trainer_start','quest_claim','shop_buy','equip','raid_start','raid_turn','raid_arena','raid_cancel','mon_upgrade'].concat(X.DUNGEON_OPS);
+  X.OPS=['survey','gather','trainer_start','quest_claim','shop_buy','equip','raid_start','raid_turn','raid_arena','raid_cancel','mon_upgrade','leuchtturm_spenden','zerhacker_schlagen'].concat(X.DUNGEON_OPS);
   X.SPAWN={x:0,z:30};X.SPAWN_TIME=60*60000;
   X.UPGRADE_LIMIT=5;
+  /* Der Leuchtturm ist das gemeinsame Bauwerk: alle zahlen darauf ein, und
+     wenn er steht, bleibt er stehen. Er bringt jedem einen vierten Brutplatz
+     und verraet, wo der Zerhacker gerade umherzieht. */
+  X.LEUCHTTURM={x:145,z:125,ziel:5000,mindestens:10};
+  X.leuchtturmFertig=function(bau){return !!bau&&bau.gold>=X.LEUCHTTURM.ziel;};
+  X.brutplaetze=function(bau){return E.INCUBATORS+(X.leuchtturmFertig(bau)?1:0);};
+
+  /* Der gehstockhassende Zerhacker zieht eine Woche lang seine Bahn ueber die
+     Insel. Seine Lage rechnet sich wie bei den Wandertrainern aus der Zeit,
+     seine Lebenskraft dagegen ist echter Weltzustand - daran schlagen alle
+     gemeinsam. Sein Rundkurs meidet die Mitte, damit er nicht dauernd im
+     Startplatz steht. */
+  X.ZERHACKER={runde:11*60000,radius:150,grundKraft:60000,proSpieler:25000,
+               abklingen:3*60000,schadenJeStufe:800,beuteRunen:6,beuteGold:400,reichweite:22};
+  /* Wochennummer, die montags umspringt: der 1.1.1970 war ein Donnerstag,
+     drei Tage Versatz ruecken den Wechsel auf Montag. */
+  X.zerhackerWoche=function(now){return Math.floor((now+3*86400000)/(7*86400000));};
+  X.zerhackerOrt=function(now){
+    var Z=X.ZERHACKER,t=(now%Z.runde)/Z.runde*Math.PI*2;
+    return {x:Math.cos(t)*Z.radius,z:Math.sin(t)*Z.radius*0.72-20,
+            heading:Math.atan2(-Math.sin(t)*Z.radius,Math.cos(t)*Z.radius*0.72)};
+  };
+  X.zerhackerKraft=function(spieler){
+    var Z=X.ZERHACKER;return Z.grundKraft+Z.proSpieler*Math.max(1,Math.min(40,spieler));
+  };
+  /* Was ein Schlag austraegt, haengt an der eigenen Truppe - wer aufruestet,
+     merkt es hier. */
+  X.zerhackerSchaden=function(p){
+    var summe=0;(p&&p.truppe||[]).forEach(function(id){var m=X.mon(p,id);if(m)summe+=m.ang+m.upgrade*2;});
+    return Math.max(150,Math.round(summe*X.ZERHACKER.schadenJeStufe/100));
+  };
+
   X.upgradeLevel=function(n){return Number.isFinite(n)?Math.max(0,Math.min(X.UPGRADE_LIMIT,Math.floor(n))):0;};
   X.mon=function(p,id){var m=D.mon(id);return m&&Object.assign({},m,{upgrade:X.upgradeLevel(p&&p.monUpgrades&&p.monUpgrades[id])});};
   X.DUNGEONS=[['Wurzelhöhle','Einfach','moosling',0,40],['Versunkene Grotte','Leicht','sumpfschnapper',35,105],['Kristallstollen','Mittel','donnerwidder',110,85],['Schattengewölbe','Schwer','runengolem',-80,-25],['Königsgrab','Sehr schwer','grabesritter',-110,-150],['Zeitenriss','Extrem','chronoschreiter',100,-95],['Abgrundtor','Apokalyptisch','endrichter',20,-130]].map(function(v,i){return{id:'dungeon-'+i,name:v[0],difficulty:v[1],bossId:v[2],x:v[3],z:v[4],rarity:i,reward:2+i%2};});
