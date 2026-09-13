@@ -26,13 +26,23 @@ vercel --prod
 
 Bei `link` das bestehende Projekt `gehstock1` auswählen, damit dessen gespeicherte Spielerwelt weiterverwendet wird. Ein neues Vercel-Projekt hat eine eigene, leere Datenbank und damit eine eigene, neue Welt. Zugangsdaten und lokale Testspielstände sind nicht Bestandteil der ZIP.
 
-Vercel baut selbst — der lokale Bauschritt entfällt. Was gebaut und ausgeliefert wird, steht in `vercel.json`; die beiden Serverfunktionen liegen unter `api/` und verweisen auf `netlify/functions/`. Die Website nur über `index.html` als Datei zu öffnen startet keinen Spielserver.
+Vercel baut selbst — der lokale Bauschritt entfällt. Was gebaut und ausgeliefert wird, steht in `vercel.json`; die Serverfunktionen liegen unter `api/` und verweisen auf `netlify/functions/`. Die Website nur über `index.html` als Datei zu öffnen startet keinen Spielserver.
 
 Geht etwas schief, holt `vercel rollback` die vorherige Veröffentlichung sofort zurück.
 
 Die Spielstände liegen in einer Redis-Datenbank (Upstash), die im Vercel-Projekt unter **Storage** hängt. `netlify/functions/lib/speicher.mjs` entscheidet anhand der Umgebung, ob Redis oder die alten Netlify-Blobs benutzt werden; derselbe Code läuft dadurch auf beiden Plattformen.
 
 Die alte Adresse `gehstock.netlify.app` bleibt vorerst als Rückweg stehen, hat aber ihre eigene, getrennte Spielerwelt. Dorthin wird nicht mehr veröffentlicht.
+
+## Anmeldung und bestehende Codes
+
+Die Anmeldung wird ausschließlich durch `/api/auth` geprüft. Alle bisherigen vierstelligen Codes und ihre Rollen bleiben gültig; die Zuordnung der Spielstände ändert sich nicht. Im Browser liegen keine Codeberechnung und kein vollständiger Codevorrat mehr. Ohne Internet ist keine neue Anmeldung möglich, auch nicht in der heruntergeladenen Offline-Datei.
+
+Nach der Anmeldung gilt eine zufällige Sitzung für höchstens acht Stunden. Sie bleibt nur im Arbeitsspeicher des Tabs; Abmelden widerruft sie auf dem Server. Die Online-Endpunkte prüfen die Sitzung und die Rolle selbst. Normale Spieler erhalten für fremde Konten neutrale Kennungen. Admins können weiterhin vergebene Codes in der Verwaltung sehen und einzelne weitere Codes vom Server zuteilen lassen.
+
+Sitzungen, Fehlversuchszähler und der Schlüssel für neutrale Kennungen liegen im zusätzlichen Store `hgh-auth` derselben bestehenden Datenbank. Es ist keine neue Umgebungseinstellung nötig. Den Identitätsschlüssel bei Sicherungen beibehalten. Der Server begrenzt falsche Codeeingaben; eine Browser-Manipulation hebt diese Begrenzung nicht auf.
+
+Beim Veröffentlichen müssen Frontend und Serverfunktionen zusammen aktualisiert werden. Bereits geöffnete alte Seiten müssen neu geladen werden. Alte, bereits kopierte Codes oder Quelltexte lassen sich durch diesen Umbau nicht zurückholen.
 
 ## Ein Übergabepaket bauen
 
@@ -69,6 +79,7 @@ node tools/serve.mjs 8792
 Die Vorschau läuft dann unter `http://localhost:8792/#/spiel/gehstockmon` mit einem lokalen Testserver. Die produktive Spielerwelt liegt in der Datenbank des Vercel-Projekts. Weitere Geräte teilen nur dann dieselbe Welt, wenn sie dieselbe veröffentlichte Website benutzen.
 
 ```sh
+node tools/auth-tests.mjs
 node tools/test.mjs
 node tools/gehstockmon-tests.mjs
 node tools/gehstockmon-world-tests.mjs

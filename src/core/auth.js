@@ -1,70 +1,6 @@
-/* ------------------------------------------------------------------
-   Zugangscodes.
-
-   Was das ist und was nicht:
-
-   Die Seite ist statisch. Es gibt keinen Server, der einen Code pruefen
-   koennte - die Pruefung laeuft im Browser des Besuchers. Wer den
-   Quelltext liest, kann sie umgehen und sich sogar eigene Codes
-   ausrechnen. Das hier ist deshalb eine Tuer mit Schluessel, kein
-   Tresor: es haelt Neugierige draussen, trennt Spielstaende sauber je
-   Person und gibt dem Admin eine echte Verwaltung.
-
-   Warum trotzdem kein Codeliste im Quelltext:
-   Eine feste Liste haette bedeutet, dass jeder neue Code einen neuen
-   Build braucht. Stattdessen traegt jeder Code seine eigene Pruefsumme.
-   Damit kann der Admin auf seinem Geraet Codes erzeugen, und jedes
-   andere Geraet erkennt sie, ohne sie je gesehen zu haben.
-
-   Aufbau eines Codes:
-
-       Vier Ziffern, z. B. 0141. Gueltig, wenn der Streuwert durch
-       RASTER teilbar ist; die Rolle ergibt sich aus demselben Wert.
-   ------------------------------------------------------------------ */
-
+/* Zugangsdaten werden ausschließlich auf dem Server geprüft. */
 (function (SG) {
-  var U = SG.util;
-
-  var A = SG.auth = {};
-
-  /* ------------------------------------------------------------------
-     Vierstellige Zahlencodes
-
-     Ein Code ist eine Zahl von 0000 bis 9999. Gueltig ist er, wenn sein
-     Streuwert durch RASTER teilbar ist - daraus ergibt sich auch gleich
-     die Rolle. Es gibt also keine Liste, die verteilt werden muesste:
-     jedes Geraet rechnet dieselbe Antwort aus.
-
-     Was das kostet: von 10 000 Zahlen sind rund 10 000/RASTER gueltig.
-     Bei RASTER = 97 sind das etwa 103 Codes, also einer von 97. Wer raet,
-     braucht im Schnitt rund fuenfzig Versuche - und nach jedem falschen
-     zehn Sekunden Bedenkzeit. Fuer eine Tuer unter Freunden reicht das;
-     ein Tresor ist es nicht, und das war es ohne Server auch vorher nie.
-     ------------------------------------------------------------------ */
-
-  var RASTER = 97;
-  var STELLEN = 4;
-
-  /* Das Geheimnis steckt im Build. Es ist im Quelltext sichtbar - siehe
-     die Einordnung oben. Es verhindert nur, dass jemand durch Raten
-     einen gueltigen Code trifft. */
-  var GEHEIM = 'gehstock:hideout:2026:kellergewoelbe';
-
-  /* Kleine, schnelle Streuwertfunktion (FNV-1a in 32 Bit) */
-  function streu(text) {
-    var h = 0x811c9dc5;
-    for (var i = 0; i < text.length; i++) {
-      h ^= text.charCodeAt(i);
-      h = (h + (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24)) >>> 0;
-    }
-    return h >>> 0;
-  }
-
-  /* Der Streuwert einer Zahl - Grundlage fuer Gueltigkeit und Rolle */
-  function wert(code) {
-    return streu('code:' + code + ':' + GEHEIM);
-  }
-
+  var U = SG.util, A = SG.auth = {}, STELLEN = 4, sitzung = null;
   /* Drei Rollen, von oben nach unten:
        A  Admin          darf alles: Codes, Sperren, Wartung, Ansagen
        K  Innerer Kreis  sieht den internen Bereich und dessen Spiele
@@ -96,59 +32,31 @@
 
   /* Normiert eine Eingabe: nur Ziffern */
   A.normieren = function (eingabe) {
-    return String(eingabe || '').replace(/\D/g, '').slice(0, STELLEN);
+    var text = String(eingabe || ''); return /^u[a-f0-9]{16}$/.test(text) ? text : text.replace(/\D/g, '').slice(0, STELLEN);
   };
 
   A.schoen = function (code) { return A.normieren(code); };
 
   A.stellen = STELLEN;
 
-  /* Prueft einen Code. Liefert { rolle, code } oder null. */
-  A.pruefen = function (eingabe) {
-    var c = A.normieren(eingabe);
-    if (c.length !== STELLEN) return null;
-    var w = wert(c);
-    if (w % RASTER !== 0) return null;
-    var rolle = [A.SPIELER, A.KREIS, A.ADMIN][Math.floor(w / RASTER) % 3];
-    return { rolle: rolle, code: c };
-  };
+  A.headers = function () { return sitzung ? { 'Content-Type': 'application/json', Authorization: 'Bearer ' + sitzung } : { 'Content-Type': 'application/json' }; };
+  A.verbunden = function () { return !!sitzung; };
+  async function server(op, data) {
+    if (SG.offline || SG.env.file) throw new Error('Zum Anmelden brauchst du eine Internetverbindung.');
+    var ctrl = new AbortController(), timer = setTimeout(function () { ctrl.abort(); }, 12000);
+    try {
+      var res = await fetch('/api/auth', { method: 'POST', headers: A.headers(), cache: 'no-store', signal: ctrl.signal, body: JSON.stringify(Object.assign({}, data || {}, { op: op })) });
+      var result = await res.json();
+      if (!res.ok) { var error = new Error(result.error || 'Anmeldung fehlgeschlagen.'); error.status = res.status; throw error; }
+      return result;
+    } catch (error) { if (error.status) throw error; throw new Error('Der Anmeldeserver ist nicht erreichbar. Bitte versuche es erneut.'); }
+    finally { clearTimeout(timer); }
+  }
+  // Bekannte Profile dienen nur der Anzeige; daraus entsteht keine Sitzung.
+  A.profil = function (code) { return A.aktuell && A.aktuell.code === code ? A.aktuell : A.liste().find(function (p) { return p.code === code; }) || null; };
+  A.erzeugen = async function (rolle, name) { var result = await server('create', { role: rolle, name: name }); SG.verwaltung.sitzung(result.verw); return result.code; };
+  A.bndPruefen = function (value) { return server('bnd-check', { value: value }); };
 
-  /* Alle gueltigen Codes einer Rolle - der Vorrat ist begrenzt, das
-     gehoert bei vier Ziffern dazu. */
-  A.vorrat = function (rolle) {
-    var out = [];
-    for (var n = 0; n < 10000; n++) {
-      var c = String(n);
-      while (c.length < STELLEN) c = '0' + c;
-      var g = A.pruefen(c);
-      if (g && (!rolle || g.rolle === rolle)) out.push(c);
-    }
-    return out;
-  };
-
-  /* Erzeugt einen neuen Code der gewuenschten Rolle. Schon vergebene
-     werden uebersprungen. Liefert null, wenn keiner mehr frei ist. */
-  A.erzeugen = function (rolle) {
-    rolle = A.gueltigeRolle(rolle);
-    var frei = A.vorrat(rolle).filter(function (c) {
-      return !A.liste().some(function (e) { return e.code === c; });
-    });
-    if (!frei.length) return null;
-    return frei[Math.floor(Math.random() * frei.length)];
-  };
-
-  /* ------------------------------------------------------------------
-     Der erste Admin
-
-     Damit ueberhaupt jemand hereinkommt, wird beim Bauen ein fester
-     Admin-Code erzeugt und ausgegeben. Er steht in der Bauausgabe und
-     laesst sich jederzeit neu erzeugen, indem man GEHEIM aendert.
-     ------------------------------------------------------------------ */
-
-  A.ersterAdmin = function () {
-    var alle = A.vorrat(A.ADMIN);
-    return alle.length ? alle[0] : null;
-  };
 
   /* ------------------------------------------------------------------
      Angemeldete Person
@@ -162,13 +70,16 @@
 
   A.aktuell = null;               // { code, rolle, name }
 
-  A.anmelden = function (code, name) {
-    var geprueft = A.pruefen(code);
-    if (!geprueft) return null;
+  A.anmelden = async function (code, name) {
+    var result = await server('login', { code: A.normieren(code), device: SG.relais && SG.relais.geraet });
+    sitzung = result.token;
+    SG.verwaltung.sitzung(result.verw);
+    var geprueft = result.profile;
     var eintrag = {
       code: geprueft.code,
       rolle: geprueft.rolle,
-      name: name || A.nameVon(geprueft.code) || '',
+      name: name || geprueft.name || A.nameVon(geprueft.code) || '',
+      kennung: geprueft.kennung,
     };
     A.aktuell = eintrag;
     /* Bewusst NICHT gespeichert: der Code wird bei jedem Seitenaufruf
@@ -192,7 +103,11 @@
   };
 
   A.abmelden = function () {
+    if (sitzung) server('logout').catch(function () {});
+    sitzung = null;
+    if (SG.verwaltung) SG.verwaltung.sitzung(null);
     A.aktuell = null;
+    ['auth:namen', 'auth:ausgegeben', 'verwaltung'].forEach(SG.storage.globalDel);
     SG.storage.globalDel(SITZUNG);
     SG.storage.setUser(null);
     if (SG.bnd) SG.bnd.abmelden();
@@ -211,6 +126,7 @@
 
      Bleibt hier stehen, damit ein alter Eintrag noch weggeraeumt wird. */
   A.fortsetzen = function () {
+    ['auth:namen', 'auth:ausgegeben', 'verwaltung'].forEach(SG.storage.globalDel);
     SG.storage.globalDel(SITZUNG);
     return null;
   };
@@ -251,7 +167,7 @@
         (d.profile || []).forEach(function (e) { if (e.code === k) e.name = name; });
       });
     } else {
-      var g = A.pruefen(k);
+      var g = A.profil(k);
       if (g) A.merken(k, name, g.rolle);
     }
     if (A.aktuell && A.aktuell.code === A.normieren(code)) {
@@ -416,27 +332,8 @@
     return A.hatBnd(k);
   };
 
-  /* Dienstschluessel: sechs Ziffern, aus dem eigenen Code gerechnet.
-     Damit muss nichts gespeichert und nichts verteilt werden - der
-     Admin sieht ihn im Profil und gibt ihn weiter, das Geraet des
-     Agenten rechnet dieselbe Zahl aus. */
-  /* Kennung: vier Zeichen, aus dem Code gerechnet. Im BND wird ueber
-     Leute gesprochen, ohne dass dabei ihr Code auf dem Schirm steht -
-     wer ueber die Schulter guckt, sieht damit nichts Brauchbares. */
-  A.bndKennung = function (code) {
-    var w = streu('kennung:' + A.normieren(code) + ':' + GEHEIM);
-    var z = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    var s = '';
-    for (var i = 0; i < 4; i++) { s += z[w % z.length]; w = Math.floor(w / z.length); }
-    return s.slice(0, 2) + '-' + s.slice(2);
-  };
-
-  A.bndSchluessel = function (code) {
-    var w = streu('bnd:' + A.normieren(code) + ':' + GEHEIM);
-    var s = String(w % 1000000);
-    while (s.length < 6) s = '0' + s;
-    return s;
-  };
+  A.bndKennung = function (code) { var p = A.profil(code); return p && p.kennung || '—'; };
+  A.bndSchluessel = async function (code) { return (await server('bnd-key', { code: code })).value; };
 
   /* ------------------------------------------------------------------
      Owner und der Schutz unter Admins
@@ -466,7 +363,7 @@
      nur unangreifbar. */
   A.ownerSetzen = function (code) {
     var k = A.normieren(code);
-    var g = A.pruefen(k);
+    var g = A.profil(k);
     if (!g || g.rolle !== A.ADMIN) return false;
     if (!A.ownerFrei() && !A.binOwner()) return false;
     SG.verwaltung.schreiben(function (d) { d.owner = k; });
@@ -483,7 +380,7 @@
     if (!A.istAdmin()) return false;
     if (A.istOwner(k)) return false;              // an den Owner kommt niemand
     if (A.binOwner()) return true;                // der Owner an jeden anderen
-    var g = A.pruefen(k);
+    var g = A.profil(k);
     return !(g && g.rolle === A.ADMIN);           // Admin gegen Admin: nein
   };
 
@@ -492,7 +389,7 @@
     var k = A.normieren(code);
     if (A.darfGegen(k)) return '';
     if (A.istOwner(k)) return 'Das ist der Owner. An den kommt niemand heran.';
-    var g = A.pruefen(k);
+    var g = A.profil(k);
     if (g && g.rolle === A.ADMIN) {
       return 'Admins können einander nichts anhaben. Nur der Owner darf das.';
     }

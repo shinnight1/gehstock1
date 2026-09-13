@@ -1,3 +1,5 @@
+import { protect } from './lib/auth-gateway.mjs';
+import { roleForCode } from './lib/auth-codes.mjs';
 import { speicher } from './lib/speicher.mjs';
 import { createHash } from 'node:crypto';
 import { data as D, economy as E, arena as A, hours as H, adventure as X } from './lib/gehstockmon-rules.mjs';
@@ -25,13 +27,7 @@ function requireOpen(timestamp, bypass = false) {
 function validCode(value) {
   return roleForCode(value) !== null;
 }
-function roleForCode(value) {
-  if (typeof value !== 'string' || !/^\d{4}$/.test(value)) return null;
-  const text = 'code:' + value + ':gehstock:hideout:2026:kellergewoelbe'; let h = 0x811c9dc5;
-  for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = (h + (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24)) >>> 0; }
-  if (h % 97 !== 0) return null;
-  return ['S', 'K', 'A'][Math.floor(h / 97) % 3];
-}
+
 function initialWorld(now) {
   return { version: 1, mapVersion: D.MAP_VERSION, players: {}, reports: [], territories: D.FELDER.map((f) => ({ id: f.id, ownerId: null,
     ownerName: ['Wilder Clan','Flusswächter','Aschenclan','Nebelwache','Die Krone'][(f.id - 1) % 5],
@@ -247,4 +243,4 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
     }
   };
 }
-export default createHandler();
+export default protect(createHandler(), { kind: 'mon' });

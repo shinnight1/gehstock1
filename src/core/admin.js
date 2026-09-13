@@ -143,14 +143,15 @@
           { label: 'Abbrechen', cls: 'ghost' },
           {
             label: 'Code erstellen', cls: 'primary', keepOpen: true,
-            onClick: function () {
+            onClick: async function () {
               var name = (nf.value || '').trim();
               if (name.length < 2) {
                 hinweis.textContent = 'Bitte einen Namen eingeben.';
                 try { nf.focus(); } catch (e) { /* egal */ }
                 return;
               }
-              var code = A.erzeugen(rolle);
+              var code;
+              try { code = await A.erzeugen(rolle, name); } catch (error) { hinweis.textContent = error.message; return; }
               if (!code) {
                 hinweis.textContent = 'Für diese Rolle ist kein Code mehr frei.';
                 return;
@@ -266,10 +267,11 @@
       var bndAn = A.hatBnd(e.code);
       var schluesselZeile = UI.el('div.notice', {
         style: { marginTop: '8px', display: bndAn ? '' : 'none' },
-        html: 'Dienstschlüssel: <b>' + A.bndSchluessel(e.code) + '</b><br>'
+        html: 'Dienstschlüssel: <b>Wird geladen …</b><br>'
           + '<span class="small">Braucht diese Person beim Betreten der '
           + 'Lagezentrale. Er ergibt sich aus dem Code und ändert sich nie.</span>',
       });
+      A.bndSchluessel(e.code).then(function (key) { schluesselZeile.querySelector('b').textContent = key; }, function (error) { schluesselZeile.querySelector('b').textContent = error.message; });
       body2.appendChild(UI.toggleRow('🕵 BND-Freigabe',
         'Zusätzlich zur Rolle. Öffnet die Lagezentrale.',
         function () { return A.hatBnd(e.code); },
