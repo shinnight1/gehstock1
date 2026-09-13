@@ -78,6 +78,27 @@
       drawer.appendChild(el('h3', 'Wer zugeschlagen hat'));
       drawer.appendChild(tafel(z.tafel, 'Schaden'));
     }
+    /* Die Fehde: eine Woche gegeneinander, verlieren kann man nur die Woche. */
+    function fehdeTeil(peer) {
+      var f = projekte && projekte.fehde; if (!f) return;
+      if (f.gegner) {
+        if (f.gegner === peer.name) drawer.appendChild(el('p', 'Ihr steht in einer Fehde: ' + f.meine + ' zu ' + f.seine + ' Punkten.'));
+        else drawer.appendChild(el('p', 'Du stehst diese Woche in einer Fehde mit ' + f.gegner + '.'));
+        return;
+      }
+      var offen = (f.offeneAn || []).filter(function (v) { return v.name === peer.name; })[0];
+      if (offen) {
+        drawer.appendChild(el('p', peer.name + ' hat dich zur Fehde gefordert - eine Woche lang zaehlt alles, was ihr beide tut.'));
+        drawer.appendChild(button('Fehde annehmen', function () { run('fehde_annehmen', { targetId: offen.id }, 'rival'); }, 'gm-button gm-primary'));
+        return;
+      }
+      if ((f.eigeneAn || []).indexOf(peer.name) >= 0) {
+        drawer.appendChild(el('p', 'Deine Herausforderung liegt bei ' + peer.name + '. Sie gilt bis Sonntag.'));
+        return;
+      }
+      drawer.appendChild(button('Zur Fehde fordern', function () { run('fehde_fordern', { targetId: peer.id }, 'rival'); }, 'gm-button'));
+    }
+
     function zeigeWoche() {
       var a = projekte && projekte.wochenaufgabe; if (!a || !c.open(a.name, 'woche')) return;
       drawer.appendChild(el('p', a.was + ' - diese Woche zaehlt jeder Beitrag von euch allen auf dasselbe Ziel. '
@@ -110,6 +131,26 @@
     }
 
     function player(skin,weapon){var p=el('div',undefined,'gm-skin-preview');p.style.setProperty('--skin',X.skin(skin).color);var canvas=el('canvas');canvas.width=canvas.height=128;canvas.setAttribute('aria-label',X.skin(skin).name);p.appendChild(canvas);R.drawAtlas(canvas,'skins',R.skinIndex(skin));p.appendChild(el('b',{gehstock:'⌁',eisenspeer:'♜',runenklinge:'⚔',sturmhammer:'⚒'}[weapon]||'✦','gm-weapon-icon'));return p;}
+    /* Ruestung und Schliff: beides haengt an den Runen aus den Dungeons. */
+    function ruestungTeil(s) {
+      drawer.appendChild(el('h3', 'Ruestung'));
+      drawer.appendChild(el('p', 'Fundstuecke aus den Dungeons. Sie daempfen, was ein Gehstock im Waffenduell anrichtet - gegen Mons helfen sie nicht.'));
+      var besitz = s.ruestungen || [];
+      if (!besitz.length) drawer.appendChild(el('p', 'Noch keins. Wer einen Dungeonboss zum ersten Mal legt, nimmt seins mit.'));
+      var raster = el('div', undefined, 'gm-shop-grid');
+      X.RUESTUNGEN.forEach(function (teil) {
+        var hat = besitz.indexOf(teil.id) >= 0, an = s.panzer === teil.id;
+        var karte = el('article', undefined, 'gm-shop-card');
+        karte.appendChild(el('h3', teil.name));
+        karte.appendChild(el('p', teil.schutz + ' % weniger Schaden' + (hat ? '' : ' · aus ' + (X.DUNGEONS.find(function (d) { return d.id === teil.von; }) || {}).name)));
+        var b = button(an ? 'Getragen' : hat ? 'Anlegen' : 'Noch nicht gefunden',
+          function () { run('panzer_anlegen', { itemId: teil.id }, 'shop'); }, 'gm-button');
+        b.disabled = an || !hat;
+        karte.appendChild(b); raster.appendChild(karte);
+      });
+      drawer.appendChild(raster);
+    }
+
     function run(op,data,view){var request=c.request(op,data);if(duel)showDuel();request.then(function(res){c.apply(res);if(res.arena&&res.arena.phase!=='finished')c.arena(res.arena,true);else if(res.duel)showDuel();else if(view==='shop')shop();else if(view==='adventure')adventure();else if(view==='leuchtturm')zeigeLeuchtturm();else if(view==='zerhacker')zeigeZerhacker();else if(view==='woche')zeigeWoche();else c.closeCombat();if(res.message)c.notify(res.message);}).catch(function(error){c.error(error);if(duel)showDuel();});}
     function approach(e){e=Object.assign({},e,X.encounterPosition(e,c.now()));c.closeDrawer();var w=c.world();if(w&&w.walkToPoint)w.walkToPoint(e);c.notify('Du läufst zu '+e.name+'. Tippe dort erneut auf die Begegnung.');}
     function encounter(e){var live=X.encounterPosition(e,c.now());e=Object.assign({},e,live);if(!c.open(e.name,'encounter'))return;var s=state(),at=c.world().position(),near=Math.hypot(at.x-e.x,at.z-e.z)<8;
@@ -124,9 +165,25 @@
       drawer.appendChild(el('h3','Deine Quests'));X.QUESTS.forEach(function(q){var done=s.claimedQuests.indexOf(q.id)>=0,n=Math.min(q.goal,X.progress(s,q)),card=el('article',undefined,'gm-quest-card');card.appendChild(el('h3',q.name));card.appendChild(el('p',({trainerWins:'Trainingssiege',visited:'Biomen erkundet',gathered:'Runen gesammelt',hatched:'Eier ausgebrütet',upgrades:'Außenposten ausgebaut'}[q.stat])+' · '+n+'/'+q.goal));card.appendChild(SG.ui.el('progress',{value:n,max:q.goal,'aria-label':q.name}));card.appendChild(el('p',q.skin?'Skin: '+X.skin(q.skin).name:q.gold+' Gold'));var claim=button(done?'Erhalten':'Belohnung abholen',function(){run('quest_claim',{questId:q.id},'adventure');},'gm-button gm-primary');claim.disabled=done||n<q.goal;card.appendChild(claim);drawer.appendChild(card);});
     }
     function shop(){if(!c.open('Skins & Waffen','shop'))return;var s=state();drawer.appendChild(el('p',s.gold+' Gold · Skins verändern deine Figur. Waffen bestimmen den Schaden im Waffenduell.'));
-      [['skin','Skins',X.SKINS],['weapon','Waffen',X.WEAPONS]].forEach(function(section){drawer.appendChild(el('h3',section[1]));var grid=el('div',undefined,'gm-shop-grid');section[2].forEach(function(item){var kind=section[0],own=s[kind==='skin'?'skins':'weapons'].indexOf(item.id)>=0,equipped=s[kind]===item.id,card=el('article',undefined,'gm-shop-card');card.appendChild(player(kind==='skin'?item.id:s.skin,kind==='weapon'?item.id:s.weapon));card.appendChild(el('h3',item.name));card.appendChild(el('p',kind==='weapon'?item.attack+' Waffenschaden':item.quest?'Quest: '+X.QUESTS.find(function(q){return q.id===item.quest;}).name:'Für Gold freischalten'));var b=button(equipped?'Ausgerüstet':own?'Ausrüsten':item.quest?'Durch Quest erhältlich':item.price+' Gold',function(){run(own?'equip':'shop_buy',{kind:kind,itemId:item.id},'shop');},'gm-button gm-primary');b.disabled=equipped||!own&&(!!item.quest||s.gold<item.price);card.appendChild(b);grid.appendChild(card);});drawer.appendChild(grid);});
+      var rang = X.rang(s);
+      drawer.appendChild(el('p', 'Trainerrang: ' + rang.name + (rang.naechster
+        ? ' · noch ' + (rang.bis - rang.erfahrung) + ' bis ' + rang.naechster : ' · hoechster Rang')
+        + ' · +' + Math.round((X.rangBonus(s) - 1) * 100) + ' % Schlagkraft'));
+      var erst = projekte && projekte.erstschlag, kopf = projekte && projekte.kopfgeld;
+      if (erst) drawer.appendChild(el('p', 'Erstschlag der Woche: ' + erst.name
+        + (erst.selbst ? ' - das bist du, ein Zehntel mehr Schaden am Zerhacker.' : '.')));
+      if (kopf) drawer.appendChild(el('p', kopf.selbst
+        ? 'Auf dich liegt ein Kopfgeld von ' + kopf.gold + ' Gold - du haeltst die meisten Gebiete.'
+        : 'Kopfgeld auf ' + kopf.name + ': ' + kopf.gold + ' Gold fuer den, der ihn im Ueberfall schlaegt.'));
+      ruestungTeil(s);
+      [['skin','Skins',X.SKINS],['weapon','Waffen',X.WEAPONS]].forEach(function(section){drawer.appendChild(el('h3',section[1]));var grid=el('div',undefined,'gm-shop-grid');section[2].forEach(function(item){var kind=section[0],own=s[kind==='skin'?'skins':'weapons'].indexOf(item.id)>=0,equipped=s[kind]===item.id,card=el('article',undefined,'gm-shop-card');card.appendChild(player(kind==='skin'?item.id:s.skin,kind==='weapon'?item.id:s.weapon));card.appendChild(el('h3',item.name));card.appendChild(el('p',kind==='weapon'?item.attack+' Waffenschaden':item.quest?'Quest: '+X.QUESTS.find(function(q){return q.id===item.quest;}).name:'Für Gold freischalten'));var b=button(equipped?'Ausgerüstet':own?'Ausrüsten':item.quest?'Durch Quest erhältlich':item.price+' Gold',function(){run(own?'equip':'shop_buy',{kind:kind,itemId:item.id},'shop');},'gm-button gm-primary');b.disabled=equipped||!own&&(!!item.quest||s.gold<item.price);card.appendChild(b);
+        if(kind==='weapon'&&own){var stufe=X.schliff(s,item.id),kosten=X.schliffKosten(stufe),voll=stufe>=X.SCHLIFF_LIMIT;
+          card.appendChild(el('p','Schliff '+stufe+'/'+X.SCHLIFF_LIMIT+' · '+X.waffenWert(s,item.id)+' Schaden'));
+          var sb=button(voll?'Voll geschliffen':'Schleifen ('+kosten+' einfache Runen)',function(){run('waffe_schleifen',{itemId:item.id},'shop');},'gm-button');
+          sb.disabled=voll||(s.runes&&s.runes[0]||0)<kosten;card.appendChild(sb);}grid.appendChild(card);});drawer.appendChild(grid);});
     }
-    function rival(peer){if(!c.open(peer.name,'rival'))return;var s=state(),at=c.world().position(),near=Math.hypot(at.x-peer.x,at.z-peer.z)<8;drawer.appendChild(player(peer.skin,peer.weapon));drawer.appendChild(el('p',X.skin(peer.skin).name+' · '+X.weapon(peer.weapon).name));drawer.appendChild(el('p','Überfall in zwei Stufen: Besiege die gespeicherte Waffenverteidigung, danach die Mon-Truppe. Bei Erfolg bekommst du genau ein getragenes oder brütendes Ei. Der Besitzer muss dabei keine Züge eingeben.'));
+    function rival(peer){if(!c.open(peer.name,'rival'))return;var s=state(),at=c.world().position(),near=Math.hypot(at.x-peer.x,at.z-peer.z)<8;drawer.appendChild(player(peer.skin,peer.weapon));
+      fehdeTeil(peer);drawer.appendChild(el('p',X.skin(peer.skin).name+' · '+X.weapon(peer.weapon).name));drawer.appendChild(el('p','Überfall in zwei Stufen: Besiege die gespeicherte Waffenverteidigung, danach die Mon-Truppe. Bei Erfolg bekommst du genau ein getragenes oder brütendes Ei. Der Besitzer muss dabei keine Züge eingeben.'));
       var protection=X.protected(s,c.now())||peer.protected;drawer.appendChild(el('p',protection?'Anfängerschutz oder Erholung aktiv. Überfälle werden erst nach 24 Stunden und mit mindestens 6 Mons möglich.':'Nach einem Diebstahl gelten 2 Stunden Schutz. Du kannst alle 30 Minuten einen Überfall beginnen.'));
       var b=button(near?'Überfall beginnen':'Zum Spieler gehen',function(){if(!near){approach(peer);return;}run('raid_start',{targetId:peer.id});},'gm-button gm-primary');b.disabled=!!protection||peer.activity==='arena'||s.raidCooldown>c.now();drawer.appendChild(b);
     }

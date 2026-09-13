@@ -2,7 +2,7 @@
 (function(SG){
   var D=SG.gehstockmon.daten,E=SG.gehstockmon.wirtschaft,X=SG.gehstockmon.abenteuer={};
   X.DUNGEON_OPS=['dungeon_create','dungeon_join','dungeon_ready','dungeon_start','dungeon_turn','dungeon_leave'];
-  X.OPS=['survey','gather','trainer_start','quest_claim','shop_buy','equip','raid_start','raid_turn','raid_arena','raid_cancel','mon_upgrade','leuchtturm_spenden','zerhacker_schlagen','waffe_schleifen','panzer_anlegen'].concat(X.DUNGEON_OPS);
+  X.OPS=['survey','gather','trainer_start','quest_claim','shop_buy','equip','raid_start','raid_turn','raid_arena','raid_cancel','mon_upgrade','leuchtturm_spenden','zerhacker_schlagen','waffe_schleifen','panzer_anlegen','fehde_fordern','fehde_annehmen'].concat(X.DUNGEON_OPS);
   X.SPAWN={x:0,z:30};X.SPAWN_TIME=60*60000;
   X.UPGRADE_LIMIT=5;
   /* Der Leuchtturm ist das gemeinsame Bauwerk: alle zahlen darauf ein, und
@@ -81,6 +81,36 @@
   X.WEAPONS.push({id:'titanenlanze',name:'Titanenlanze',attack:37,price:2500},{id:'weltenbrecher',name:'Weltenbrecher',attack:43,price:6500});
   X.QUESTS=[{id:'trainer1',name:'Der erste Trainingssieg',stat:'trainerWins',goal:1,gold:80},{id:'trainer3',name:'Mit Geduld zum Meister',stat:'trainerWins',goal:3,skin:'trainermeister'},{id:'visit3',name:'Drei Horizonte',stat:'visited',goal:3,gold:120},{id:'visit9',name:'Die ganze Insel',stat:'visited',goal:9,skin:'weltenwanderer'},{id:'gather6',name:'Runensuche',stat:'gathered',goal:6,skin:'runensucher'},{id:'hatch1',name:'Ein neuer Begleiter',stat:'hatched',goal:1,gold:100},{id:'upgrade1',name:'Ein sicherer Rückzugsort',stat:'upgrades',goal:1,gold:100}];
   X.skin=function(id){return X.SKINS.find(function(v){return v.id===id;})||X.SKINS[0];};
+  /* Wer in einer Woche den meisten Schaden am Zerhacker macht, traegt in der
+     naechsten den Erstschlag - ein Zehntel mehr Schlagkraft. So entsteht ein
+     Wettstreit mitten in der Zusammenarbeit. */
+  X.ERSTSCHLAG_BONUS=1.1;
+
+  /* Kopfgeld: Wer die meisten Gebiete haelt, wird zur Zielscheibe. Das ist
+     die Bremse gegen den einen, der sonst uneinholbar davonzieht - und es
+     gibt den uebrigen ein gemeinsames Ziel, ohne dass sie sich absprechen. */
+  X.KOPFGELD_AB=2;X.KOPFGELD_JE_GEBIET=150;
+  X.kopfgeld=function(gebieteJeSpieler){
+    var beste=null,zweit=0;
+    Object.keys(gebieteJeSpieler||{}).forEach(function(id){
+      var n=gebieteJeSpieler[id];
+      if(!beste||n>beste.anzahl){zweit=beste?beste.anzahl:0;beste={id:id,anzahl:n};}
+      else if(n>zweit)zweit=n;
+    });
+    if(!beste||beste.anzahl<X.KOPFGELD_AB||beste.anzahl<=zweit)return null;
+    return {id:beste.id,anzahl:beste.anzahl,gold:beste.anzahl*X.KOPFGELD_JE_GEBIET};
+  };
+
+  /* Die Fehde: eine Woche lang gegeneinander, aus allem was man ohnehin tut.
+     Verloren geht dabei nichts ausser der Woche - genau deshalb kann man sie
+     unter Freunden austragen. */
+  X.FEHDE_PUNKTE={trainer:10,rune:4,ei:6,tiefe:25,zerhacker:1/200,gebiet:15};
+  X.fehdePunkte=function(zaehler){
+    var z=zaehler||{},P=X.FEHDE_PUNKTE;
+    return Math.round((z.trainer||0)*P.trainer+(z.rune||0)*P.rune+(z.ei||0)*P.ei
+      +(z.tiefe||0)*P.tiefe+(z.zerhacker||0)*P.zerhacker+(z.gebiet||0)*P.gebiet);
+  };
+
   /* Der Trainerrang waechst an allem, was man ohnehin tut, und gibt kleine
      Zuschlaege auf den eigenen Schaden. Er laesst sich nicht kaufen und nicht
      verlieren - das ist der ruhige Fortschritt neben Gold und Runen. */

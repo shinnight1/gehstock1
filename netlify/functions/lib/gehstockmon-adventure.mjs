@@ -17,7 +17,7 @@ export function finishEncounter(world,p,id,now){
   b.settled=true;
   if(b.kind==='trainer'){
     if(b.winner==='wir'&&!p.encounterClaims.includes(b.encounterId)){
-      p.encounterClaims=p.encounterClaims.concat(b.encounterId).slice(-100);p.progress.trainerWins++;p.gold+=25;wochenschritt(world,p,id,'trainer',now);
+      p.encounterClaims=p.encounterClaims.concat(b.encounterId).slice(-100);p.progress.trainerWins++;p.gold+=25;wochenschritt(world,p,id,'trainer',now);fehdeSchritt(world,id,'trainer',now);
       if(p.eggs.length<E.BAG_LIMIT){egg(p,b.territoryId,now);b.message='Training gewonnen! Ein Ei und 25 Gold gehören dir.';}
       else {p.rewardEggs=p.rewardEggs||{};p.rewardEggs[b.territoryId]=(p.rewardEggs[b.territoryId]||0)+1;b.message='Training gewonnen! 25 Gold; dein Ei wartet auf Platz in der Tasche.';}
     }else b.message='Das Training ist beendet. Du verlierst weder Gold noch Eier. Probiere andere Attacken.';
@@ -30,6 +30,11 @@ export function finishEncounter(world,p,id,now){
       if(stolen&&p.eggs.length<E.BAG_LIMIT&&(stolen.startedAt===null||p.eggs.filter(e=>e.startedAt!==null).length<E.INCUBATORS)){
         target.eggs=target.eggs.filter(e=>e.id!==stolen.id);p.eggs.push({...stolen,id:'stolen-'+now+'-'+(++p.eggSerial)});target.raidShield=now+2*E.HOUR;
         b.message='Überfall gewonnen! Ein Ei aus '+target.name+'s Tasche gehört dir. Seine Brutzeit bleibt erhalten.';log(world,p,id,b.targetId,'erbeutet ein Ei von '+target.name+'.',now);
+        /* Wer den Fuehrenden stellt, kassiert das Kopfgeld. */
+        const zaehler={};for(const t2 of world.territories||[])if(t2.ownerId)zaehler[t2.ownerId]=(zaehler[t2.ownerId]||0)+1;
+        const kopf=X.kopfgeld(zaehler);
+        if(kopf&&kopf.id===b.targetId){p.gold+=kopf.gold;b.message+=' Und '+kopf.gold+' Gold Kopfgeld - er hielt die meisten Gebiete.';
+          log(world,p,id,b.targetId,'kassiert das Kopfgeld auf '+target.name+'.',now);}
       }else b.message='Gewonnen, aber das Ei kann nicht übertragen werden. Kein Ei geht verloren.';
     }else b.message=b.winner==='wir'?'Der Überfall ist abgelaufen. Kein Ei wird übertragen.':'Die Verteidigung hält. Es wurde kein Ei gestohlen.';
     if(lock?.attackerId===id)delete target.raidLock;p.duel=null;return true;
@@ -47,10 +52,36 @@ export function leuchtturm(world){
 export function zerhacker(world,now){
   const woche=X.zerhackerWoche(now);
   if(!world.zerhacker||world.zerhacker.woche!==woche){
+    /* Wer die Woche ueber am haertesten zugeschlagen hat, traegt in der
+       naechsten den Erstschlag. */
+    const alt=world.zerhacker&&world.zerhacker.beitraege;
+    if(alt){
+      let bester=null;
+      for(const [pid,wert] of Object.entries(alt))if(!bester||wert>bester.wert)bester={pid,wert};
+      world.erstschlag=bester?{woche,id:bester.pid,name:world.players[bester.pid]?.name||'Unbekannt',wert:bester.wert}:null;
+    }
     const kraft=X.zerhackerKraft(Object.keys(world.players||{}).length);
     world.zerhacker={woche,hp:kraft,maxHp:kraft,beitraege:{},besiegtAm:null,verteilt:false};
   }
   return world.zerhacker;
+}
+
+/* Die Fehde laeuft wochenweise. Eine offene Herausforderung verfaellt mit der
+   Woche, in der sie ausgesprochen wurde. */
+export function fehden(world,now){
+  const woche=X.zerhackerWoche(now);
+  if(!world.fehden||world.fehden.woche!==woche)world.fehden={woche,offen:{},paare:[]};
+  return world.fehden;
+}
+export function fehdeVon(world,id,now){
+  const f=fehden(world,now);
+  return f.paare.find(v=>v.a===id||v.b===id)||null;
+}
+/* Zaehlt einen Fehdepunkt fuer beide Seiten getrennt. */
+export function fehdeSchritt(world,id,art,now,anzahl=1){
+  const paar=fehdeVon(world,id,now);if(!paar)return;
+  const seite=paar.a===id?'zaehlerA':'zaehlerB';
+  paar[seite][art]=(paar[seite][art]||0)+anzahl;
 }
 /* Die Wochenaufgabe wird wie der Zerhacker jede Woche neu gesetzt. */
 export function wochenaufgabe(world,now){
@@ -87,7 +118,17 @@ export function weltprojekte(world,id,now){
           zerhacker:{hp:z.hp,maxHp:z.maxHp,besiegtAm:z.besiegtAm,eigen:z.beitraege[id]||0,
                      tafel:namen(z.beitraege),vorrat:X.zerhackerVorrat(world.players[id],now),vorratMax:X.ZERHACKER.vorratMax,naechsterIn:X.zerhackerWartezeit(world.players[id],now)},
           wochenaufgabe:{name:ziel.name,was:ziel.was,stand:Math.min(a.stand,ziel.ziel),ziel:ziel.ziel,
-                         erfuellt:!!a.erfuelltAm,eigen:a.beitraege[id]||0,tafel:namen(a.beitraege)}};
+                         erfuellt:!!a.erfuelltAm,eigen:a.beitraege[id]||0,tafel:namen(a.beitraege)},
+          erstschlag:world.erstschlag?{name:world.erstschlag.name,selbst:world.erstschlag.id===id,wert:world.erstschlag.wert}:null,
+          kopfgeld:(()=>{const zaehler={};for(const t of world.territories||[])if(t.ownerId)zaehler[t.ownerId]=(zaehler[t.ownerId]||0)+1;
+            const k=X.kopfgeld(zaehler);return k?{name:world.players[k.id]?.name||'Unbekannt',selbst:k.id===id,gebiete:k.anzahl,gold:k.gold}:null;})(),
+          fehde:(()=>{const f=fehden(world,now),paar=fehdeVon(world,id,now);
+            if(paar){const ich=paar.a===id?'A':'B',du=ich==='A'?'B':'A';
+              return {gegner:world.players[paar[du.toLowerCase()]]?.name||'Unbekannt',
+                      meine:X.fehdePunkte(paar['zaehler'+ich]),seine:X.fehdePunkte(paar['zaehler'+du])};}
+            const offen=Object.entries(f.offen).filter(([von,an])=>an===id||von===id);
+            return {offeneAn:offen.filter(([von])=>von!==id).map(([von])=>({id:von,name:world.players[von]?.name||'Unbekannt'})),
+                    eigeneAn:offen.filter(([von])=>von===id).map(([,an])=>world.players[an]?.name||'Unbekannt')};})()};
 }
 
 export function deliverRewards(p,now){if(activeArena(p)||activeDuel(p))return;for(const [id,n]of Object.entries(p.rewardEggs||{})){const count=Math.min(n,E.BAG_LIMIT-p.eggs.length);for(let i=0;i<count;i++)egg(p,Number(id),now);p.rewardEggs[id]-=count;if(!p.rewardEggs[id])delete p.rewardEggs[id];}}
@@ -102,7 +143,7 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
   if(op==='gather'||op==='trainer_start'){
     const encounter=X.encounters(now,world.territories).find(e=>e.id===body.encounterId);if(!encounter||encounter.kind!==(op==='gather'?'rune':'trainer'))fail('Diese Begegnung ist weitergezogen. Aktualisiere die Karte.');
     if(p.encounterClaims.includes(encounter.id))fail('Diese Begegnung hast du bereits abgeschlossen.');await nearby(encounter);
-    if(op==='gather'){p.encounterClaims=p.encounterClaims.concat(encounter.id).slice(-100);p.progress.gathered++;p.gold+=10;extra.message=wochenschritt(world,p,id,'runen',now)||'Rune gefunden! +10 Gold und Fortschritt für deine Quest.';}
+    if(op==='gather'){p.encounterClaims=p.encounterClaims.concat(encounter.id).slice(-100);p.progress.gathered++;p.gold+=10;fehdeSchritt(world,id,'rune',now);extra.message=wochenschritt(world,p,id,'runen',now)||'Rune gefunden! +10 Gold und Fortschritt für deine Quest.';}
     else {p.truppe=validateSquad(p,body.squad);p.arena=A.create(p.truppe.map(mid=>X.mon(p,mid)),['blattschleicher','tauhupfer'].slice(0,p.progress.trainerWins<3?1:2).map(D.mon),{id:body.requestId,territoryId:encounter.territoryId,now});Object.assign(p.arena,{kind:'trainer',encounterId:encounter.id,title:encounter.name});}
   }
   if(op==='leuchtturm_spenden'){
@@ -124,8 +165,11 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
     if(X.zerhackerVorrat(p,now)<1)fail('Deine Truppe sammelt sich noch. In wenigen Minuten hast du wieder einen Schlag.');
     if(!p.truppe||!p.truppe.length)fail('Stelle zuerst eine Truppe auf.');
     await nearby(X.zerhackerOrt(now),X.ZERHACKER.reichweite);
-    const schaden=Math.min(z.hp,X.zerhackerSchaden(p));
+    const erst=world.erstschlag&&world.erstschlag.id===id?X.ERSTSCHLAG_BONUS:1;
+    const schaden=Math.min(z.hp,Math.round(X.zerhackerSchaden(p)*erst));
     z.hp-=schaden;z.beitraege[id]=(z.beitraege[id]||0)+schaden;
+    p.zerhackerGesamt=(p.zerhackerGesamt||0)+schaden;
+    fehdeSchritt(world,id,'zerhacker',now,schaden);
     X.zerhackerVerbrauchen(p,now);
     extra.message='Treffer! '+schaden+' Schaden am Zerhacker.';
     if(z.hp<=0&&!z.verteilt){
@@ -143,6 +187,30 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
       log(world,p,id,null,'streckt den gehstockhassenden Zerhacker nieder.',now);
       extra.message='Der Zerhacker ist gefallen! Alle Beteiligten haben ihre Beute erhalten.';
     }
+  }
+  if(op==='fehde_fordern'){
+    const gegner=world.players[body.targetId];
+    if(!gegner||body.targetId===id)fail('Fordere einen anderen Spieler heraus.');
+    if(fehdeVon(world,id,now))fail('Du stehst diese Woche schon in einer Fehde.');
+    if(fehdeVon(world,body.targetId,now))fail(gegner.name+' steht diese Woche schon in einer Fehde.');
+    const f=fehden(world,now);
+    /* Hat der andere mich schon gefordert, gilt das sofort als Handschlag. */
+    if(f.offen[body.targetId]===id){
+      delete f.offen[body.targetId];
+      f.paare.push({a:body.targetId,b:id,zaehlerA:{},zaehlerB:{},seit:now});
+      extra.message='Die Fehde mit '+gegner.name+' steht. Freitag um 13 Uhr wird abgerechnet.';
+    } else {
+      f.offen[id]=body.targetId;
+      extra.message=gegner.name+' wurde herausgefordert. Erst wenn er annimmt, zaehlt die Woche.';
+    }
+  }
+  if(op==='fehde_annehmen'){
+    const f=fehden(world,now),von=body.targetId;
+    if(f.offen[von]!==id)fail('Diese Herausforderung gibt es nicht mehr.');
+    if(fehdeVon(world,id,now)||fehdeVon(world,von,now))fail('Eine der beiden Seiten steht schon in einer Fehde.');
+    delete f.offen[von];
+    f.paare.push({a:von,b:id,zaehlerA:{},zaehlerB:{},seit:now});
+    extra.message='Die Fehde mit '+(world.players[von]?.name||'ihm')+' steht. Freitag um 13 Uhr wird abgerechnet.';
   }
   if(op==='waffe_schleifen'){
     const waffe=X.WEAPONS.find(v=>v.id===body.itemId);
