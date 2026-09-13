@@ -144,6 +144,24 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
       extra.message='Der Zerhacker ist gefallen! Alle Beteiligten haben ihre Beute erhalten.';
     }
   }
+  if(op==='waffe_schleifen'){
+    const waffe=X.WEAPONS.find(v=>v.id===body.itemId);
+    if(!waffe||!p.weapons.includes(waffe.id))fail('Diese Waffe besitzt du nicht.');
+    const stufe=X.schliff(p,waffe.id);
+    if(stufe>=X.SCHLIFF_LIMIT)fail('Diese Waffe ist so scharf, wie sie werden kann.');
+    const kosten=X.schliffKosten(stufe),vorrat=p.runes[0]||0;
+    if(vorrat<kosten)fail('Dafuer brauchst du '+kosten+' einfache Runen.');
+    p.runes[0]=vorrat-kosten;p.waffenSchliff=p.waffenSchliff||{};p.waffenSchliff[waffe.id]=stufe+1;
+    extra.message=waffe.name+' geschliffen: Stufe '+(stufe+1)+', jetzt '+X.waffenWert(p,waffe.id)+' Schaden.';
+  }
+  if(op==='panzer_anlegen'){
+    if(body.itemId===null||body.itemId===''){p.panzer=null;extra.message='Ruestung abgelegt.';}
+    else{
+      const teil=X.ruestung(body.itemId);
+      if(!teil||!(p.ruestungen||[]).includes(teil.id))fail('Dieses Ruestungsteil hast du nicht.');
+      p.panzer=teil.id;extra.message=teil.name+' angelegt: '+teil.schutz+' % weniger Schaden durch Gehstoecke.';
+    }
+  }
   if(op==='quest_claim'){const quest=X.QUESTS.find(q=>q.id===body.questId);if(!quest||p.claimedQuests.includes(quest.id)||X.progress(p,quest)<quest.goal)fail('Diese Questbelohnung ist noch nicht verfügbar.');p.claimedQuests.push(quest.id);if(quest.gold)p.gold+=quest.gold;if(quest.skin&&!p.skins.includes(quest.skin))p.skins.push(quest.skin);extra.message=quest.skin?X.skin(quest.skin).name+' freigeschaltet!':'Quest geschafft! +'+quest.gold+' Gold.';}
   if(op==='shop_buy'||op==='equip'){
     if(p.raidLock?.until>now)fail('Während eines Überfalls bleibt deine Ausrüstung fest.');
@@ -157,12 +175,16 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
     if(p.raidCooldown>now||target.raidLock?.until>now||activeArena(target)||activeDuel(target)||activeDungeon(world,target))fail('Dieser Überfall ist gerade nicht möglich.');
     if(p.eggs.length>=E.BAG_LIMIT)fail('Du brauchst einen freien Platz für ein erbeutetes Ei.');
     const targetPos=await position(body.targetId);await nearby(targetPos);const victimEgg=target.eggs.find(e=>e.startedAt!==null&&p.eggs.filter(e=>e.startedAt!==null).length<E.INCUBATORS)||target.eggs.find(e=>e.startedAt===null);if(!victimEgg)fail('Dieser Spieler trägt kein Ei, das in deine Brutstation passt.');
-    p.raidCooldown=now+30*60000;p.duel={id:body.requestId,targetId:body.targetId,targetName:target.name,revision:0,round:1,phase:'choose',hp:100,enemyHp:100,weapon:p.weapon,enemyWeapon:target.weapon,enemySkin:target.skin,until:now+10*60000,message:'Gewinne zuerst das Waffenduell, danach den Mon-Kampf.'};target.raidLock={attackerId:id,eggId:victimEgg.id,until:p.duel.until};
+    p.raidCooldown=now+30*60000;p.duel={id:body.requestId,targetId:body.targetId,targetName:target.name,revision:0,round:1,phase:'choose',hp:100,enemyHp:100,weapon:p.weapon,enemyWeapon:target.weapon,enemySkin:target.skin,enemyPanzer:target.panzer||null,until:now+10*60000,message:'Gewinne zuerst das Waffenduell, danach den Mon-Kampf.'};target.raidLock={attackerId:id,eggId:victimEgg.id,until:p.duel.until};
   }
   if(op==='raid_turn'){
     const d=p.duel;if(!d||d.phase!=='choose'||d.id!==body.duelId||d.revision!==body.revision)fail('Rufe den aktuellen Duellstand ab.');if(!['strike','heavy','guard'].includes(body.move))fail('Wähle eine Waffenaktion.');
-    const enemyMove=['strike','heavy','guard'][Math.min(2,Math.floor(draw*3))],hit=(weapon,move,guard)=>Math.round(X.weapon(weapon).attack*(move==='guard'?.4:move==='heavy'?1.4:1)*(guard?.35:1));
-    const damage=hit(d.weapon,body.move,enemyMove==='guard'),counter=hit(d.enemyWeapon,enemyMove,body.move==='guard');d.enemyHp=Math.max(0,d.enemyHp-damage);if(d.enemyHp)d.hp=Math.max(0,d.hp-counter);d.revision++;d.round++;d.message='Dein Treffer: '+damage+' Schaden. Gegenangriff: '+(d.enemyHp?counter:0)+'.';
+    const enemyMove=['strike','heavy','guard'][Math.min(2,Math.floor(draw*3))];
+    /* Der Verteidiger kaempft mit dem Stand, den er gespeichert hat - deshalb
+       wird er hier nachgeschlagen und nicht aus dem Duell gelesen. */
+    const gegner=world.players[d.targetId]||{panzer:d.enemyPanzer};
+    const damage=X.duellSchaden(p,d.weapon,body.move,enemyMove==='guard',gegner);
+    const counter=X.duellSchaden(gegner,d.enemyWeapon,enemyMove,body.move==='guard',p);d.enemyHp=Math.max(0,d.enemyHp-damage);if(d.enemyHp)d.hp=Math.max(0,d.hp-counter);d.revision++;d.round++;d.message='Dein Treffer: '+damage+' Schaden. Gegenangriff: '+(d.enemyHp?counter:0)+'.';
     if(!d.enemyHp){d.phase='won';d.message='Waffenduell gewonnen. Fordere jetzt seine Mons heraus, um ein Ei zu erbeuten.';}
     else if(!d.hp||d.round>20){d.phase='finished';d.message='Duell verloren. Deine Eier bleiben unberührt.';const t=world.players[d.targetId];if(t?.raidLock?.attackerId===id)delete t.raidLock;}
   }

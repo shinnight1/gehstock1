@@ -2,7 +2,7 @@
 (function(SG){
   var D=SG.gehstockmon.daten,E=SG.gehstockmon.wirtschaft,X=SG.gehstockmon.abenteuer={};
   X.DUNGEON_OPS=['dungeon_create','dungeon_join','dungeon_ready','dungeon_start','dungeon_turn','dungeon_leave'];
-  X.OPS=['survey','gather','trainer_start','quest_claim','shop_buy','equip','raid_start','raid_turn','raid_arena','raid_cancel','mon_upgrade','leuchtturm_spenden','zerhacker_schlagen'].concat(X.DUNGEON_OPS);
+  X.OPS=['survey','gather','trainer_start','quest_claim','shop_buy','equip','raid_start','raid_turn','raid_arena','raid_cancel','mon_upgrade','leuchtturm_spenden','zerhacker_schlagen','waffe_schleifen','panzer_anlegen'].concat(X.DUNGEON_OPS);
   X.SPAWN={x:0,z:30};X.SPAWN_TIME=60*60000;
   X.UPGRADE_LIMIT=5;
   /* Der Leuchtturm ist das gemeinsame Bauwerk: alle zahlen darauf ein, und
@@ -66,11 +66,14 @@
      merkt es hier. */
   X.zerhackerSchaden=function(p){
     var summe=0;(p&&p.truppe||[]).forEach(function(id){var m=X.mon(p,id);if(m)summe+=m.ang+m.upgrade*2;});
-    return Math.max(150,Math.round(summe*X.ZERHACKER.schadenJeStufe/100));
+    return Math.max(150,Math.round(summe*X.ZERHACKER.schadenJeStufe/100*X.rangBonus(p)));
   };
 
   X.upgradeLevel=function(n){return Number.isFinite(n)?Math.max(0,Math.min(X.UPGRADE_LIMIT,Math.floor(n))):0;};
-  X.mon=function(p,id){var m=D.mon(id);return m&&Object.assign({},m,{upgrade:X.upgradeLevel(p&&p.monUpgrades&&p.monUpgrades[id])});};
+  X.mon=function(p,id){var m=D.mon(id);if(!m)return m;
+    var w=X.wesenVon&&X.wesenVon(p,id);
+    return Object.assign({},m,{upgrade:X.upgradeLevel(p&&p.monUpgrades&&p.monUpgrades[id])},
+      w?{hp:Math.max(20,m.hp+w.hp),ang:Math.max(1,m.ang+w.ang),tempo:Math.max(1,m.tempo+w.tempo),wesen:w.name}:{});};
   X.DUNGEONS=[['Wurzelhöhle','Einfach','moosling',0,40],['Versunkene Grotte','Leicht','sumpfschnapper',35,105],['Kristallstollen','Mittel','donnerwidder',110,85],['Schattengewölbe','Schwer','runengolem',-80,-25],['Königsgrab','Sehr schwer','grabesritter',-110,-150],['Zeitenriss','Extrem','chronoschreiter',100,-95],['Abgrundtor','Apokalyptisch','endrichter',20,-130]].map(function(v,i){return{id:'dungeon-'+i,name:v[0],difficulty:v[1],bossId:v[2],x:v[3],z:v[4],rarity:i,reward:2+i%2};});
   X.SKINS=[{id:'wanderer',name:'Wanderer',color:'#ffffff',price:0},{id:'waldlaeufer',name:'Waldläufer',color:'#8ee6ad',price:150},{id:'frostwanderer',name:'Frostwanderer',color:'#83cfff',price:300},{id:'aschenritter',name:'Ascheritter',color:'#ff9576',price:500},{id:'trainermeister',name:'Trainermeister',color:'#ffe07b',quest:'trainer3'},{id:'runensucher',name:'Runensucher',color:'#bd90ff',quest:'gather6'},{id:'weltenwanderer',name:'Weltenwanderer',color:'#71ffe3',quest:'visit9'}];
   X.SKINS.push({id:'knochenkoenig',name:'Knochenkönig',color:'#f0dfb5',price:2400},{id:'leerenreaper',name:'Leerenschnitter',color:'#ad79ff',price:5000},{id:'drachenritter',name:'Drachenritter',color:'#ff6254',price:8000});
@@ -78,6 +81,75 @@
   X.WEAPONS.push({id:'titanenlanze',name:'Titanenlanze',attack:37,price:2500},{id:'weltenbrecher',name:'Weltenbrecher',attack:43,price:6500});
   X.QUESTS=[{id:'trainer1',name:'Der erste Trainingssieg',stat:'trainerWins',goal:1,gold:80},{id:'trainer3',name:'Mit Geduld zum Meister',stat:'trainerWins',goal:3,skin:'trainermeister'},{id:'visit3',name:'Drei Horizonte',stat:'visited',goal:3,gold:120},{id:'visit9',name:'Die ganze Insel',stat:'visited',goal:9,skin:'weltenwanderer'},{id:'gather6',name:'Runensuche',stat:'gathered',goal:6,skin:'runensucher'},{id:'hatch1',name:'Ein neuer Begleiter',stat:'hatched',goal:1,gold:100},{id:'upgrade1',name:'Ein sicherer Rückzugsort',stat:'upgrades',goal:1,gold:100}];
   X.skin=function(id){return X.SKINS.find(function(v){return v.id===id;})||X.SKINS[0];};
+  /* Der Trainerrang waechst an allem, was man ohnehin tut, und gibt kleine
+     Zuschlaege auf den eigenen Schaden. Er laesst sich nicht kaufen und nicht
+     verlieren - das ist der ruhige Fortschritt neben Gold und Runen. */
+  X.RAENGE=[{name:'Wanderer',ab:0},{name:'Spaeher',ab:60},{name:'Faehrtenleser',ab:150},
+            {name:'Hueter',ab:300},{name:'Meister',ab:550},{name:'Legende',ab:900}];
+  X.erfahrung=function(p){
+    var g=(p&&p.progress)||{};
+    return (g.trainerWins||0)*10+(g.gathered||0)*4+(g.hatched||0)*6
+         +(g.visited||0)*8+(g.upgrades||0)*5+Math.floor((p&&p.zerhackerGesamt||0)/400);
+  };
+  X.rang=function(p){
+    var e=X.erfahrung(p),stufe=0;
+    for(var i=0;i<X.RAENGE.length;i++)if(e>=X.RAENGE[i].ab)stufe=i;
+    var naechster=X.RAENGE[stufe+1]||null;
+    return {stufe:stufe,name:X.RAENGE[stufe].name,erfahrung:e,
+            bis:naechster?naechster.ab:null,naechster:naechster?naechster.name:null};
+  };
+  /* Zwei Prozent mehr Schlagkraft je Rangstufe. */
+  X.rangBonus=function(p){return 1+X.rang(p).stufe*0.02;};
+
+  /* Jedes geschluepfte Mon bringt ein Wesen mit. Damit ist nicht mehr jeder
+     Donnerwidder derselbe - und es gibt einen Grund, Eier zu tauschen. */
+  X.WESEN=[
+    {id:'ruhig',    name:'ruhig',     hp: 8, ang: 0, tempo: 0},
+    {id:'stuermisch',name:'stuermisch',hp:-4, ang: 0, tempo: 2},
+    {id:'stur',     name:'stur',      hp:12, ang:-1, tempo:-1},
+    {id:'wild',     name:'wild',      hp:-6, ang: 3, tempo: 0},
+    {id:'flink',    name:'flink',     hp: 0, ang:-1, tempo: 3},
+    {id:'treu',     name:'treu',      hp: 5, ang: 1, tempo: 0}
+  ];
+  X.wesen=function(id){return X.WESEN.find(function(v){return v.id===id;})||null;};
+  X.wesenVon=function(p,monId){return X.wesen(p&&p.wesen&&p.wesen[monId]);};
+  X.wesenZuweisen=function(p,monId,zufall){
+    p.wesen=p.wesen||{};
+    if(!p.wesen[monId])p.wesen[monId]=X.WESEN[Math.min(X.WESEN.length-1,Math.floor(zufall*X.WESEN.length))].id;
+    return X.wesen(p.wesen[monId]);
+  };
+
+  /* Waffen lassen sich mit Runen schaerfen, genau wie Mons aufgewertet
+     werden. Damit bleibt auch der Reisestock eines Anfaengers brauchbar und
+     die Runen aus den Dungeons haben ein zweites Ziel. */
+  X.SCHLIFF_LIMIT=5;X.SCHLIFF_PLUS=3;
+  X.schliff=function(p,id){var n=p&&p.waffenSchliff&&p.waffenSchliff[id];
+    return Number.isFinite(n)?Math.max(0,Math.min(X.SCHLIFF_LIMIT,Math.floor(n))):0;};
+  X.schliffKosten=function(stufe){return stufe+1;};
+  X.waffenWert=function(p,id){return X.weapon(id).attack+X.schliff(p,id)*X.SCHLIFF_PLUS;};
+
+  /* Ruestung kommt aus den Dungeons: Wer einen Boss zum ersten Mal legt,
+     nimmt sein Fundstueck mit. Sie daempft, was ein Gehstock im Waffenduell
+     anrichtet - gegen Mons hilft sie nicht. */
+  X.RUESTUNGEN=[
+    {id:'wanderweste',  name:'Wanderweste',   schutz:8,  von:'dungeon-0'},
+    {id:'lederpanzer',  name:'Lederpanzer',   schutz:12, von:'dungeon-1'},
+    {id:'kettenhemd',   name:'Kettenhemd',    schutz:16, von:'dungeon-2'},
+    {id:'schuppenrock', name:'Schuppenrock',  schutz:20, von:'dungeon-3'},
+    {id:'runenharnisch',name:'Runenharnisch', schutz:25, von:'dungeon-4'},
+    {id:'drachenplatte',name:'Drachenplatte', schutz:30, von:'dungeon-5'},
+    {id:'weltenwall',   name:'Weltenwall',    schutz:35, von:'dungeon-6'}
+  ];
+  X.ruestung=function(id){return X.RUESTUNGEN.find(function(v){return v.id===id;})||null;};
+  X.ruestungFuer=function(dungeonId){return X.RUESTUNGEN.find(function(v){return v.von===dungeonId;})||null;};
+  X.schutzWert=function(p){var r=p&&p.panzer&&X.ruestung(p.panzer);return r?r.schutz:0;};
+  /* Was ein Schlag im Duell austraegt: Waffe mal Haltung, gedaempft durch die
+     Deckung des Gegners und seine Ruestung. */
+  X.duellSchaden=function(angreifer,waffe,zug,deckung,verteidiger){
+    var roh=X.waffenWert(angreifer,waffe)*X.rangBonus(angreifer)*(zug==='guard'?.4:zug==='heavy'?1.4:1)*(deckung?.35:1);
+    return Math.max(1,Math.round(roh*(1-X.schutzWert(verteidiger)/100)));
+  };
+
   X.weapon=function(id){return X.WEAPONS.find(function(v){return v.id===id;})||X.WEAPONS[0];};
   var previous=D.neuerStand;
   D.neuerStand=function(save,now){var p=previous(save,now),old=save||{};now=Number.isFinite(now)?now:Date.now();
@@ -85,6 +157,9 @@
     p.skins=X.SKINS.filter(function(s){return s.id==='wanderer'||(old.skins||[]).indexOf(s.id)>=0;}).map(function(s){return s.id;});
     p.weapons=X.WEAPONS.filter(function(w){return w.id==='gehstock'||(old.weapons||[]).indexOf(w.id)>=0;}).map(function(w){return w.id;});
     p.skin=p.skins.indexOf(old.skin)>=0?old.skin:'wanderer';p.weapon=p.weapons.indexOf(old.weapon)>=0?old.weapon:'gehstock';
+    p.waffenSchliff=Object.assign({},old.waffenSchliff);p.wesen=Object.assign({},old.wesen);p.zerhackerGesamt=Math.max(0,Math.floor(old.zerhackerGesamt)||0);
+    p.ruestungen=X.RUESTUNGEN.filter(function(r){return (old.ruestungen||[]).indexOf(r.id)>=0;}).map(function(r){return r.id;});
+    p.panzer=p.ruestungen.indexOf(old.panzer)>=0?old.panzer:null;
     p.progress={};['trainerWins','gathered','hatched','upgrades'].forEach(function(k){p.progress[k]=Math.max(0,Math.floor(Number(old.progress&&old.progress[k])||0));});
     p.visited=D.FELDER.map(function(f){return f.id;}).filter(function(id){return(old.visited||[]).indexOf(id)>=0;});
     p.claimedQuests=X.QUESTS.filter(function(q){return(old.claimedQuests||[]).indexOf(q.id)>=0;}).map(function(q){return q.id;});
