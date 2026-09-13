@@ -411,9 +411,9 @@ const SG = { rules: {} };
   X.SPAWN={x:0,z:30};X.SPAWN_TIME=60*60000;
   X.UPGRADE_LIMIT=5;
   /* Der Leuchtturm ist das gemeinsame Bauwerk: alle zahlen darauf ein, und
-     wenn er steht, bleibt er stehen. Er bringt jedem einen vierten Brutplatz
-     und verraet, wo der Zerhacker gerade umherzieht. */
-  X.LEUCHTTURM={x:145,z:125,ziel:5000,mindestens:10};
+     wenn er steht, bleibt er stehen. Er steht mitten auf der Insel und
+     peilt von dort den Zerhacker an. */
+  X.LEUCHTTURM={x:0,z:0,ziel:5000,mindestens:10};
   X.leuchtturmFertig=function(bau){return !!bau&&bau.gold>=X.LEUCHTTURM.ziel;};
   X.brutplaetze=function(bau){return E.INCUBATORS+(X.leuchtturmFertig(bau)?1:0);};
 

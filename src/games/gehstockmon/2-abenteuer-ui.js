@@ -81,7 +81,7 @@
         var ziel = peilung();
         if (ziel) drawer.appendChild(el('p', 'Gerade im ' + ziel.text + ', etwa ' + ziel.weit + ' Schritte entfernt.'));
       } else {
-        drawer.appendChild(el('p', 'An der Kueste steht ein Geruest. Wer Gold hineinsteckt, baut mit - und steht danach fuer immer auf der Tafel. Ist der Turm fertig, peilt sein Licht den Zerhacker an, und jeder sieht Richtung und Entfernung, statt die halbe Insel abzusuchen.'));
+        drawer.appendChild(el('p', 'Mitten auf der Insel steht ein Geruest. Wer Gold hineinsteckt, baut mit - und steht danach fuer immer auf der Tafel. Ist der Turm fertig, peilt sein Licht den Zerhacker an, und jeder sieht Richtung und Entfernung, statt die halbe Insel abzusuchen.'));
         drawer.appendChild(el('p', l.gold.toLocaleString('de-DE') + ' von ' + l.ziel.toLocaleString('de-DE') + ' Gold verbaut'
           + (l.eigen ? ' · dein Anteil: ' + l.eigen.toLocaleString('de-DE') : '')));
         var s = state();
