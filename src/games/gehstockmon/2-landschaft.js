@@ -44,6 +44,7 @@
   };
   R.riverCenter=R.abenteuer.riverCenter;
   R.createWater=function(T,scene){
+    var surroundings=R.createSeascape(T,scene);
     var owned=[],waterMat=new T.MeshStandardMaterial({color:'#397e88',roughness:.3,metalness:.12}),bankMat=new T.MeshStandardMaterial({color:'#a69972',roughness:1});
     function ribbon(width,y,material){var positions=[];for(var i=0;i<250;i++){var z=-250+i*2,next=z+2,a=R.riverCenter(z),b=R.riverCenter(next);if(!R.abenteuer.onLand({x:a,z:z})||!R.abenteuer.onLand({x:b,z:next}))continue;positions.push(a-width,y,z,b-width,y,next,b+width,y,next,a-width,y,z,b+width,y,next,a+width,y,z);}
       var g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(positions,3));g.computeVertexNormals();var m=new T.Mesh(g,material);m.receiveShadow=true;scene.add(m);owned.push(m);return m;}
@@ -52,7 +53,7 @@
     var highlights=new T.BufferGeometry(),points=[];
     for(var j=0;j<200;j++){var z=-220+j*2.2,x=R.riverCenter(z)+Math.sin(j*4)*1.1;points.push(x,.092,z,x+.6,.092,z+.17,x+.7,.092,z+.1,x,.092,z,x-.1,.092,z+.07,x+.6,.092,z+.17);}
     highlights.setAttribute('position',new T.Float32BufferAttribute(points,3));highlights.computeVertexNormals();var foam=new T.Mesh(highlights,new T.MeshBasicMaterial({color:'#b2e3db',transparent:true,opacity:.22,depthWrite:false}));scene.add(foam);owned.push(foam);
-    return {update:function(t){var pos=highlights.getAttribute('position');for(var j=0;j<200;j++){var z=-220+((j*2.2+t*2.2)%440),x=R.riverCenter(z)+Math.sin(j*4)*2.8,base=j*6;[[0,0],[.9,.18],[1,.1],[0,0],[-.1,.07],[.9,.18]].forEach(function(v,k){pos.setXYZ(base+k,x+v[0],.092+Math.sin(t*2+j)*.008,z+v[1]);});}pos.needsUpdate=true;foam.material.opacity=.35;},destroy:function(){owned.forEach(function(m){scene.remove(m);m.geometry.dispose();m.material.dispose();});}};
+    return {update:function(t){surroundings.update(t);var pos=highlights.getAttribute('position');for(var j=0;j<200;j++){var z=-220+((j*2.2+t*2.2)%440),x=R.riverCenter(z)+Math.sin(j*4)*2.8,base=j*6;[[0,0],[.9,.18],[1,.1],[0,0],[-.1,.07],[.9,.18]].forEach(function(v,k){pos.setXYZ(base+k,x+v[0],.092+Math.sin(t*2+j)*.008,z+v[1]);});}pos.needsUpdate=true;foam.material.opacity=.35;},destroy:function(){surroundings.destroy();owned.forEach(function(m){scene.remove(m);m.geometry.dispose();m.material.dispose();});}};
   };
   R.contactShadow=function(T){
     var c=document.createElement('canvas');c.width=c.height=64;var ctx=c.getContext('2d'),g=ctx.createRadialGradient(32,32,2,32,32,31);

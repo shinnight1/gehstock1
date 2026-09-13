@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 class Element{
+  get childNodes(){return this.children;}
   constructor(tag){this.tagName=tag;this.children=[];this.events={};this.attrs={};this.hidden=false;this.disabled=false;this.className='';this.style={setProperty(){}};this.text='';this.value='';this.selected=false;this.classList={contains:c=>this.className.split(' ').includes(c),add:(...cs)=>{this.className=[...new Set(this.className.split(' ').concat(cs))].join(' ');},remove:(...cs)=>{this.className=this.className.split(' ').filter(c=>!cs.includes(c)).join(' ');},toggle:(c,yes)=>yes?this.classList.add(c):this.classList.remove(c)};}
   appendChild(e){e.parentNode=this;this.children.push(e);return e;}insertBefore(e,before){e.parentNode=this;this.children.splice(this.children.indexOf(before),0,e);}removeChild(e){this.children.splice(this.children.indexOf(e),1);e.parentNode=null;}remove(){this.parentNode?.removeChild(this);}
   get firstChild(){return this.children[0];}get lastChild(){return this.children.at(-1);}set textContent(v){this.text=String(v);this.children=[];}get textContent(){return this.text+this.children.map(c=>c.textContent).join('');}
@@ -41,7 +42,7 @@ export async function checkUi(D,E,A,handler,code,clock,otherCode){
   assert.ok(blocked,'no movement before join');assert.equal(definition.onlineOnly,true);await flush();
   assert.ok(!root.querySelector('.gm-connection').hidden,'startup failure keeps game gated');
   assert.equal(game.state.besitz.length,4,'legacy local collection never imported');assert.equal(game.state.gold,180);
-  unreachable=false;click('Erneut verbinden');await flush();assert.equal(requests.at(-1).op,'join');assert.equal(root.querySelector('.gm-connection').hidden,true);assert.equal(blocked,false);
+  unreachable=false;click('Erneut verbinden');await flush();assert.equal(requests.at(-1).op,'join');assert.equal(root.querySelector('.gm-connection').hidden,true,root.querySelector('.gm-connection').textContent);assert.equal(blocked,false);
   assert.ok(!root.textContent.includes('lokalen Kampagne'));assert.equal(latest.profile.gold,180);
   await handler(new Request('http://localhost/api/gehstockmon',{method:'POST',body:JSON.stringify({code:otherCode,name:'Mitspieler',op:'join'})}));
   await handler(new Request('http://localhost/api/gehstockmon',{method:'POST',body:JSON.stringify({code:otherCode,op:'presence',position:{x:0,z:30,heading:0}})}));

@@ -22,7 +22,7 @@
     scene.fog = new T.FogExp2('#345665', 0.0011);
     var camera = new T.PerspectiveCamera(39, 1, 1, 2400);
     var focus = new T.Vector3(-8, 0, 6), desiredFocus = focus.clone();
-    var yaw = 0.63, zoom = 38, desiredZoom = 38;
+    var MAX_ZOOM = 760, yaw = 0.63, zoom = 38, desiredZoom = 38;
     var ambient = new T.HemisphereLight('#c5dfea', '#303b30', 1.6);
     scene.add(ambient);
     var sun = new T.DirectionalLight('#ffe2b2', 3);
@@ -516,7 +516,7 @@ p.updatedAt=info.updatedAt;p.age=Math.max(0,(serverTime-info.updatedAt)/1000);p.
       selectionRing.position.set(o.x, 0.38, o.z);
       if (center) { following = false; desiredFocus.set(o.x, 0, o.z + 3); desiredZoom = 35; }
     }
-    function overview() { following = false; desiredFocus.set(0, 0, 0); desiredZoom = 860; }
+    function overview() { following = false; desiredFocus.set(0, 0, 0); desiredZoom = MAX_ZOOM; }
     function follow() {
       following = true; desiredZoom = 38; desiredFocus.set(explorer.group.position.x, 0, explorer.group.position.z - 2);
       if (handlers.explore) handlers.explore();
@@ -577,7 +577,7 @@ p.updatedAt=info.updatedAt;p.age=Math.max(0,(serverTime-info.updatedAt)/1000);p.
     on(canvas, 'pointermove', function (e) {
       if (!pointers[e.pointerId]) return;
       var last = pointers[e.pointerId]; pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
-      if (Object.keys(pointers).length > 1) { var d = distance(); if (pinch > 0 && d > 0) desiredZoom = T.MathUtils.clamp(desiredZoom * pinch / d, 20, 1250); pinch = d; dragged = true; return; }
+      if (Object.keys(pointers).length > 1) { var d = distance(); if (pinch > 0 && d > 0) desiredZoom = T.MathUtils.clamp(desiredZoom * pinch / d, 20, MAX_ZOOM); pinch = d; dragged = true; return; }
       var dx = e.clientX - last.x, dy = e.clientY - last.y;
       if (prev && Math.hypot(e.clientX - prev.x, e.clientY - prev.y) > 7) dragged = true;
       if (dragged) {
@@ -604,7 +604,7 @@ p.updatedAt=info.updatedAt;p.age=Math.max(0,(serverTime-info.updatedAt)/1000);p.
     on(canvas, 'pointercancel', clearInput);
     on(canvas, 'lostpointercapture', function (e) { if (pointers[e.pointerId]) clearInput(); });
     on(window, 'blur', clearInput); on(document, 'visibilitychange', clearInput);
-    on(canvas, 'wheel', function (e) { e.preventDefault(); desiredZoom = T.MathUtils.clamp(desiredZoom + e.deltaY * 0.03, 20, 1250); }, { passive: false });
+    on(canvas, 'wheel', function (e) { e.preventDefault(); desiredZoom = T.MathUtils.clamp(desiredZoom + e.deltaY * 0.03, 20, MAX_ZOOM); }, { passive: false });
     on(canvas, 'contextmenu', function (e) { e.preventDefault(); });
     on(canvas, 'keydown', function (e) { if (!inputBlocked && /^(Arrow(Up|Down|Left|Right)|[wasdqe])$/i.test(e.key)) { keys[e.key.toLowerCase()] = true; e.preventDefault(); } });
     on(window, 'keyup', function (e) { delete keys[e.key.toLowerCase()]; });
@@ -729,7 +729,7 @@ p.updatedAt=info.updatedAt;p.age=Math.max(0,(serverTime-info.updatedAt)/1000);p.
       },
       zerhackerOrt:function(){return {x:zerhacker.gruppe.position.x,z:zerhacker.gruppe.position.z,lebt:zerhacker.lebt};},
       setEncounters:function(list,serverTime){encounterClock=serverTime-time*1000;var keep={};list.filter(function(e){return e.kind==='trainer';}).forEach(function(e){keep[e.id]=true;var p=trainers[e.id];if(!p){var g=creature(0,0,false,'player'),texture=spriteTexture('skin-'+e.skinIndex,'#ffffff');g.userData.portrait.material.map=texture;g.userData.portrait.scale.set(4.5,4.5,1);g.name='trainer-'+e.id;scene.add(g);anziehen(g,skinName(e.skinIndex));p=trainers[e.id]={group:g};}p.info=e;});Object.keys(trainers).forEach(function(id){if(!keep[id]){disposeUnit(trainers[id]);delete trainers[id];}});},
-      zoom: function (delta) { desiredZoom = T.MathUtils.clamp(desiredZoom + delta, 20, 1250); },
+      zoom: function (delta) { desiredZoom = T.MathUtils.clamp(desiredZoom + delta, 20, MAX_ZOOM); },
       rotate: function (delta) { yaw += delta; },
       move: function (x, y) { if (inputBlocked || battle) return; stick.x = x; stick.y = y; },
       blockInput: function (yes) { inputBlocked = yes; if (yes) clearInput(); },

@@ -9,7 +9,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { data as D, fight, adventure as X } from '../netlify/functions/lib/gehstockmon-rules.mjs';
 let scene, camera, loop, listeners = new Map(), disposed = false, loopDestroyed = false;
 let keyedPixels;
-function surface() { return { className: '', style: {}, setAttribute() {}, appendChild() {}, remove() {}, focus() {}, tabIndex: 0, addEventListener(name, fn) { listeners.set(name, fn); }, removeEventListener(name, fn) { if (listeners.get(name) === fn) listeners.delete(name); }, getBoundingClientRect() { return { x: 0, y: 0, left: 0, top: 0, width: 1180, height: 768 }; }, getContext() { return { clearRect() {}, save() {}, restore() {}, beginPath() {}, moveTo() {}, lineTo() {}, quadraticCurveTo() {}, closePath() {}, clip() {}, drawImage() {}, stroke() {}, createRadialGradient(){return{addColorStop(){}};}, fillRect() {}, createImageData(w,h) { return { data: new Uint8ClampedArray(w*h*4) }; }, getImageData() { return { data: new Uint8ClampedArray([255, 0, 255, 255, 40, 95, 84, 255, 160, 98, 30, 255]) }; }, putImageData(pixels) { keyedPixels = pixels.data; } }; } }; }
+function surface() { return { setPointerCapture() {}, hasPointerCapture() { return false; }, className: '', style: {}, setAttribute() {}, appendChild() {}, remove() {}, focus() {}, tabIndex: 0, addEventListener(name, fn) { listeners.set(name, fn); }, removeEventListener(name, fn) { if (listeners.get(name) === fn) listeners.delete(name); }, getBoundingClientRect() { return { x: 0, y: 0, left: 0, top: 0, width: 1180, height: 768 }; }, getContext() { return { clearRect() {}, save() {}, restore() {}, beginPath() {}, moveTo() {}, lineTo() {}, quadraticCurveTo() {}, closePath() {}, clip() {}, drawImage() {}, stroke() {}, createRadialGradient(){return{addColorStop(){}};}, fillRect() {}, createImageData(w,h) { return { data: new Uint8ClampedArray(w*h*4) }; }, getImageData() { return { data: new Uint8ClampedArray([255, 0, 255, 255, 40, 95, 84, 255, 160, 98, 30, 255]) }; }, putImageData(pixels) { keyedPixels = pixels.data; } }; } }; }
 class FakeRenderer { constructor() { this.domElement = surface(); this.shadowMap={}; } setPixelRatio() {} setSize() {} render(s, c) { scene = s; camera = c; } dispose() { disposed = true; } forceContextLoss() {} }
 class FakeImage { constructor() { this.naturalWidth = 256; this.naturalHeight = 256; } set src(value) { this.onload?.(); } }
 /* Nur die Namen, die der gebaute Browser-Bundle wirklich auf window.THREE legt.
@@ -27,6 +27,7 @@ const ctx = vm.createContext({ SG, window, document, Image: FakeImage, console, 
 vm.runInContext(fs.readFileSync('src/games/gehstockmon/2-figuren.js','utf8'),ctx);
 vm.runInContext(fs.readFileSync('src/games/gehstockmon/2-landschaft.js', 'utf8'), ctx);
 vm.runInContext(fs.readFileSync('src/games/gehstockmon/2-revier.js','utf8'),ctx);
+vm.runInContext(fs.readFileSync('src/games/gehstockmon/2-umgebung.js','utf8'),ctx);
 vm.runInContext(fs.readFileSync('src/games/gehstockmon/2-welt.js', 'utf8'), ctx);
 const host = { loop(options) { loop = options; return { start() {}, pause() {}, resume() {}, destroy() { loopDestroyed = true; } }; } };
 const world = SG.gehstockmon.createWorld(host, surface(), {});
@@ -97,11 +98,25 @@ world.setPosition({x:X.riverCenter(60)-9,z:60});world.move(1,0);for(let i=0;i<18
 const result = fight(D.KREATUREN, D.START_PLAN, D.FELDER[0].feinde); world.startBattle(result, 1, D.KATALOG.slice(0, 4));
 for (const step of result.schritte) { world.step(step); for (let i = 0; i < 40; i++) loop.update(1 / 60); loop.render(); }
 world.endBattle();
+function settledZoom(){for(let i=0;i<240;i++)loop.update(1/60);loop.render();return camera.position.y/.86;}
+world.overview();assert.ok(Math.abs(settledZoom()-760)<.001,'overview respects zoom limit');
+world.zoom(1e6);assert.ok(Math.abs(settledZoom()-760)<.001,'buttons cannot exceed zoom limit');
+listeners.get('wheel')({preventDefault(){},deltaY:1e8});assert.ok(Math.abs(settledZoom()-760)<.001,'mouse wheel cannot exceed zoom limit');
+listeners.get('pointerdown')({pointerId:1,clientX:100,clientY:100});
+listeners.get('pointerdown')({pointerId:2,clientX:500,clientY:100});
+listeners.get('pointermove')({pointerId:2,clientX:101,clientY:100});
+assert.ok(Math.abs(settledZoom()-760)<.001,'pinch cannot exceed zoom limit');
+listeners.get('pointerup')({pointerId:1});listeners.get('pointerup')({pointerId:2});
+world.zoom(-1e6);assert.ok(Math.abs(settledZoom()-20)<.001,'close zoom stays available');
+const surroundings=['coastal-shallows','offshore-rocks-0','offshore-rocks-1','offshore-rocks-2','shore-breakers','ocean-swells'].map(name=>{const m=scene.getObjectByName(name);assert.ok(m,name);return m;});
+const swell=surroundings.at(-1),wavePosition=swell.position.clone();loop.update(1);assert.ok(swell.position.distanceTo(wavePosition)>.001,'ocean waves move');
+let releasedScenery=0;surroundings.forEach(m=>{m.geometry.addEventListener('dispose',()=>releasedScenery++);m.material.addEventListener('dispose',()=>releasedScenery++);});
+
 const textures = new Set(), spriteMaterials = new Set(), releasedTextures = new Set(), releasedMaterials = new Set();
 scene.traverse((o) => { if (o.isSprite) { textures.add(o.material.map); spriteMaterials.add(o.material); } });
 textures.forEach((t) => t.addEventListener('dispose', () => releasedTextures.add(t)));
 spriteMaterials.forEach((m) => m.addEventListener('dispose', () => releasedMaterials.add(m)));
-world.destroy(); assert.ok(disposed); assert.ok(loopDestroyed); assert.equal(listeners.size, 0);
+world.destroy(); assert.equal(releasedScenery,12);assert.ok(surroundings.every(m=>!m.parent)); assert.ok(disposed); assert.ok(loopDestroyed); assert.equal(listeners.size, 0);
 assert.equal(releasedTextures.size, textures.size, 'portrait textures released when leaving game');
 assert.equal(releasedMaterials.size, spriteMaterials.size, 'portrait materials released when leaving game');
 console.log('3D scene, merged terrain, image followers, joystick movement, outer territory, battle animation and disposal verified.');
