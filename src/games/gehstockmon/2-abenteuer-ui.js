@@ -48,6 +48,14 @@
       return { text: richtungen[((achtel % 8) + 8) % 8], weit: weit };
     }
 
+    /* Ausserhalb der Oeffnungszeiten waechst nichts nach - dann steht hier
+       die Stunde, zu der es weitergeht, statt einer Zahl in Minuten. */
+    function wartetext(ms) {
+      var min = Math.ceil((ms || 0) / 60000);
+      if (min <= 90) return 'in ' + min + ' Minuten';
+      return 'wenn die Insel wieder oeffnet';
+    }
+
     function zeigeZerhacker() {
       var z = projekte && projekte.zerhacker; if (!z || !c.open('Gehstockhassender Zerhacker', 'zerhacker')) return;
       if (z.hp <= 0) {
@@ -64,7 +72,7 @@
         + ', etwa ' + ziel.weit + ' Schritte entfernt.'));
       else if (ziel) drawer.appendChild(el('p', 'Wo er gerade steckt, weiss niemand genau - dafuer muesste erst der Leuchtturm stehen.'));
       drawer.appendChild(el('p', 'Deine Schlaege: ' + z.vorrat + ' von ' + z.vorratMax
-        + (z.vorrat < z.vorratMax ? ' · der naechste in ' + Math.ceil((z.naechsterIn || 0) / 60000) + ' Minuten' : ' · Beutel voll')));
+        + (z.vorrat < z.vorratMax ? ' · der naechste ' + wartetext(z.naechsterIn) : ' · Beutel voll')));
       var wartet = !z.vorrat;
       var w = c.world(), ort = w && w.zerhackerOrt && w.zerhackerOrt();
       var nah = ort && w.position && Math.hypot(w.position().x - ort.x, w.position().z - ort.z) < X.ZERHACKER.reichweite;

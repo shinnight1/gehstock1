@@ -1,6 +1,6 @@
 /* Gemeinsame Abenteuer-, Ausrüstungs- und Revierregeln ohne Browser-Abhängigkeit. */
 (function(SG){
-  var D=SG.gehstockmon.daten,E=SG.gehstockmon.wirtschaft,X=SG.gehstockmon.abenteuer={};
+  var D=SG.gehstockmon.daten,E=SG.gehstockmon.wirtschaft,H=SG.gehstockmon.zeiten,X=SG.gehstockmon.abenteuer={};
   X.DUNGEON_OPS=['dungeon_create','dungeon_join','dungeon_ready','dungeon_start','dungeon_turn','dungeon_leave'];
   X.OPS=['survey','gather','trainer_start','quest_claim','shop_buy','equip','raid_start','raid_turn','raid_arena','raid_cancel','mon_upgrade','leuchtturm_spenden','zerhacker_schlagen','waffe_schleifen','panzer_anlegen','fehde_fordern','fehde_annehmen'].concat(X.DUNGEON_OPS);
   X.SPAWN={x:0,z:30};X.SPAWN_TIME=60*60000;
@@ -21,7 +21,7 @@
      rund zwanzig Schlaege pro Kopf und Woche sollen reichen. Statt einer
      starren Sperre nach jedem Schlag fuellt sich ein Vorrat - wer zwei Tage
      weg war, kommt mit vollem Beutel zurueck und haut sie am Stueck raus. */
-  X.ZERHACKER={runde:11*60000,radius:150,grundKraft:10000,proSpieler:6000,
+  X.ZERHACKER={runde:11*60000,radius:150,kraft:25000,
                nachschub:10*60000,vorratMax:12,
                schadenJeStufe:800,beuteRunen:6,beuteGold:400,reichweite:22};
   /* Jede Woche eine gemeinsame Aufgabe, an der alle zusammen zaehlen. Anders
@@ -36,20 +36,31 @@
   ];
   X.wochenziel=function(now){return X.WOCHENZIELE[X.zerhackerWoche(now)%X.WOCHENZIELE.length];};
 
+  /* Montag null Uhr - ab da zaehlt die Woche. */
+  X.wochenStart=function(now){var tag=H.day(now);return H.at(tag-((H.weekday(tag)+6)%7),0);};
+
+  /* Der Vorrat waechst nur, waehrend die Insel offen ist: nachts und am
+     Wochenende passiert nichts, und am Montag beginnt jeder bei null.
+     Gezaehlt wird darum nicht die verstrichene Zeit, sondern die geoeffnete. */
   X.zerhackerVorrat=function(p,now){
-    var seit=now-((p&&p.zerhackerStand)||0);
-    return Math.max(0,Math.min(X.ZERHACKER.vorratMax,Math.floor(seit/X.ZERHACKER.nachschub)));
+    var start=X.wochenStart(now),stand=Math.max((p&&p.zerhackerStand)||0,start);
+    var offen=H.openTime(now)-H.openTime(stand);
+    return Math.max(0,Math.min(X.ZERHACKER.vorratMax,Math.floor(offen/X.ZERHACKER.nachschub)));
   };
   /* Verbraucht einen Schlag. Ein lange unberuehrter Stand wird erst auf den
      vollen Beutel gezogen, sonst sammelte sich Guthaben ohne Grenze an. */
   /* Wie lange bis zum naechsten Schlag - fuer die Anzeige. */
   X.zerhackerWartezeit=function(p,now){
     var Z=X.ZERHACKER;if(X.zerhackerVorrat(p,now)>=Z.vorratMax)return 0;
-    return Z.nachschub-(now-((p&&p.zerhackerStand)||0))%Z.nachschub;
+    var start=X.wochenStart(now),stand=Math.max((p&&p.zerhackerStand)||0,start);
+    var offen=H.openTime(now)-H.openTime(stand),bis=(Math.floor(offen/Z.nachschub)+1)*Z.nachschub;
+    return Math.max(0,H.productionAt(H.openTime(stand)+bis)-now);
   };
   X.zerhackerVerbrauchen=function(p,now){
-    var Z=X.ZERHACKER,voll=now-Z.vorratMax*Z.nachschub;
-    p.zerhackerStand=Math.max(p.zerhackerStand||0,voll)+Z.nachschub;
+    var Z=X.ZERHACKER,start=X.wochenStart(now);
+    var stand=H.openTime(Math.max(p.zerhackerStand||0,start));
+    var voll=H.openTime(now)-Z.vorratMax*Z.nachschub;
+    p.zerhackerStand=H.productionAt(Math.max(stand,voll)+Z.nachschub);
   };
   /* Wochennummer, die montags umspringt: der 1.1.1970 war ein Donnerstag,
      drei Tage Versatz ruecken den Wechsel auf Montag. */
@@ -59,9 +70,7 @@
     return {x:Math.cos(t)*Z.radius,z:Math.sin(t)*Z.radius*0.72-20,
             heading:Math.atan2(-Math.sin(t)*Z.radius,Math.cos(t)*Z.radius*0.72)};
   };
-  X.zerhackerKraft=function(spieler){
-    var Z=X.ZERHACKER;return Z.grundKraft+Z.proSpieler*Math.max(1,Math.min(40,spieler));
-  };
+  X.zerhackerKraft=function(){return X.ZERHACKER.kraft;};
   /* Was ein Schlag austraegt, haengt an der eigenen Truppe - wer aufruestet,
      merkt es hier. */
   X.zerhackerSchaden=function(p){
