@@ -110,6 +110,7 @@ export function wochenschritt(world,p,id,art,now,anzahl=1){
 /* Was der Client von beidem sehen darf. Die Spenderliste wird auf die groessten
    zehn gekuerzt - mehr passt ohnehin nicht auf die Tafel. */
 export function weltprojekte(world,id,now){
+  X.zerhackerUhrStellen(world.players[id],now);
   const bau=leuchtturm(world),z=zerhacker(world,now),a=wochenaufgabe(world,now),ziel=X.wochenziel(now),namen=(eintraege)=>
     Object.entries(eintraege).sort((a,b)=>b[1]-a[1]).slice(0,10)
       .map(([pid,wert])=>({name:world.players[pid]?.name||'Unbekannt',wert,selbst:pid===id}));

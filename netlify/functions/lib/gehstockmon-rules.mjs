@@ -452,26 +452,38 @@ const SG = { rules: {} };
   X.wochenStart=function(now){var tag=H.day(now);return H.at(tag-((H.weekday(tag)+6)%7),0);};
 
   /* Der Vorrat waechst nur, waehrend die Insel offen ist: nachts und am
-     Wochenende passiert nichts, und am Montag beginnt jeder bei null.
-     Gezaehlt wird darum nicht die verstrichene Zeit, sondern die geoeffnete. */
+     Wochenende passiert nichts. Gezaehlt wird darum nicht die verstrichene
+     Zeit, sondern die geoeffnete - dieselbe Rechnung, mit der Eier reifen.
+
+     Gezaehlt wird ausserdem erst ab dem ersten Besuch der Woche, nicht ab
+     Montag null Uhr: sonst haette, wer montags um zehn hereinschaut, den
+     Beutel schon voll, ohne je dagewesen zu sein. */
   X.zerhackerVorrat=function(p,now){
-    var start=X.wochenStart(now),stand=Math.max((p&&p.zerhackerStand)||0,start);
+    var stand=p&&p.zerhackerStand;
+    if(!stand||stand<X.wochenStart(now))return 0;
     var offen=H.openTime(now)-H.openTime(stand);
     return Math.max(0,Math.min(X.ZERHACKER.vorratMax,Math.floor(offen/X.ZERHACKER.nachschub)));
+  };
+
+  /* Beim ersten Kontakt der Woche beginnt die Uhr. Danach ruehrt das hier
+     nichts mehr an. */
+  X.zerhackerUhrStellen=function(p,now){
+    if(!p)return;
+    if(!p.zerhackerStand||p.zerhackerStand<X.wochenStart(now))p.zerhackerStand=now;
   };
   /* Verbraucht einen Schlag. Ein lange unberuehrter Stand wird erst auf den
      vollen Beutel gezogen, sonst sammelte sich Guthaben ohne Grenze an. */
   /* Wie lange bis zum naechsten Schlag - fuer die Anzeige. */
   X.zerhackerWartezeit=function(p,now){
     var Z=X.ZERHACKER;if(X.zerhackerVorrat(p,now)>=Z.vorratMax)return 0;
-    var start=X.wochenStart(now),stand=Math.max((p&&p.zerhackerStand)||0,start);
-    var offen=H.openTime(now)-H.openTime(stand),bis=(Math.floor(offen/Z.nachschub)+1)*Z.nachschub;
+    var stand=(p&&p.zerhackerStand)||now;
+    if(stand<X.wochenStart(now))stand=now;
+    var offen=H.openTime(now)-H.openTime(stand),bis=(Math.floor(Math.max(0,offen)/Z.nachschub)+1)*Z.nachschub;
     return Math.max(0,H.productionAt(H.openTime(stand)+bis)-now);
   };
   X.zerhackerVerbrauchen=function(p,now){
-    var Z=X.ZERHACKER,start=X.wochenStart(now);
-    var stand=H.openTime(Math.max(p.zerhackerStand||0,start));
-    var voll=H.openTime(now)-Z.vorratMax*Z.nachschub;
+    var Z=X.ZERHACKER;X.zerhackerUhrStellen(p,now);
+    var stand=H.openTime(p.zerhackerStand),voll=H.openTime(now)-Z.vorratMax*Z.nachschub;
     p.zerhackerStand=H.productionAt(Math.max(stand,voll)+Z.nachschub);
   };
   /* Wochennummer, die montags umspringt: der 1.1.1970 war ein Donnerstag,
