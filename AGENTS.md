@@ -73,9 +73,9 @@ Eigene Logik steckt nicht darin: die Serverfunktionen sind dieselben Dateien
 wie bei Vercel, und über `UPSTASH_REDIS_REST_URL` hängt der Spiegel an
 derselben Spielerwelt. Wer über ihn spielt, spielt mit allen anderen zusammen.
 
-Die drei Endpunkte aus `api/` sind in `deno/server.js` noch einmal aufgeführt.
+Die beiden Endpunkte aus `api/` sind in `deno/server.js` noch einmal aufgeführt.
 Kommt dort einer dazu, muss er hier mit - sonst fehlt er stillschweigend nur auf
-dem Spiegel. Genau so ist `/api/auth` beim ersten Anlauf untergegangen.
+dem Spiegel. Die Anmeldung läuft wieder im Browser und benötigt keinen `/api/auth`-Endpunkt.
 
 Die Kopfzeilen stehen dort ein zweites Mal, weil Deno Deploy `vercel.json` nicht
 lesen kann. Wer eine ändert, ändert sie an beiden Stellen. Eine `deno.json`

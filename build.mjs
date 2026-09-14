@@ -621,9 +621,43 @@ function build() {
   if (assets.count) log('  Eingebettete Bilder: ' + assets.count + ' (' + kb(assets.bytes) + ')');
   if (skins.count) log('  Modelle daneben     : ' + skins.count + ' (' + kb(skins.bytes) + ')');
   log('');
-  log('  Anmeldung         : ausschließlich über den Server');
+  const adm = ersterAdminCode();
+  log('  Erster Admin-Code  : ' + adm.code);
+  log('  Codevorrat         : ' + adm.zaehler.A + ' Admin, ' + adm.zaehler.K + ' Kreis, ' + adm.zaehler.S + ' Spieler');
   if (offSize > 2 * 1024 * 1024) log('  ! Offline-Datei ueber Budget');
   log('');
 }
 
 build();
+
+/* Denselben ersten Admin-Code ausrechnen, den src/core/auth.js erwartet.
+   Ohne ihn kaeme niemand durch die Tuer. */
+function ersterAdminCode() {
+  const src = read(path.join(SRC, 'core/auth.js'));
+  const g = /var GEHEIM = '([^']+)'/.exec(src);
+  const r = /var RASTER = (\d+)/.exec(src);
+  const GEHEIM = g ? g[1] : '';
+  const RASTER = r ? Number(r[1]) : 97;
+
+  const streu = (t) => {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < t.length; i++) {
+      h ^= t.charCodeAt(i);
+      h = (h + (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24)) >>> 0;
+    }
+    return h >>> 0;
+  };
+
+  const rollen = ['S', 'K', 'A'];
+  const zaehler = { A: 0, K: 0, S: 0 };
+  let erster = null;
+  for (let n = 0; n < 10000; n++) {
+    const c = String(n).padStart(4, '0');
+    const w = streu('code:' + c + ':' + GEHEIM);
+    if (w % RASTER !== 0) continue;
+    const rolle = rollen[Math.floor(w / RASTER) % 3];
+    zaehler[rolle]++;
+    if (rolle === 'A' && !erster) erster = c;
+  }
+  return { code: erster, zaehler };
+}

@@ -169,19 +169,32 @@
 
     var gesperrt = false;
 
-    async function versuchen() {
-      if (gesperrt || eingabe.length !== A.stellen) return;
-      gesperrt = true;
-      var eingegeben = eingabe, eintrag;
-      meldung.textContent = 'Zugang wird geprüft …';
-      try { eintrag = await A.anmelden(eingegeben, offenerName); }
-      catch (error) {
-        gesperrt = false; eingabe = ''; anzeigen();
-        if (error.status === 401) { SG.audio.play('error'); strafe(eingegeben); }
-        else meldung.textContent = error.message;
+    function versuchen() {
+      var eingegeben = eingabe;
+      var geprueft = A.pruefen(eingabe);
+      if (!geprueft) {
+        SG.audio.play('error');
+        SG.settings.buzz(40);
+        punkte.classList.add('falsch');
+        setTimeout(function () { punkte.classList.remove('falsch'); }, 450);
+        strafe(eingegeben);
+        return;
+      }
+      /* Gesperrt heisst gesperrt - auch wenn der Code an sich stimmt.
+         Die Sperrliste kommt vom Relais und liegt vor der Tuer schon
+         bereit (siehe boot.js). */
+      var bann = A.gebannt(geprueft.code);
+      if (bann) {
+        SG.audio.play('error');
+        SG.settings.buzz(60);
+        eingabe = '';
+        anzeigen();
+        gesperrtZeigen(bann);
         return;
       }
       SG.audio.play('win');
+      if (offenerName) A.nameSetzen(geprueft.code, offenerName);
+      var eintrag = A.anmelden(geprueft.code);
       SG.storage.uebernehmen();
       /* Wem gehoert dieses Geraet gerade? Steht nur lokal - der Dienst
          erfaehrt es erst, wenn von hier eine Meldung ausgeht. */

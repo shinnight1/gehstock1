@@ -27,7 +27,6 @@
 
   var daten = null;
   var version = 0;
-  var warteschlange = Promise.resolve(), sitzungsVersion = 0;
   var offeneSchreiben = 0;             // eigene Aenderungen noch unterwegs
   var bus = U.emitter();
 
@@ -70,13 +69,8 @@
     SG.storage.globalSet(SCHLUESSEL, daten);
   }
 
-  V.sitzung = function (res) {
-    sitzungsVersion++;
-    daten = U.assign(leer(), res && res.daten || {}); version = res && res.version || 0;
-    Rel.verwVersionSetzen(version); merken(); bus.emit('aenderung', daten);
-  };
   V.daten = function () {
-    if (!daten) { daten = leer(); }
+    if (!daten) { daten = ausGeraet(); }
     return daten;
   };
 
@@ -104,7 +98,7 @@
      da sein, bevor jemand seinen Code eingibt. */
   V.laden = function () {
     V.daten();
-    if (!SG.auth.verbunden() || !V.verfuegbar()) return Promise.resolve(daten);
+    if (!V.verfuegbar()) return Promise.resolve(daten);
     return Rel.post({ op: 'verw:read', since: 0 }, 6000).then(function (res) {
       // Ein leeres Relais darf lokale Daten nicht wegwischen
       if (res && res.version === 0 && daten && hatInhalt(daten)) {
@@ -142,21 +136,16 @@
     if (aenderung) aenderung(daten);
     merken();
     bus.emit('aenderung', daten);
-    if (!SG.auth.verbunden() || !V.verfuegbar()) return Promise.resolve(daten);
-    var generation = sitzungsVersion;
+    if (!V.verfuegbar()) return Promise.resolve(daten);
     offeneSchreiben++;
-    var run = warteschlange.then(function () {
-      if (generation !== sitzungsVersion || !SG.auth.verbunden()) return daten;
-      return Rel.post({ op: 'verw:write', daten: daten, version: version }, 8000).then(function (res) {
-        if (generation !== sitzungsVersion) return daten;
-        if (res && typeof res.version === 'number') {
-          version = res.version; Rel.verwVersionSetzen(version); V.online = true;
-          if (offeneSchreiben === 1) { daten = U.assign(leer(), res.daten || {}); merken(); bus.emit('aenderung', daten); }
-        }
-        return daten;
-      });
-    }).catch(function () { return daten; }).finally(function () { offeneSchreiben--; });
-    warteschlange = run;
-    return run;
+    return Rel.post({ op: 'verw:write', daten: daten }, 8000).then(function (res) {
+      offeneSchreiben--;
+      if (res && typeof res.version === 'number') {
+        version = res.version;
+        Rel.verwVersionSetzen(version);
+        V.online = true;
+      }
+      return daten;
+    }, function () { offeneSchreiben--; return daten; });
   };
 })(SG);

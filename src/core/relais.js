@@ -71,15 +71,13 @@
   /* ------------------------------------------------------------------ Senden */
 
   function post(nutzlast, timeoutMs, ctrlAus) {
-    if (!SG.auth.verbunden()) return Promise.reject(new Error('Bitte zuerst anmelden.'));
-    var requestHeaders = SG.auth.headers();
     var ctrl = null;
     try { ctrl = new AbortController(); } catch (e) { /* egal */ }
     if (ctrlAus && ctrl) ctrlAus(ctrl);
     var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, timeoutMs || 12000);
     return fetch(ENDPUNKT, {
       method: 'POST',
-      headers: requestHeaders,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(nutzlast),
       signal: ctrl ? ctrl.signal : undefined,
       cache: 'no-store',
@@ -96,7 +94,6 @@
           function () { throw new Error('no_service'); });
       }
       return r.json().then(function (j) {
-        if (requestHeaders.Authorization !== SG.auth.headers().Authorization) throw new Error('Die Anmeldung wurde gewechselt.');
         if (!r.ok || j.error) throw new Error(j.error || ('HTTP ' + r.status));
         return j;
       }, function () {

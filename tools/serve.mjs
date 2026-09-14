@@ -17,13 +17,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHandler as createMonHandler } from '../netlify/functions/gehstockmon.mjs';
 import { devStore as monStore, transientStore } from './gehstockmon-dev-store.mjs';
-import { createAuth } from '../netlify/functions/lib/auth-service.mjs';
-import { protect } from '../netlify/functions/lib/auth-gateway.mjs';
-import { createRoomHandler } from '../netlify/functions/room.mjs';
-import { memoryStore } from './auth-memory-store.mjs';
-const localRooms = memoryStore(), localAuth = createAuth({ sessions: memoryStore(), rooms: localRooms });
-const roomHandler = protect(createRoomHandler(localRooms), { service: localAuth });
-const monHandler = protect(createMonHandler({ store: monStore(), presenceStore: transientStore() }), { service: localAuth, kind: 'mon' });
+const monHandler = createMonHandler({ store: monStore(), presenceStore: transientStore() });
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'dist');
@@ -615,17 +609,24 @@ const server = http.createServer((req, res) => {
     return res.end();
   }
 
-  const endpoint = { '/api/auth': localAuth.endpoint, '/api/room': roomHandler, '/api/gehstockmon': monHandler }[url.pathname];
-  if (endpoint) {
+  if (url.pathname === '/api/room' || url.pathname === '/.netlify/functions/room') {
+    let body = '';
+    req.on('data', (d) => { body += d; });
+    req.on('end', () => handleRoom(req, res, body));
+    return undefined;
+  }
+
+  if (url.pathname === '/api/gehstockmon' || url.pathname === '/.netlify/functions/gehstockmon') {
     let body = '', tooLarge = false;
-    req.on('data', d => { body += d; if (body.length > 1000000 && !tooLarge) { tooLarge = true; res.writeHead(413); res.end(); } });
+    req.on('data', (d) => { body += d; if (body.length > 24000 && !tooLarge) { tooLarge = true; res.writeHead(413, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Anfrage zu groß.' })); } });
     req.on('end', async () => {
       if (tooLarge) return;
       try {
-        const response = await endpoint(new Request('http://localhost' + url.pathname, { method: req.method, headers: { ...req.headers, 'x-forwarded-for': req.socket.remoteAddress || 'local' }, body: req.method === 'POST' ? body : undefined }));
+        const response = await monHandler(new Request('http://localhost' + url.pathname, { method: req.method, headers: req.headers, body: req.method === 'POST' ? body : undefined }));
         res.writeHead(response.status, Object.fromEntries(response.headers)); res.end(await response.text());
-      } catch { res.writeHead(503, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Lokaler Server nicht erreichbar.' })); }
-    }); return;
+      } catch (error) { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Lokaler Spielserver nicht erreichbar.' })); }
+    });
+    return undefined;
   }
 
   let p = decodeURIComponent(url.pathname);

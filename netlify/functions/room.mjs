@@ -33,8 +33,6 @@
    die Liste der Zuege, jeder Client rechnet sie selbst nach.
    ------------------------------------------------------------------ */
 
-import { protect } from './lib/auth-gateway.mjs';
-import { roleForCode } from './lib/auth-codes.mjs';
 import { speicher } from './lib/speicher.mjs';
 
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // ohne 0/O/1/I
@@ -52,7 +50,27 @@ const PRAESENZ_SCHREIB_MS = 45 * 1000;
 const BILD_MAX = 700 * 1024;                           // Base64-Laenge
 const SCHIRM_MAX = 260 * 1024;
 
-const codeGueltig = code => roleForCode(code) !== null;
+/* Dasselbe Geheimnis wie in src/core/auth.js. Der Server kann damit
+   wenigstens pruefen, dass eine Anfrage von jemandem mit gueltigem
+   Code kommt - Rollen kennt er weiterhin nicht, die stehen in der
+   Verwaltung. Aendert sich GEHEIM dort, muss es hier mitwandern. */
+const GEHEIM = 'gehstock:hideout:2026:kellergewoelbe';
+const RASTER = 97;
+
+function streu(text) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = (h + (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24)) >>> 0;
+  }
+  return h >>> 0;
+}
+
+function codeGueltig(code) {
+  const c = String(code || '').replace(/\D/g, '');
+  if (c.length !== 4) return false;
+  return streu('code:' + c + ':' + GEHEIM) % RASTER === 0;
+}
 
 function store() {
   return speicher('hgh-rooms');
@@ -245,7 +263,7 @@ async function readRoom(st, code) {
 
 /* ------------------------------------------------------------------ Einstieg */
 
-export function createRoomHandler(st = store()) { return async (req) => {
+export default async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
@@ -265,7 +283,7 @@ export function createRoomHandler(st = store()) { return async (req) => {
     return fail('bad_json');
   }
 
-
+  const st = store();
   const op = String(msg.op || '');
 
   try {
@@ -294,8 +312,7 @@ export function createRoomHandler(st = store()) { return async (req) => {
   } catch (e) {
     return fail('server: ' + String((e && e.message) || e), 500);
   }
-}; }
-export default protect(createRoomHandler());
+};
 
 /* ==================================================================
    sync - die eine Verbindung

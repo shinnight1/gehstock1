@@ -272,7 +272,7 @@
       UI.clear(wrap);
       wrap.appendChild(abbruch);
 
-      var prueft = false;
+      var soll = A.bndSchluessel(A.aktuell.code);
       var eingabe = '';
       var punkte = UI.el('div.pin-punkte.bnd-punkte');
       var punktEl = [];
@@ -347,17 +347,13 @@
       scanner.addEventListener('pointercancel', scanStopp);
       scanner.style.display = 'none';
 
-      async function pruefen() {
-        if (prueft) return;
-        prueft = true;
-        try { await A.bndPruefen(eingabe); }
-        catch (error) {
-          prueft = false;
+      function pruefen() {
+        if (eingabe !== soll) {
           SG.audio.play('error');
           SG.settings.buzz(60);
           punkte.classList.add('falsch');
           setTimeout(function () { punkte.classList.remove('falsch'); }, 450);
-          meldung.textContent = error.message;
+          meldung.textContent = 'Dienstschlüssel falsch.';
           eingabe = '';
           setTimeout(malen, 460);
           if (SG.protokoll) {

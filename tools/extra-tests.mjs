@@ -1,8 +1,6 @@
 /* Zusatztests fuer die restlichen Regel-Engines und die beiden Tycoons.
    Wird von tools/test.mjs eingebunden, sobald SG geladen ist. */
 
-import { legacyCodes, roleForCode } from '../netlify/functions/lib/auth-codes.mjs';
-
 export function extraTests(SG, U, test) {
   /* --- Schach --- */
   const CH = SG.rules.chess;
@@ -640,10 +638,8 @@ export function extraTests(SG, U, test) {
      Admin den anderen aus und niemand merkt es vor dem Ernstfall. */
 
   const A = SG.auth;
-  const adminCodes = legacyCodes.filter(c => roleForCode(c) === 'A');
-  const spielerCodes = legacyCodes.filter(c => roleForCode(c) === 'S');
-  // These tests cover display permissions; real login and server authorization have their own integration suite.
-  function displayAccount(code, name) { A.aktuell = { code, name, rolle: roleForCode(code) }; A.merken(code, name, roleForCode(code)); }
+  const adminCodes = A.vorrat(A.ADMIN);
+  const spielerCodes = A.vorrat(A.SPIELER);
   const OWNER = adminCodes[0];
   const ADMIN2 = adminCodes[1];
   const SPIELER = spielerCodes[0];
@@ -651,7 +647,7 @@ export function extraTests(SG, U, test) {
   test('Owner: der erste Admin kann die freie Rolle nehmen', () => {
     SG.verwaltung.schreiben((d) => { delete d.owner; });
     if (!A.ownerFrei()) throw new Error('Rolle war nicht frei');
-    displayAccount(OWNER, 'Owner');
+    A.anmelden(OWNER, 'Owner');
     if (!A.ownerSetzen(OWNER)) throw new Error('Uebernehmen ging nicht');
     if (!A.binOwner()) throw new Error('bin nicht Owner');
   });
@@ -662,7 +658,7 @@ export function extraTests(SG, U, test) {
   });
 
   test('Owner: ein zweiter Admin kommt an ihn nicht heran', () => {
-    displayAccount(ADMIN2, 'Zweiter');
+    A.anmelden(ADMIN2, 'Zweiter');
     if (A.darfGegen(OWNER)) throw new Error('darfGegen sagt ja');
     if (A.bannSetzen(OWNER, 'Test')) throw new Error('Bann ging durch');
     if (A.gebannt(OWNER)) throw new Error('Owner ist gebannt');
@@ -675,20 +671,20 @@ export function extraTests(SG, U, test) {
   test('Owner: ein Admin kommt auch an andere Admins nicht heran', () => {
     const dritter = adminCodes[2];
     A.merken(dritter, 'Dritter', A.ADMIN);
-    displayAccount(ADMIN2, 'Zweiter');
+    A.anmelden(ADMIN2, 'Zweiter');
     if (A.darfGegen(dritter)) throw new Error('darfGegen sagt ja');
     if (A.bannSetzen(dritter, 'Test')) throw new Error('Bann ging durch');
   });
 
   test('Owner: gegen Spieler darf ein Admin weiterhin alles', () => {
-    displayAccount(ADMIN2, 'Zweiter');
+    A.anmelden(ADMIN2, 'Zweiter');
     if (!A.darfGegen(SPIELER)) throw new Error('darfGegen sagt nein');
     if (!A.bannSetzen(SPIELER, 'Test')) throw new Error('Bann ging nicht');
     A.bannLoesen(SPIELER);
   });
 
   test('Owner: der Owner selbst darf gegen jeden Admin vorgehen', () => {
-    displayAccount(OWNER, 'Owner');
+    A.anmelden(OWNER, 'Owner');
     if (!A.darfGegen(ADMIN2)) throw new Error('Owner darf nicht');
     if (!A.bannSetzen(ADMIN2, 'Test')) throw new Error('Bann ging nicht');
     A.bannLoesen(ADMIN2);
