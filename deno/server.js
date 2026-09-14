@@ -22,6 +22,7 @@ import { join } from 'jsr:@std/path@^1';
 
 import room from '../netlify/functions/room.mjs';
 import gehstockmon from '../netlify/functions/gehstockmon.mjs';
+import auth from '../netlify/functions/auth.mjs';
 
 /* import.meta.dirname ist gesetzt, solange die Datei von der Platte
    kommt - lokal wie bei Deno Deploy. Der Rueckfall auf den
@@ -29,9 +30,13 @@ import gehstockmon from '../netlify/functions/gehstockmon.mjs';
    beim ersten Aufruf in einen Absturz laeuft. */
 const DIST = import.meta.dirname ? join(import.meta.dirname, '..', 'dist') : 'dist';
 
+/* Dieselben drei Endpunkte, die auch unter api/ fuer Vercel liegen. Kommt
+   dort einer dazu, muss er hier mit - sonst fehlt er stillschweigend nur
+   auf dem Spiegel. */
 const ROUTEN = {
   '/api/room': room,
   '/api/gehstockmon': gehstockmon,
+  '/api/auth': auth,
 };
 
 const JAHR = 'public, max-age=31536000, immutable';

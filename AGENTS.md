@@ -69,9 +69,13 @@ andere.
 damit unter einer Adresse, die nicht auf `vercel.app` endet. Für Netze, die diese
 Endung sperren, ist das der Weg hinein.
 
-Eigene Logik steckt nicht darin: die beiden Serverfunktionen sind dieselben
-Dateien wie bei Vercel, und über `UPSTASH_REDIS_REST_URL` hängt der Spiegel an
+Eigene Logik steckt nicht darin: die Serverfunktionen sind dieselben Dateien
+wie bei Vercel, und über `UPSTASH_REDIS_REST_URL` hängt der Spiegel an
 derselben Spielerwelt. Wer über ihn spielt, spielt mit allen anderen zusammen.
+
+Die drei Endpunkte aus `api/` sind in `deno/server.js` noch einmal aufgeführt.
+Kommt dort einer dazu, muss er hier mit - sonst fehlt er stillschweigend nur auf
+dem Spiegel. Genau so ist `/api/auth` beim ersten Anlauf untergegangen.
 
 Die Kopfzeilen stehen dort ein zweites Mal, weil Deno Deploy `vercel.json` nicht
 lesen kann. Wer eine ändert, ändert sie an beiden Stellen. Eine `deno.json`
@@ -95,15 +99,15 @@ deno run --env-file=.env.local --allow-net --allow-read --allow-env --allow-sys 
 Achtung: mit `.env.local` hängt der Spiegel auch lokal an der **echten**
 Spielerwelt. Was man dort anfasst, fassen alle mit an.
 
-**Stand: der Spiegel hat noch keine Adresse.** Die App `gehstock-hideout` in der
-Organisation `gehstcok` ist angelegt, baut durch und hängt über die gesetzten
-Upstash-Variablen an der richtigen Spielerwelt. Nur bekommt sie keine Domain:
-die Organisation hat gar keine, alle Revisionen stehen auf `PROD  no`, und unter
-dem erwarteten Namen `gehstock-hideout.gehstcok.deno.net` gibt es zwar einen
-DNS-Eintrag, aber kein passendes Zertifikat. Weder die Kommandozeile noch das
-Dashboard bieten einen Weg, eine Revision in die Produktion zu befördern. Bis das
-geklärt ist, ist der Spiegel nicht erreichbar und `deno deploy --prod` bringt
-nichts.
+Der Spiegel liegt unter `hideout.gehstock.deno.net` - App `hideout` in der
+Organisation `gehstock`. Welche das ist, steht in `deno.jsonc`.
+
+Eine Warnung aus der Entstehung: die erste Organisation bekam nie ihre
+Standard-Domain `<org>.deno.net`. Die Apps darin bauten und veröffentlichten
+klaglos, blieben aber ohne Adresse - DNS zeigte hin, ein Zertifikat gab es nie,
+und alle Revisionen standen auf `PROD  no`. Weder Kommandozeile noch Dashboard
+konnten das nachholen. Wer in einer Organisation ohne Domain landet, legt eine
+neue an, statt zu suchen.
 
 Beide Auslieferungen sind getrennt. Ein `vercel --prod` allein ändert am Spiegel
 nichts und umgekehrt - nach einer Änderung, die beide zeigen sollen, gehen beide

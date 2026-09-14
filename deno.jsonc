@@ -1,12 +1,6 @@
 {
   "deploy": {
-    "org": "gehstcok",
-    "app": "gehstock-hideout"
+    "org": "gehstock",
+    "app": "hideout"
   }
 }
-
-
-
-
-
-

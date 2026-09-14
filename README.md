@@ -38,6 +38,9 @@ vercel --prod
 Wird sie in einem Netz gesperrt, führt [gehstock-hideout.vercel.app](https://gehstock-hideout.vercel.app)
 zur selben Seite mit derselben Spielerwelt.
 
+Und unter [hideout.gehstock.deno.net](https://hideout.gehstock.deno.net) liegt
+dieselbe Seite noch einmal bei Deno Deploy, veröffentlicht mit `deno deploy --prod`.
+
 Mehr ist es nicht. Vercel baut selbst und liest dafür `vercel.json`:
 
 | Einstellung | Wert |

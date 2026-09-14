@@ -12,6 +12,10 @@ Dieselbe Seite ist außerdem unter [gehstock-hideout.vercel.app](https://gehstoc
 erreichbar - gleiches Projekt, gleicher Stand, gleiche Spielerwelt. Sperrt ein Netz den
 einen Namen, führt der andere trotzdem hin.
 
+Ein dritter Weg führt über [hideout.gehstock.deno.net](https://hideout.gehstock.deno.net)
+bei Deno Deploy - wieder dieselbe Seite und dieselbe Spielerwelt, nur ein anderer
+Anbieter und eine Endung, die nicht auf `vercel.app` lautet.
+
 1. Die ZIP vollständig in einen Ordner entpacken.
 2. Ein Terminal in diesem Ordner öffnen. Node.js 22.12 oder neuer muss installiert sein.
 3. Einmalig anmelden und den Ordner mit dem bestehenden Projekt verbinden:

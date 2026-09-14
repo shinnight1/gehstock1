@@ -93,12 +93,14 @@ und welche Adresse stattdessen durchkommt.</p>
       bild: '/icons/icon-32.png', kante: 32 },
     { id: 'zweit', name: 'Zweite Adresse', host: 'gehstock-hideout.vercel.app',
       bild: '/icons/icon-32.png', kante: 32 },
+    { id: 'spiegel', name: 'Spiegel bei Deno', host: 'hideout.gehstock.deno.net',
+      bild: '/icons/icon-32.png', kante: 32 },
     { id: 'vercel', name: 'Vercel selbst', host: 'vercel.com', bild: '/favicon.ico' },
     { id: 'kontrolle', name: 'Kontrolle: kommt ueberhaupt was durch?',
       host: 'www.google.com', bild: '/favicon.ico' }
   ];
 
-  var WEITERE = ['pages.dev', 'deno.dev', 'github.io', 'gehstock.netlify.app'];
+  var WEITERE = ['pages.dev', 'github.io', 'gehstock.netlify.app'];
 
   var ZEITLIMIT = 8000;
 
@@ -163,7 +165,7 @@ und welche Adresse stattdessen durchkommt.</p>
              'steht noch vor einer Anmeldeseite. Erst irgendeine andere Seite in Safari ' +
              'oeffnen und schauen, was passiert.';
     }
-    if (e.eigen.stand === 'fremd' || e.zweit.stand === 'fremd') {
+    if (e.eigen.stand === 'fremd' || e.zweit.stand === 'fremd' || e.spiegel.stand === 'fremd') {
       return 'Die Verbindung kommt zustande, aber es antwortet nicht unser Server - der ' +
              'Schulfilter bricht den Verkehr auf und schiebt seine eigene Seite unter. ' +
              'Jetzt ist der zweite Test das Wichtigste: den Text der Sperrseite mitbringen.';
@@ -178,18 +180,23 @@ und welche Adresse stattdessen durchkommt.</p>
              'gehstock-hideout.vercel.app kommt durch. Ab sofort die benutzen; sie zeigt ' +
              'dieselbe Seite mit derselben Spielerwelt.';
     }
-    if (frei('vercel')) {
-      return 'Beide vercel.app-Adressen sind dicht, vercel.com aber nicht. Gesperrt ist ' +
-             'also die ganze Endung vercel.app - dort, wo jeder seine Seiten hinlegen ' +
-             'kann. Eine dritte vercel.app-Adresse braucht man gar nicht erst zu ' +
-             'probieren. Was hilft: ein anderer Anbieter oder eine eigene Domain. Im ' +
-             'zweiten Test bitte pages.dev, deno.dev und github.io antippen - was davon ' +
-             'aufgeht, kommt als neues Zuhause in Frage.';
+    if (frei('spiegel')) {
+      return 'Beide vercel.app-Adressen sind dicht, der Spiegel bei Deno kommt aber ' +
+             'durch. Ab sofort hideout.gehstock.deno.net benutzen - dieselbe Seite, ' +
+             'dieselbe Spielerwelt, nur ein anderer Anbieter. Einmal neu anmelden, dann ' +
+             'laeuft alles wie gewohnt.';
     }
-    return 'Vercel ist komplett gesperrt, google.com nicht. Der Filter arbeitet also mit ' +
-           'Kategorien. Bitte im zweiten Test pages.dev, deno.dev und github.io antippen: ' +
-           'geht keins davon auf, sperrt er Hosting-Anbieter als Gruppe, und ein Umzug zum ' +
-           'naechsten Gratisanbieter bringt nichts. Dann hilft nur eine eigene Domain - ' +
+    if (frei('vercel')) {
+      return 'Beide vercel.app-Adressen und der Deno-Spiegel sind dicht, vercel.com aber ' +
+             'nicht. Gesperrt ist also nicht die Firma, sondern die Endungen, unter denen ' +
+             'jeder seine eigenen Seiten ablegen kann. Ein vierter Gratisanbieter wird ' +
+             'genauso enden. Im zweiten Test bitte pages.dev und github.io antippen - ' +
+             'geht auch davon nichts auf, hilft nur noch eine eigene Domain.';
+    }
+    return 'Alles Gehostete ist gesperrt, google.com nicht. Der Filter arbeitet also mit ' +
+           'Kategorien und hat Vercel und Deno beide darin. Bitte im zweiten Test ' +
+           'pages.dev und github.io antippen: geht keins davon auf, ist ein Umzug zum ' +
+           'naechsten Gratisanbieter vergebene Muehe. Dann hilft nur eine eigene Domain - ' +
            'und wirklich sicher erst, wenn die Schul-IT sie freischaltet.';
   }
 
