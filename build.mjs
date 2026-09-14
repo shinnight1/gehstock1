@@ -13,7 +13,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
-import { execFileSync } from 'node:child_process';
 import { buildNoJs, NOJS_ANZAHL } from './tools/nojs.mjs';
 import { abziehen, pruefen } from './tools/kleiner.mjs';
 import { buildSync } from 'esbuild';
@@ -429,11 +428,19 @@ function build() {
   fs.writeFileSync(path.join(DIST, 'assets', cssName), css);
   fs.writeFileSync(path.join(DIST, 'assets', jsName), js);
 
-  // Syntaxpruefung des gesamten Bundles
+  /* Syntaxpruefung des gesamten Bundles.
+
+     new Function laesst V8 den ganzen Text parsen und wirft bei einem
+     Syntaxfehler; ausgefuehrt wird dabei nichts. Frueher stand hier ein
+     Unterprozess mit --check. Der ging ueberall dort kaputt, wo node in
+     Wahrheit Deno ist - etwa im Build von Deno Deploy. Dort bedeutet
+     "deno --check datei.js" naemlich nicht "nur pruefen", sondern "mit
+     Typpruefung ausfuehren", und beim Ausfuehren fehlt dem Bundle
+     natuerlich window. */
   try {
-    execFileSync(process.execPath, ['--check', path.join(DIST, 'assets', jsName)], { stdio: 'pipe' });
-  } catch (e) {
-    console.error('\nSyntaxfehler im Bundle:\n' + (e.stderr ? e.stderr.toString() : e.message));
+    new Function(js);
+  } catch (fehler) {
+    console.error('\nSyntaxfehler im Bundle:\n' + ((fehler && fehler.message) || fehler));
     process.exit(1);
   }
 
