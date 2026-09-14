@@ -8,6 +8,10 @@ GehstockMon lädt nach der Hideout-Anmeldung automatisch dieselbe Spielerwelt f�
 
 Die Seite liegt auf Vercel unter [gehstock1.vercel.app](https://gehstock1.vercel.app).
 
+Dieselbe Seite ist außerdem unter [gehstock-hideout.vercel.app](https://gehstock-hideout.vercel.app)
+erreichbar - gleiches Projekt, gleicher Stand, gleiche Spielerwelt. Sperrt ein Netz den
+einen Namen, führt der andere trotzdem hin.
+
 1. Die ZIP vollständig in einen Ordner entpacken.
 2. Ein Terminal in diesem Ordner öffnen. Node.js 22.12 oder neuer muss installiert sein.
 3. Einmalig anmelden und den Ordner mit dem bestehenden Projekt verbinden:

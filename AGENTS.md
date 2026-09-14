@@ -57,6 +57,12 @@ Vercel baut selbst; `vercel.json` trägt Build, Ausgabeordner und Kopfzeilen. Vo
 einem Deploy, der die Seite verändert, `node tools/test.mjs` laufen lassen. Die
 übrigen Build- und Testbefehle stehen in `ONLINE-START.md`.
 
+Dieselbe Seite hört zusätzlich auf `gehstock-hideout.vercel.app`. Die Adresse hängt
+am selben Vercel-Projekt, zeigt denselben Stand und dieselbe Spielerwelt und wird von
+jedem `vercel --prod` mitgezogen. Sie ist der Ausweichweg für Netze, die den ersten
+Namen sperren - etwa das Schul-WLAN. Beide Adressen bleiben gültig; keine ersetzt die
+andere.
+
 Die alte Adresse `gehstock.netlify.app` bleibt vorerst als Rückweg stehen. Dorthin
 wird **nicht** mehr veröffentlicht: Beide Seiten haben eigene, getrennte
 Spielerwelten, und ein Deploy dorthin lässt die Spielstände auseinanderlaufen.

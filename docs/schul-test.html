@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Schultest - Herr Gehstocks Hideout</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 20px 16px 60px; background: #0d1017; color: #e7ecf3;
+         font: 17px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+  .blatt { max-width: 640px; margin: 0 auto; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  .unter { color: #93a1b5; margin: 0 0 24px; }
+  p { margin: 0 0 14px; }
+  button { -webkit-appearance: none; appearance: none; border: 0; border-radius: 12px;
+           background: #3b82f6; color: #fff; font-size: 18px; font-weight: 600;
+           padding: 16px 22px; width: 100%; margin: 0 0 14px; cursor: pointer; }
+  button.neben { background: #263041; color: #cbd5e1; font-size: 16px; padding: 13px 18px; }
+  button:disabled { opacity: .5; }
+  ol { list-style: none; margin: 0 0 22px; padding: 0; }
+  li { display: flex; align-items: baseline; gap: 10px; padding: 11px 0;
+       border-bottom: 1px solid #1c2432; }
+  .marke { font-size: 20px; width: 26px; flex: none; text-align: center; }
+  .name { flex: 1; }
+  .name small { display: block; color: #7b899d; font-size: 13px; word-break: break-all; }
+  .wert { color: #93a1b5; font-size: 14px; flex: none; }
+  .kasten { border-radius: 14px; padding: 16px 18px; margin: 0 0 22px;
+            background: #151b26; border: 1px solid #232d3d; }
+  .kasten h2 { font-size: 17px; margin: 0 0 8px; }
+  .kasten.wichtig { border-color: #3b82f6; background: #121b2c; }
+  .liste-links a { display: inline-block; padding: 7px 0; margin-right: 16px; color: #7dd3fc; }
+  textarea { width: 100%; box-sizing: border-box; height: 150px; background: #0a0d13;
+             color: #cbd5e1; border: 1px solid #232d3d; border-radius: 10px; padding: 10px;
+             font: 13px/1.45 ui-monospace, Menlo, Consolas, monospace; }
+</style>
+</head>
+<body>
+<div class="blatt">
+
+<h1>Schultest</h1>
+<p class="unter">Findet heraus, warum das Hideout im Schul-WLAN nicht aufgeht -
+und welche Adresse stattdessen durchkommt.</p>
+
+<div class="kasten">
+  <h2>So benutzen</h2>
+  <p>Diese Datei <strong>vorher zu Hause</strong> auf das iPad laden (Dateien-App,
+  AirDrop oder OneDrive). Sie selbst braucht kein Netz. In der Schule oeffnen, ins
+  Schul-WLAN gehen, auf <em>Test starten</em> tippen - und danach unbedingt noch
+  den zweiten Test weiter unten machen.</p>
+</div>
+
+<button id="los">Test starten</button>
+
+<ol id="liste"></ol>
+
+<div class="kasten wichtig" id="urteil" hidden>
+  <h2>Ergebnis</h2>
+  <div id="urteilText"></div>
+</div>
+
+<div class="kasten">
+  <h2>Zweiter Test: die Sperrseite lesen</h2>
+  <p>Diese Links nacheinander antippen. Ist eine Adresse gesperrt, zeigt der
+  Schulfilter fast immer eine eigene Seite mit seinem Namen und dem Grund
+  ("Kategorie: Spiele", "Web Hosting", "Proxy Avoidance"). Genau dieser Text
+  entscheidet, was hilft - abschreiben oder abfotografieren.</p>
+  <p class="liste-links" id="links"></p>
+</div>
+
+<div class="kasten">
+  <h2>Ergebnis zum Weitergeben</h2>
+  <textarea id="protokoll" readonly></textarea>
+  <button class="neben" id="kopieren" style="margin-top:12px">Ergebnis kopieren</button>
+</div>
+
+</div>
+<script>
+(function () {
+  'use strict';
+
+  /* ------------------------------------------------------------------
+     Warum Bilder und kein fetch()
+
+     Diese Datei liegt auf dem iPad und laeuft damit unter file://. Aus
+     so einer Seite heraus laesst Safari keine fetch-Anfragen ins Netz -
+     jede Adresse saehe dann gesperrt aus, auch eine freie. Ein <img>
+     darf dagegen ueberallhin laden. Kommt das Bild an, ist die Adresse
+     frei; bricht es ab, haelt etwas dazwischen sie auf.
+     ------------------------------------------------------------------ */
+
+  var ZIELE = [
+    { id: 'eigen', name: 'Unsere Seite', host: 'gehstock1.vercel.app',
+      bild: '/icons/icon-32.png', kante: 32 },
+    { id: 'zweit', name: 'Zweite Adresse', host: 'gehstock-hideout.vercel.app',
+      bild: '/icons/icon-32.png', kante: 32 },
+    { id: 'vercel', name: 'Vercel selbst', host: 'vercel.com', bild: '/favicon.ico' },
+    { id: 'kontrolle', name: 'Kontrolle: kommt ueberhaupt was durch?',
+      host: 'www.google.com', bild: '/favicon.ico' }
+  ];
+
+  var WEITERE = ['pages.dev', 'deno.dev', 'github.io', 'gehstock.netlify.app'];
+
+  var ZEITLIMIT = 8000;
+
+  var liste = document.getElementById('liste');
+  var knopf = document.getElementById('los');
+  var protokoll = document.getElementById('protokoll');
+  var zeilen = {};
+
+  ZIELE.forEach(function (z) {
+    var li = document.createElement('li');
+    li.innerHTML = '<span class="marke">·</span><span class="name">' + z.name +
+                   '<small>' + z.host + '</small></span><span class="wert"></span>';
+    liste.appendChild(li);
+    zeilen[z.id] = { marke: li.children[0], wert: li.children[2] };
+  });
+
+  document.getElementById('links').innerHTML =
+    ZIELE.map(function (z) { return z.host; }).concat(WEITERE).map(function (h) {
+      return '<a href="https://' + h + '/" target="_blank" rel="noreferrer">' + h + '</a>';
+    }).join('');
+
+  function pruefe(z) {
+    return new Promise(function (fertig) {
+      var start = Date.now();
+      var bild = new Image();
+      var erledigt = false;
+
+      function schluss(stand, hinweis) {
+        if (erledigt) return;
+        erledigt = true;
+        clearTimeout(uhr);
+        bild.onload = bild.onerror = null;
+        fertig({ stand: stand, ms: Date.now() - start, hinweis: hinweis });
+      }
+
+      var uhr = setTimeout(function () { schluss('zeit'); }, ZEITLIMIT);
+
+      bild.onload = function () {
+        /* Ein Filter, der den Verkehr aufbricht, kann mit Status 200 und
+           eigenem Inhalt antworten. Unser Symbol ist genau 32 Pixel breit -
+           kommt etwas anderes an, war es nicht unser Server. */
+        if (z.kante && bild.naturalWidth !== z.kante) {
+          return schluss('fremd', bild.naturalWidth + 'x' + bild.naturalHeight + ' statt ' +
+                                  z.kante + 'x' + z.kante);
+        }
+        schluss('frei');
+      };
+      bild.onerror = function () { schluss('gesperrt'); };
+      bild.src = 'https://' + z.host + z.bild + '?t=' + Date.now();
+    });
+  }
+
+  var ZEICHEN = { frei: '✅', fremd: '⚠️', gesperrt: '❌', zeit: '⏱️' };
+  var WORT = { frei: 'frei', fremd: 'abgefangen', gesperrt: 'gesperrt', zeit: 'keine Antwort' };
+
+  function urteilen(e) {
+    var frei = function (k) { return e[k] && e[k].stand === 'frei'; };
+
+    if (!frei('kontrolle')) {
+      return 'Es kommt gar nichts durch, auch google.com nicht. Dann liegt es nicht an ' +
+             'unserer Seite: entweder haengt das iPad nicht richtig im WLAN, oder es ' +
+             'steht noch vor einer Anmeldeseite. Erst irgendeine andere Seite in Safari ' +
+             'oeffnen und schauen, was passiert.';
+    }
+    if (e.eigen.stand === 'fremd' || e.zweit.stand === 'fremd') {
+      return 'Die Verbindung kommt zustande, aber es antwortet nicht unser Server - der ' +
+             'Schulfilter bricht den Verkehr auf und schiebt seine eigene Seite unter. ' +
+             'Jetzt ist der zweite Test das Wichtigste: den Text der Sperrseite mitbringen.';
+    }
+    if (frei('eigen')) {
+      return 'Die Seite ist im Schul-WLAN erreichbar. Wenn sie trotzdem nicht aufging, ' +
+             'lag es nicht am Filter. Dann in den iPad-Einstellungen unter Safari den ' +
+             'Verlauf und die Website-Daten loeschen und es noch einmal versuchen.';
+    }
+    if (frei('zweit')) {
+      return 'Gesperrt ist nur der Name gehstock1.vercel.app - die zweite Adresse ' +
+             'gehstock-hideout.vercel.app kommt durch. Ab sofort die benutzen; sie zeigt ' +
+             'dieselbe Seite mit derselben Spielerwelt.';
+    }
+    if (frei('vercel')) {
+      return 'Beide vercel.app-Adressen sind dicht, vercel.com aber nicht. Gesperrt ist ' +
+             'also die ganze Endung vercel.app - dort, wo jeder seine Seiten hinlegen ' +
+             'kann. Eine dritte vercel.app-Adresse braucht man gar nicht erst zu ' +
+             'probieren. Was hilft: ein anderer Anbieter oder eine eigene Domain. Im ' +
+             'zweiten Test bitte pages.dev, deno.dev und github.io antippen - was davon ' +
+             'aufgeht, kommt als neues Zuhause in Frage.';
+    }
+    return 'Vercel ist komplett gesperrt, google.com nicht. Der Filter arbeitet also mit ' +
+           'Kategorien. Bitte im zweiten Test pages.dev, deno.dev und github.io antippen: ' +
+           'geht keins davon auf, sperrt er Hosting-Anbieter als Gruppe, und ein Umzug zum ' +
+           'naechsten Gratisanbieter bringt nichts. Dann hilft nur eine eigene Domain - ' +
+           'und wirklich sicher erst, wenn die Schul-IT sie freischaltet.';
+  }
+
+  knopf.addEventListener('click', function () {
+    knopf.disabled = true;
+    knopf.textContent = 'laeuft ...';
+    var e = {};
+    var reihe = Promise.resolve();
+
+    ZIELE.forEach(function (z) {
+      reihe = reihe.then(function () {
+        zeilen[z.id].marke.textContent = '…';
+        return pruefe(z).then(function (r) {
+          e[z.id] = r;
+          zeilen[z.id].marke.textContent = ZEICHEN[r.stand] || '?';
+          zeilen[z.id].wert.textContent = (WORT[r.stand] || r.stand) + ' · ' + r.ms + ' ms';
+        });
+      });
+    });
+
+    reihe.then(function () {
+      knopf.textContent = 'Noch einmal testen';
+      knopf.disabled = false;
+      document.getElementById('urteil').hidden = false;
+      document.getElementById('urteilText').textContent = urteilen(e);
+
+      var text = ['Schultest ' + new Date().toLocaleString('de-DE'),
+                  navigator.userAgent, 'online=' + navigator.onLine, ''];
+      ZIELE.forEach(function (z) {
+        var r = e[z.id] || {};
+        text.push(z.host + ' -> ' + (WORT[r.stand] || '?') + ' (' + r.ms + ' ms)' +
+                  (r.hinweis ? ' [' + r.hinweis + ']' : ''));
+      });
+      text.push('', urteilen(e));
+      protokoll.value = text.join('\n');
+    });
+  });
+
+  document.getElementById('kopieren').addEventListener('click', function () {
+    protokoll.select();
+    if (navigator.clipboard) navigator.clipboard.writeText(protokoll.value);
+    else document.execCommand('copy');
+    this.textContent = 'kopiert';
+  });
+})();
+</script>
+</body>
+</html>
