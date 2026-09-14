@@ -64,10 +64,6 @@
     }
   },
   "workspace": {
-    "dependencies": [
-      "npm:@netlify/blobs@^11.0.3",
-      "npm:@upstash/redis@^1.38.4"
-    ],
     "packageJson": {
       "dependencies": [
         "npm:@netlify/blobs@^11.0.3",

@@ -74,14 +74,26 @@ Dateien wie bei Vercel, und über `UPSTASH_REDIS_REST_URL` hängt der Spiegel an
 derselben Spielerwelt. Wer über ihn spielt, spielt mit allen anderen zusammen.
 
 Die Kopfzeilen stehen dort ein zweites Mal, weil Deno Deploy `vercel.json` nicht
-lesen kann. Wer eine ändert, ändert sie an beiden Stellen. `deno.json` trägt nur
-die Paketnamen nach, die Deno sonst nicht auflösen kann.
+lesen kann. Wer eine ändert, ändert sie an beiden Stellen. Eine `deno.json`
+braucht es nicht: Deno nimmt die npm-Pakete aus `package.json` und dem
+`node_modules` des Builds. Eine liegt bewusst auch nicht da - sie brächte die
+Deno-Kommandozeile dazu, ihre eigenen Pakete im `node_modules` des Projekts zu
+suchen, und dann läuft `deno deploy` nicht mehr.
 
 Veröffentlicht wird von Hand, wie bei Vercel auch:
 
 ```sh
 deno deploy --prod
 ```
+
+Vorher lokal anschauen geht auch:
+
+```sh
+deno run --env-file=.env.local --allow-net --allow-read --allow-env --allow-sys deno/server.js
+```
+
+Achtung: mit `.env.local` hängt der Spiegel auch lokal an der **echten**
+Spielerwelt. Was man dort anfasst, fassen alle mit an.
 
 Beide Auslieferungen sind getrennt. Ein `vercel --prod` allein ändert am Spiegel
 nichts und umgekehrt - nach einer Änderung, die beide zeigen sollen, gehen beide
