@@ -1,0 +1,30 @@
+{
+  "//": "Nur fuer den Spiegel bei Deno Deploy. Node liest diese Datei nicht; Vercel und Netlify bauen weiterhin ueber package.json.",
+  "imports": {
+    "@upstash/redis": "npm:@upstash/redis@^1.38.4",
+    "@netlify/blobs": "npm:@netlify/blobs@^11.0.3"
+  },
+  "tasks": {
+    "spiegel": "deno run --allow-net --allow-read --allow-env --allow-sys deno/server.js"
+  },
+  "lint": {
+    "exclude": [
+      "dist",
+      "arena",
+      "src",
+      "tools",
+      "netlify",
+      "build.mjs"
+    ]
+  },
+  "fmt": {
+    "exclude": [
+      "dist",
+      "arena",
+      "src",
+      "tools",
+      "netlify",
+      "build.mjs"
+    ]
+  }
+}

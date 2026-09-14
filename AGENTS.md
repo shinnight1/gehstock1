@@ -63,6 +63,30 @@ jedem `vercel --prod` mitgezogen. Sie ist der Ausweichweg für Netze, die den er
 Namen sperren - etwa das Schul-WLAN. Beide Adressen bleiben gültig; keine ersetzt die
 andere.
 
+### Der Spiegel bei Deno Deploy
+
+`deno/server.js` liefert dieselbe Seite ein zweites Mal aus - bei Deno Deploy und
+damit unter einer Adresse, die nicht auf `vercel.app` endet. Für Netze, die diese
+Endung sperren, ist das der Weg hinein.
+
+Eigene Logik steckt nicht darin: die beiden Serverfunktionen sind dieselben
+Dateien wie bei Vercel, und über `UPSTASH_REDIS_REST_URL` hängt der Spiegel an
+derselben Spielerwelt. Wer über ihn spielt, spielt mit allen anderen zusammen.
+
+Die Kopfzeilen stehen dort ein zweites Mal, weil Deno Deploy `vercel.json` nicht
+lesen kann. Wer eine ändert, ändert sie an beiden Stellen. `deno.json` trägt nur
+die Paketnamen nach, die Deno sonst nicht auflösen kann.
+
+Veröffentlicht wird von Hand, wie bei Vercel auch:
+
+```sh
+deno deploy --prod
+```
+
+Beide Auslieferungen sind getrennt. Ein `vercel --prod` allein ändert am Spiegel
+nichts und umgekehrt - nach einer Änderung, die beide zeigen sollen, gehen beide
+Befehle.
+
 Die alte Adresse `gehstock.netlify.app` bleibt vorerst als Rückweg stehen. Dorthin
 wird **nicht** mehr veröffentlicht: Beide Seiten haben eigene, getrennte
 Spielerwelten, und ein Deploy dorthin lässt die Spielstände auseinanderlaufen.
