@@ -70,13 +70,18 @@ await test('Closed server rejects every operation and spoofed client clocks with
   const lateStore=memoryStore();let checks=0;const late=createHandler({store:lateStore,now:()=>Date.parse('2026-09-21T12:59:59.999+02:00')+(checks++?1:0)});
   assert.equal((await call(late,ca,'join')).status,423);assert.equal(lateStore.data,null,'a request crossing closing time cannot commit');
 });
-await test('Admin developer code opens the closed island only for an admin account',async()=>{
-  const time=Date.parse('2026-09-19T12:00:00+02:00'),store=memoryStore(),presence=memoryStore(),h=createHandler({store,presenceStore:presence,now:()=>time});
+await test('Admin developer code opens one shared, temporary multiplayer testzone',async()=>{
+  const time=Date.parse('2026-09-19T12:00:00+02:00'),store=memoryStore(),presence=memoryStore(),h=createHandler({store,presenceStore:presence,now:()=>time}),secondAdmin='0585';
   const normal=await call(h,cb,'join',{adminOverride:true,adminCode:'3141'});assert.equal(normal.status,423);assert.equal(store.data,null);
   const typo=await call(h,ca,'join',{adminOverride:true,adminCode:'3140'});assert.equal(typo.status,423);assert.equal(store.data,null);
-  const admin=await call(h,ca,'join',{adminOverride:true,adminCode:'3141'});assert.equal(admin.status,200);assert.equal(admin.access.open,true);assert.equal(admin.access.adminOverride,true);
-  const fight=await call(h,ca,'arena_start',{adminOverride:true,adminCode:'3141',testState:admin.testState,territoryId:1,version:1,squad:D.neuerStand().truppe});
-  assert.equal(fight.status,200);assert.equal(store.data,null,'Testzone schreibt niemals in den Spielspeicher');assert.ok(fight.testState.players[admin.playerId].arena,'flüchtiger Testkampf');
+  const admin=await call(h,ca,'join',{adminOverride:true,adminCode:'3141'}),teammate=await call(h,secondAdmin,'join',{adminOverride:true,adminCode:'3141'});
+  assert.equal(admin.status,200);assert.equal(teammate.status,200);assert.equal(admin.access.open,true);assert.equal(admin.access.adminOverride,true);
+  const fight=await call(h,ca,'arena_start',{adminOverride:true,adminCode:'3141',territoryId:1,version:1,squad:D.neuerStand().truppe});assert.equal(fight.status,200);
+  await call(h,ca,'presence',{adminOverride:true,adminCode:'3141',position:{x:admin.spawn.x,z:admin.spawn.z,heading:0}});
+  const together=await call(h,secondAdmin,'presence',{adminOverride:true,adminCode:'3141',position:{x:teammate.spawn.x,z:teammate.spawn.z,heading:0}});
+  assert.equal(together.peers.length,1);assert.equal(together.peers[0].id,admin.playerId);assert.equal(together.peers[0].activity,'arena');
+  const seenBack=await call(h,ca,'presence',{adminOverride:true,adminCode:'3141',position:{x:admin.spawn.x,z:admin.spawn.z,heading:0}});assert.equal(seenBack.peers[0].id,teammate.playerId);
+  assert.equal(store.data,null,'Testzone schreibt niemals in den Spielspeicher');assert.equal(presence.data,null,'Testzone schreibt niemals in die echte Anwesenheit');
   assert.equal((await call(h,ca,'world')).status,423,'ohne Testzone bleibt die Insel zu');
 });
 await test('Each completed weekend gives two eggs per held post once, preserving overflow and ownership rewards',async()=>{

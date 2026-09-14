@@ -112,11 +112,12 @@ await test('Lobby leadership transfers, finished losses grant nothing, and expir
   f.time+=301000;r=ok(await call(f,1,'world'));assert.equal(r.dungeon.winner,'expired');assert.deepEqual(r.profile.runes,[0,0,0,0,0,0,0]);ok(await call(f,1,'arena_start',{territoryId:1,version:1,squad:r.profile.truppe}));
   const g=await fixture();r=await group(g,1,6);r=await play(g,r,1);assert.equal(r.dungeon.winner,'boss');assert.deepEqual(r.profile.runes,[0,0,0,0,0,0,0]);
 });
-await test('Testzone dungeons and upgrades stay in the temporary capsule and never touch live stores',async()=>{
-  const forbidden={async getWithMetadata(){throw Error('live read');},async setJSON(){throw Error('live write');}},handler=createHandler({store:forbidden,presenceStore:forbidden,now:()=>stamp});let state=null,presence=null;
-  async function invoke(op,data={}){const res=await handler(new Request('http://localhost/api/gehstockmon',{method:'POST',body:JSON.stringify({code:'0141',op,requestId:'test-capsule-'+(++serial),adminOverride:true,adminCode:'3141',testState:state,testPresence:presence,...data})}));assert.equal(res.status,200,await res.clone().text());const r=await res.json();state=r.testState;presence=r.testPresence;return r;}
+await test('Testzone dungeons and upgrades share one temporary session and never touch live stores',async()=>{
+  let testTime=stamp;const forbidden={async getWithMetadata(){throw Error('live read');},async setJSON(){throw Error('live write');}},handler=createHandler({store:forbidden,presenceStore:forbidden,now:()=>testTime});
+  async function invoke(op,data={}){const res=await handler(new Request('http://localhost/api/gehstockmon',{method:'POST',body:JSON.stringify({code:'0141',op,requestId:'test-capsule-'+(++serial),adminOverride:true,adminCode:'3141',...data})}));assert.equal(res.status,200,await res.clone().text());return res.json();}
   let r=await invoke('join');await invoke('presence',{position:{x:0,z:40,heading:0}});r=await invoke('dungeon_create',{dungeonId:'dungeon-0',monId:'endrichter'});const roomId=r.dungeon.id;await invoke('dungeon_ready',{roomId,monId:'endrichter',ready:true});r=await invoke('dungeon_start',{roomId});
   while(r.dungeon.phase==='battle')r=await invoke('dungeon_turn',{roomId,round:r.dungeon.round,move:'strike'});assert.equal(r.profile.runes[0],2);r=await invoke('mon_upgrade',{monId:'glutfuchs',level:0});assert.equal(r.profile.monUpgrades.glutfuchs,1);
-  state=presence=null;r=await invoke('join');assert.equal(r.profile.runes[0],0);assert.equal(r.profile.monUpgrades.glutfuchs,undefined);assert.equal(r.dungeon,null);
+  r=await invoke('join');assert.equal(r.profile.runes[0],1);assert.equal(r.profile.monUpgrades.glutfuchs,1,'the active temporary session survives reloads');
+  testTime+=300001;r=await invoke('join');assert.equal(r.profile.runes[0],0);assert.equal(r.profile.monUpgrades.glutfuchs,undefined);assert.equal(r.dungeon,null,'an idle test session starts fresh');
 });
 console.log('\n'+checks+' dungeon and balance checks passed.');

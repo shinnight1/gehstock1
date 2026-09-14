@@ -7,6 +7,17 @@ import {activeDungeon,settleDungeons,dungeonResult,dungeonAction} from './lib/ge
 const KEY = 'world-v2';
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' } });
+const SANDBOX_IDLE = 5 * 60 * 1000;
+function volatileStore() {
+  let value = null, version = 0;
+  return {
+    async getWithMetadata() { return value ? { data: clone(value), etag: String(version) } : null; },
+    async setJSON(key, next, options) {
+      if ((options?.onlyIfMatch !== undefined && options.onlyIfMatch !== String(version)) || (options?.onlyIfNew && value)) return { modified: false };
+      value = clone(next); version++; return { modified: true };
+    },
+  };
+}
 const mutations = ['arena_start', 'arena_turn', 'arena_flee', 'collect', 'incubate', 'hatch', 'upgrade', 'defend',...X.OPS];
 class GameError extends Error { constructor(message, status = 400) { super(message); this.status = status; } }
 function adminBypass(body) {
@@ -149,6 +160,14 @@ function settleBattle(world, p, id, now, requestId) {
 
 /* Each turn, egg and upgrade is authoritative and atomically persisted. */
 export function createHandler({ store, presenceStore, now = Date.now, random = Math.random, sandbox = false } = {}) {
+  let sharedSandbox = null;
+  function sandboxHandler(timestamp) {
+    if (!sharedSandbox || timestamp - sharedSandbox.lastUsed >= SANDBOX_IDLE) {
+      sharedSandbox = { lastUsed: timestamp, handler: createHandler({ store: volatileStore(), presenceStore: volatileStore(), now, random, sandbox: true }) };
+    }
+    sharedSandbox.lastUsed = timestamp;
+    return sharedSandbox.handler;
+  }
   return async function handle(request) {
     if (request.method !== 'POST') return json({ error: 'POST erforderlich.' }, 405);
     try {
@@ -160,14 +179,12 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
       if (mutations.includes(body.op) && (typeof body.requestId !== 'string' || body.requestId.length < 8 || body.requestId.length > 80)) throw new GameError('Aktionskennung fehlt.');
       const id = createHash('sha256').update('gehstockmon-player:' + body.code).digest('hex').slice(0, 24), timestamp = now();
       const bypass = adminBypass(body);
-      // Die Testzone erhält ausschließlich flüchtigen Zustand aus diesem Tab.
+      // Alle Admins teilen sich eine flüchtige Mehrspieler-Testwelt im Arbeitsspeicher.
       // Keine echte Datenbank und keine echte Anwesenheit werden gelesen/geschrieben.
       if(bypass&&!sandbox){
-        function memory(initial){let value=initial?clone(initial):null,version=0;return{getWithMetadata:async()=>value?{data:clone(value),etag:String(version)}:null,setJSON:async(key,next,options)=>{if(options?.onlyIfMatch!==undefined&&options.onlyIfMatch!==String(version)||options?.onlyIfNew&&value)return{modified:false};value=clone(next);version++;return{modified:true};},read:()=>value};}
-        const testStore=memory(body.testState),testPresence=memory(body.testPresence);
-        const isolated=createHandler({store:testStore,presenceStore:testPresence,now,random,sandbox:true});
+        const isolated=sandboxHandler(timestamp);
         const result=await isolated(new Request(request.url,{method:'POST',body:JSON.stringify(body)})),payload=await result.json();
-        return json({...payload,testState:testStore.read(),testPresence:testPresence.read(),sandbox:true},result.status);
+        return json({...payload,sandbox:true},result.status);
       }
       requireOpen(timestamp, bypass);
       if(body.adminOverride===true&&!bypass)throw new GameError('Die Testzone benötigt ein echtes Admin-Konto und den richtigen Testcode.',403);

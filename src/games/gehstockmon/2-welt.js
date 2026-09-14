@@ -341,6 +341,10 @@
         koerper.position.set(-vorlage.stand.x, 0, -vorlage.stand.z);
         traeger.add(koerper);
         gruppe.add(traeger);
+        if (gruppe.userData.ladefigur) {
+          gruppe.remove(gruppe.userData.ladefigur);
+          gruppe.userData.ladefigur = null;
+        }
         if (gruppe.userData.portrait) gruppe.userData.portrait.visible = false;
         var mixer = new T.AnimationMixer(koerper), spuren = {};
         vorlage.clips.forEach(function (clip) {
@@ -379,6 +383,25 @@
       figuren = figuren.filter(function (f) { return f !== alt; });
       gruppe.remove(alt.traeger);
       gruppe.userData.figur = null;
+    }
+
+    /* Bei fremden Spielern wird niemals mehr das Pixelbild eingeblendet.
+       Solange das eigentliche Skin-Modell laedt, steht stattdessen eine
+       einfache 3D-Figur im Ring. Schlaegt das Laden fehl, bleibt wenigstens
+       diese Figur sichtbar. */
+    function fremdeLadefigur(gruppe, skin) {
+      if (gruppe.userData.portrait) gruppe.userData.portrait.visible = false;
+      if (gruppe.userData.figur || gruppe.userData.ladefigur) return;
+      var farbe = X.skin(skin).color, figur = new T.Group();
+      figur.name = 'peer-3d-placeholder';
+      mesh(figur, 'cylinder', farbe, 0, 1.45, 0, 0.72, 1.65, 0.58);
+      mesh(figur, 'sphere', '#e5b995', 0, 2.65, 0, 0.72, 0.78, 0.72);
+      var armL = mesh(figur, 'cylinder', farbe, -0.72, 1.55, 0, 0.2, 1.35, 0.2);
+      var armR = mesh(figur, 'cylinder', farbe, 0.72, 1.55, 0, 0.2, 1.35, 0.2);
+      armL.rotation.z = -0.16; armR.rotation.z = 0.16;
+      mesh(figur, 'cylinder', '#26333a', -0.3, 0.48, 0, 0.24, 0.95, 0.24);
+      mesh(figur, 'cylinder', '#26333a', 0.3, 0.48, 0, 0.24, 0.95, 0.24);
+      gruppe.add(figur); gruppe.userData.ladefigur = figur;
     }
 
     /* Ueberblenden zwischen Stehen und Laufen. Der Anteil wandert weich, damit
@@ -497,7 +520,7 @@
           p=peers[info.id]={group:g,texture:texture,from:g.position.clone(),to:g.position.clone(),elapsed:0,duration:1,updatedAt:0,followers:[],trail:initialTrail};
         }
         if(p.updatedAt!==info.updatedAt){p.from.copy(p.group.position);p.to.set(info.x,.15,info.z);p.duration=T.MathUtils.clamp((info.updatedAt-p.updatedAt)/1000,.15,3);p.elapsed=0;if(p.from.distanceTo(p.to)>45){p.group.position.copy(p.to);p.from.copy(p.to);}}
-        var skin=info.skin||'wanderer';if(p.skin!==skin){p.texture.dispose();p.texture=spriteTexture(skin==='wanderer'?'gm-player-pixel':'skin-'+R.skinIndex(skin),'#ffffff').clone();p.texture.needsUpdate=true;p.group.userData.portrait.material.map=p.texture;p.skin=skin;anziehen(p.group,skin);}
+        var skin=info.skin||'wanderer';if(p.skin!==skin){p.texture.dispose();p.texture=spriteTexture(skin==='wanderer'?'gm-player-pixel':'skin-'+R.skinIndex(skin),'#ffffff').clone();p.texture.needsUpdate=true;p.group.userData.portrait.material.map=p.texture;p.skin=skin;fremdeLadefigur(p.group,skin);anziehen(p.group,skin);}
         var squad=(info.squad||[]).filter(function(id){return !!R.daten.mon(id);}).slice(0,4),squadKey=squad.join(',');if(p.squadKey!==squadKey){p.followers.forEach(disposeUnit);p.followers=squad.map(function(id,i){var mon=R.daten.mon(id),g=creature(mon.typ,mon.seltenheit,false,id);g.name='peer-mon-'+info.id+'-'+id;g.position.copy(p.group.position);scene.add(g);return{group:g};});p.offsets=followOffsets(squad.map(R.daten.mon));p.squadKey=squadKey;}
 p.updatedAt=info.updatedAt;p.age=Math.max(0,(serverTime-info.updatedAt)/1000);p.heading=info.heading||0;p.info=info;
       });Object.keys(peers).forEach(function(id){if(!keep[id])removePeer(id);});
