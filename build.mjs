@@ -507,6 +507,14 @@ function build() {
     }
   }
 
+  /* Der Schultest wird unveraendert danebengelegt, damit er sich auch im
+     Browser aufrufen laesst und nicht nur als Datei vom iPad. Den Kopf der
+     extern-Seiten vertraegt er nicht: er ist ein vollstaendiges Dokument,
+     und ein <meta> vor dem doctype schickt Safari in den Quirks-Modus.
+     Kopiert statt zweimal gepflegt - zwei Fassungen liefen auseinander. */
+  const schultest = path.join(ROOT, 'docs', 'schul-test.html');
+  if (exists(schultest)) fs.copyFileSync(schultest, path.join(DIST, 'schul-test.html'));
+
   // ---- Icons
   const icons = [32, 180, 192, 512];
   for (const s of icons) {
