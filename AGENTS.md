@@ -95,6 +95,16 @@ deno run --env-file=.env.local --allow-net --allow-read --allow-env --allow-sys 
 Achtung: mit `.env.local` hängt der Spiegel auch lokal an der **echten**
 Spielerwelt. Was man dort anfasst, fassen alle mit an.
 
+**Stand: der Spiegel hat noch keine Adresse.** Die App `gehstock-hideout` in der
+Organisation `gehstcok` ist angelegt, baut durch und hängt über die gesetzten
+Upstash-Variablen an der richtigen Spielerwelt. Nur bekommt sie keine Domain:
+die Organisation hat gar keine, alle Revisionen stehen auf `PROD  no`, und unter
+dem erwarteten Namen `gehstock-hideout.gehstcok.deno.net` gibt es zwar einen
+DNS-Eintrag, aber kein passendes Zertifikat. Weder die Kommandozeile noch das
+Dashboard bieten einen Weg, eine Revision in die Produktion zu befördern. Bis das
+geklärt ist, ist der Spiegel nicht erreichbar und `deno deploy --prod` bringt
+nichts.
+
 Beide Auslieferungen sind getrennt. Ein `vercel --prod` allein ändert am Spiegel
 nichts und umgekehrt - nach einer Änderung, die beide zeigen sollen, gehen beide
 Befehle.
