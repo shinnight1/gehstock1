@@ -18,17 +18,18 @@
   button.neben { background: #263041; color: #cbd5e1; font-size: 16px; padding: 13px 18px; }
   button:disabled { opacity: .5; }
   ol { list-style: none; margin: 0 0 22px; padding: 0; }
-  li { display: flex; align-items: baseline; gap: 10px; padding: 11px 0;
+  li { display: flex; align-items: baseline; padding: 11px 0;
        border-bottom: 1px solid #1c2432; }
-  .marke { font-size: 20px; width: 26px; flex: none; text-align: center; }
-  .name { flex: 1; }
+  .marke { font-size: 20px; width: 30px; flex: none; text-align: center; color: #64748b; }
+  .name { flex: 1; padding-right: 10px; }
   .name small { display: block; color: #7b899d; font-size: 13px; word-break: break-all; }
   .wert { color: #93a1b5; font-size: 14px; flex: none; }
   .kasten { border-radius: 14px; padding: 16px 18px; margin: 0 0 22px;
             background: #151b26; border: 1px solid #232d3d; }
   .kasten h2 { font-size: 17px; margin: 0 0 8px; }
   .kasten.wichtig { border-color: #3b82f6; background: #121b2c; }
-  .liste-links a { display: inline-block; padding: 7px 0; margin-right: 16px; color: #7dd3fc; }
+  .kasten.warnung { border-color: #a16207; background: #1c1708; }
+  .liste-links a { display: inline-block; padding: 8px 0; margin-right: 18px; color: #7dd3fc; }
   textarea { width: 100%; box-sizing: border-box; height: 150px; background: #0a0d13;
              color: #cbd5e1; border: 1px solid #232d3d; border-radius: 10px; padding: 10px;
              font: 13px/1.45 ui-monospace, Menlo, Consolas, monospace; }
@@ -49,9 +50,52 @@ und welche Adresse stattdessen durchkommt.</p>
   den zweiten Test weiter unten machen.</p>
 </div>
 
+<!-- Steht sichtbar im HTML und wird beim Laden von JavaScript wieder
+     ausgeblendet. Laeuft kein JavaScript - so oeffnet die Dateien-App
+     des iPads HTML naemlich, als reine Vorschau - bleibt der Kasten
+     stehen und erklaert, warum der Knopf nichts tut. -->
+<div class="kasten warnung" id="ohneJs">
+  <h2>Hier laeuft kein JavaScript</h2>
+  <p>Die Dateien-App zeigt HTML nur als Vorschau und fuehrt nichts aus. Der Knopf
+  unten tut deshalb nichts und die Liste bleibt grau.</p>
+  <p><strong>Das ist halb so wild.</strong> Der zweite Test weiter unten
+  funktioniert trotzdem, und der ist der aussagekraeftigere von beiden: Links
+  antippen, schauen was aufgeht, Sperrseite lesen.</p>
+</div>
+
 <button id="los">Test starten</button>
 
-<ol id="liste"></ol>
+<!-- Die Liste steht absichtlich fest im HTML statt aus JavaScript zu
+     entstehen: ohne JavaScript soll wenigstens zu sehen sein, worum es
+     geht. data-host und data-bild sind zugleich die einzige Quelle fuer
+     das Skript - so kann keine zweite Liste danebenlaufen. -->
+<ol id="liste">
+  <li data-id="eigen" data-host="gehstock1.vercel.app" data-bild="/icons/icon-32.png" data-kante="32">
+    <span class="marke">&middot;</span>
+    <span class="name">Unsere Seite<small>gehstock1.vercel.app</small></span>
+    <span class="wert"></span>
+  </li>
+  <li data-id="zweit" data-host="gehstock-hideout.vercel.app" data-bild="/icons/icon-32.png" data-kante="32">
+    <span class="marke">&middot;</span>
+    <span class="name">Zweite Adresse<small>gehstock-hideout.vercel.app</small></span>
+    <span class="wert"></span>
+  </li>
+  <li data-id="spiegel" data-host="hideout.gehstock.deno.net" data-bild="/icons/icon-32.png" data-kante="32">
+    <span class="marke">&middot;</span>
+    <span class="name">Spiegel bei Deno<small>hideout.gehstock.deno.net</small></span>
+    <span class="wert"></span>
+  </li>
+  <li data-id="vercel" data-host="vercel.com" data-bild="/favicon.ico">
+    <span class="marke">&middot;</span>
+    <span class="name">Vercel selbst<small>vercel.com</small></span>
+    <span class="wert"></span>
+  </li>
+  <li data-id="kontrolle" data-host="www.google.com" data-bild="/favicon.ico">
+    <span class="marke">&middot;</span>
+    <span class="name">Kontrolle: kommt ueberhaupt was durch?<small>www.google.com</small></span>
+    <span class="wert"></span>
+  </li>
+</ol>
 
 <div class="kasten wichtig" id="urteil" hidden>
   <h2>Ergebnis</h2>
@@ -64,7 +108,17 @@ und welche Adresse stattdessen durchkommt.</p>
   Schulfilter fast immer eine eigene Seite mit seinem Namen und dem Grund
   ("Kategorie: Spiele", "Web Hosting", "Proxy Avoidance"). Genau dieser Text
   entscheidet, was hilft - abschreiben oder abfotografieren.</p>
-  <p class="liste-links" id="links"></p>
+  <p class="liste-links">
+    <a href="https://gehstock1.vercel.app/" target="_blank" rel="noreferrer">gehstock1.vercel.app</a>
+    <a href="https://gehstock-hideout.vercel.app/" target="_blank" rel="noreferrer">gehstock-hideout.vercel.app</a>
+    <a href="https://hideout.gehstock.deno.net/" target="_blank" rel="noreferrer">hideout.gehstock.deno.net</a>
+    <a href="https://vercel.com/" target="_blank" rel="noreferrer">vercel.com</a>
+    <a href="https://pages.dev/" target="_blank" rel="noreferrer">pages.dev</a>
+    <a href="https://github.io/" target="_blank" rel="noreferrer">github.io</a>
+    <a href="https://www.google.com/" target="_blank" rel="noreferrer">www.google.com</a>
+  </p>
+  <p>Die drei ersten sind unsere eigenen Adressen. Geht eine davon auf, hast du
+  gewonnen - dann dort spielen. Die hinteren sagen, wie breit der Filter sperrt.</p>
 </div>
 
 <div class="kasten">
@@ -78,6 +132,12 @@ und welche Adresse stattdessen durchkommt.</p>
 (function () {
   'use strict';
 
+  /* Laeuft dieses Skript, braucht es den Hinweiskasten nicht mehr. Das
+     ist die erste Anweisung ueberhaupt, damit er auch dann verschwindet,
+     wenn weiter unten etwas schiefgeht. */
+  var hinweis = document.getElementById('ohneJs');
+  if (hinweis) hinweis.hidden = true;
+
   /* ------------------------------------------------------------------
      Warum Bilder und kein fetch()
 
@@ -88,39 +148,23 @@ und welche Adresse stattdessen durchkommt.</p>
      frei; bricht es ab, haelt etwas dazwischen sie auf.
      ------------------------------------------------------------------ */
 
-  var ZIELE = [
-    { id: 'eigen', name: 'Unsere Seite', host: 'gehstock1.vercel.app',
-      bild: '/icons/icon-32.png', kante: 32 },
-    { id: 'zweit', name: 'Zweite Adresse', host: 'gehstock-hideout.vercel.app',
-      bild: '/icons/icon-32.png', kante: 32 },
-    { id: 'spiegel', name: 'Spiegel bei Deno', host: 'hideout.gehstock.deno.net',
-      bild: '/icons/icon-32.png', kante: 32 },
-    { id: 'vercel', name: 'Vercel selbst', host: 'vercel.com', bild: '/favicon.ico' },
-    { id: 'kontrolle', name: 'Kontrolle: kommt ueberhaupt was durch?',
-      host: 'www.google.com', bild: '/favicon.ico' }
-  ];
-
-  var WEITERE = ['pages.dev', 'github.io', 'gehstock.netlify.app'];
-
   var ZEITLIMIT = 8000;
 
-  var liste = document.getElementById('liste');
-  var knopf = document.getElementById('los');
-  var protokoll = document.getElementById('protokoll');
-  var zeilen = {};
-
-  ZIELE.forEach(function (z) {
-    var li = document.createElement('li');
-    li.innerHTML = '<span class="marke">·</span><span class="name">' + z.name +
-                   '<small>' + z.host + '</small></span><span class="wert"></span>';
-    liste.appendChild(li);
-    zeilen[z.id] = { marke: li.children[0], wert: li.children[2] };
+  /* Die Ziele stehen im HTML, nicht hier. */
+  var zeilen = [].slice.call(document.querySelectorAll('#liste li'));
+  var ZIELE = zeilen.map(function (li) {
+    return {
+      id: li.getAttribute('data-id'),
+      host: li.getAttribute('data-host'),
+      bild: li.getAttribute('data-bild'),
+      kante: Number(li.getAttribute('data-kante')) || 0,
+      marke: li.querySelector('.marke'),
+      wert: li.querySelector('.wert')
+    };
   });
 
-  document.getElementById('links').innerHTML =
-    ZIELE.map(function (z) { return z.host; }).concat(WEITERE).map(function (h) {
-      return '<a href="https://' + h + '/" target="_blank" rel="noreferrer">' + h + '</a>';
-    }).join('');
+  var knopf = document.getElementById('los');
+  var protokoll = document.getElementById('protokoll');
 
   function pruefe(z) {
     return new Promise(function (fertig) {
@@ -128,12 +172,12 @@ und welche Adresse stattdessen durchkommt.</p>
       var bild = new Image();
       var erledigt = false;
 
-      function schluss(stand, hinweis) {
+      function schluss(stand, hinweisText) {
         if (erledigt) return;
         erledigt = true;
         clearTimeout(uhr);
         bild.onload = bild.onerror = null;
-        fertig({ stand: stand, ms: Date.now() - start, hinweis: hinweis });
+        fertig({ stand: stand, ms: Date.now() - start, hinweis: hinweisText });
       }
 
       var uhr = setTimeout(function () { schluss('zeit'); }, ZEITLIMIT);
@@ -143,8 +187,8 @@ und welche Adresse stattdessen durchkommt.</p>
            eigenem Inhalt antworten. Unser Symbol ist genau 32 Pixel breit -
            kommt etwas anderes an, war es nicht unser Server. */
         if (z.kante && bild.naturalWidth !== z.kante) {
-          return schluss('fremd', bild.naturalWidth + 'x' + bild.naturalHeight + ' statt ' +
-                                  z.kante + 'x' + z.kante);
+          return schluss('fremd', bild.naturalWidth + 'x' + bild.naturalHeight +
+                                  ' statt ' + z.kante + 'x' + z.kante);
         }
         schluss('frei');
       };
@@ -158,46 +202,48 @@ und welche Adresse stattdessen durchkommt.</p>
 
   function urteilen(e) {
     var frei = function (k) { return e[k] && e[k].stand === 'frei'; };
+    var abgefangen = function (k) { return e[k] && e[k].stand === 'fremd'; };
 
     if (!frei('kontrolle')) {
-      return 'Es kommt gar nichts durch, auch google.com nicht. Dann liegt es nicht an ' +
-             'unserer Seite: entweder haengt das iPad nicht richtig im WLAN, oder es ' +
-             'steht noch vor einer Anmeldeseite. Erst irgendeine andere Seite in Safari ' +
-             'oeffnen und schauen, was passiert.';
+      return 'Es kommt gar nichts durch, auch google.com nicht. Dann liegt es nicht ' +
+             'an unserer Seite: entweder haengt das iPad nicht richtig im WLAN, oder ' +
+             'es steht noch vor einer Anmeldeseite. Erst irgendeine andere Seite in ' +
+             'Safari oeffnen und schauen, was passiert.';
     }
-    if (e.eigen.stand === 'fremd' || e.zweit.stand === 'fremd' || e.spiegel.stand === 'fremd') {
-      return 'Die Verbindung kommt zustande, aber es antwortet nicht unser Server - der ' +
-             'Schulfilter bricht den Verkehr auf und schiebt seine eigene Seite unter. ' +
-             'Jetzt ist der zweite Test das Wichtigste: den Text der Sperrseite mitbringen.';
+    if (abgefangen('eigen') || abgefangen('zweit') || abgefangen('spiegel')) {
+      return 'Die Verbindung kommt zustande, aber es antwortet nicht unser Server: ' +
+             'der Filter faengt die Seite ab und schiebt eine eigene unter. Jetzt ist ' +
+             'der zweite Test das Wichtigste: den Text der Sperrseite mitbringen.';
     }
     if (frei('eigen')) {
       return 'Die Seite ist im Schul-WLAN erreichbar. Wenn sie trotzdem nicht aufging, ' +
-             'lag es nicht am Filter. Dann in den iPad-Einstellungen unter Safari den ' +
-             'Verlauf und die Website-Daten loeschen und es noch einmal versuchen.';
+             'lag es nicht am Filter. Dann in den iPad-Einstellungen unter Safari ' +
+             'Verlauf und Website-Daten loeschen und es noch einmal versuchen.';
     }
     if (frei('zweit')) {
       return 'Gesperrt ist nur der Name gehstock1.vercel.app - die zweite Adresse ' +
-             'gehstock-hideout.vercel.app kommt durch. Ab sofort die benutzen; sie zeigt ' +
-             'dieselbe Seite mit derselben Spielerwelt.';
+             'gehstock-hideout.vercel.app kommt durch. Ab sofort die benutzen; sie ' +
+             'zeigt dieselbe Seite mit derselben Spielerwelt.';
     }
     if (frei('spiegel')) {
       return 'Beide vercel.app-Adressen sind dicht, der Spiegel bei Deno kommt aber ' +
              'durch. Ab sofort hideout.gehstock.deno.net benutzen - dieselbe Seite, ' +
-             'dieselbe Spielerwelt, nur ein anderer Anbieter. Einmal neu anmelden, dann ' +
-             'laeuft alles wie gewohnt.';
+             'dieselbe Spielerwelt, nur ein anderer Anbieter. Einmal neu anmelden, ' +
+             'dann laeuft alles wie gewohnt.';
     }
     if (frei('vercel')) {
-      return 'Beide vercel.app-Adressen und der Deno-Spiegel sind dicht, vercel.com aber ' +
-             'nicht. Gesperrt ist also nicht die Firma, sondern die Endungen, unter denen ' +
-             'jeder seine eigenen Seiten ablegen kann. Ein vierter Gratisanbieter wird ' +
-             'genauso enden. Im zweiten Test bitte pages.dev und github.io antippen - ' +
-             'geht auch davon nichts auf, hilft nur noch eine eigene Domain.';
+      return 'Beide vercel.app-Adressen und der Deno-Spiegel sind dicht, vercel.com ' +
+             'aber nicht. Gesperrt ist also nicht die Firma, sondern die Endungen, ' +
+             'unter denen jeder seine eigenen Seiten ablegen kann. Ein vierter ' +
+             'Gratisanbieter wird genauso enden. Im zweiten Test bitte pages.dev und ' +
+             'github.io antippen - geht auch davon nichts auf, hilft nur eine eigene ' +
+             'Domain.';
     }
-    return 'Alles Gehostete ist gesperrt, google.com nicht. Der Filter arbeitet also mit ' +
-           'Kategorien und hat Vercel und Deno beide darin. Bitte im zweiten Test ' +
+    return 'Alles Gehostete ist gesperrt, google.com nicht. Der Filter arbeitet also ' +
+           'mit Kategorien und hat Vercel und Deno beide darin. Bitte im zweiten Test ' +
            'pages.dev und github.io antippen: geht keins davon auf, ist ein Umzug zum ' +
-           'naechsten Gratisanbieter vergebene Muehe. Dann hilft nur eine eigene Domain - ' +
-           'und wirklich sicher erst, wenn die Schul-IT sie freischaltet.';
+           'naechsten Gratisanbieter vergebene Muehe. Dann hilft nur eine eigene ' +
+           'Domain - und wirklich sicher erst, wenn die Schul-IT sie freischaltet.';
   }
 
   knopf.addEventListener('click', function () {
@@ -208,11 +254,11 @@ und welche Adresse stattdessen durchkommt.</p>
 
     ZIELE.forEach(function (z) {
       reihe = reihe.then(function () {
-        zeilen[z.id].marke.textContent = '…';
+        z.marke.textContent = '…';
         return pruefe(z).then(function (r) {
           e[z.id] = r;
-          zeilen[z.id].marke.textContent = ZEICHEN[r.stand] || '?';
-          zeilen[z.id].wert.textContent = (WORT[r.stand] || r.stand) + ' · ' + r.ms + ' ms';
+          z.marke.textContent = ZEICHEN[r.stand] || '?';
+          z.wert.textContent = (WORT[r.stand] || r.stand) + ' · ' + r.ms + ' ms';
         });
       });
     });
