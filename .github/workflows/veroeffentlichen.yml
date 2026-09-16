@@ -1,0 +1,103 @@
+# Veröffentlichen per Knopfdruck - ohne PC, ohne Befehlszeile.
+#
+# Zwei Wege:
+#   Actions -> "Veröffentlichen" -> "Run workflow"   der Knopf, auch am Handy
+#   ein Push auf main                                 automatisch
+#
+# Vorher laufen Build und Tests. Sind sie rot, wird nichts veröffentlicht und
+# die alte, heile Fassung bleibt online. Das ist der ganze Sinn der Übung:
+# von unterwegs veröffentlichen, ohne die Seite kaputt machen zu können.
+#
+# Soll ein Push NICHT mehr automatisch veröffentlichen, die vier Zeilen unter
+# "push:" löschen - der Knopf bleibt davon unberührt.
+
+name: Veröffentlichen
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+# Zwei Deploys gleichzeitig würden sich überholen; der zweite wartet.
+concurrency:
+  group: veroeffentlichen
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  veroeffentlichen:
+    name: Bauen, testen, veröffentlichen
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+    steps:
+      - name: Stand holen
+        uses: actions/checkout@v4
+
+      - name: Node einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            arena/package-lock.json
+
+      # Ohne Projekt-Kennung legt die Vercel-Befehlszeile ein NEUES Projekt an.
+      # Das hätte eine eigene, leere Datenbank - also eine zweite, leere
+      # Spielerwelt neben der echten. Lieber hier abbrechen als das riskieren.
+      - name: Zugangsdaten prüfen
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          fehlt=""
+          [ -n "$VERCEL_TOKEN" ]      || fehlt="$fehlt VERCEL_TOKEN"
+          [ -n "$VERCEL_ORG_ID" ]     || fehlt="$fehlt VERCEL_ORG_ID"
+          [ -n "$VERCEL_PROJECT_ID" ] || fehlt="$fehlt VERCEL_PROJECT_ID"
+          if [ -n "$fehlt" ]; then
+            echo "::error::Diese Secrets fehlen noch:$fehlt"
+            echo "Nachtragen unter: Settings -> Secrets and variables -> Actions"
+            exit 1
+          fi
+
+      - name: Abhängigkeiten holen
+        run: |
+          npm ci
+          npm ci --prefix arena
+
+      - name: Bauen
+        run: node tools/deploy-bauen.mjs
+
+      # tools/test.mjs liest das gebaute Bundle aus dist/assets - erst bauen.
+      - name: Testen
+        run: node tools/test.mjs
+
+      # Vercel baut selbst noch einmal aus dem Quellstand, genau wie bei einem
+      # "vercel --prod" vom eigenen Rechner. Der Bauschritt oben ist die Probe
+      # davor: er entscheidet nur, ob überhaupt veröffentlicht wird.
+      - name: Veröffentlichen
+        id: deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          npx --yes vercel@latest deploy --prod --yes --token "$VERCEL_TOKEN" > adresse.txt
+          echo "url=$(cat adresse.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Adresse melden
+        run: |
+          {
+            echo "### Veröffentlicht"
+            echo ""
+            echo "Die Seite: <https://gehstock1.vercel.app>"
+            echo ""
+            echo "Diese Ausgabe: ${{ steps.deploy.outputs.url }}"
+            echo ""
+            echo "Ging etwas schief: \`vercel rollback\` holt die vorherige zurück."
+          } >> "$GITHUB_STEP_SUMMARY"

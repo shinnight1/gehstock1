@@ -50,8 +50,11 @@ Hand aus dem Projektordner:
 vercel --prod
 ```
 
-Ein Push allein ändert an der Website nichts mehr. Wer will, dass er es wieder
-tut, verbindet das Repository einmalig mit `vercel git connect`.
+Wer nicht am Rechner sitzt, nimmt den Knopf auf GitHub: **Actions →
+Veröffentlichen → Run workflow**. Derselbe Lauf startet automatisch bei jedem
+Push auf `main`. Er baut, lässt `node tools/test.mjs` laufen und veröffentlicht
+erst danach; ist etwas rot, bleibt die alte Fassung online. Die Einstellungen
+stehen in `.github/workflows/veroeffentlichen.yml`.
 
 Vercel baut selbst; `vercel.json` trägt Build, Ausgabeordner und Kopfzeilen. Vor
 einem Deploy, der die Seite verändert, `node tools/test.mjs` laufen lassen. Die

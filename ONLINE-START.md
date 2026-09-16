@@ -38,6 +38,8 @@ Vercel baut selbst — der lokale Bauschritt entfällt. Was gebaut und ausgelief
 
 Geht etwas schief, holt `vercel rollback` die vorherige Veröffentlichung sofort zurück.
 
+Ohne Rechner geht es auch: auf GitHub unter **Actions → Veröffentlichen → Run workflow**. Der Lauf baut, testet und veröffentlicht; schlägt der Build oder ein Test fehl, bleibt die alte Fassung online. Ein Push auf `main` löst denselben Lauf automatisch aus. Einmalig nötig sind die Secrets `VERCEL_TOKEN`, `VERCEL_ORG_ID` und `VERCEL_PROJECT_ID` unter **Settings → Secrets and variables → Actions**.
+
 Die Spielstände liegen in einer Redis-Datenbank (Upstash), die im Vercel-Projekt unter **Storage** hängt. `netlify/functions/lib/speicher.mjs` entscheidet anhand der Umgebung, ob Redis oder die alten Netlify-Blobs benutzt werden; derselbe Code läuft dadurch auf beiden Plattformen.
 
 Die alte Adresse `gehstock.netlify.app` bleibt vorerst als Rückweg stehen, hat aber ihre eigene, getrennte Spielerwelt. Dorthin wird nicht mehr veröffentlicht.

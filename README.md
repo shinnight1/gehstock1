@@ -57,9 +57,22 @@ laufen.
 Geht etwas schief, holt `vercel rollback` die vorherige Veröffentlichung
 sofort zurück — ohne neuen Build.
 
-> **Ein Push allein veröffentlicht nichts.** Wer das möchte, verbindet das
-> Repository einmalig mit `vercel git connect`; danach baut jeder Push auf
-> `main` die Seite neu.
+### Veröffentlichen ohne Rechner
+
+Für unterwegs liegt in `.github/workflows/veroeffentlichen.yml` ein Knopf:
+**Actions → Veröffentlichen → Run workflow**. Er baut, testet und
+veröffentlicht — im Browser wie in der GitHub-App. Ein Push auf `main` löst
+dasselbe automatisch aus.
+
+Gebaut und getestet wird *vor* dem Veröffentlichen. Schlägt eines von beidem
+fehl, passiert nichts und die alte Fassung bleibt online.
+
+Dafür müssen einmalig drei Secrets unter **Settings → Secrets and variables →
+Actions** liegen: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`. Fehlt
+eines, bricht der Lauf sofort mit einem Hinweis ab — sonst legte die
+Vercel-Befehlszeile ein neues Projekt mit leerer Spielerwelt an.
+
+Vom eigenen Rechner bleibt `vercel --prod` unverändert der kürzere Weg.
 
 ### Wo die Spielstände liegen
 
