@@ -8,9 +8,11 @@
    Der Ablauf:
 
      falscher Code        -> Meldung ins Brett 'fehlversuche'
-     drei in 20 Minuten   -> ein Fall im Brett 'verhoere', die Tuer
-                             geht in den Verhoerbildschirm
-     BND sieht den Alarm  -> eigenes Fenster, ueberall in der App
+     drei in 20 Minuten   -> die Ampel im Dienst wird rot. Mehr nicht:
+                             von allein verhoert hier niemanden.
+     BND leitet ein       -> ein Fall im Brett 'verhoere', erst dann
+                             geht die Tuer in den Verhoerbildschirm
+     BND sieht den Fall   -> eigenes Fenster, ueberall in der App
      BND befragt          -> eigener Chatraum je Geraet
      BND entscheidet      -> Freigeben, oder Ablehnen: dann geht ein
                              Antrag an die Administration. Sperren
@@ -40,7 +42,7 @@
   V.raum = function (geraet) { return 'verhoer-' + String(geraet || '').slice(0, 24); };
 
   var FENSTER_MS = 20 * 60 * 1000;   // so lange zaehlt ein Fehlversuch mit
-  var GRENZE = 3;                    // so viele, dann Verhoer
+  var GRENZE = 3;                    // so viele, dann rote Ampel im Dienst
 
   V.GRENZE = GRENZE;
 
@@ -102,9 +104,9 @@
         profil: p,
       },
     }, ABSENDER).then(function () {
-      var n = V.anzahl();
-      if (n >= GRENZE) return V.anlegen().then(function (f) { return { anzahl: n, fall: f }; });
-      return { anzahl: n, fall: null };
+      /* Gezaehlt wird weiter, aufgemacht wird nichts: ein Verhoer
+         entsteht nur, wenn ein Mensch es einleitet. */
+      return { anzahl: V.anzahl(), fall: null };
     }, function () { return { anzahl: 0, fall: null }; });
   };
 
@@ -255,20 +257,29 @@
 
   V.raumPerson = function (code) { return 'bnd-' + A.normieren(code); };
 
-  V.anlegen = function () {
-    var schon = V.eigenerFall();
-    if (schon) return Promise.resolve(schon);
-    var p = V.profil();
-    var versuche = V.versuche().map(function (m) { return m.zusatz.versuch; });
+  /* Ein Geraeteverhoer einleiten. Ohne Buendel gilt das eigene Geraet,
+     mit Buendel das aus der Geraeteakte des Dienstes - dann steht der
+     BND als Absender darunter und nicht die Tuer. */
+  V.anlegen = function (buendel) {
+    var eigenes = !buendel;
+    var b = buendel || {
+      geraet: Rel.geraet, profil: V.profil(),
+      versuche: V.versuche().map(function (m) { return { code: m.zusatz.versuch }; }),
+    };
+    var schon = V.fallVon(b.geraet);
+    if (schon && schon.status === undefined) return Promise.resolve(schon);
+    var versuche = (b.versuche || []).map(function (v) {
+      return typeof v === 'string' ? v : v.code;
+    });
     return Rel.senden(V.BRETT_FAELLE, {
       text: 'Zutrittsversuch: ' + versuche.length + ' falsche Codes',
       zusatz: {
         art: 'verhoer',
-        geraet: p.geraet,
-        profil: p,
+        geraet: b.geraet,
+        profil: b.profil || {},
         versuche: versuche,
       },
-    }, ABSENDER).then(function () { return V.eigenerFall(); });
+    }, eigenes ? ABSENDER : undefined).then(function () { return V.fallVon(b.geraet); });
   };
 
   V.freigeben = function (fall) {

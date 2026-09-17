@@ -768,10 +768,19 @@ unterscheiden — und genau darum geht es.
 ### Nach drei Fehlversuchen
 
 ```
-falscher Code            →  Meldung, 10 s Bild, Hinweis „noch 2 Versuche"
-drei in zwanzig Minuten  →  Fall im Brett 'verhoere', die Tür geht in den
+falscher Code            →  Meldung, 10 s Bild, Hinweis „wird vermerkt"
+drei in zwanzig Minuten  →  im Dienst wird die Ampel rot. Sonst nichts.
+BND leitet ein           →  Fall im Brett 'verhoere', die Tür geht in den
                             Verhörbildschirm und lässt sich nicht mehr benutzen
 ```
+
+**Von allein verhört hier niemanden.** Das war einmal anders: drei falsche
+Codes reichten, und die Tür ging von selbst in den Verhörbildschirm — auch
+bei jemandem, der sich schlicht vertippt hatte. Gezählt wird weiter, und ab
+drei Versuchen steht das Gerät im Dienst auf Rot. Ob daraus ein Verhör wird,
+entscheidet ein Mensch: in der **Geräteakte** unter *🚪 Tür* liegt dafür der
+Knopf **🎙 Verhör einleiten**, der einmal nachfragt, bevor er die Tür
+zusperrt.
 
 Auf dem gesperrten Gerät steht dann:
 
@@ -783,7 +792,7 @@ Chatraum auf. Der Befragte kann schreiben — mehr nicht.
 
 ### Beim Dienst
 
-Sobald ein Fall aufgeht, erscheint bei **jedem BND-Mitarbeiter** ein eigenes
+Sobald ein Verhör eingeleitet ist, erscheint bei **jedem BND-Mitarbeiter** ein eigenes
 Fenster unten rechts — überall in der App, auch mitten im Spiel. Es nennt die
 Zahl der Fehlversuche, die Geräteart, die Kennung und wer sich zuletzt auf
 diesem Gerät angemeldet hat. Ein Knopf: **Fall öffnen**.
@@ -805,7 +814,8 @@ getrennt stehen.
 
 Im BND gibt es dafür den Reiter **🚪 Tür**: offene Verhöre oben, darunter die
 erledigten und alle Geräte, die je einen falschen Code eingegeben haben — mit
-der Liste der probierten Zahlen.
+der Liste der probierten Zahlen. Ein Tippen darauf öffnet die Geräteakte, und
+dort wird ein Verhör auch eingeleitet.
 
 ---
 

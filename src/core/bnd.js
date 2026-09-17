@@ -493,9 +493,10 @@
 
       ziel.appendChild(UI.el('p.small.muted', {
         text: 'Jeder falsche Code an der Tür wird hier vermerkt — mit Gerät, '
-          + 'Zeitpunkt und der Zahl, die probiert wurde. Nach '
-          + VH.GRENZE + ' Fehlversuchen in 20 Minuten geht die Tür in ein '
-          + 'Verhör und wartet auf dich.',
+          + 'Zeitpunkt und der Zahl, die probiert wurde. Ab '
+          + VH.GRENZE + ' Fehlversuchen in 20 Minuten wird die Ampel rot. '
+          + 'Von allein passiert nichts: ein Verhör leitest du in der '
+          + 'Geräteakte ein.',
       }));
 
       if (offene.length) {
@@ -643,16 +644,37 @@
         }));
       }
 
-      UI.modal({
+      var akte = UI.modal({
         title: 'Geräteakte', body: body, wide: true,
         actions: [
           {
-            label: '🎙 Verhör', cls: 'ghost',
-            onClick: function () { SG.router.go('#/verhoer/' + b.geraet); },
+            label: '🎙 Verhör einleiten', cls: 'ghost', keepOpen: true,
+            onClick: function () { akte.close(); verhoerEinleiten(b); },
           },
           { label: 'Fertig', cls: 'primary' },
         ],
       });
+    }
+
+    /* Ein Geraeteverhoer sperrt die Tuer fuer den, der davorsteht.
+       Darum fragt der Dienst einmal nach, bevor er es eroeffnet. */
+    function verhoerEinleiten(b) {
+      var VH = SG.verhoer;
+      var offen = VH.fallVon(b.geraet);
+      if (offen && offen.status === undefined) {
+        SG.router.go('#/verhoer/' + b.geraet);
+        return;
+      }
+      UI.confirm('Verhör einleiten?',
+        'Dieses Gerät kommt dann nicht mehr an der Tür vorbei, bis du '
+        + 'freigibst oder ablehnst.', 'Verhör einleiten').then(function (ok) {
+          if (!ok) return;
+          VH.anlegen(b).then(function () {
+            SG.protokoll.schreiben('verhoer',
+              'Geräteverhör eingeleitet: ' + VH.kurz(b.geraet));
+            SG.router.go('#/verhoer/' + b.geraet);
+          }, function () { UI.toast('Konnte nicht eingeleitet werden.', 'bad'); });
+        });
     }
 
     /* ---------------------------------------------------------- Lagebild */

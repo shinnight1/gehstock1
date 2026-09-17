@@ -25,8 +25,9 @@
     var gsperre = SG.verhoer.geraetGebannt();
     if (gsperre) return geraetGesperrt(app, gsperre);
 
-    /* Laeuft gegen dieses Geraet ein Verhoer, geht die Tuer nicht auf,
-       bevor der Dienst entschieden hat. */
+    /* Hat der Dienst gegen dieses Geraet ein Verhoer eingeleitet, geht
+       die Tuer nicht auf, bevor er entschieden hat. Von allein passiert
+       das nicht - Fehlversuche werden nur gezaehlt. */
     var offenerFall = null;
     var abFaelle = SG.relais.beobachten(SG.verhoer.BRETT_FAELLE, function () {
       var f = SG.verhoer.eigenerFall();
@@ -290,23 +291,14 @@
       ]);
       app.appendChild(deckel);
 
-      /* Melden, was hier passiert. Der Dienst zaehlt mit; nach drei
-         Fehlversuchen in zwanzig Minuten macht er einen Fall auf und
-         die Tuer geht in den Verhoerbildschirm. */
+      /* Melden, was hier passiert. Der Dienst zaehlt mit - mehr nicht.
+         In ein Verhoer geht die Tuer nur, wenn ein Mensch beim Dienst
+         eines einleitet. */
       SG.verhoer.melden(versuch).then(function (r) {
-        if (r.fall) {
-          offenerFall = r.fall;
-          clearInterval(t);
-          if (stockAus) stockAus();
-          UI.remove(deckel);
-          insVerhoer(r.fall);
-          return;
-        }
-        var uebrig = SG.verhoer.GRENZE - r.anzahl;
-        if (r.anzahl > 0 && uebrig > 0) {
-          warnung.textContent = uebrig === 1
-            ? 'Noch ein Fehlversuch, dann wird der Zugang überprüft.'
-            : 'Noch ' + uebrig + ' Versuche, dann wird der Zugang überprüft.';
+        if (r.anzahl >= SG.verhoer.GRENZE) {
+          warnung.textContent = 'Der Dienst sieht sich diese Versuche an.';
+        } else if (r.anzahl > 0) {
+          warnung.textContent = 'Jeder Fehlversuch wird vermerkt.';
         }
       });
 
