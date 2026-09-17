@@ -63,6 +63,14 @@ export function zerhacker(world,now){
     const kraft=X.zerhackerKraft(Object.keys(world.players||{}).length);
     world.zerhacker={woche,hp:kraft,maxHp:kraft,beitraege:{},besiegtAm:null,verteilt:false};
   }
+  /* Wird seine Lebenskraft neu festgelegt, gilt das sofort und nicht erst am
+     Montag. Was diese Woche schon an Schaden liegt, bleibt angerechnet - der
+     Rest schrumpft auf das neue Mass. */
+  const kraft=X.zerhackerKraft(Object.keys(world.players||{}).length);
+  if(world.zerhacker.maxHp!==kraft&&!world.zerhacker.besiegtAm){
+    const geschlagen=world.zerhacker.maxHp-world.zerhacker.hp;
+    world.zerhacker.maxHp=kraft;world.zerhacker.hp=Math.max(0,kraft-geschlagen);
+  }
   return world.zerhacker;
 }
 
@@ -165,7 +173,11 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
     if(z.hp<=0)fail('Der Zerhacker ist fuer diese Woche erledigt.');
     if(X.zerhackerVorrat(p,now)<1)fail('Deine Truppe sammelt sich noch. In wenigen Minuten hast du wieder einen Schlag.');
     if(!p.truppe||!p.truppe.length)fail('Stelle zuerst eine Truppe auf.');
-    await nearby(X.zerhackerOrt(now),X.ZERHACKER.reichweite);
+    /* Er zieht weiter, waehrend die Standortmeldung unterwegs ist. Beide
+       Punkte darum zur selben Zeit messen - sonst steht man neben ihm und
+       der Server rechnet gegen den Ort, an dem er jetzt waere. */
+    const wo=await position(id),bahn=X.zerhackerOrt(wo.updatedAt);
+    if(Math.hypot(wo.x-bahn.x,wo.z-bahn.z)>X.ZERHACKER.reichweite)fail('Laufe zuerst näher heran.');
     const erst=world.erstschlag&&world.erstschlag.id===id?X.ERSTSCHLAG_BONUS:1;
     const schaden=Math.min(z.hp,Math.round(X.zerhackerSchaden(p)*erst));
     z.hp-=schaden;z.beitraege[id]=(z.beitraege[id]||0)+schaden;
@@ -240,11 +252,11 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
   }
   if(op==='raid_start'){
     const target=world.players[body.targetId];if(!target||body.targetId===id)fail('Wähle einen anderen Spieler.');
-    if(X.protected(p,now)||X.protected(target,now))fail('Anfängerschutz: Beide Spieler brauchen 24 Stunden Spielalter und mindestens 6 Mons. Nach einem Diebstahl gelten 2 Stunden Schutz.');
+    if(X.protected(target,now))fail('Dieser Spieler steht nach einem Diebstahl zwei Stunden unter Schutz.');
     if(p.raidCooldown>now||target.raidLock?.until>now||activeArena(target)||activeDuel(target)||activeDungeon(world,target))fail('Dieser Überfall ist gerade nicht möglich.');
     if(p.eggs.length>=E.BAG_LIMIT)fail('Du brauchst einen freien Platz für ein erbeutetes Ei.');
     const targetPos=await position(body.targetId);await nearby(targetPos);const victimEgg=target.eggs.find(e=>e.startedAt!==null&&p.eggs.filter(e=>e.startedAt!==null).length<E.INCUBATORS)||target.eggs.find(e=>e.startedAt===null);if(!victimEgg)fail('Dieser Spieler trägt kein Ei, das in deine Brutstation passt.');
-    p.raidCooldown=now+30*60000;p.duel={id:body.requestId,targetId:body.targetId,targetName:target.name,revision:0,round:1,phase:'choose',hp:100,enemyHp:100,weapon:p.weapon,enemyWeapon:target.weapon,enemySkin:target.skin,enemyPanzer:target.panzer||null,until:now+10*60000,message:'Gewinne zuerst das Waffenduell, danach den Mon-Kampf.'};target.raidLock={attackerId:id,eggId:victimEgg.id,until:p.duel.until};
+    p.raidCooldown=now+X.UEBERFALL_PAUSE;p.duel={id:body.requestId,targetId:body.targetId,targetName:target.name,revision:0,round:1,phase:'choose',hp:100,enemyHp:100,weapon:p.weapon,enemyWeapon:target.weapon,enemySkin:target.skin,enemyPanzer:target.panzer||null,until:now+10*60000,message:'Gewinne zuerst das Waffenduell, danach den Mon-Kampf.'};target.raidLock={attackerId:id,eggId:victimEgg.id,until:p.duel.until};
   }
   if(op==='raid_turn'){
     const d=p.duel;if(!d||d.phase!=='choose'||d.id!==body.duelId||d.revision!==body.revision)fail('Rufe den aktuellen Duellstand ab.');if(!['strike','heavy','guard'].includes(body.move))fail('Wähle eine Waffenaktion.');

@@ -64,6 +64,8 @@ export async function checkUi(D,E,A,handler,code,clock,otherCode){
   await jump(clock.value+21*60000);find(e=>e.classList.contains('gm-move-strike')).fire('click');await flush();
   click('Kampfstand abrufen');await flush();click('Zurück zur Karte');assert.equal(blocked,false,'expired server fight can be exited');
   click('◉ Eier');await jump(clock.value+45000);assert.ok(root.all().some(e=>e.visible&&e.tagName==='h2'&&e.textContent==='Brutstation'),'passive update keeps drawer open');
+  const chancen=root.querySelectorAll('.gm-chance');assert.ok(chancen.length>=3,'Brutstation nennt die Schlupfchancen je Seltenheit');
+  assert.ok(chancen.every(z=>/%$/.test(z.textContent)),'jede Zeile endet auf einen Prozentwert');
   const storedGold=game.state.gold;unreachable=true;listeners.offline();assert.ok(blocked);await jump(clock.value+3*E.HOUR);assert.equal(game.state.gold,storedGold,'offline clock cannot advance progression');
   unreachable=false;listeners.online();await flush();assert.equal(root.querySelector('.gm-connection').hidden,true);assert.ok(game.state.gold>storedGold,'server settles income on reconnect');
   assert.deepEqual(values.get('stand'),legacy,'old local save left intact and unused');assert.deepEqual(values.get('arena-v1'),{invalid:'legacy fight'});assert.deepEqual(values.get('online-squad'),['moosling']);

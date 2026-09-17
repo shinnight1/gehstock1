@@ -21,9 +21,12 @@
      rund zwanzig Schlaege pro Kopf und Woche sollen reichen. Statt einer
      starren Sperre nach jedem Schlag fuellt sich ein Vorrat - wer zwei Tage
      weg war, kommt mit vollem Beutel zurueck und haut sie am Stueck raus. */
-  X.ZERHACKER={runde:11*60000,radius:150,kraft:25000,
+  /* Reichweite mit Rand: Er zieht mit gut einem Schritt je Sekunde weiter,
+     und die Standortmeldung darf bis zu 15 Sekunden alt sein. Bei 22 stand
+     man neben ihm und der Server sah trotzdem einen zu grossen Abstand. */
+  X.ZERHACKER={runde:11*60000,radius:150,kraft:5000,
                nachschub:10*60000,vorratMax:12,
-               schadenJeStufe:800,beuteRunen:6,beuteGold:400,reichweite:22};
+               schadenJeStufe:800,beuteRunen:6,beuteGold:400,reichweite:34};
   /* Jede Woche eine gemeinsame Aufgabe, an der alle zusammen zaehlen. Anders
      als der Zerhacker verlangt sie keine Wartezeit und keinen Weg zu einem
      bestimmten Ort - jeder Beitrag zaehlt sofort, auch der aus fuenf Minuten
@@ -221,7 +224,12 @@
     p.raidCooldown=Number(old.raidCooldown)||0;p.raidShield=Number(old.raidShield)||0;return p;
   };
   X.progress=function(p,q){return q.stat==='visited'?p.visited.length:p.progress[q.stat]||0;};
-  X.protected=function(p,now){return now-p.joinedAt<24*E.HOUR||p.besitz.length<6||p.raidShield>now;};
+  /* Ueberfallschutz gibt es nur noch aus einem Grund: Wer gerade bestohlen
+     wurde, hat zwei Stunden Ruhe. Der fruehere Anfaengerschutz - 24 Stunden
+     Spielalter und sechs Mons - ist weg. Ein Ei traegt man auf eigenes
+     Risiko, und zwar von der ersten Minute an. */
+  X.UEBERFALL_PAUSE=30*60000;
+  X.protected=function(p,now){return p.raidShield>now;};
   X.riverCenter=function(z){return 72+Math.sin(z*.02)*12;};
   X.polygonContains=function(p,points){var inside=false;for(var i=0,j=points.length-1;i<points.length;j=i++){var a=points[i],b=points[j];if((a.z>p.z)!==(b.z>p.z)&&p.x<(b.x-a.x)*(p.z-a.z)/(b.z-a.z)+a.x)inside=!inside;}return inside;};
   var coast=D.WORLD.coast.map(function(v){return{x:v[0],z:v[1]};});

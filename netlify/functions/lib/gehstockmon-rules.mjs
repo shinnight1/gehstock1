@@ -344,10 +344,26 @@ const SG = { rules: {} };
     if (st.eggs.filter(function (e) { return e.startedAt !== null; }).length >= E.INCUBATORS) throw new Error('Alle drei Brutplätze sind belegt.');
     egg.startedAt = Math.max(now, st.clockAt); egg.readyAt = egg.startedAt + E.HATCH_TIME; return egg;
   };
+  /* Was aus einem Ei kommt, entscheidet die Seltenheit - und das, was in der
+     Sammlung noch fehlt. Ein Mon, das man schon hat, kann nicht noch einmal
+     kommen; mit jedem Fund verschieben sich also die Aussichten. Genau
+     deshalb rechnet die Anzeige mit demselben Vorrat wie das Schluepfen
+     selbst, statt feste Prozente hinzuschreiben, die nach dem dritten Ei
+     nicht mehr stimmen. */
+  E.SCHLUPF_GEWICHTE = [8, 5, 3.8, 3, 1, .25, .05];
+  E.schlupfChancen = function (st) {
+    var pool = D.KATALOG.filter(function (k) { return st.besitz.indexOf(k.id) < 0; });
+    var summe = pool.reduce(function (s, k) { return s + E.SCHLUPF_GEWICHTE[k.seltenheit]; }, 0);
+    return D.SELTENHEITEN.map(function (r, i) {
+      var offen = pool.filter(function (k) { return k.seltenheit === i; }).length;
+      return { name: r.name, farbe: r.farbe, offen: offen,
+        anteil: summe ? offen * E.SCHLUPF_GEWICHTE[i] / summe : 0 };
+    }).filter(function (v) { return v.offen > 0; });
+  };
   E.hatch = function (st, id, now, random) {
     var egg = st.eggs.find(function (e) { return e.id === id; });
     if (!egg || egg.readyAt === null || now < egg.readyAt) throw new Error('Das Ei ist noch nicht fertig ausgebrütet.');
-    var pool = D.KATALOG.filter(function (k) { return st.besitz.indexOf(k.id) < 0; }), weights = [8, 5, 3.8, 3, 1, .25, .05], chosen = null;
+    var pool = D.KATALOG.filter(function (k) { return st.besitz.indexOf(k.id) < 0; }), weights = E.SCHLUPF_GEWICHTE, chosen = null;
     if (pool.length) {
       var total = pool.reduce(function (sum, k) { return sum + weights[k.seltenheit]; }, 0), pick = Math.max(0, Math.min(0.9999999, Number.isFinite(random) ? random : Math.random())) * total;
       chosen = pool[pool.length - 1]; for (var i = 0; i < pool.length; i++) { pick -= weights[pool[i].seltenheit]; if (pick < 0) { chosen = pool[i]; break; } }
@@ -433,9 +449,12 @@ const SG = { rules: {} };
      rund zwanzig Schlaege pro Kopf und Woche sollen reichen. Statt einer
      starren Sperre nach jedem Schlag fuellt sich ein Vorrat - wer zwei Tage
      weg war, kommt mit vollem Beutel zurueck und haut sie am Stueck raus. */
-  X.ZERHACKER={runde:11*60000,radius:150,kraft:25000,
+  /* Reichweite mit Rand: Er zieht mit gut einem Schritt je Sekunde weiter,
+     und die Standortmeldung darf bis zu 15 Sekunden alt sein. Bei 22 stand
+     man neben ihm und der Server sah trotzdem einen zu grossen Abstand. */
+  X.ZERHACKER={runde:11*60000,radius:150,kraft:5000,
                nachschub:10*60000,vorratMax:12,
-               schadenJeStufe:800,beuteRunen:6,beuteGold:400,reichweite:22};
+               schadenJeStufe:800,beuteRunen:6,beuteGold:400,reichweite:34};
   /* Jede Woche eine gemeinsame Aufgabe, an der alle zusammen zaehlen. Anders
      als der Zerhacker verlangt sie keine Wartezeit und keinen Weg zu einem
      bestimmten Ort - jeder Beitrag zaehlt sofort, auch der aus fuenf Minuten
@@ -633,7 +652,12 @@ const SG = { rules: {} };
     p.raidCooldown=Number(old.raidCooldown)||0;p.raidShield=Number(old.raidShield)||0;return p;
   };
   X.progress=function(p,q){return q.stat==='visited'?p.visited.length:p.progress[q.stat]||0;};
-  X.protected=function(p,now){return now-p.joinedAt<24*E.HOUR||p.besitz.length<6||p.raidShield>now;};
+  /* Ueberfallschutz gibt es nur noch aus einem Grund: Wer gerade bestohlen
+     wurde, hat zwei Stunden Ruhe. Der fruehere Anfaengerschutz - 24 Stunden
+     Spielalter und sechs Mons - ist weg. Ein Ei traegt man auf eigenes
+     Risiko, und zwar von der ersten Minute an. */
+  X.UEBERFALL_PAUSE=30*60000;
+  X.protected=function(p,now){return p.raidShield>now;};
   X.riverCenter=function(z){return 72+Math.sin(z*.02)*12;};
   X.polygonContains=function(p,points){var inside=false;for(var i=0,j=points.length-1;i<points.length;j=i++){var a=points[i],b=points[j];if((a.z>p.z)!==(b.z>p.z)&&p.x<(b.x-a.x)*(p.z-a.z)/(b.z-a.z)+a.x)inside=!inside;}return inside;};
   var coast=D.WORLD.coast.map(function(v){return{x:v[0],z:v[1]};});

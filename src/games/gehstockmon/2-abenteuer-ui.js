@@ -16,6 +16,16 @@
       kasten.appendChild(el('small', Math.round(anteil * 100) + ' %'));
       return kasten;
     }
+    /* Dasselbe Format wie ein Balken, nur ohne Fortschritt: fuer Dinge, die
+       keine Zahl von hundert haben, aber trotzdem jeder sehen soll. */
+    function marke(titel, text, farbe, beim_klick) {
+      var kasten = button('', beim_klick, 'gm-projekt gm-marke');
+      kasten.appendChild(el('b', titel));
+      var zeile = el('strong', text, 'gm-marke-wert');
+      zeile.style.color = farbe;
+      kasten.appendChild(zeile);
+      return kasten;
+    }
     function zeigeProjekte() {
       if (!projektLeiste) { projektLeiste = el('div', undefined, 'gm-projekte'); c.layer.appendChild(projektLeiste); }
       projektLeiste.textContent = '';
@@ -25,6 +35,13 @@
       if (l && !l.fertig) projektLeiste.appendChild(balken('Leuchtturm', l.gold, l.ziel, '#f0b429', zeigeLeuchtturm));
       var a = projekte && projekte.wochenaufgabe;
       if (a) projektLeiste.appendChild(balken(a.name, a.stand, a.ziel, a.erfuellt ? '#81d2a3' : '#89cce5', zeigeWoche));
+      /* Das Kopfgeld stand bisher nur im Ausruestungsfenster und fiel damit
+         niemandem auf, obwohl es das ganze Spielfeld betrifft. Hier steht es
+         neben den anderen Weltzustaenden: eine Zeile, kein Banner. */
+      var kopf = projekte && projekte.kopfgeld;
+      if (kopf) projektLeiste.appendChild(marke(kopf.selbst ? 'Kopfgeld auf dich' : 'Kopfgeld',
+        kopf.gold.toLocaleString('de-DE') + ' G · ' + (kopf.selbst ? 'du führst' : kopf.name),
+        kopf.selbst ? '#f2705a' : '#f0b429', zeigeKopfgeld));
       projektLeiste.hidden = !projektLeiste.childNodes.length;
     }
     function tafel(eintraege, einheit) {
@@ -56,6 +73,22 @@
       return 'wenn die Insel wieder oeffnet';
     }
 
+    /* Er zieht weiter, waehrend man unterwegs zu ihm ist. Wer den Ort anpeilt,
+       an dem er gerade steht, kommt ein paar Schritte hinter ihm an - und das
+       jedes Mal aufs Neue, bis man aufgibt. Gesucht wird darum der Punkt, an
+       dem beide gleichzeitig sind: einmal schaetzen, wie lange der Weg dauert,
+       und mit dieser Zeit neu fragen, wo er dann steht. Nach ein paar Runden
+       steht der Treffpunkt. Gerechnet wird mit 9 statt 11 Schritten je
+       Sekunde, weil ein Weg um Mauern und ueber Bruecken laenger ist als die
+       Luftlinie - lieber etwas zu weit vorn warten als hinterherlaufen. */
+    function treffpunkt(von) {
+      var jetzt = c.now(), ziel = X.zerhackerOrt(jetzt);
+      for (var i = 0; i < 6; i++) {
+        var dauer = Math.hypot(ziel.x - von.x, ziel.z - von.z) / 9 * 1000;
+        ziel = X.zerhackerOrt(jetzt + dauer);
+      }
+      return ziel;
+    }
     function zeigeZerhacker() {
       var z = projekte && projekte.zerhacker; if (!z || !c.open('Gehstockhassender Zerhacker', 'zerhacker')) return;
       if (z.hp <= 0) {
@@ -78,13 +111,25 @@
       var nah = ort && w.position && Math.hypot(w.position().x - ort.x, w.position().z - ort.z) < X.ZERHACKER.reichweite;
       var knopf = button(wartet ? 'Kein Schlag uebrig' : nah ? 'Zuschlagen (' + z.vorrat + ')' : 'Hingehen', function () {
         if (wartet) return;
-        if (!nah) { c.closeDrawer(); if (w && w.walkToPoint) w.walkToPoint(ort); c.notify('Du machst dich auf den Weg zum Zerhacker.'); return; }
+        if (!nah) { c.closeDrawer(); if (w && w.walkToPoint) w.walkToPoint(treffpunkt(w.position())); c.notify('Du machst dich auf den Weg zum Zerhacker.'); return; }
         run('zerhacker_schlagen', {}, 'zerhacker');
       }, 'gm-button gm-primary');
       knopf.disabled = !!wartet;
       drawer.appendChild(knopf);
       drawer.appendChild(el('h3', 'Wer zugeschlagen hat'));
       drawer.appendChild(tafel(z.tafel, 'Schaden'));
+    }
+    function zeigeKopfgeld() {
+      var kopf = projekte && projekte.kopfgeld;
+      if (!kopf || !c.open(kopf.selbst ? 'Kopfgeld auf dich' : 'Kopfgeld auf ' + kopf.name, 'kopfgeld')) return;
+      drawer.appendChild(el('p', kopf.selbst
+        ? 'Du hältst mit ' + kopf.gebiete + ' Außenposten die meisten auf der Insel. Wer dich im Überfall schlägt, bekommt dafür ' + kopf.gold.toLocaleString('de-DE') + ' Gold obendrauf.'
+        : kopf.name + ' hält mit ' + kopf.gebiete + ' Außenposten die meisten auf der Insel. Wer ihn im Überfall schlägt, bekommt ' + kopf.gold.toLocaleString('de-DE') + ' Gold obendrauf.'));
+      drawer.appendChild(el('p', 'Das Kopfgeld wächst mit jedem Außenposten: ' + X.KOPFGELD_JE_GEBIET
+        + ' Gold je Gebiet, ab ' + X.KOPFGELD_AB + ' Gebieten Vorsprung. Es zahlt sich einmal aus und richtet sich danach neu.'));
+      drawer.appendChild(el('p', kopf.selbst
+        ? 'Solange du vorn liegst, bist du das Ziel. Wer ein Ei bei sich trägt, verliert es im Überfall.'
+        : 'Du musst ihn dafür auf der Insel finden und im Überfall schlagen - Waffenduell, dann Mon-Kampf.'));
     }
     /* Die Fehde: eine Woche gegeneinander, verlieren kann man nur die Woche. */
     function fehdeTeil(peer) {
@@ -192,8 +237,12 @@
     }
     function rival(peer){if(!c.open(peer.name,'rival'))return;var s=state(),at=c.world().position(),near=Math.hypot(at.x-peer.x,at.z-peer.z)<8;drawer.appendChild(player(peer.skin,peer.weapon));
       fehdeTeil(peer);drawer.appendChild(el('p',X.skin(peer.skin).name+' · '+X.weapon(peer.weapon).name));drawer.appendChild(el('p','Überfall in zwei Stufen: Besiege die gespeicherte Waffenverteidigung, danach die Mon-Truppe. Bei Erfolg bekommst du genau ein getragenes oder brütendes Ei. Der Besitzer muss dabei keine Züge eingeben.'));
-      var protection=X.protected(s,c.now())||peer.protected;drawer.appendChild(el('p',protection?'Anfängerschutz oder Erholung aktiv. Überfälle werden erst nach 24 Stunden und mit mindestens 6 Mons möglich.':'Nach einem Diebstahl gelten 2 Stunden Schutz. Du kannst alle 30 Minuten einen Überfall beginnen.'));
-      var b=button(near?'Überfall beginnen':'Zum Spieler gehen',function(){if(!near){approach(peer);return;}run('raid_start',{targetId:peer.id});},'gm-button gm-primary');b.disabled=!!protection||peer.activity==='arena'||s.raidCooldown>c.now();drawer.appendChild(b);
+      var protection=!!peer.protected,ohneEi=peer.eier===0,pause=s.raidCooldown>c.now();
+      drawer.appendChild(el('p',protection?'Dieser Spieler steht nach einem Diebstahl zwei Stunden unter Schutz.'
+        :ohneEi?'Dieser Spieler trägt gerade kein Ei. Ohne Ei gibt es nichts zu holen.'
+        :pause?'Dein nächster Überfall ist in '+Math.ceil((s.raidCooldown-c.now())/60000)+' Minuten möglich.'
+        :'Alle 30 Minuten kannst du jemanden überfallen, der Eier trägt. Nach einem Diebstahl hat das Opfer zwei Stunden Ruhe.'));
+      var b=button(near?'Überfall beginnen':'Zum Spieler gehen',function(){if(!near){approach(peer);return;}run('raid_start',{targetId:peer.id});},'gm-button gm-primary');b.disabled=protection||ohneEi||peer.activity==='arena'||pause;drawer.appendChild(b);
     }
     function showDuel(){if(dungeons.active()){dungeons.show();return;}if(!duel)return;c.openCombat();var box=c.arenaBox;SG.ui.clear(box);box.className='gm-arena gm-duel';var head=el('header',undefined,'gm-arena-header');head.appendChild(el('div','ÜBERFALL · STUFE 1 VON 2','gm-eyebrow'));head.appendChild(el('strong','Waffenduell · '+duel.targetName));box.appendChild(head);var scene=el('div',undefined,'gm-duel-scene');[[duel.hp,state().skin,duel.weapon,'Du'],[duel.enemyHp,duel.enemySkin,duel.enemyWeapon,duel.targetName]].forEach(function(v){var card=el('div',undefined,'gm-duel-fighter');card.appendChild(el('h3',v[3]));card.appendChild(player(v[1],v[2]));card.appendChild(el('p',X.weapon(v[2]).name+' · '+v[0]+'/100 KP'));card.appendChild(SG.ui.el('progress',{value:v[0],max:100,'aria-label':v[3]+' Lebenspunkte'}));scene.appendChild(card);});box.appendChild(scene);
       var panel=el('div',undefined,'gm-arena-panel');panel.appendChild(el('p',duel.message,'gm-arena-line'));panel.appendChild(el('small','Gegen die gespeicherte Verteidigung · Ein Überfall läuft nach 10 Minuten ab.'));

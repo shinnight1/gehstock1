@@ -82,3 +82,13 @@
 .gm-arena.biome-4 .gm-arena-scene{background:linear-gradient(#385570,#8da9b4 52%,#d1dfdf 53%,#86a3ac)}
 .gm-arena.biome-2 .gm-arena-scene{background:linear-gradient(#382f3a,#925343 52%,#6a4d40 53%,#322e32)}
 @media(max-width:600px){.gm-map-pin{min-width:125px;max-width:190px;gap:7px;padding:7px}.gm-pin-name{font-size:14px}.gm-pin-owner{font-size:12px;max-width:142px}.gm-peer-label{font-size:12px;max-width:130px}.gm-target-badges{font-size:12px}.gm-top-actions .gm-online-button{max-width:150px;font-size:13px}}
+
+/* Die Schlupfchancen in der Brutstation: eine Zeile je Seltenheit, Punkt in
+   der Farbe der Stufe, Prozent rechts - schmal genug fuer die Schublade. */
+.gm-chancen{display:flex;flex-direction:column;gap:2px;margin:4px 0 8px}
+.gm-chance{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:8px;background:rgba(255,255,255,.04)}
+.gm-chance i{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
+.gm-chance span{flex:1 1 auto;font-size:13px;font-weight:600}
+.gm-chance small{font-size:11px;opacity:.6}
+.gm-chance strong{font-variant-numeric:tabular-nums;font-size:13px}
+.gm-chancen-fuss{font-size:12px;opacity:.72}

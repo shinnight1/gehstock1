@@ -106,6 +106,27 @@
       st.eggs.forEach(function(egg){var card=el('article',undefined,'gm-egg-card'),visualEgg=el('div',undefined,'gm-egg'+(egg.readyAt!==null&&egg.readyAt<=now()?' ready':''));visualEgg.setAttribute('aria-hidden','true');card.appendChild(visualEgg);var detail=el('div');detail.appendChild(el('h3','Ei aus '+D.FELDER[egg.territoryId-1].name));
         if(egg.startedAt===null){detail.appendChild(el('p','Noch nicht im Brutplatz'));var begin=button('Ausbrüten · 1 Stunde',function(){perform('incubate',{eggId:egg.id});},'gm-button gm-primary');begin.disabled=occupied>=E.INCUBATORS;detail.appendChild(begin);}else{var row=el('p','Schlüpft in ');deadline(row,egg.readyAt,'jetzt!');detail.appendChild(row);var hatch=button('Schlüpfen lassen',function(){perform('hatch',{eggId:egg.id});},'gm-button gm-primary');hatch.disabled=egg.readyAt>now();hatch.setAttribute('data-enable-at',String(egg.readyAt));detail.appendChild(hatch);}card.appendChild(detail);drawer.appendChild(card);
       });if(st.besitz.length===D.KATALOG.length)drawer.appendChild(el('p','Sammlung vollständig: Jedes weitere ausgebrütete Ei bringt 75 Gold.'));
+      else chancenTafel();
+    }
+    /* Was kommt da raus? Die Frage stellt sich bei jedem Ei, und die Antwort
+       aendert sich mit jedem Fund: Was man schon hat, kann nicht noch einmal
+       kommen, also steigen die Aussichten auf das Seltene von allein. Darum
+       stehen hier die Zahlen fuer die eigene Sammlung und keine festen
+       Prozente aus dem Regelwerk. */
+    function chancenTafel(){
+      var chancen=E.schlupfChancen(st);if(!chancen.length)return;
+      drawer.appendChild(el('h3','Was aus einem Ei kommt'));
+      var tafel=el('div',undefined,'gm-chancen');
+      chancen.forEach(function(v){
+        var zeile=el('div',undefined,'gm-chance'),punkt=el('i');punkt.style.background=v.farbe;
+        zeile.appendChild(punkt);
+        zeile.appendChild(el('span',v.name));
+        zeile.appendChild(el('small',v.offen+' offen'));
+        zeile.appendChild(el('strong',(v.anteil*100).toFixed(v.anteil<0.01?2:1).replace('.',',')+' %'));
+        tafel.appendChild(zeile);
+      });
+      drawer.appendChild(tafel);
+      drawer.appendChild(el('p','Gilt für deine Sammlung: '+(D.KATALOG.length-st.besitz.length)+' von '+D.KATALOG.length+' Mons fehlen dir noch. Was du schon hast, kommt nicht noch einmal — mit jedem Fund steigen die Aussichten auf das Seltenere.','gm-chancen-fuss'));
     }
     function refreshDrawer(view){if(view==='eggs')showEggs();else if(view==='posts')showOutposts();else if(view&&view.indexOf('post:')===0)showPost(Number(view.slice(5)));else if(view==='mons')showCollection();else adventures.refresh(view);}
     function perform(op,data,view){if(!connected||busy||battle||dueling())return;view=view||drawerView;
