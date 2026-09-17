@@ -38,6 +38,7 @@
     category: 'karten',
     desc: 'Echtzeit-Duell: Deck, Elixir, zwei Brücken — wer zuerst den Turm knackt',
     tags: ['echtzeit', 'karten', 'deck', 'elixir', 'türme', 'duell', 'strategie'],
+    credit: { icon: '⚔️', text: 'Von Louis gebaut.' },
     external: SEITE,
 
     /* Kachelvorschau: das Spielfeld aus derselben Blickrichtung wie im

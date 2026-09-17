@@ -20,6 +20,13 @@
         + 'die Spiele bis zu beiden großen Tycoons.',
     },
     {
+      name: 'Louis',
+      rolle: 'Head Developer & Quality Assurance',
+      text: 'GehstockMon ist seins — handgemacht entwickelt, von der gemeinsamen '
+        + 'Spielerwelt über die Insel bis zum letzten der 42 Mons. Die Arena hat '
+        + 'er ebenfalls gebaut. Und was hier erscheint, hat er vorher geprüft.',
+    },
+    {
       name: 'Max',
       rolle: 'Krisenstab 03:12',
       text: 'Hat das Krisenspiel vollständig gebaut und mitgebracht. Es läuft als '

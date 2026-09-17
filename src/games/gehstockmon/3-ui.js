@@ -214,6 +214,6 @@
     update();connectWorld();host.after(tick,1000);
     return {get state(){return st;},selftest:function(){if(D.KATALOG.length!==42)throw new Error('42 Mons erwartet');},destroy:function(){dead=true;requestEpoch++;animationToken++;if(closeTimer)host.cancel(closeTimer);window.removeEventListener('blur',joyEnd);window.removeEventListener('offline',connectionLost);window.removeEventListener('online',connectionRestored);document.removeEventListener('visibilitychange',joyEnd);if(world)world.destroy();}};
   }
-  SG.register({id:'gehstockmon',name:'GehstockMon',category:'tycoon',onlineOnly:true,heavy:true,desc:'Gemeinsame Online-Welt: 42 Mons, 9 Biome, Quests und Überfälle',tags:['3d','monster','arena','eier','revier','spielerwelt'],
+  SG.register({id:'gehstockmon',name:'GehstockMon',category:'tycoon',onlineOnly:true,heavy:true,credit:{icon:'🐉',text:'Handgemacht von Louis entwickelt.'},desc:'Gemeinsame Online-Welt: 42 Mons, 9 Biome, Quests und Überfälle',tags:['3d','monster','arena','eier','revier','spielerwelt'],
     preview:function(c,w,h){c.fillStyle='#18343a';c.fillRect(0,0,w,h);if(!R.previewArt&&SG.assets['gm-spaeher']){R.previewArt=new Image();R.previewArt.src=SG.assets['gm-spaeher'];}if(R.previewArt&&R.previewArt.complete&&R.previewArt.naturalWidth)c.drawImage(R.previewArt,w*.22,-h*.18,h*1.2,h*1.2);c.fillStyle='rgba(8,22,25,.7)';c.fillRect(0,h*.71,w,h*.29);SG.gfx.text(c,'GEHSTOCKMON',w*.5,h*.86,{font:SG.gfx.font(Math.round(h*.11),700),fill:'#ffdc97',align:'center',baseline:'middle'});},mount:mount});
 })(SG);
