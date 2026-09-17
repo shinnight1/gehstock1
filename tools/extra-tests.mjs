@@ -688,6 +688,31 @@ export function extraTests(SG, U, test) {
     if (!A.darfGegen(ADMIN2)) throw new Error('Owner darf nicht');
     if (!A.bannSetzen(ADMIN2, 'Test')) throw new Error('Bann ging nicht');
     A.bannLoesen(ADMIN2);
+  });
+
+  /* Die eine Tuer, die sich nicht von innen zusperren laesst: Einen
+     gesperrten Owner koennte niemand wieder hereinlassen. */
+  test('Owner: er kann sich selbst nicht sperren und nicht loeschen', () => {
+    A.anmelden(OWNER, 'Owner');
+    if (!A.darfGegen(OWNER)) throw new Error('gegen sich selbst gilt sonst alles');
+    if (A.darfSperren(OWNER)) throw new Error('darfSperren sagt ja');
+    if (A.darfLoeschen(OWNER)) throw new Error('darfLoeschen sagt ja');
+    if (A.bannSetzen(OWNER, 'Versehen')) throw new Error('Selbstbann ging durch');
+    if (A.gebannt(OWNER)) throw new Error('Owner ist gebannt');
+    A.merken(OWNER, 'Owner', A.ADMIN);
+    A.vergessen(OWNER);
+    if (!A.liste().some((e) => e.code === OWNER)) throw new Error('Profil wurde geloescht');
+    /* Umbenennen und Spielsperren gegen sich selbst bleiben erlaubt. */
+    A.nameSetzen(OWNER, 'Chef');
+    if (A.nameVon(OWNER) !== 'Chef') throw new Error('Umbenennen ging nicht');
+    A.abmelden();
+  });
+
+  test('Owner: ein gewoehnlicher Admin darf sich weiterhin selbst sperren', () => {
+    A.anmelden(ADMIN2, 'Zweiter');
+    if (!A.darfSperren(ADMIN2)) throw new Error('darfSperren sagt nein');
+    if (!A.bannSetzen(ADMIN2, 'Test')) throw new Error('Selbstbann ging nicht');
+    A.bannLoesen(ADMIN2);
     A.abmelden();
   });
 }

@@ -284,7 +284,7 @@
   };
 
   A.vergessen = function (code) {
-    if (!A.darfGegen(code)) return A.liste();
+    if (!A.darfLoeschen(code)) return A.liste();
     SG.verwaltung.schreiben(function (d) {
       d.profile = (d.profile || []).filter(function (e) { return e.code !== code; });
       delete (d.sperren || {})[code];
@@ -487,10 +487,33 @@
     return !(g && g.rolle === A.ADMIN);           // Admin gegen Admin: nein
   };
 
+  /* Zwei Dinge darf auch der Owner nicht gegen sich selbst tun: sich
+     sperren und sein Profil loeschen.
+
+     Gegen sich selbst ist sonst alles erlaubt, und das ist auch richtig -
+     man darf sich umbenennen, sich Spiele sperren, sich die BND-Freigabe
+     nehmen. Nur diese beiden sind endgueltig: Ein gesperrter Owner kommt
+     nicht mehr durch die Tuer, und aufmachen darf sie niemand, weil an
+     den Owner keiner herankommt. Ein geloeschtes Profil nimmt ihn aus der
+     Liste, waehrend die Rolle an seinem Code haengen bleibt. Beides endet
+     damit, dass sich das Hideout selbst zugesperrt hat. */
+  A.darfSperren = function (code) {
+    return A.darfGegen(code) && !A.istOwner(code);
+  };
+  A.darfLoeschen = function (code) {
+    return A.darfGegen(code) && !A.istOwner(code);
+  };
+
   /* Ein Satz, den die Oberflaeche anzeigen kann, wenn es nicht geht. */
   A.schutzGrund = function (code) {
     var k = A.normieren(code);
-    if (A.darfGegen(k)) return '';
+    if (A.darfGegen(k)) {
+      if (A.istOwner(k)) {
+        return 'Als Owner kannst du dich weder sperren noch löschen — dich '
+          + 'wieder hereinlassen dürfte niemand. Gib die Rolle erst weiter.';
+      }
+      return '';
+    }
     if (A.istOwner(k)) return 'Das ist der Owner. An den kommt niemand heran.';
     var g = A.pruefen(k);
     if (g && g.rolle === A.ADMIN) {
@@ -515,7 +538,7 @@
 
   A.bannSetzen = function (code, grund, von) {
     var k = A.normieren(code);
-    if (!A.darfGegen(k)) return null;
+    if (!A.darfSperren(k)) return null;
     SG.verwaltung.schreiben(function (d) {
       d.banne = d.banne || {};
       d.banne[k] = {

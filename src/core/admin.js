@@ -259,10 +259,15 @@
           UI.toast('Sperre aufgehoben.', 'good');
           neu();
         }, 'wide primary'));
-      } else {
+      } else if (A.darfSperren(e.code)) {
         body2.appendChild(UI.btn('⛔ Zugang sperren', function () {
           bannDialog(e);
         }, 'wide bad'));
+      } else {
+        /* Der Owner steht hier vor seinem eigenen Profil. */
+        body2.appendChild(UI.el('div.notice.warn', {
+          html: '<b>👑 Kein Knopf gegen dich selbst</b><br>' + A.schutzGrund(e.code),
+        }));
       }
 
       /* --- Nachrichtendienst --- */
@@ -322,7 +327,7 @@
             label: 'Alles freigeben', cls: 'ghost',
             onClick: function () { A.sperrenSetzen(e.code, []); neu(); },
           },
-          {
+          A.darfLoeschen(e.code) ? {
             label: 'Löschen', cls: 'bad',
             onClick: function () {
               UI.confirm('Profil löschen?',
@@ -338,9 +343,9 @@
                   neu();
                 });
             },
-          },
+          } : null,
           { label: 'Fertig', cls: 'primary', onClick: neu },
-        ],
+        ].filter(Boolean),
       });
     }
 
@@ -675,8 +680,9 @@
 
       ziel.appendChild(UI.el('div.notice', {
         html: '<b>👑 Du bist Owner.</b><br>Kein Admin kann dich sperren, löschen '
-          + 'oder umbenennen. Umgekehrt bist du der Einzige, der gegen andere '
-          + 'Admins vorgehen darf.',
+          + 'oder umbenennen — und du selbst auch nicht: Wer dich wieder '
+          + 'hereinlässt, gäbe es nicht. Umgekehrt bist du der Einzige, der '
+          + 'gegen andere Admins vorgehen darf.',
       }));
       ziel.appendChild(UI.el('div', { style: { height: '8px' } }));
       ziel.appendChild(UI.btn('Owner übergeben', function () {
