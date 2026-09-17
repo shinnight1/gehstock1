@@ -109,3 +109,22 @@ je Stufe um zwei Prozent, auf ganze Werte abgerundet und auf zehn Prozent begren
 Tempo, Fähigkeiten und Seltenheit ändern sich dadurch nicht. Die Verbesserungen
 gelten in Dungeons, Arenen, Trainingskämpfen und der gespeicherten Verteidigung.
 In der Developer-Testzone bleiben auch Dungeons und Runen vollständig flüchtig.
+
+## Die Developer-Testzone
+
+Admins öffnen sie im Spiel über *Spielerwelt → Developer-Testzone*. Sie läuft im
+Arbeitsspeicher des Servers, alle Tester teilen sich dieselbe, und nach fünf
+Minuten ohne Zugriff ist sie wieder leer. Die echte Spielerwelt bleibt dabei
+unberührt — auch außerhalb der Öffnungszeiten.
+
+Wer sie betritt, bekommt Ausrüstung zum Ausprobieren: **50 000 Gold**, die
+Sammlung bis auf sieben Lücken — aus jeder Seltenheit fehlt genau eines — und
+**drei Eier**, von denen zwei schon fertig ausgebrütet sind. Die Lücken und die
+fertigen Eier haben einen Grund: Mit vollständiger Sammlung bringt ein Ei nur
+noch Gold, und eine Stunde Brutzeit überlebt die Testzone nicht. So lassen sich
+Brutplatz, Schlüpfen und die Chancenanzeige in derselben Sitzung durchspielen.
+Weil jeder Tester Eier trägt, sind dort auch Überfälle möglich.
+
+Was **nicht** in die Testzone geht: Geschenke aus dem Adminmenü. Der Reiter
+*🎁 Geben* schreibt immer in die echte Spielerwelt und sagt das auch, solange
+die Testzone offen ist.

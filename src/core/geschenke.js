@@ -63,6 +63,17 @@
         + 'Das landet sofort in der echten Spielerwelt — nicht in der Testzone.',
     }));
 
+    /* Wer gerade in der Developer-Testzone steckt, denkt leicht, das hier
+       ginge auch dorthin. Tut es nicht - und ein Geschenk, das nach fuenf
+       Minuten weg ist, faellt sonst erst dem Beschenkten auf. */
+    if (SG.gehstockmon && SG.gehstockmon.adminOverride === true) {
+      ziel.appendChild(UI.el('div.notice.warn', {
+        html: '<b>Die Developer-Testzone ist offen.</b><br>Geschenke gehen '
+          + 'trotzdem in die echte Spielerwelt. Die Testzone lässt sich nicht '
+          + 'beschenken — ihr Stand verfällt nach fünf Minuten.',
+      }));
+    }
+
     var liste = A.liste();
     ziel.appendChild(UI.el('div.sec-head', null, [
       UI.el('h2', { text: 'An wen?' }),

@@ -225,7 +225,24 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
           if (body.op !== 'join') throw new GameError('Betritt zuerst die Spielerwelt.', 409);
           if (Object.keys(world.players).length >= 110) throw new GameError('Diese Welt ist voll.', 409);
           world.players[id] = { ...D.neuerStand(null, timestamp), name: name || 'Wanderer', lastSeen: timestamp, lastOfflineLoss: 0 };
-          if(sandbox){world.players[id].besitz=D.KATALOG.map(k=>k.id);world.players[id].gold=50000;}
+          if(sandbox){
+            /* Alles ausser dem jeweils letzten Mon einer Seltenheit, dazu drei
+               Eier in der Tasche. Ein volles Regal war zum Testen unbrauchbar:
+               Wer schon alles hat, bekommt aus einem Ei nur noch Gold - Bruten,
+               Schluepfen und die Chancenanzeige liessen sich gar nicht
+               ausprobieren. Sieben Luecken reichen dafuer und lassen trotzdem
+               jede starke Truppe zu. */
+            const luecken=D.SELTENHEITEN.map((_,rang)=>D.KATALOG.filter(k=>k.seltenheit===rang).pop()).filter(Boolean).map(k=>k.id);
+            world.players[id].besitz=D.KATALOG.map(k=>k.id).filter(mid=>!luecken.includes(mid));
+            world.players[id].gold=50000;
+            /* Zwei davon sind schon durch. Die Testzone vergisst sich nach
+               fuenf Minuten Ruhe - eine Stunde Brutzeit abzuwarten geht darin
+               gar nicht, und ohne fertiges Ei liesse sich das Schluepfen nie
+               ausprobieren. Das dritte bleibt roh, damit auch der Brutplatz
+               drankommt. */
+            world.players[id].eggs=[1,2,3].map((n)=>({id:'testzone-ei-'+n,territoryId:n,producedAt:timestamp,
+              startedAt:n<3?timestamp-E.HATCH_TIME:null,readyAt:n<3?timestamp:null}));
+          }
         }
         const p = world.players[id]; p.name = name || p.name; p.lastSeen = timestamp;
         if(body.op==='join'){p.dailyDelivery=E.deliverDaily(p);p.lastJoinAt=timestamp;p.spawn=X.outside(X.SPAWN,X.layout(world.territories));}

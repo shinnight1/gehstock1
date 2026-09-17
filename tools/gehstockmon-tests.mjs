@@ -77,6 +77,14 @@ await test('Admin developer code opens one shared, temporary multiplayer testzon
   const typo=await call(h,ca,'join',{adminOverride:true,adminCode:'3140'});assert.equal(typo.status,423);assert.equal(store.data,null);
   const admin=await call(h,ca,'join',{adminOverride:true,adminCode:'3141'}),teammate=await call(h,secondAdmin,'join',{adminOverride:true,adminCode:'3141'});
   assert.equal(admin.status,200);assert.equal(teammate.status,200);assert.equal(admin.access.open,true);assert.equal(admin.access.adminOverride,true);
+  /* Zum Testen gehoert auch das Bruten: sieben Luecken in der Sammlung und drei Eier in der Tasche. */
+  assert.equal(admin.profile.besitz.length,D.KATALOG.length-D.SELTENHEITEN.length,'aus jeder Seltenheit fehlt eines');
+  assert.equal(E.schlupfChancen(admin.profile).length,D.SELTENHEITEN.length,'die Chancenanzeige hat etwas zu zeigen');
+  assert.equal(admin.profile.eggs.length,3);assert.ok(D.STARTER.every(id=>admin.profile.besitz.includes(id)),'die Truppe gehoert ihm');
+  assert.equal(admin.profile.eggs.filter(e=>e.readyAt!==null&&e.readyAt<=time).length,2,'zwei Eier sind sofort schluepfbereit');
+  const geschluepft=await call(h,ca,'hatch',{adminOverride:true,adminCode:'3141',eggId:'testzone-ei-1'});
+  assert.equal(geschluepft.status,200,geschluepft.error);assert.ok(geschluepft.monId,'in der Testzone kommt ein Mon, kein Gold');
+  assert.equal(admin.profile.gold,50000);
   const fight=await call(h,ca,'arena_start',{adminOverride:true,adminCode:'3141',territoryId:1,version:1,squad:D.neuerStand().truppe});assert.equal(fight.status,200);
   await call(h,ca,'presence',{adminOverride:true,adminCode:'3141',position:{x:admin.spawn.x,z:admin.spawn.z,heading:0}});
   const together=await call(h,secondAdmin,'presence',{adminOverride:true,adminCode:'3141',position:{x:teammate.spawn.x,z:teammate.spawn.z,heading:0}});
