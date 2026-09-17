@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { data as D, economy as E, arena as A, hours as H, adventure as X } from '../netlify/functions/lib/gehstockmon-rules.mjs';
 import { createHandler } from '../netlify/functions/gehstockmon.mjs';
+import { ausstatten, spielerId } from './spieler-ausstatten.mjs';
 let passed=0,sequence=0;
 async function test(name,fn){await fn();passed++;console.log('ok',name);}
 export function memoryStore(){let data=null,version=0;return{get data(){return data;},async getWithMetadata(){return data?{data:structuredClone(data),etag:String(version)}:null;},async setJSON(key,next,opts){await new Promise(setImmediate);if((opts.onlyIfNew&&data)||(opts.onlyIfMatch!==undefined&&opts.onlyIfMatch!==String(version)))return{modified:false};data=structuredClone(next);version++;return{modified:true};}};}
@@ -104,5 +105,20 @@ await test('Weekend replaces normal egg production, retains partial cycles and i
   }
   assert.equal(H.weekends(Date.parse('2026-09-12T01:00:00+02:00'),Date.parse('2026-09-14T07:00:00+02:00')).count,0,'ownership must precede the weekend');
   assert.equal(H.weekends(0,Date.parse('2026-09-14T07:00:00+02:00')).count,1,'no rewards before introduction');
+});
+await test('The gift tool hands over Mons and territories and leaves another player untouched',async()=>{
+  const store=memoryStore(),h=createHandler({store,now:()=>stamp});const a=await call(h,ca,'join'),b=await call(h,cb,'join');
+  assert.equal(a.playerId,spielerId(ca),'Werkzeug und Server leiten dieselbe Spielerkennung ab');
+  const eintrag=await store.getWithMetadata('world-v2'),welt=structuredClone(eintrag.data);
+  welt.territories[6].ownerId=b.playerId;
+  assert.throws(()=>ausstatten(welt,{code:ca,gebiete:[7],now:stamp}),/Test B/,'fremde Gebiete nur mit --wegnehmen');
+  const bericht=ausstatten(welt,{code:ca,mons:['sturmhorn','seelenqualle','obsidianrabe','mondhexe'],gebiete:[2,4,5],now:stamp});
+  assert.deepEqual(bericht.gebiete,[2,4,5]);assert.equal((await store.setJSON('world-v2',welt,{onlyIfMatch:eintrag.etag})).modified,true);
+  const r=await call(h,ca,'world');for(const id of ['sturmhorn','seelenqualle','obsidianrabe','mondhexe'])assert.ok(r.profile.besitz.includes(id),id);
+  assert.deepEqual(r.profile.geschafft,[2,4,5]);assert.deepEqual(r.territories.filter(t=>t.ownerId===a.playerId).map(t=>t.id),[2,4,5]);
+  assert.deepEqual(r.territories[1].defense.map(d=>d.id),r.profile.truppe,'der Außenposten verteidigt sich mit seiner Truppe');
+  assert.deepEqual((await call(h,cb,'world')).profile.geschafft,[7],'das Gebiet des Partners bleibt seins');
+  const nochmal=ausstatten(structuredClone(welt),{code:ca,mons:['sturmhorn'],gebiete:[2],now:stamp});
+  assert.deepEqual([nochmal.mons,nochmal.gebiete],[[],[]],'ein zweiter Lauf ändert nichts');
 });
 console.log('\n'+passed+' GehstockMon regression checks passed.');

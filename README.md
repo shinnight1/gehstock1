@@ -155,6 +155,16 @@ eine volle Tetris-Reihe bleibt nicht liegen, Solitär hat immer 52 Karten. Der
 Selbsttest prüft das in acht Etappen je Spiel, nicht nur am Ende — ein Fehler,
 der sich zwei Züge später von selbst wieder auflöst, fiele sonst nicht auf.
 
+```bash
+node --env-file=.env.local tools/spieler-ausstatten.mjs 5572 \
+  --mons sturmhorn,seelenqualle --gebiete 2,4
+```
+Schenkt einem GehstockMon-Konto Mons und Außenposten. Welches Konto gemeint ist,
+sagt allein der vierstellige Zugangscode — aus ihm leitet auch der Spielserver
+die Spielerkennung ab. `--probe` schreibt nichts und zeigt nur, was passieren
+würde, `--wegnehmen` übergibt auch ein Gebiet, das schon einem anderen Spieler
+gehört. Die Zugangsdaten zur Spielerwelt holt vorher `vercel env pull .env.local`.
+
 ---
 
 ## Offline spielen
