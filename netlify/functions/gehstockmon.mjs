@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { data as D, economy as E, arena as A, hours as H, adventure as X } from './lib/gehstockmon-rules.mjs';
 import {adventureAction,finishEncounter,expireAdventure,deliverRewards,activeArena,activeDuel,weltprojekte,wochenschritt} from './lib/gehstockmon-adventure.mjs';
 import {activeDungeon,settleDungeons,dungeonResult,dungeonAction} from './lib/gehstockmon-dungeons.mjs';
+import {schenken,schenkungen} from './lib/gehstockmon-schenken.mjs';
 
 const KEY = 'world-v2';
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -19,6 +20,9 @@ function volatileStore() {
   };
 }
 const mutations = ['arena_start', 'arena_turn', 'arena_flee', 'collect', 'incubate', 'hatch', 'upgrade', 'defend',...X.OPS];
+/* Verschenken und Nachlesen sind Verwaltung, kein Spielzug: sie brauchen
+   keinen eigenen Spielstand und richten sich nicht nach den Oeffnungszeiten. */
+const ADMIN_OPS = ['admin_grant', 'admin_log'];
 class GameError extends Error { constructor(message, status = 400) { super(message); this.status = status; } }
 function adminBypass(body) {
   return body && body.adminOverride === true && body.adminCode === '3141' && roleForCode(body.code) === 'A';
@@ -175,7 +179,7 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
       const raw = await request.text(); if (raw.length > 240000) throw new GameError('Anfrage zu groß.', 413);
       let body; try { body = JSON.parse(raw); } catch { throw new GameError('Ungültige Anfrage.'); }
       if (!body || !validCode(body.code)) throw new GameError('Bitte melde dich im Hideout an.', 401);
-      if (!['join','world','presence',...mutations].includes(body.op)) throw new GameError('Diese Spielaktion wird nicht mehr unterstützt. Lade das Spiel neu.');
+      if (!['join','world','presence',...ADMIN_OPS,...mutations].includes(body.op)) throw new GameError('Diese Spielaktion wird nicht mehr unterstützt. Lade das Spiel neu.');
       if (mutations.includes(body.op) && (typeof body.requestId !== 'string' || body.requestId.length < 8 || body.requestId.length > 80)) throw new GameError('Aktionskennung fehlt.');
       const id = createHash('sha256').update('gehstockmon-player:' + body.code).digest('hex').slice(0, 24), timestamp = now();
       const bypass = adminBypass(body);
@@ -186,7 +190,10 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
         const result=await isolated(new Request(request.url,{method:'POST',body:JSON.stringify(body)})),payload=await result.json();
         return json({...payload,sandbox:true},result.status);
       }
-      requireOpen(timestamp, bypass);
+      const verwaltung = ADMIN_OPS.includes(body.op);
+      if (verwaltung && roleForCode(body.code) !== 'A') throw new GameError('Das darf nur ein Administrator.', 403);
+      if (body.op === 'admin_grant' && !validCode(body.zielCode)) throw new GameError('Diesen Zugangscode gibt es nicht.');
+      requireOpen(timestamp, bypass || verwaltung);
       if(body.adminOverride===true&&!bypass)throw new GameError('Die Testzone benötigt ein echtes Admin-Konto und den richtigen Testcode.',403);
       const name = typeof body.name === 'string' ? body.name.trim().replace(/[\u0000-\u001f]/g, '').slice(0, 30) : '';
       const db = store || speicher('hgh-gehstockmon'), draw = random();
@@ -199,6 +206,21 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
         const entry = await db.getWithMetadata(KEY, { type: 'json', consistency: 'strong' });
         const world = entry ? clone(entry.data) : initialWorld(timestamp);
         migrateAndSettle(world, timestamp);
+        /* Verwaltung laeuft vor allem anderen ab: Der Admin muss die
+           Spielerwelt nie selbst betreten haben, um sie zu verwalten. */
+        if (body.op === 'admin_log') return json({ serverTime: timestamp, schenkungen: schenkungen(world) });
+        if (body.op === 'admin_grant') {
+          let bericht;
+          try {
+            bericht = schenken(world, { code: body.zielCode, name: body.zielName, mons: body.mons || [], gebiete: body.gebiete || [], gold: body.gold || 0,
+              now: timestamp, wegnehmen: body.wegnehmen === true, quelle: 'Adminmenü', id: body.requestId,
+              von: { id, name: name || 'Admin' } });
+          } catch (err) { throw new GameError(err.message); }
+          if (!bericht.mons.length && !bericht.gebiete.length && !bericht.gold) return json({ serverTime: timestamp, bericht, schenkungen: schenkungen(world) });
+          const geschrieben = await db.setJSON(KEY, world, entry ? { onlyIfMatch: entry.etag } : { onlyIfNew: true });
+          if (geschrieben.modified) return json({ serverTime: timestamp, bericht, schenkungen: schenkungen(world) });
+          continue;
+        }
         if (!world.players[id]) {
           if (body.op !== 'join') throw new GameError('Betritt zuerst die Spielerwelt.', 409);
           if (Object.keys(world.players).length >= 110) throw new GameError('Diese Welt ist voll.', 409);

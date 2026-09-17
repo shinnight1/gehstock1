@@ -1,12 +1,16 @@
 /* ------------------------------------------------------------------
    Admin-Bereich.
 
-   Fuenf Reiter:
+   Sechs Reiter:
      Leute     Codes anlegen, Profile oeffnen, BND-Freigabe, sperren
      Spiele    Wartung und "nur innerer Kreis" je Spiel
+     Geben     Mons, Aussenposten und Gold an eine Person vergeben
      Ansage    eine Meldung, die oben im Hub steht
      Sperren   wer gesperrt ist und wie man es wieder aufhebt
      Sitzung   wer man ist, Werkzeuge, abmelden
+
+   Der Reiter 'Geben' steht in core/geschenke.js: er redet als einziger
+   mit dem Spielserver und nicht mit dem Relais.
 
    Alles hier liegt in SG.verwaltung und damit auf dem Relais: was ein
    Admin aendert, ist in unter einer Sekunde auf allen Geraeten da.
@@ -33,6 +37,7 @@
     body.appendChild(UI.tabs([
       { id: 'leute', label: '👥 Leute' },
       { id: 'spiele', label: '🎲 Spiele' },
+      { id: 'geben', label: '🎁 Geben' },
       { id: 'ansage', label: '📣 Ansage' },
       { id: 'banne', label: '⛔ Sperren' },
       { id: 'sitzung', label: '🛡 Sitzung' },
@@ -54,6 +59,7 @@
     function bauen(ziel) {
       if (reiter === 'leute') leute(ziel);
       else if (reiter === 'spiele') spiele(ziel);
+      else if (reiter === 'geben') SG.geschenke.reiter(ziel, neu);
       else if (reiter === 'ansage') ansage(ziel);
       else if (reiter === 'banne') banne(ziel);
       else sitzung(ziel);

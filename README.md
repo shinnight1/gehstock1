@@ -100,6 +100,7 @@ src/
                        tarnung.js    der Deckel, der nach Schule aussieht
                        wache.js      setzt Sperren und Befehle durch
                        verhoer.js    Fehlversuche an der Tür, Verhöre
+                       geschenke.js  Adminreiter „Geben" für GehstockMon
                        meeting.js    Besprechungen, Route, Stundenplan
                        flix.js       Gehstockflix: Vorspann, Regal, Abspieler
                        dev.js        Entwicklerkonsole
@@ -157,13 +158,15 @@ der sich zwei Züge später von selbst wieder auflöst, fiele sonst nicht auf.
 
 ```bash
 node --env-file=.env.local tools/spieler-ausstatten.mjs 5572 \
-  --mons sturmhorn,seelenqualle --gebiete 2,4
+  --mons sturmhorn,seelenqualle --gebiete 2,4 --gold 500
 ```
-Schenkt einem GehstockMon-Konto Mons und Außenposten. Welches Konto gemeint ist,
-sagt allein der vierstellige Zugangscode — aus ihm leitet auch der Spielserver
-die Spielerkennung ab. `--probe` schreibt nichts und zeigt nur, was passieren
-würde, `--wegnehmen` übergibt auch ein Gebiet, das schon einem anderen Spieler
-gehört. Die Zugangsdaten zur Spielerwelt holt vorher `vercel env pull .env.local`.
+Schenkt einem GehstockMon-Konto Mons, Außenposten und Gold — dasselbe, was im
+Admin-Menü der Reiter *🎁 Geben* tut, nur ohne Browser. Welches Konto gemeint
+ist, sagt allein der vierstellige Zugangscode; aus ihm leitet auch der
+Spielserver die Spielerkennung ab. `--probe` schreibt nichts und zeigt nur, was
+passieren würde, `--wegnehmen` übergibt auch ein Gebiet, das schon einem anderen
+Spieler gehört. Die Zugangsdaten zur Spielerwelt holt vorher
+`vercel env pull .env.local`.
 
 ---
 
@@ -513,6 +516,40 @@ Zwei Feinheiten, die in der Praxis wehtaten:
 Ohne Relais (Offline-Datei, Seite ohne Serverfunktion) fällt alles auf den
 Gerätespeicher zurück — dann gilt eben wieder nur lokal, was lokal gesetzt
 wurde.
+
+### Geben — Mons, Außenposten und Gold verschenken
+
+Im Admin-Menü liegt der Reiter **🎁 Geben**. Person antippen, Mons ankreuzen,
+Außenposten ankreuzen, Gold eintragen, fertig. Das landet unmittelbar in der
+echten Spielerwelt — nicht in der Developer-Testzone, deren Stand nach fünf
+Minuten ohnehin verfällt.
+
+Ein paar Eigenheiten, die Ärger ersparen:
+
+- Wer noch nie gespielt hat, bekommt sein Konto gleich mit angelegt. Das
+  Geschenk liegt dann beim ersten Betreten da.
+- Ein Außenposten wechselt mitsamt Ausbaustufe, Goldeinkommen und
+  Eierproduktion; verteidigt wird er ab sofort von der Truppe des neuen
+  Besitzers.
+- Gehört das Gebiet schon jemand anderem, weigert sich der Server erst einmal
+  und nennt den Namen. Erst auf Rückfrage wird es übergeben — denn für den
+  bisherigen Besitzer ist das ein Verlust.
+- Zweimal dasselbe verschenken ändert nichts. Was da ist, ist da.
+
+**Jede Schenkung steht im Buch**, unter der Liste: wer, an wen, was, woher
+(Menü oder Kommandozeile) und wann. Sich selbst zu beschenken ist erlaubt und
+steht genau deshalb mit 🪞 darin — im Buch stehen Geber und Beschenkter
+nebeneinander, und wer sich selbst neun Außenposten gibt, sieht das dort auch.
+Zusätzlich geht jede Schenkung ins normale Protokoll im Admin-Raum.
+
+Erlaubt ist das nur mit Admin-Code, und zwar auf dem **Server** geprüft: die
+Aktion ist nichts wert, wenn man sie im Browser nachbaut. Die Öffnungszeiten
+von GehstockMon gelten dafür nicht — verschenken geht auch, wenn die Insel
+gerade zu ist.
+
+Dasselbe ohne Menü, von der Kommandozeile aus, kann
+`tools/spieler-ausstatten.mjs` (siehe *Befehle*). Beide Wege benutzen dieselbe
+Logik und schreiben dasselbe Buch: `netlify/functions/lib/gehstockmon-schenken.mjs`.
 
 ### Ansagen
 

@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { data as D, economy as E, arena as A, hours as H, adventure as X } from '../netlify/functions/lib/gehstockmon-rules.mjs';
 import { createHandler } from '../netlify/functions/gehstockmon.mjs';
-import { ausstatten, spielerId } from './spieler-ausstatten.mjs';
+import { schenken, schenkungen, spielerId } from '../netlify/functions/lib/gehstockmon-schenken.mjs';
 let passed=0,sequence=0;
 async function test(name,fn){await fn();passed++;console.log('ok',name);}
 export function memoryStore(){let data=null,version=0;return{get data(){return data;},async getWithMetadata(){return data?{data:structuredClone(data),etag:String(version)}:null;},async setJSON(key,next,opts){await new Promise(setImmediate);if((opts.onlyIfNew&&data)||(opts.onlyIfMatch!==undefined&&opts.onlyIfMatch!==String(version)))return{modified:false};data=structuredClone(next);version++;return{modified:true};}};}
@@ -111,14 +111,62 @@ await test('The gift tool hands over Mons and territories and leaves another pla
   assert.equal(a.playerId,spielerId(ca),'Werkzeug und Server leiten dieselbe Spielerkennung ab');
   const eintrag=await store.getWithMetadata('world-v2'),welt=structuredClone(eintrag.data);
   welt.territories[6].ownerId=b.playerId;
-  assert.throws(()=>ausstatten(welt,{code:ca,gebiete:[7],now:stamp}),/Test B/,'fremde Gebiete nur mit --wegnehmen');
-  const bericht=ausstatten(welt,{code:ca,mons:['sturmhorn','seelenqualle','obsidianrabe','mondhexe'],gebiete:[2,4,5],now:stamp});
+  assert.throws(()=>schenken(welt,{code:ca,gebiete:[7],now:stamp}),/Test B/,'fremde Gebiete nur mit --wegnehmen');
+  const bericht=schenken(welt,{code:ca,mons:['sturmhorn','seelenqualle','obsidianrabe','mondhexe'],gebiete:[2,4,5],now:stamp});
   assert.deepEqual(bericht.gebiete,[2,4,5]);assert.equal((await store.setJSON('world-v2',welt,{onlyIfMatch:eintrag.etag})).modified,true);
   const r=await call(h,ca,'world');for(const id of ['sturmhorn','seelenqualle','obsidianrabe','mondhexe'])assert.ok(r.profile.besitz.includes(id),id);
   assert.deepEqual(r.profile.geschafft,[2,4,5]);assert.deepEqual(r.territories.filter(t=>t.ownerId===a.playerId).map(t=>t.id),[2,4,5]);
   assert.deepEqual(r.territories[1].defense.map(d=>d.id),r.profile.truppe,'der Außenposten verteidigt sich mit seiner Truppe');
   assert.deepEqual((await call(h,cb,'world')).profile.geschafft,[7],'das Gebiet des Partners bleibt seins');
-  const nochmal=ausstatten(structuredClone(welt),{code:ca,mons:['sturmhorn'],gebiete:[2],now:stamp});
+  const nochmal=schenken(structuredClone(welt),{code:ca,mons:['sturmhorn'],gebiete:[2],now:stamp});
   assert.deepEqual([nochmal.mons,nochmal.gebiete],[[],[]],'ein zweiter Lauf ändert nichts');
+});
+await test('Only an admin hands out Mons and territories, also outside opening hours, and every gift is written down',async()=>{
+  const store=memoryStore(),h=createHandler({store,now:()=>stamp});
+  assert.equal((await call(h,cb,'admin_grant',{zielCode:cb,mons:['mondhexe']})).status,403,'ein Spieler darf nicht verschenken');
+  assert.equal((await call(h,cb,'admin_log')).status,403);
+  assert.equal((await call(h,ca,'admin_grant',{zielCode:'1234',mons:['mondhexe']})).status,400,'den Code gibt es nicht');
+  // Der Admin hat die Spielerwelt nie betreten - verwalten kann er sie trotzdem.
+  let r=await call(h,ca,'admin_grant',{zielCode:cb,zielName:'Test B',mons:['mondhexe','sturmhorn'],gebiete:[3]});
+  assert.equal(r.status,200,r.error);assert.deepEqual([r.bericht.mons,r.bericht.gebiete],[['mondhexe','sturmhorn'],[3]]);
+  const beschenkt=await call(h,cb,'join');
+  assert.ok(beschenkt.profile.besitz.includes('mondhexe'));assert.deepEqual(beschenkt.profile.geschafft,[3]);
+  assert.equal(beschenkt.territories[2].ownerName,'Test B');
+  let buch=(await call(h,ca,'admin_log')).schenkungen;
+  assert.equal(buch.length,1);assert.equal(buch[0].anName,'Test B');assert.equal(buch[0].vonName,'Test A');assert.equal(buch[0].selbst,false);
+  assert.deepEqual([buch[0].mons,buch[0].gebiete],[['mondhexe','sturmhorn'],[3]]);
+  // Sich selbst beschenken geht - und steht als solches im Buch.
+  await call(h,ca,'admin_grant',{zielCode:ca,zielName:'Test A',mons:['leerenwyrm']});
+  buch=(await call(h,ca,'admin_log')).schenkungen;
+  assert.equal(buch.length,2);assert.equal(buch[0].selbst,true,'jüngste Schenkung zuerst');
+  // Ein zweites Mal dasselbe schenken ändert nichts und schreibt nichts.
+  r=await call(h,ca,'admin_grant',{zielCode:cb,mons:['mondhexe'],gebiete:[3]});
+  assert.deepEqual([r.bericht.mons,r.bericht.gebiete],[[],[]]);assert.equal(r.schenkungen.length,2);
+  // Fremde Gebiete nur ausdrücklich.
+  assert.equal((await call(h,ca,'admin_grant',{zielCode:ca,gebiete:[3]})).error,'Gebiet 3 (Aschenklippen) gehört Test B.');
+  assert.equal((await call(h,ca,'admin_grant',{zielCode:ca,gebiete:[3],wegnehmen:true})).status,200);
+  // Geschlossen ist die Insel nur für Spielzüge.
+  const zu=createHandler({store,now:()=>Date.parse('2026-09-18T13:00:00+02:00')});
+  assert.equal((await call(zu,ca,'world')).status,423);
+  assert.equal((await call(zu,ca,'admin_grant',{zielCode:cb,mons:['nachtflatter']})).status,200);
+  assert.equal((await call(zu,ca,'admin_log')).status,200);
+});
+await test('The admin gift tab and the server agree on every field',async()=>{
+  const store=memoryStore(),h=createHandler({store,now:()=>stamp});
+  const SG={ui:{el:()=>({}),empty:()=>({}),modal:()=>({close(){}}),toast:()=>{},confirm:()=>Promise.resolve(false),clear:()=>{},remove:()=>{}},
+    auth:{aktuell:{code:ca,name:'Test A'},liste:()=>[],schoen:(c)=>c},env:{},offline:false,audio:{play(){}},protokoll:{schreiben(){}},gehstockmon:{}};
+  const fetchStub=async(url,opts)=>{const res=await h(new Request('http://localhost'+url,{method:opts.method,body:opts.body}));
+    return {ok:res.ok,status:res.status,headers:{get:(k)=>res.headers.get(k)},json:()=>res.json()};};
+  vm.runInContext(fs.readFileSync('src/core/geschenke.js','utf8'),vm.createContext({SG,fetch:fetchStub,Promise,Object,Math,Date,Number,String,JSON,console}));
+  const G=SG.geschenke;
+  assert.deepEqual((await G.senden('admin_log',{})).schenkungen,[]);
+  const r=await G.senden('admin_grant',{zielCode:cb,zielName:'Test B',mons:['sturmhorn'],gebiete:[2],gold:500,wegnehmen:false,requestId:'geschenk-0001'});
+  assert.deepEqual([r.bericht.mons,r.bericht.gebiete,r.bericht.gold,r.bericht.neu],[['sturmhorn'],[2],500,true]);
+  const buch=(await G.senden('admin_log',{})).schenkungen;
+  assert.equal(buch.length,1);assert.equal(buch[0].vonName,'Test A');assert.equal(buch[0].quelle,'Adminmenü');
+  await assert.rejects(G.senden('admin_grant',{zielCode:ca,zielName:'Test A',mons:[],gebiete:[2],gold:0,requestId:'geschenk-0002'}),
+    (e)=>/^Gebiet \d+ .* gehört /.test(e.message),'die Oberfläche erkennt genau diesen Wortlaut wieder');
+  SG.auth.aktuell={code:cb,name:'Test B'};
+  await assert.rejects(G.senden('admin_grant',{zielCode:cb,mons:['endrichter'],gebiete:[],gold:0,requestId:'geschenk-0003'}),/nur ein Administrator/);
 });
 console.log('\n'+passed+' GehstockMon regression checks passed.');
