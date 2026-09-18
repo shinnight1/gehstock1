@@ -1,5 +1,6 @@
 import {data as D,economy as E,arena as A,adventure as X} from './gehstockmon-rules.mjs';
 import {activeDungeon} from './gehstockmon-dungeons.mjs';
+import {stadtSettle} from './gehstockmon-stadt.mjs';
 const fail=(message)=>{throw new Error(message);};
 export const activeArena=p=>p.arena&&p.arena.phase!=='finished';
 export const activeDuel=p=>p.duel&&['choose','won'].includes(p.duel.phase);
@@ -15,6 +16,7 @@ function egg(p,territoryId,now){p.eggs.push({id:'reward-'+territoryId+'-'+now+'-
 export function finishEncounter(world,p,id,now){
   const b=p.arena;if(!b?.kind||b.phase!=='finished'||b.settled)return false;
   b.settled=true;
+  if(b.kind==='rang'||b.kind==='champion')return stadtSettle(world,p,id,now);
   if(b.kind==='trainer'){
     if(b.winner==='wir'&&!p.encounterClaims.includes(b.encounterId)){
       p.encounterClaims=p.encounterClaims.concat(b.encounterId).slice(-100);p.progress.trainerWins++;p.gold+=25;wochenschritt(world,p,id,'trainer',now);fehdeSchritt(world,id,'trainer',now);

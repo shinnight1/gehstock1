@@ -149,7 +149,7 @@ const SG = { rules: {} };
   ];
 })(SG);
 
-/* 42 eigenstaendige Mons, vier taktische Rollen. Seltenheit ist sichtbar,
+/* 57 eigenstaendige Mons, vier taktische Rollen. Seltenheit ist sichtbar,
    ersetzt aber keinen guten Plan. Bestehende Startwerte bleiben erhalten. */
 (function (SG) {
   var D = SG.gehstockmon.daten;
@@ -203,12 +203,36 @@ const SG = { rules: {} };
   D.SELTENHEITEN.splice(2,0,{name:'Außergewöhnlich',farbe:'#69dcad',rang:3,text:'Erwachte Naturkraft · seltene Mutationen'});
   D.SELTENHEITEN.forEach(function(r,i){r.rang=i+1;});
   D.KATALOG.forEach(function(k){if(k.seltenheit>=2)k.seltenheit++;if(['donnerwidder','frostklaue','dornenwolf','obsidianrabe','korallenwacht','duenenschakal','bernsteinkaefer'].indexOf(k.id)>=0)k.seltenheit=2;});
+  /* Neue Mons kommen nach dem Seltenheits-Shift mit ihren finalen Rängen
+     hinein. Damit bleiben alle alten gespeicherten IDs und Raritäten stabil. */
+  [
+    ['blitzotter','Blitzotter',1,1,'blitzotter','Ein Stromstoß aus seinen Schnurrhaaren lässt selbst Rüstung beben.'],
+    ['mondluchs','Mondluchs',3,1,'mondluchs','Folgt nur Pfaden, die im Mondlicht sichtbar werden.'],
+    ['salzkrabbe','Salzkrabbe',0,1,'salzkrabbe','Ihr Kristallpanzer bricht Wellen und Angriffe gleichermaßen.'],
+    ['sporenbison','Sporenbison',0,2,'sporenbison','In seiner Mähne leuchten Pilze, die alte Wunden schließen.'],
+    ['prismensalamander','Prismensalamander',2,2,'prismensalamander','Sein Kristallrücken teilt Licht in heilende Farben.'],
+    ['nebelkrake','Nebelkrake',2,2,'nebelkrake','Schwebt durch jeden Spalt und lässt den Gegner ins Leere greifen.'],
+    ['stahlkolibri','Stahlkolibri',3,2,'stahlkolibri','Seine Flügel schlagen schneller als ein gezogener Plan.'],
+    ['glutbasilisk','Glutbasilisk',1,3,'glutbasilisk','Unter seinen Schuppen glimmt ein Herd aus uraltem Feuer.'],
+    ['runenminotaur','Runenminotaur',0,3,'runenminotaur','Jede eingeritzte Rune macht ihn schwerer aufzuhalten.'],
+    ['frostmanta','Frostmanta',3,3,'frostmanta','Gleitet auf eisigen Strömungen über jede Gefahr hinweg.'],
+    ['aurorabaer','Aurorabär',0,4,'aurorabaer','Sein Fell trägt das Nordlicht und sein Brüllen schützt die Truppe.'],
+    ['obsidianbehemoth','Obsidianbehemoth',1,4,'obsidianbehemoth','Ein Schritt von ihm lässt selbst Basalt erzittern.'],
+    ['novaorakel','Novaorakel',2,5,'novaorakel','Ein sechsäugiger Sternenwolf, dessen Geweih den Untergang vorhersagt.'],
+    ['zeitphoenix','Zeitphönix',3,5,'zeitphoenix','Der Donneradler reißt Sekunden aus dem Kampf und lässt nur Asche zurück.'],
+    ['risskaiser','Risskaiser',0,6,'risskaiser','Ein urzeitlicher Weltzerstörer; Mauern und Berge zerbrechen unter seinem Brüllen.']
+  ].forEach(function(v){var basis=D.KREATUREN[v[2]];D.KATALOG.push({id:v[0],name:v[1],typ:v[2],seltenheit:v[3],bild:'gm-'+v[4],lore:v[5],rolle:basis.rolle,hp:basis.hp,ang:basis.ang,tempo:basis.tempo,faeh:basis.faeh,mono:basis.mono});});
   /* Der Spaeher ist breiter als hoch und fuellt seine hochkantige Atlaszelle
      nur zu gut sechzig Prozent. Ohne den groesseren Wert liefe er als
      Zwerg ueber die Insel; 4.4 bringt ihn auf dieselbe Hoehe wie vorher und
      laesst die Fluegel zu ihrer Breite kommen. */
-  D.MON_SIZES=[3.8,3.2,3.4,4.4,1.25,1.55,1.2,1.25,2.1,1.7,1.2,1.2,3.4,3.1,2.8,2.6,1.6,1.5,3.2,4.6,3.6,5,4.6,2.4,2.1,4.6,5.5,5.8,4.3,5.5,1.2,1,2.6,1.7,4.5,3.5,3.9,3.8,5.8,4.2,6.8,7.5];
-  D.KATALOG.forEach(function(k,i){k.spriteIndex=i;k.worldSize=D.MON_SIZES[i];});
+  D.MON_SIZES=[3.8,3.2,3.4,4.4,1.25,1.55,1.2,1.25,2.1,1.7,1.2,1.2,3.4,3.1,2.8,2.6,1.6,1.5,3.2,4.6,3.6,5,4.6,2.4,2.1,4.6,5.5,5.8,4.3,5.5,1.2,1,2.6,1.7,4.5,3.5,3.9,3.8,5.8,4.2,6.8,7.5,2.4,2.8,2.7,4.8,3.1,3.4,1.9,4.6,5.7,4.4,6.4,6.8,7.1,7.3,10.5];
+  /* Drei Mons haben ein eigenes Schaubild mit Hintergrund. Es steht nur in
+     der Sammlung; auf der Insel laufen weiterhin die freigestellten Bilder,
+     sonst traegt der Begleiter eine Landschaft mit sich herum. */
+  D.VORSCHAUEN=['novaorakel','zeitphoenix','risskaiser'];
+  D.KATALOG.forEach(function(k,i){k.spriteIndex=i;k.worldSize=D.MON_SIZES[i];
+    if(D.VORSCHAUEN.indexOf(k.id)>=0)k.vorschau=k.bild+'-vorschau';});
   D.mon = function (id) { return D.KATALOG.find(function (k) { return k.id === id; }) || null; };
   D.STARTER = ['moosling','glutfuchs','nebelmolch','rostknirps'];
   D.neuerStand = function (save) {
@@ -260,7 +284,10 @@ const SG = { rules: {} };
     { x:2,z:-187,farbe:'#452d4e',dach:'#c64e74',biom:'Weltenschlund',terrain:'Leerenbruch',difficulty:'Endspiel' }
   ];
   D.FELDER=D.FELDER.slice(0,5);
-  for(var i=5;i<9;i++)D.FELDER.push({id:i+1,feinde:JSON.parse(JSON.stringify(D.FELDER[i===5?0:4].feinde)),lehre:i===5?'Ein sicherer erster Schritt.':'Baue eine starke Truppe auf.'});
+  var LEHREN={5:'Ein sicherer erster Schritt.',
+    6:'Vier Legendäre, und einer heilt sie alle. Nimm den Pfleger zuerst.',
+    7:'Baue eine starke Truppe auf.',8:'Baue eine starke Truppe auf.'};
+  for(var i=5;i<9;i++)D.FELDER.push({id:i+1,feinde:JSON.parse(JSON.stringify(D.FELDER[i===5?0:4].feinde)),lehre:LEHREN[i]});
   D.FELDER.forEach(function(f,i){f.name=D.BIOME[i].biom;f.biom=D.BIOME[i].terrain;f.difficulty=D.BIOME[i].difficulty||['Leicht','Mittel','Mittel','Schwer','Schwer'][i];});
 })(SG);
 
@@ -341,39 +368,66 @@ const SG = { rules: {} };
     for (var i = 0; i < count; i++) st.eggs.push({ id: 'egg-' + id + '-' + now + '-' + (++st.eggSerial), territoryId: id, producedAt: now, startedAt: null, readyAt: null });
     post.eggStock -= count; return count;
   };
-  E.incubate = function (st, id, now) {
+  /* Wie viele Brutplaetze jemand hat, haengt am Leuchtturm und an gekauften
+     Plaetzen - beides weiss nur der Aufrufer. Ohne Angabe bleiben es die drei
+     festen. */
+  E.incubate = function (st, id, now, plaetze) {
+    var frei = Number.isFinite(plaetze) ? Math.max(E.INCUBATORS, plaetze) : E.INCUBATORS;
     var egg = st.eggs.find(function (e) { return e.id === id; });
     if (!egg) throw new Error('Dieses Ei ist nicht in deiner Bruttasche.');
     if (egg.startedAt !== null) throw new Error('Dieses Ei wird bereits ausgebrütet.');
-    if (st.eggs.filter(function (e) { return e.startedAt !== null; }).length >= E.INCUBATORS) throw new Error('Alle drei Brutplätze sind belegt.');
+    if (st.eggs.filter(function (e) { return e.startedAt !== null; }).length >= frei) throw new Error('Alle ' + frei + ' Brutplätze sind belegt.');
     egg.startedAt = Math.max(now, st.clockAt); egg.readyAt = egg.startedAt + E.HATCH_TIME; return egg;
   };
   /* Was aus einem Ei kommt, entscheidet die Seltenheit - und das, was in der
-     Sammlung noch fehlt. Ein Mon, das man schon hat, kann nicht noch einmal
-     kommen; mit jedem Fund verschieben sich also die Aussichten. Genau
-     deshalb rechnet die Anzeige mit demselben Vorrat wie das Schluepfen
+     Sammlung noch fehlt. Ein Mon, das man schon hat, kann wiederkommen, zieht
+     dabei aber nur noch einen Bruchteil des Gewichts auf sich: am Anfang ist
+     fast jedes Ei ein neues Gesicht, gegen Ende sind es lauter Zwillinge.
+     Deshalb rechnet die Anzeige mit demselben Vorrat wie das Schluepfen
      selbst, statt feste Prozente hinzuschreiben, die nach dem dritten Ei
      nicht mehr stimmen. */
   E.SCHLUPF_GEWICHTE = [8, 5, 3.8, 3, 1, .25, .05];
-  E.schlupfChancen = function (st) {
-    var pool = D.KATALOG.filter(function (k) { return st.besitz.indexOf(k.id) < 0; });
-    var summe = pool.reduce(function (s, k) { return s + E.SCHLUPF_GEWICHTE[k.seltenheit]; }, 0);
-    return D.SELTENHEITEN.map(function (r, i) {
-      var offen = pool.filter(function (k) { return k.seltenheit === i; }).length;
-      return { name: r.name, farbe: r.farbe, offen: offen,
-        anteil: summe ? offen * E.SCHLUPF_GEWICHTE[i] / summe : 0 };
-    }).filter(function (v) { return v.offen > 0; });
+  E.DOPPEL_GEWICHT = .35;
+  E.schlupfVorrat = function (st) {
+    return D.KATALOG.map(function (k) {
+      var doppelt = st.besitz.indexOf(k.id) >= 0;
+      return { mon: k, doppelt: doppelt, gewicht: E.SCHLUPF_GEWICHTE[k.seltenheit] * (doppelt ? E.DOPPEL_GEWICHT : 1) };
+    });
   };
+  E.schlupfChancen = function (st) {
+    var vorrat = E.schlupfVorrat(st);
+    var summe = vorrat.reduce(function (s, v) { return s + v.gewicht; }, 0);
+    return D.SELTENHEITEN.map(function (r, i) {
+      var teil = vorrat.filter(function (v) { return v.mon.seltenheit === i; });
+      var gewicht = teil.reduce(function (s, v) { return s + v.gewicht; }, 0);
+      var neu = teil.filter(function (v) { return !v.doppelt; });
+      return { name: r.name, farbe: r.farbe, offen: neu.length,
+        anteil: summe ? gewicht / summe : 0,
+        neuAnteil: summe ? neu.reduce(function (s, v) { return s + v.gewicht; }, 0) / summe : 0 };
+    }).filter(function (v) { return v.anteil > 0; });
+  };
+  /* Ein Zwilling geht nicht verloren: Er steckt seine Kraft in das Mon, das
+     schon da ist, und hebt es eine Runenstufe. Steht es schon auf der
+     hoechsten, zerfaellt er zu Runen seiner eigenen Seltenheit - und die
+     sind umso wertvoller, je seltener er war. */
   E.hatch = function (st, id, now, random) {
+    var X = SG.gehstockmon.abenteuer;
     var egg = st.eggs.find(function (e) { return e.id === id; });
     if (!egg || egg.readyAt === null || now < egg.readyAt) throw new Error('Das Ei ist noch nicht fertig ausgebrütet.');
-    var pool = D.KATALOG.filter(function (k) { return st.besitz.indexOf(k.id) < 0; }), weights = E.SCHLUPF_GEWICHTE, chosen = null;
-    if (pool.length) {
-      var total = pool.reduce(function (sum, k) { return sum + weights[k.seltenheit]; }, 0), pick = Math.max(0, Math.min(0.9999999, Number.isFinite(random) ? random : Math.random())) * total;
-      chosen = pool[pool.length - 1]; for (var i = 0; i < pool.length; i++) { pick -= weights[pool[i].seltenheit]; if (pick < 0) { chosen = pool[i]; break; } }
-      st.besitz.push(chosen.id); st.beschwoerungen++;
-    } else st.gold += 75;
-    st.eggs = st.eggs.filter(function (e) { return e.id !== id; }); return chosen;
+    var vorrat = E.schlupfVorrat(st), chosen = vorrat[vorrat.length - 1];
+    var total = vorrat.reduce(function (sum, v) { return sum + v.gewicht; }, 0);
+    var pick = Math.max(0, Math.min(0.9999999, Number.isFinite(random) ? random : Math.random())) * total;
+    for (var i = 0; i < vorrat.length; i++) { pick -= vorrat[i].gewicht; if (pick < 0) { chosen = vorrat[i]; break; } }
+    st.eggs = st.eggs.filter(function (e) { return e.id !== id; });
+    var mon = chosen.mon;
+    if (!chosen.doppelt) { st.besitz.push(mon.id); st.beschwoerungen++; return { mon: mon, neu: true, stufe: 0, runen: 0 }; }
+    st.monUpgrades = st.monUpgrades || {};
+    var stufe = X.upgradeLevel(st.monUpgrades[mon.id]);
+    if (stufe < X.UPGRADE_LIMIT) { st.monUpgrades[mon.id] = stufe + 1; return { mon: mon, neu: false, stufe: stufe + 1, runen: 0 }; }
+    st.runes = st.runes || D.SELTENHEITEN.map(function () { return 0; });
+    var runen = X.UPGRADE_LIMIT;
+    st.runes[mon.seltenheit] = Math.min(9999, (st.runes[mon.seltenheit] || 0) + runen);
+    return { mon: mon, neu: false, stufe: stufe, runen: runen };
   };
   E.upgrade = function (st, post, now) {
     E.settle(st, post, now); var price = E.LEVELS[post.level].cost;
@@ -434,7 +488,8 @@ const SG = { rules: {} };
 (function(SG){
   var D=SG.gehstockmon.daten,E=SG.gehstockmon.wirtschaft,H=SG.gehstockmon.zeiten,X=SG.gehstockmon.abenteuer={};
   X.DUNGEON_OPS=['dungeon_create','dungeon_join','dungeon_ready','dungeon_start','dungeon_turn','dungeon_leave'];
-  X.OPS=['survey','gather','trainer_start','quest_claim','shop_buy','equip','raid_start','raid_turn','raid_arena','raid_cancel','mon_upgrade','leuchtturm_spenden','zerhacker_schlagen','waffe_schleifen','panzer_anlegen','fehde_fordern','fehde_annehmen'].concat(X.DUNGEON_OPS);
+  X.STADT_OPS=['arena_rang','champion_fordern','tagwerk','findelei','brutplatz_kaufen'];
+  X.OPS=['survey','gather','trainer_start','quest_claim','shop_buy','equip','raid_start','raid_turn','raid_arena','raid_cancel','mon_upgrade','leuchtturm_spenden','zerhacker_schlagen','waffe_schleifen','panzer_anlegen','fehde_fordern','fehde_annehmen'].concat(X.STADT_OPS).concat(X.DUNGEON_OPS);
   X.SPAWN={x:0,z:30};X.SPAWN_TIME=60*60000;
   X.UPGRADE_LIMIT=5;
   /* Der Leuchtturm ist das gemeinsame Bauwerk: alle zahlen darauf ein, und
@@ -442,7 +497,26 @@ const SG = { rules: {} };
      peilt von dort den Zerhacker an. */
   X.LEUCHTTURM={x:0,z:0,ziel:5000,mindestens:10};
   X.leuchtturmFertig=function(bau){return !!bau&&bau.gold>=X.LEUCHTTURM.ziel;};
-  X.brutplaetze=function(bau){return E.INCUBATORS+(X.leuchtturmFertig(bau)?1:0);};
+  /* Drei feste Brutplaetze, einer aus dem Leuchtturm, dazu bis zu drei
+     gekaufte. Bisher rechnete nur diese Funktion mit dem Leuchtturm, waehrend
+     E.incubate hart gegen die drei festen prueft - der vierte Platz war also
+     unerreichbar. Jetzt geht beides durch dieselbe Zahl. */
+  X.BRUTPLATZ_PREISE=[400,1200,3000];
+  X.gekaufteBrutplaetze=function(p){var n=p&&p.brutplaetze;
+    return Number.isFinite(n)?Math.max(0,Math.min(X.BRUTPLATZ_PREISE.length,Math.floor(n))):0;};
+  X.brutplaetze=function(bau,p){return E.INCUBATORS+(X.leuchtturmFertig(bau)?1:0)+X.gekaufteBrutplaetze(p);};
+
+  /* Stockhafen: der eine Ort auf der Insel, den niemand erobern kann. Er ist
+     die Antwort auf die Frage, was jemand tut, der gerade kein Gebiet haelt -
+     hier gibt es Arbeit, ein Findelei und die Grosse Arena. Das Rund der
+     Arena selbst ist massiv: man laeuft aussen herum, nicht hindurch. */
+  X.STADT={x:-46,z:24,name:'Stockhafen',radius:26};
+  X.ARENA_BAU={x:-46,z:24,radius:11};
+  X.inStadt=function(p){return Math.hypot(p.x-X.STADT.x,p.z-X.STADT.z)<X.STADT.radius;};
+  X.imArenaBau=function(p){return Math.hypot(p.x-X.ARENA_BAU.x,p.z-X.ARENA_BAU.z)<X.ARENA_BAU.radius;};
+  /* Vor dem Tor auf der Suedseite steht man nah genug fuer alles, was die
+     Stadt anbietet. */
+  X.STADT_TOR={x:X.STADT.x,z:X.STADT.z+X.ARENA_BAU.radius+4};
 
   /* Der gehstockhassende Zerhacker zieht eine Woche lang seine Bahn ueber die
      Insel. Seine Lage rechnet sich wie bei den Wandertrainern aus der Zeit,
@@ -587,6 +661,67 @@ const SG = { rules: {} };
   /* Zwei Prozent mehr Schlagkraft je Rangstufe. */
   X.rangBonus=function(p){return 1+X.rang(p).stufe*0.02;};
 
+  /* Die Grosse Arena in Stockhafen. Hier kaempft man gegen die gespeicherte
+     Truppe eines anderen - der muss dafuer nicht da sein und verliert auch
+     nichts. Das macht sie zum einzigen Spielerkampf, den man jederzeit haben
+     kann, und zur Einnahmequelle fuer alle ohne Gebiet.
+
+     Ueber allem steht genau ein Gehstock-Champion. Solange ihn niemand
+     geschlagen hat, haelt ihn ein Meister des Hauses: es gibt also vom ersten
+     Tag an einen Titeltraeger und nie eine leere Tafel. */
+  X.ARENA_PAUSE=8*60000;X.ARENA_LOHN=45;X.ARENA_TROST=10;
+  X.RUHM_START=1000;X.RUHM_SIEG=25;X.RUHM_NIEDERLAGE=12;X.RUHM_TITEL=60;
+  X.TITEL_PAUSE=40*60000;X.TITEL_SIEGE=3;
+  X.CHAMPION_SOLD=400;
+  X.HAUSMEISTER={id:null,name:'Meister Gehstock',
+    squad:[{id:'titanenkrone',upgrade:3},{id:'weltenfresser',upgrade:3},{id:'sternengeweih',upgrade:3},{id:'leerenwyrm',upgrade:3}]};
+  /* Drei Gegner des Hauses, damit die Arena auch dann etwas taugt, wenn
+     ausser dir gerade niemand in der Welt ist. Sie stehen immer am Ende der
+     Liste, hinter allen echten Leuten. */
+  X.ARENA_GEGNER=[
+    {id:'haus-1',name:'Stocklehrling Pim',ruhm:900,haus:true,
+     squad:[{id:'kieselkrabb',upgrade:1},{id:'glutfuchs',upgrade:1},{id:'nebelmolch',upgrade:1},{id:'rostknirps',upgrade:1}]},
+    {id:'haus-2',name:'Wachmeisterin Rade',ruhm:1150,haus:true,
+     squad:[{id:'korallenwacht',upgrade:2},{id:'dornenwolf',upgrade:2},{id:'pilzhueter',upgrade:2},{id:'obsidianrabe',upgrade:2}]},
+    {id:'haus-3',name:'Turnierritter Hald',ruhm:1450,haus:true,
+     squad:[{id:'runengolem',upgrade:3},{id:'aschenhydra',upgrade:3},{id:'seelenqualle',upgrade:3},{id:'kristallspinne',upgrade:3}]}
+  ];
+  X.arenaGegner=function(id){return X.ARENA_GEGNER.find(function(v){return v.id===id;})||null;};
+  X.ruhm=function(p){var n=p&&p.arenaRuhm;return Number.isFinite(n)?Math.max(0,Math.min(99999,Math.floor(n))):X.RUHM_START;};
+  X.arenaSiege=function(p){var n=p&&p.arenaSiege;return Number.isFinite(n)?Math.max(0,Math.floor(n)):0;};
+  /* Der Sold laeuft mit dem Titel aus - sonst waere der erste Champion auf
+     ewig im Vorteil. Was bleibt, ist der Eintrag in der Chronik. */
+  X.championSold=function(tage){return Math.max(0,Math.floor(tage))*X.CHAMPION_SOLD;};
+
+  /* Stockhafen fuer alle ohne Gebiet: geregelte Arbeit statt Almosen. Beides
+     reift nur waehrend der Oeffnungszeiten, genau wie die Eier auf einem
+     Aussenposten - nachts und am Wochenende passiert nichts. */
+  X.TAGWERK_ZEIT=2*3600000;X.TAGWERK_LOHN=80;X.TAGWERK_VORRAT=3;
+  X.FINDELEI_ZEIT=4*3600000;X.FINDELEI_FELD=6;
+  function reif(stand,now,dauer,hoechstens){
+    if(!Number.isFinite(stand))return {fertig:0,stand:now};
+    var offen=H.openTime(now)-H.openTime(stand),n=Math.max(0,Math.floor(offen/dauer));
+    return {fertig:Math.min(hoechstens,n),stand:stand};
+  }
+  X.tagwerkStand=function(p,now){return reif(p&&p.tagwerkAt,now,X.TAGWERK_ZEIT,X.TAGWERK_VORRAT);};
+  X.tagwerkWartezeit=function(p,now){
+    var stand=p&&p.tagwerkAt;if(!Number.isFinite(stand))return 0;
+    var offen=H.openTime(now)-H.openTime(stand),bis=(Math.floor(Math.max(0,offen)/X.TAGWERK_ZEIT)+1)*X.TAGWERK_ZEIT;
+    return Math.max(0,H.productionAt(H.openTime(stand)+bis)-now);
+  };
+  /* Verbraucht genau ein Tagwerk und laesst angefangene Zeit stehen. */
+  X.tagwerkVerbrauchen=function(p,now){
+    var voll=H.openTime(now)-X.TAGWERK_VORRAT*X.TAGWERK_ZEIT;
+    p.tagwerkAt=H.productionAt(Math.max(H.openTime(p.tagwerkAt),voll)+X.TAGWERK_ZEIT);
+  };
+  X.findeleiFertig=function(p,now){
+    return Number.isFinite(p&&p.findeleiAt)&&H.openTime(now)-H.openTime(p.findeleiAt)>=X.FINDELEI_ZEIT;
+  };
+  X.findeleiWartezeit=function(p,now){
+    if(!Number.isFinite(p&&p.findeleiAt))return 0;
+    return Math.max(0,H.productionAt(H.openTime(p.findeleiAt)+X.FINDELEI_ZEIT)-now);
+  };
+
   /* Jedes geschluepfte Mon bringt ein Wesen mit. Damit ist nicht mehr jeder
      Donnerwidder derselbe - und es gibt einen Grund, Eier zu tauschen. */
   X.WESEN=[
@@ -653,7 +788,16 @@ const SG = { rules: {} };
     p.rewardEggs={};D.FELDER.forEach(function(f){var n=Math.max(0,Math.floor(Number(old.rewardEggs&&old.rewardEggs[f.id])||0));if(n)p.rewardEggs[f.id]=n;});
     p.runes=D.SELTENHEITEN.map(function(r,i){var n=old.runes&&old.runes[i];return Number.isFinite(n)?Math.max(0,Math.min(9999,Math.floor(n))):0;});
     p.monUpgrades={};p.besitz.forEach(function(id){var n=X.upgradeLevel(old.monUpgrades&&old.monUpgrades[id]);if(n)p.monUpgrades[id]=n;});
-    p.raidCooldown=Number(old.raidCooldown)||0;p.raidShield=Number(old.raidShield)||0;return p;
+    p.raidCooldown=Number(old.raidCooldown)||0;p.raidShield=Number(old.raidShield)||0;
+    p.brutplaetze=X.gekaufteBrutplaetze(old);
+    p.arenaRuhm=X.ruhm(old);p.arenaSiege=X.arenaSiege(old);
+    p.arenaCooldown=Number(old.arenaCooldown)||0;p.titelCooldown=Number(old.titelCooldown)||0;
+    /* Wer zum ersten Mal in die Stadt kommt, faengt sofort an zu verdienen:
+       beide Uhren starten jetzt, nicht bei null. */
+    p.tagwerkAt=Number.isFinite(old.tagwerkAt)?old.tagwerkAt:now;
+    p.findeleiAt=Number.isFinite(old.findeleiAt)?old.findeleiAt:now;
+    p.championSeit=Number.isFinite(old.championSeit)?old.championSeit:null;
+    p.championTitel=Math.max(0,Math.floor(Number(old.championTitel)||0));return p;
   };
   X.progress=function(p,q){return q.stat==='visited'?p.visited.length:p.progress[q.stat]||0;};
   /* Ueberfallschutz gibt es nur noch aus einem Grund: Wer gerade bestohlen
@@ -669,7 +813,7 @@ const SG = { rules: {} };
   X.coast=function(){return coast;};
   X.onLand=function(p){return Number.isFinite(p.x)&&Number.isFinite(p.z)&&(Math.abs(p.x)<220&&Math.abs(p.z)<180||X.polygonContains(p,X.coast())&&X.coast().every(function(a,i,points){return pointDistance(p,a,points[(i+1)%points.length])>2;}));};
   X.waterAt=function(p){return Math.abs(p.x-X.riverCenter(p.z))<5.3&&!D.WORLD.bridgeZ.some(function(z){return Math.abs(p.z-z)<2.6;});};
-  X.walkable=function(p){return X.onLand(p)&&!X.waterAt(p);};
+  X.walkable=function(p){return X.onLand(p)&&!X.waterAt(p)&&!X.imArenaBau(p);};
   X.landTravel=function(a,b){if(!X.walkable(a)||!X.walkable(b))return false;var n=Math.ceil(Math.hypot(b.x-a.x,b.z-a.z)/2);for(var i=1;i<n;i++)if(!X.walkable({x:a.x+(b.x-a.x)*i/n,z:a.z+(b.z-a.z)*i/n}))return false;return true;};
   // Unregelmäßige Reviere; die zwei angrenzenden Wald-/Wiesengebiete können verschmelzen.
   X.cells=function(){var cells=D.BIOME.map(function(b,i){return Array.from({length:7},function(_,j){var a=(j/7)*Math.PI*2+i*.31;return{x:b.x+Math.cos(a)*(45+i%3*3),z:b.z+Math.sin(a)*(39+i%2*4)};});});
@@ -703,6 +847,10 @@ const SG = { rules: {} };
     var nodes=[from,to],seen={};function add(p){var k=pointKey(p);if(seen[k]||!X.walkable(p)||layout.some(function(g){return g.ownerId!==id&&X.inside(p,g);}))return;seen[k]=true;nodes.push(p);}
     layout.forEach(function(g){g.edges.forEach(function(e){[e.a,e.b].forEach(function(p){var dx=p.x-g.center.x,dz=p.z-g.center.z,l=Math.hypot(dx,dz);add({x:p.x+dx/l*2.5,z:p.z+dz/l*2.5});});});var q=g.gate;[-1,1].forEach(function(s){add({x:q.x+q.nx*4*s,z:q.z+q.nz*4*s});});});
     D.WORLD.bridgeZ.forEach(function(z){[-1,1].forEach(function(side){add({x:X.riverCenter(z)+side*10,z:z});});});
+    /* Acht Punkte im Kreis um die Arena: ohne sie bricht jede Sichtlinie, die
+       das Rund schneidet, und die Wegsuche gaebe auf, statt aussen herum zu
+       gehen. */
+    for(var ecke=0;ecke<8;ecke++){var winkel=ecke/8*Math.PI*2;add({x:X.ARENA_BAU.x+Math.cos(winkel)*(X.ARENA_BAU.radius+2.5),z:X.ARENA_BAU.z+Math.sin(winkel)*(X.ARENA_BAU.radius+2.5)});}
     var dist=nodes.map(function(){return Infinity;}),prev=[],done={};dist[0]=0;
     for(var n=0;n<nodes.length;n++){var at=-1;for(var i=0;i<nodes.length;i++)if(!done[i]&&(at<0||dist[i]<dist[at]))at=i;if(at<0||dist[at]>limit||!Number.isFinite(dist[at]))break;if(at===1){var path=[];while(at!==0){path.unshift(nodes[at]);at=prev[at];}return path;}done[at]=true;
       for(var j=0;j<nodes.length;j++){if(done[j])continue;var d=dist[at]+Math.hypot(nodes[at].x-nodes[j].x,nodes[at].z-nodes[j].z);if(d<dist[j]&&d<=limit&&X.canTravel(layout,nodes[at],nodes[j],id)){dist[j]=d;prev[j]=at;}}
@@ -724,23 +872,43 @@ const SG = { rules: {} };
   var D = SG.gehstockmon.daten, A = SG.gehstockmon.arena = {};
   var stats = [[132,20,3],[88,29,8],[112,22,5],[96,25,11]];
   var specials = ['Schildstoß', 'Sichelstreich', 'Lebensquell', 'Runenstörung'];
-  A.stats = function (mon) { var s = stats[mon.typ],factor=[.78,1.16,1.38,1.64,1.98,2.4,3][mon.seltenheit],bonus=1+SG.gehstockmon.abenteuer.upgradeLevel(mon.upgrade)*.02; return { hp: Math.floor(Math.round(s[0]*factor)*bonus), ang: Math.floor(Math.round(s[1]*factor)*bonus), tempo: s[2] }; };
+  /* Was eine Runenstufe bringt. Drei Prozent je Stufe auf KP und Angriff statt
+     bisher zwei, also bis zu +15 %. Mehr geht nicht: bei +18 % schlaegt ein
+     voll aufgewertetes Aussergewoehnliches ein frisches Episches, und damit
+     waere die Seltenheit nichts mehr wert. Die Prozente sind deshalb nicht der
+     Grund, Runen auszugeben - das sind die beiden Schwellen:
+
+       ab Stufe 3  laedt der Kraftschlag eine Runde schneller
+       ab Stufe 4  gibt es eine dritte Ladung der Faehigkeit
+
+     Beides haengt nicht an den Grundwerten und ist im Kampf sofort zu spueren.
+     Tempo bleibt unangetastet - wer zuerst schlaegt, entscheidet zu viel. */
+  A.UPGRADE_BONUS = .03; A.LADUNG_AB = 4; A.LADUNGEN = 2; A.SCHNELL_AB = 3; A.POWER_PAUSE = 3;
+  A.ladungen = function (mon) { return A.LADUNGEN + (SG.gehstockmon.abenteuer.upgradeLevel(mon.upgrade) >= A.LADUNG_AB ? 1 : 0); };
+  A.powerPause = function (mon) { return A.POWER_PAUSE - (SG.gehstockmon.abenteuer.upgradeLevel(mon.upgrade) >= A.SCHNELL_AB ? 1 : 0); };
+  A.stats = function (mon) { var s = stats[mon.typ],factor=[.78,1.16,1.38,1.64,1.98,2.4,3][mon.seltenheit],bonus=1+SG.gehstockmon.abenteuer.upgradeLevel(mon.upgrade)*A.UPGRADE_BONUS; return { hp: Math.floor(Math.round(s[0]*factor)*bonus), ang: Math.floor(Math.round(s[1]*factor)*bonus), tempo: s[2] }; };
   A.moves = function (u, round) {
+    var voll = u.maxCharges || A.LADUNGEN, pause = (u.powerPause || A.POWER_PAUSE) - 1;
     return [
       { id: 'strike', name: 'Stockhieb', text: 'Zuverlässiger Angriff', damage: u.ang, enabled: true },
-      { id: 'power', name: 'Kraftschlag', text: round < u.powerReady ? 'Bereit ab Runde ' + u.powerReady : 'Danach 2 Runden Pause', damage: Math.round(u.ang * 1.55), enabled: round >= u.powerReady },
-      { id: 'special', name: specials[u.role], text: ['Schaden + Schild', 'Stärker gegen geschwächte Ziele', 'Heilt 32 % deiner KP', 'Schwächt den nächsten Treffer'][u.role] + ' · ' + u.charges + '/2', damage: u.role === 2 ? 0 : Math.round(u.ang * [0.9,1.35,0,0.8][u.role]), enabled: u.charges > 0 && (u.role !== 2 || u.hp < u.maxHp) },
+      { id: 'power', name: 'Kraftschlag', text: round < u.powerReady ? 'Bereit ab Runde ' + u.powerReady : 'Danach ' + pause + (pause === 1 ? ' Runde Pause' : ' Runden Pause'), damage: Math.round(u.ang * 1.55), enabled: round >= u.powerReady },
+      { id: 'special', name: specials[u.role], text: ['Schaden + Schild', 'Stärker gegen geschwächte Ziele', 'Heilt 32 % deiner KP', 'Schwächt den nächsten Treffer'][u.role] + ' · ' + u.charges + '/' + voll, damage: u.role === 2 ? 0 : Math.round(u.ang * [0.9,1.35,0,0.8][u.role]), enabled: u.charges > 0 && (u.role !== 2 || u.hp < u.maxHp) },
       { id: 'guard', name: 'Deckung', text: 'Nächster Treffer −60 %', damage: 0, enabled: true }
     ];
   };
   function unit(mon, side, i, bonus) {
-    var s = A.stats(mon), hp = Math.round(s.hp * (1 + bonus));
-    return { uid: side + i, monId: mon.id, name: mon.name, role: mon.typ, maxHp: hp, hp: hp, ang: Math.round(s.ang * (1 + bonus / 2)), speed: s.tempo, powerReady: 1, charges: 2, shield: 0, weakened: false };
+    var s = A.stats(mon), hp = Math.round(s.hp * (1 + bonus)), laden = A.ladungen(mon), pause = A.powerPause(mon);
+    return { uid: side + i, monId: mon.id, name: mon.name, role: mon.typ, maxHp: hp, hp: hp, ang: Math.round(s.ang * (1 + bonus / 2)), speed: s.tempo, powerReady: 1, charges: laden, maxCharges: laden, powerPause: pause, shield: 0, weakened: false };
   }
   A.defenders = function (fieldId, saved) {
     if (saved && saved.length) return saved.map(function (e) { return Object.assign({},D.mon(e.id || e.monId) || D.KATALOG[0],{upgrade:SG.gehstockmon.abenteuer.upgradeLevel(e.upgrade)}); });
     var roster = [['moosling','rostknirps'], ['sumpfschnapper','nebelmolch','klinge'], ['kieselkrabb','glutfuchs','donnerwidder'], ['dornenwolf','pilzhueter','nachtflatter'], ['runengolem','frostklaue','seelenqualle','obsidianrabe']];
-    roster.push(['tauhupfer'],['grabesritter','vulkanmantis','frostorakel','gewittergreif'],['aetherdrache','chronoschreiter','grabesritter','frostorakel'],['endrichter','nullwyrm','chronoschreiter','aetherdrache']);
+    /* Das Sonnengrab war ein Abklatsch des Horsts und damit die leichteste
+       Stufe unter "Sehr schwer", die es je gab. Jetzt stehen dort vier
+       Legendaere in allen vier Rollen - Wall, Schneide, Pfleger, Stoerung -,
+       und der Pfleger macht daraus die eigentliche Aufgabe: ohne ihn zuerst
+       zu brechen, heilt er alles wieder weg. */
+    roster.push(['tauhupfer'],['grabesritter','sternengeweih','vulkanmantis','leerenwyrm'],['aetherdrache','chronoschreiter','grabesritter','frostorakel'],['endrichter','nullwyrm','chronoschreiter','aetherdrache']);
     var ids = roster[fieldId - 1].slice();
     return ids.map(D.mon);
   };
@@ -748,7 +916,7 @@ const SG = { rules: {} };
     var o = options || {};
     return { id: o.id || 'local', territoryId: o.territoryId || 1, territoryVersion: o.version || 1,
       level: o.level || 1, revision: 0, round: 1, phase: 'choose', winner: null, settled: false,
-      teams: [roster.map(function (k,i) { return unit(k,'wir',i,0); }), enemies.map(function (k,i) { return unit(k,'sie',i,SG.gehstockmon.wirtschaft.LEVELS[o.level || 1].bonus+(o.npcTerritory?(o.territoryId===9?.65:o.territoryId===8?.4:0):0)); })],
+      teams: [roster.map(function (k,i) { return unit(k,'wir',i,0); }), enemies.map(function (k,i) { return unit(k,'sie',i,SG.gehstockmon.wirtschaft.LEVELS[o.level || 1].bonus+(o.npcTerritory?(o.territoryId===9?.65:o.territoryId===8?.4:o.territoryId===7?.22:0):0)+(o.bonus||0)); })],
       active: [0,0], events: [], startedAt: o.now || Date.now(), lastActionAt: o.now || Date.now() };
   };
   function active(s, side) { return s.teams[side][s.active[side]]; }
@@ -763,7 +931,7 @@ const SG = { rules: {} };
     var me = active(s, side), other = active(s, 1-side); if (me.hp <= 0 || other.hp <= 0) return;
     me.shield = 0;
     if (move === 'guard') { me.shield = 0.6; record(s, me.name + ' geht in Deckung.', me); }
-    else if (move === 'power') { me.powerReady = s.round + 3; damage(s,me,other,me.ang*1.55,'Kraftschlag'); }
+    else if (move === 'power') { me.powerReady = s.round + (me.powerPause || A.POWER_PAUSE); damage(s,me,other,me.ang*1.55,'Kraftschlag'); }
     else if (move === 'special') {
       me.charges--;
       if (me.role === 2) { var healing = Math.min(me.maxHp-me.hp,Math.round(me.maxHp*0.32)); me.hp += healing; record(s,me.name+' heilt '+healing+' KP.',me,me,healing); }

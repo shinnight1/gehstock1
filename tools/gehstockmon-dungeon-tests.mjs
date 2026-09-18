@@ -32,7 +32,7 @@ await test('Rarity base values rise clearly; every rune level is capped and pres
   const old=[.78,1,1.09,1.18,1.38,1.65,2];
   for(let role=0;role<4;role++)for(let rarity=0;rarity<7;rarity++){
     const mon={typ:role,seltenheit:rarity},base=A.stats(mon),max=A.stats({...mon,upgrade:5});
-    for(const value of [-4,0,1,2,3,4,5,6,999999,Infinity,NaN]){const s=A.stats({...mon,upgrade:value});assert.ok(s.hp>=base.hp&&s.hp<=base.hp*1.1);assert.ok(s.ang>=base.ang&&s.ang<=base.ang*1.1);assert.equal(s.tempo,base.tempo);}
+    for(const value of [-4,0,1,2,3,4,5,6,999999,Infinity,NaN]){const s=A.stats({...mon,upgrade:value});assert.ok(s.hp>=base.hp&&s.hp<=base.hp*(1+X.UPGRADE_LIMIT*A.UPGRADE_BONUS));assert.ok(s.ang>=base.ang&&s.ang<=base.ang*(1+X.UPGRADE_LIMIT*A.UPGRADE_BONUS));assert.equal(s.tempo,base.tempo);}
     if(rarity<6){const next=A.stats({...mon,seltenheit:rarity+1});assert.ok(max.hp<next.hp&&max.ang<next.ang,'upgrades never bridge a rarity tier for the same role');}
     if(rarity>0)assert.ok(base.hp>Math.round([132,88,112,96][role]*old[rarity]));
   }

@@ -25,7 +25,7 @@ export async function checkUi(D,E,A,handler,code,clock,otherCode){
     const response=await handler(new Request('http://localhost'+url,opts));if(response.ok){const data=await response.clone().json();if(data.profile)latest=data;}
     if(loseResponse){loseResponse=false;throw new TypeError('Antwort verloren');}if(delayReply){delayReply=false;await new Promise(resolve=>releaseReply=resolve);}return response;
   }});
-  for(const file of['src/core/ui.js','src/games/gehstockmon/1-zeiten.js','src/games/gehstockmon/1-zusatz.js','src/games/gehstockmon/2-figuren.js','src/games/gehstockmon/2-online.js','src/games/gehstockmon/2-abenteuer-ui.js','src/games/gehstockmon/2-dungeon-ui.js','src/games/gehstockmon/3-ui.js'])vm.runInContext(fs.readFileSync(file,'utf8'),context);
+  for(const file of['src/core/ui.js','src/games/gehstockmon/1-zeiten.js','src/games/gehstockmon/1-zusatz.js','src/games/gehstockmon/2-figuren.js','src/games/gehstockmon/2-online.js','src/games/gehstockmon/2-abenteuer-ui.js','src/games/gehstockmon/2-dungeon-ui.js','src/games/gehstockmon/2-stadt-ui.js','src/games/gehstockmon/3-ui.js'])vm.runInContext(fs.readFileSync(file,'utf8'),context);
   const mount=()=>definition.mount({stage,root,store:storage,onLeave(){},sfx(){},after:(fn,ms)=>{timers.set(++timerId,{fn,at:clock.value+ms});return timerId;},cancel:id=>timers.delete(id)});
   let game=mount();
   const find=fn=>{const e=root.all().find(e=>e.visible&&fn(e));assert.ok(e,'control exists');return e;};

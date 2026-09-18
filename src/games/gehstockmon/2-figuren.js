@@ -10,5 +10,13 @@
     if(entry){if(entry.ready)draw(entry.image);else entry.wait.push(draw);return;}
     var img=new Image();entry=loaded[key]={image:img,ready:false,wait:[draw]};img.onload=function(){entry.ready=true;entry.wait.splice(0).forEach(function(fn){fn(img);});};img.src=SG.assets[key];
   };
-  R.skinIndex=function(id){var at=R.abenteuer.SKINS.findIndex(function(s){return s.id===id;});return Math.max(0,at);};
+  /* Einzelne Mon-Portraits bleiben frei skaliert; damit können neue Mons
+     außerhalb des festen 6×7-Atlas direkt in der Welt erscheinen. */
+  R.drawMon=function(canvas,mon,done){var key=mon&&mon.bild,entry=loaded[key];
+    function draw(img){var ctx=canvas.getContext('2d'),w=img.naturalWidth||img.width,h=img.naturalHeight||img.height,scale=Math.min(canvas.width/w,canvas.height/h)*.94;
+      ctx.clearRect(0,0,canvas.width,canvas.height);ctx.imageSmoothingEnabled=true;ctx.drawImage(img,(canvas.width-w*scale)/2,(canvas.height-h*scale)/2,w*scale,h*scale);if(done)done();
+    }
+    if(entry){if(entry.ready)draw(entry.image);else entry.wait.push(draw);return;}
+    var img=new Image();entry=loaded[key]={image:img,ready:false,wait:[draw]};img.onload=function(){entry.ready=true;entry.wait.splice(0).forEach(function(fn){fn(img);});};img.src=SG.assets[key]||SG.assets['gm-bollwerk'];
+  };  R.skinIndex=function(id){var at=R.abenteuer.SKINS.findIndex(function(s){return s.id===id;});return Math.max(0,at);};
 })(SG);

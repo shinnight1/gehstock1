@@ -16,6 +16,9 @@
     { x:2,z:-187,farbe:'#452d4e',dach:'#c64e74',biom:'Weltenschlund',terrain:'Leerenbruch',difficulty:'Endspiel' }
   ];
   D.FELDER=D.FELDER.slice(0,5);
-  for(var i=5;i<9;i++)D.FELDER.push({id:i+1,feinde:JSON.parse(JSON.stringify(D.FELDER[i===5?0:4].feinde)),lehre:i===5?'Ein sicherer erster Schritt.':'Baue eine starke Truppe auf.'});
+  var LEHREN={5:'Ein sicherer erster Schritt.',
+    6:'Vier Legendäre, und einer heilt sie alle. Nimm den Pfleger zuerst.',
+    7:'Baue eine starke Truppe auf.',8:'Baue eine starke Truppe auf.'};
+  for(var i=5;i<9;i++)D.FELDER.push({id:i+1,feinde:JSON.parse(JSON.stringify(D.FELDER[i===5?0:4].feinde)),lehre:LEHREN[i]});
   D.FELDER.forEach(function(f,i){f.name=D.BIOME[i].biom;f.biom=D.BIOME[i].terrain;f.difficulty=D.BIOME[i].difficulty||['Leicht','Mittel','Mittel','Schwer','Schwer'][i];});
 })(SG);

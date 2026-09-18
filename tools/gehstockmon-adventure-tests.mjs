@@ -14,8 +14,21 @@ async function position(f,index,at){return call(f,index,'presence',{position:{..
 async function walk(f,index,target){const p=f.players[index],route=X.route(X.layout(f.store.data.territories),p.position||p.spawn,target,p.playerId);assert.ok(route,'destination reachable');let at={...(p.position||p.spawn)};await position(f,index,at);for(const to of route){let distance=Math.hypot(to.x-at.x,to.z-at.z);while(distance>.01){const step=Math.min(18,distance);at={x:at.x+(to.x-at.x)/distance*step,z:at.z+(to.z-at.z)/distance*step};f.time+=2000;const r=await position(f,index,at);assert.ok(!r.positionCorrected,'valid walk accepted');distance=Math.hypot(to.x-at.x,to.z-at.z);}}p.position=at;if(target.kind==='trainer'){const live=X.encounterPosition(target,f.time);if(Math.hypot(live.x-at.x,live.z-at.z)>3)return walk(f,index,{...target,...live});}return at;}
 function mature(f,index){const p=f.store.data.players[f.players[index].playerId];p.joinedAt=stamp-48*E.HOUR;p.besitz=D.KATALOG.map(k=>k.id);p.gold=2500;return p;}
 function seedEggs(p,now){p.eggs=[{id:'warm-egg',territoryId:6,producedAt:now-2*E.HOUR,startedAt:now-30*60000,readyAt:now+30*60000},{id:'bag-egg',territoryId:1,producedAt:now,startedAt:null,readyAt:null}];}
-await test('Nine regions, seven rarities, two apocalyptic Mons, and four distinct new difficulty levels',()=>{
-  assert.equal(D.KATALOG.length,42);assert.equal(D.SELTENHEITEN.length,7);assert.deepEqual(D.KATALOG.filter(k=>k.seltenheit===6).map(k=>k.id),['endrichter','nullwyrm']);
+await test('Nine regions, seven rarities, three apocalyptic Mons, and four distinct new difficulty levels',()=>{
+  assert.equal(D.KATALOG.length,57);assert.equal(new Set(D.KATALOG.map(k=>k.id)).size,57);assert.equal(D.SELTENHEITEN.length,7);
+  assert.deepEqual(D.KATALOG.filter(k=>k.seltenheit===6).map(k=>k.id),['endrichter','nullwyrm','risskaiser']);
+  /* Die fuenfzehn Nachzuegler kamen nach dem Seltenheits-Shift hinein und
+     verteilen sich 3/4/3/2/2/1 ueber Selten bis Apokalyptisch. */
+  const neue=['blitzotter','mondluchs','salzkrabbe','sporenbison','prismensalamander','nebelkrake','stahlkolibri','glutbasilisk','runenminotaur','frostmanta','aurorabaer','obsidianbehemoth','novaorakel','zeitphoenix','risskaiser'];
+  assert.equal(neue.length,15);
+  const verteilung=[0,0,0,0,0,0,0];for(const id of neue){const m=D.mon(id);assert.ok(m,id);verteilung[m.seltenheit]++;}
+  assert.deepEqual(verteilung,[0,3,4,3,2,2,1]);
+  /* Jedes Mon traegt eine der vier Rollen und ein eigenes Bild. */
+  for(const id of neue){const m=D.mon(id);assert.ok(m.typ>=0&&m.typ<4,id);assert.equal(m.bild,'gm-'+id);assert.ok(m.worldSize>0,id);}
+  assert.ok(D.mon('risskaiser').worldSize>D.mon('nullwyrm').worldSize,'the world-ender towers over the Nullwyrm');
+  /* Die drei Schaubilder haengen genau an den drei vorgesehenen Mons. */
+  assert.deepEqual(D.KATALOG.filter(k=>k.vorschau).map(k=>k.id),['novaorakel','zeitphoenix','risskaiser']);
+  for(const k of D.KATALOG.filter(k=>k.vorschau))assert.equal(k.vorschau,k.bild+'-vorschau');
   const strength=id=>A.defenders(id).reduce((s,k)=>s+A.stats(k).hp+A.stats(k).ang,0),old=Math.max(...[1,2,3,4,5].map(strength));assert.ok(strength(6)<strength(1));assert.ok(strength(7)>old);assert.ok(strength(8)>strength(7));assert.ok(strength(9)>strength(8));
   let b=A.create(D.STARTER.map(D.mon),A.defenders(6),{});for(let i=0;i<80&&b.phase!=='finished';i++)b=A.turn(b,move(b));assert.equal(b.winner,'wir');
 });

@@ -3,23 +3,43 @@
   var D = SG.gehstockmon.daten, A = SG.gehstockmon.arena = {};
   var stats = [[132,20,3],[88,29,8],[112,22,5],[96,25,11]];
   var specials = ['Schildstoß', 'Sichelstreich', 'Lebensquell', 'Runenstörung'];
-  A.stats = function (mon) { var s = stats[mon.typ],factor=[.78,1.16,1.38,1.64,1.98,2.4,3][mon.seltenheit],bonus=1+SG.gehstockmon.abenteuer.upgradeLevel(mon.upgrade)*.02; return { hp: Math.floor(Math.round(s[0]*factor)*bonus), ang: Math.floor(Math.round(s[1]*factor)*bonus), tempo: s[2] }; };
+  /* Was eine Runenstufe bringt. Drei Prozent je Stufe auf KP und Angriff statt
+     bisher zwei, also bis zu +15 %. Mehr geht nicht: bei +18 % schlaegt ein
+     voll aufgewertetes Aussergewoehnliches ein frisches Episches, und damit
+     waere die Seltenheit nichts mehr wert. Die Prozente sind deshalb nicht der
+     Grund, Runen auszugeben - das sind die beiden Schwellen:
+
+       ab Stufe 3  laedt der Kraftschlag eine Runde schneller
+       ab Stufe 4  gibt es eine dritte Ladung der Faehigkeit
+
+     Beides haengt nicht an den Grundwerten und ist im Kampf sofort zu spueren.
+     Tempo bleibt unangetastet - wer zuerst schlaegt, entscheidet zu viel. */
+  A.UPGRADE_BONUS = .03; A.LADUNG_AB = 4; A.LADUNGEN = 2; A.SCHNELL_AB = 3; A.POWER_PAUSE = 3;
+  A.ladungen = function (mon) { return A.LADUNGEN + (SG.gehstockmon.abenteuer.upgradeLevel(mon.upgrade) >= A.LADUNG_AB ? 1 : 0); };
+  A.powerPause = function (mon) { return A.POWER_PAUSE - (SG.gehstockmon.abenteuer.upgradeLevel(mon.upgrade) >= A.SCHNELL_AB ? 1 : 0); };
+  A.stats = function (mon) { var s = stats[mon.typ],factor=[.78,1.16,1.38,1.64,1.98,2.4,3][mon.seltenheit],bonus=1+SG.gehstockmon.abenteuer.upgradeLevel(mon.upgrade)*A.UPGRADE_BONUS; return { hp: Math.floor(Math.round(s[0]*factor)*bonus), ang: Math.floor(Math.round(s[1]*factor)*bonus), tempo: s[2] }; };
   A.moves = function (u, round) {
+    var voll = u.maxCharges || A.LADUNGEN, pause = (u.powerPause || A.POWER_PAUSE) - 1;
     return [
       { id: 'strike', name: 'Stockhieb', text: 'Zuverlässiger Angriff', damage: u.ang, enabled: true },
-      { id: 'power', name: 'Kraftschlag', text: round < u.powerReady ? 'Bereit ab Runde ' + u.powerReady : 'Danach 2 Runden Pause', damage: Math.round(u.ang * 1.55), enabled: round >= u.powerReady },
-      { id: 'special', name: specials[u.role], text: ['Schaden + Schild', 'Stärker gegen geschwächte Ziele', 'Heilt 32 % deiner KP', 'Schwächt den nächsten Treffer'][u.role] + ' · ' + u.charges + '/2', damage: u.role === 2 ? 0 : Math.round(u.ang * [0.9,1.35,0,0.8][u.role]), enabled: u.charges > 0 && (u.role !== 2 || u.hp < u.maxHp) },
+      { id: 'power', name: 'Kraftschlag', text: round < u.powerReady ? 'Bereit ab Runde ' + u.powerReady : 'Danach ' + pause + (pause === 1 ? ' Runde Pause' : ' Runden Pause'), damage: Math.round(u.ang * 1.55), enabled: round >= u.powerReady },
+      { id: 'special', name: specials[u.role], text: ['Schaden + Schild', 'Stärker gegen geschwächte Ziele', 'Heilt 32 % deiner KP', 'Schwächt den nächsten Treffer'][u.role] + ' · ' + u.charges + '/' + voll, damage: u.role === 2 ? 0 : Math.round(u.ang * [0.9,1.35,0,0.8][u.role]), enabled: u.charges > 0 && (u.role !== 2 || u.hp < u.maxHp) },
       { id: 'guard', name: 'Deckung', text: 'Nächster Treffer −60 %', damage: 0, enabled: true }
     ];
   };
   function unit(mon, side, i, bonus) {
-    var s = A.stats(mon), hp = Math.round(s.hp * (1 + bonus));
-    return { uid: side + i, monId: mon.id, name: mon.name, role: mon.typ, maxHp: hp, hp: hp, ang: Math.round(s.ang * (1 + bonus / 2)), speed: s.tempo, powerReady: 1, charges: 2, shield: 0, weakened: false };
+    var s = A.stats(mon), hp = Math.round(s.hp * (1 + bonus)), laden = A.ladungen(mon), pause = A.powerPause(mon);
+    return { uid: side + i, monId: mon.id, name: mon.name, role: mon.typ, maxHp: hp, hp: hp, ang: Math.round(s.ang * (1 + bonus / 2)), speed: s.tempo, powerReady: 1, charges: laden, maxCharges: laden, powerPause: pause, shield: 0, weakened: false };
   }
   A.defenders = function (fieldId, saved) {
     if (saved && saved.length) return saved.map(function (e) { return Object.assign({},D.mon(e.id || e.monId) || D.KATALOG[0],{upgrade:SG.gehstockmon.abenteuer.upgradeLevel(e.upgrade)}); });
     var roster = [['moosling','rostknirps'], ['sumpfschnapper','nebelmolch','klinge'], ['kieselkrabb','glutfuchs','donnerwidder'], ['dornenwolf','pilzhueter','nachtflatter'], ['runengolem','frostklaue','seelenqualle','obsidianrabe']];
-    roster.push(['tauhupfer'],['grabesritter','vulkanmantis','frostorakel','gewittergreif'],['aetherdrache','chronoschreiter','grabesritter','frostorakel'],['endrichter','nullwyrm','chronoschreiter','aetherdrache']);
+    /* Das Sonnengrab war ein Abklatsch des Horsts und damit die leichteste
+       Stufe unter "Sehr schwer", die es je gab. Jetzt stehen dort vier
+       Legendaere in allen vier Rollen - Wall, Schneide, Pfleger, Stoerung -,
+       und der Pfleger macht daraus die eigentliche Aufgabe: ohne ihn zuerst
+       zu brechen, heilt er alles wieder weg. */
+    roster.push(['tauhupfer'],['grabesritter','sternengeweih','vulkanmantis','leerenwyrm'],['aetherdrache','chronoschreiter','grabesritter','frostorakel'],['endrichter','nullwyrm','chronoschreiter','aetherdrache']);
     var ids = roster[fieldId - 1].slice();
     return ids.map(D.mon);
   };
@@ -27,7 +47,7 @@
     var o = options || {};
     return { id: o.id || 'local', territoryId: o.territoryId || 1, territoryVersion: o.version || 1,
       level: o.level || 1, revision: 0, round: 1, phase: 'choose', winner: null, settled: false,
-      teams: [roster.map(function (k,i) { return unit(k,'wir',i,0); }), enemies.map(function (k,i) { return unit(k,'sie',i,SG.gehstockmon.wirtschaft.LEVELS[o.level || 1].bonus+(o.npcTerritory?(o.territoryId===9?.65:o.territoryId===8?.4:0):0)); })],
+      teams: [roster.map(function (k,i) { return unit(k,'wir',i,0); }), enemies.map(function (k,i) { return unit(k,'sie',i,SG.gehstockmon.wirtschaft.LEVELS[o.level || 1].bonus+(o.npcTerritory?(o.territoryId===9?.65:o.territoryId===8?.4:o.territoryId===7?.22:0):0)+(o.bonus||0)); })],
       active: [0,0], events: [], startedAt: o.now || Date.now(), lastActionAt: o.now || Date.now() };
   };
   function active(s, side) { return s.teams[side][s.active[side]]; }
@@ -42,7 +62,7 @@
     var me = active(s, side), other = active(s, 1-side); if (me.hp <= 0 || other.hp <= 0) return;
     me.shield = 0;
     if (move === 'guard') { me.shield = 0.6; record(s, me.name + ' geht in Deckung.', me); }
-    else if (move === 'power') { me.powerReady = s.round + 3; damage(s,me,other,me.ang*1.55,'Kraftschlag'); }
+    else if (move === 'power') { me.powerReady = s.round + (me.powerPause || A.POWER_PAUSE); damage(s,me,other,me.ang*1.55,'Kraftschlag'); }
     else if (move === 'special') {
       me.charges--;
       if (me.role === 2) { var healing = Math.min(me.maxHp-me.hp,Math.round(me.maxHp*0.32)); me.hp += healing; record(s,me.name+' heilt '+healing+' KP.',me,me,healing); }

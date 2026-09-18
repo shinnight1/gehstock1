@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { data as D, economy as E, arena as A, hours as H, adventure as X } from './lib/gehstockmon-rules.mjs';
 import {adventureAction,finishEncounter,expireAdventure,deliverRewards,activeArena,activeDuel,weltprojekte,wochenschritt} from './lib/gehstockmon-adventure.mjs';
 import {activeDungeon,settleDungeons,dungeonResult,dungeonAction} from './lib/gehstockmon-dungeons.mjs';
+import {stadtAction,arenaStand,championSold} from './lib/gehstockmon-stadt.mjs';
 import {schenken,schenkungen} from './lib/gehstockmon-schenken.mjs';
 
 const KEY = 'world-v2';
@@ -96,6 +97,7 @@ function migrateAndSettle(world, now) {
   }
   expireAdventure(world,now);
   settleDungeons(world,now);
+  championSold(world,now);
 }
 function validateSquad(p, squad) {
   if (!Array.isArray(squad) || squad.length !== 4 || new Set(squad).size !== 4 || squad.some((id) => typeof id !== 'string' || !p.besitz.includes(id) || !D.mon(id))) throw new GameError('Wähle vier verschiedene Mons aus deiner Sammlung.');
@@ -112,7 +114,7 @@ function protectedOwner(world, t, now) {
 function publicResult(world, id, now, extra = {}) {
   const p = world.players[id];
   return { playerId: id, serverTime: now, access: accessFor(now, extra.adminOverride === true), mapVersion: world.mapVersion, dailyDelivery:extra.joining?p.dailyDelivery||0:0,profile: D.neuerStand(p, now), arena: p.arena || null,duel:p.duel||null,spawn:p.spawn,encounters:X.encounters(now,world.territories).filter(e=>!p.encounterClaims.includes(e.id)),
-    ...dungeonResult(world,p), ...weltprojekte(world,id,now), territories: world.territories.map((t) => ({ id: t.id, ownerId: t.ownerId, ownerName: world.players[t.ownerId]?.name || t.ownerName, version: t.version, level: t.level,
+    ...dungeonResult(world,p), ...weltprojekte(world,id,now), ...arenaStand(world,id,now), territories: world.territories.map((t) => ({ id: t.id, ownerId: t.ownerId, ownerName: world.players[t.ownerId]?.name || t.ownerName, version: t.version, level: t.level,
       defense: A.defenders(t.id, t.ownerId ? t.defense : null).map((k) => ({ id: k.id, name: k.name, upgrade:k.upgrade||0 })),
       eggStock: t.ownerId === id ? t.eggStock : 0, eggAt: t.ownerId === id ? t.eggAt : null })),
     reports: world.reports.filter((r) => r.attackerId === id || r.defenderId === id).slice(-20), ...extra };
@@ -135,7 +137,7 @@ async function updatePresence(db, world, id, position, timestamp, clock, bypass 
     if(!route)return json({serverTime:timestamp,access:accessFor(timestamp,bypass),position:{x:from.x,z:from.z,heading:from.heading||0},positionCorrected:true,peers:Object.values(players).filter(v=>v.id!==id).map(({credit,spawnAt,...peer})=>peer)});
     let traveled=0,cursor=from;for(const point of route){traveled+=Math.hypot(point.x-cursor.x,point.z-cursor.z);cursor=point;}
     if (!players[id] || players[id].updatedAt<=timestamp) players[id] = { id, name:p.name, x:Math.round(position.x*100)/100, z:Math.round(position.z*100)/100,
-      heading:position.heading, activity:activeArena(p)||activeDuel(p)||activeDungeon(world,p)?'arena':'map', updatedAt:timestamp,spawnAt:p.lastJoinAt,credit:Math.max(0,credit-traveled),skin:p.skin,weapon:p.weapon,squad:p.truppe.slice(),protected:X.protected(p,timestamp),eier:p.eggs.length };
+      heading:position.heading, activity:activeArena(p)||activeDuel(p)||activeDungeon(world,p)?'arena':'map', updatedAt:timestamp,spawnAt:p.lastJoinAt,credit:Math.max(0,credit-traveled),skin:p.skin,weapon:p.weapon,squad:p.truppe.slice(),protected:X.protected(p,timestamp),eier:p.eggs.length,champion:world.champion?.id===id };
     requireOpen(clock(), bypass);
     const result=await db.setJSON('presence-v1',{players},entry?{onlyIfMatch:entry.etag}:{onlyIfNew:true});
     if(result.modified)return json({serverTime:timestamp,access:accessFor(timestamp,bypass),peers:Object.values(players).filter(v=>v.id!==id).map(({credit,spawnAt,...peer})=>peer)});
@@ -255,6 +257,7 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
           if(activeDungeon(world,p)&&mutations.includes(body.op)&&!X.DUNGEON_OPS.includes(body.op))throw new GameError('Beende zuerst deine Dungeon-Expedition.',409);
           if(p.raidLock?.until>timestamp&&(['arena_start','trainer_start','raid_start','defend'].includes(body.op)||(['hatch','incubate'].includes(body.op)&&body.eggId===p.raidLock.eggId)))throw new GameError('Deine Verteidigung hält gerade einen Überfall ab. Dieses Ei bleibt bis zum Ergebnis reserviert.',409);
           if(X.DUNGEON_OPS.includes(body.op)||body.op==='mon_upgrade')Object.assign(extra,await dungeonAction({world,p,id,body,now:timestamp,presence:presenceStore||speicher('hgh-gehstockmon-presence')}));
+          else if(X.STADT_OPS.includes(body.op))Object.assign(extra,await stadtAction({world,p,id,body,now:timestamp,presence:presenceStore||speicher('hgh-gehstockmon-presence')}));
           else if(X.OPS.includes(body.op))Object.assign(extra,await adventureAction({world,p,id,body,now:timestamp,draw,presence:presenceStore||speicher('hgh-gehstockmon-presence'),validateSquad}));
           if (body.op === 'arena_start' || body.op === 'defend') {
             if (p.arena && p.arena.phase !== 'finished') throw new GameError('Beende zuerst deinen aktuellen Arenakampf.', 409);
@@ -284,8 +287,24 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
             if (body.op === 'collect') extra.message = E.collect(p,t,t.id,timestamp) + ' Ei(er) in deiner Bruttasche.';
             else { E.upgrade(p,t,timestamp); p.progress.upgrades++;t.version++; extra.message = E.LEVELS[t.level].name + ' fertig: mehr Einkommen und stärkere Verteidigung.'; }
           }
-          if (body.op === 'incubate') { E.incubate(p,body.eggId,timestamp); extra.message = 'Die Brutzeit hat begonnen: 1 Stunde.'; }
-          if (body.op === 'hatch') { const mon = E.hatch(p,body.eggId,timestamp,draw);p.progress.hatched++; wochenschritt(world, p, id, 'eier', timestamp); if (mon) X.wesenZuweisen(p, mon.id, draw); extra.monId = mon && mon.id; extra.message = mon ? mon.name + ' ist geschlüpft' + (X.wesenVon(p, mon.id) ? ' - ein ' + X.wesenVon(p, mon.id).name + 'es Wesen!' : '!') : 'Sammlung vollständig! Das Ei bringt dir 75 Gold.'; }
+          if (body.op === 'incubate') { E.incubate(p,body.eggId,timestamp,X.brutplaetze(world.leuchtturm,p)); extra.message = 'Die Brutzeit hat begonnen: 1 Stunde.'; }
+          if (body.op === 'hatch') {
+            const schlupf = E.hatch(p,body.eggId,timestamp,draw), mon = schlupf.mon;
+            p.progress.hatched++; wochenschritt(world, p, id, 'eier', timestamp);
+            X.wesenZuweisen(p, mon.id, draw); extra.monId = mon.id; extra.schlupf = schlupf;
+            /* Ein Zwilling ist kein Trostpreis: entweder hebt er die Runenstufe
+               des Mons, das schon da ist, oder er zerfaellt zu Runen. */
+            extra.message = schlupf.neu
+              ? mon.name + ' ist geschlüpft' + (X.wesenVon(p, mon.id) ? ' - ein ' + X.wesenVon(p, mon.id).name + 'es Wesen!' : '!')
+              : schlupf.runen
+                ? 'Ein zweiter ' + mon.name + '! Er steht schon auf Runenstufe 5 - sein Zwilling zerfällt zu ' + schlupf.runen + ' ' + D.SELTENHEITEN[mon.seltenheit].name + '-Runen.'
+                : 'Ein zweiter ' + mon.name + '! Beide werden eins: Runenstufe ' + schlupf.stufe + '/' + X.UPGRADE_LIMIT + ', jetzt +' + Math.round(schlupf.stufe * A.UPGRADE_BONUS * 100) + ' % KP und Angriff.';
+            /* Steht das Mon in einer Verteidigung, kaempft es dort sofort mit
+               der neuen Stufe - sonst haette der Zwilling auf dem eigenen Land
+               keine Wirkung. */
+            if (!schlupf.neu && schlupf.stufe) for (const t of world.territories)
+              if (t.ownerId === id && t.defense.some((m) => m.id === mon.id)) { t.defense.forEach((m) => { if (m.id === mon.id) m.upgrade = schlupf.stufe; }); t.version++; }
+          }
           deliverRewards(p,timestamp);
           const weekendEggs = activeArena(p)||activeDuel(p)?0:E.deliverWeekend(p, timestamp);
           if (weekendEggs) extra.weekendDelivery = weekendEggs;
