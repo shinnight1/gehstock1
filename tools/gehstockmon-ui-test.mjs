@@ -104,6 +104,20 @@ export async function checkUi(D,E,A,handler,code,clock,otherCode){
   click('Aufklären');await flush();
   assert.ok(root.querySelector('.gm-plan-karte'),'scouting lists how they fight');
   assert.ok(root.textContent.includes('Wie sie kämpfen'));
+  /* Die Sammlungsfilter bauen sich auf und greifen. */
+  click('▦ Mons');await flush();
+  assert.ok(root.querySelector('.gm-filter'),'the collection has a filter bar');
+  const alle=root.querySelectorAll('.gm-collect-card').length;
+  click('Ohne Dienst');await flush();
+  const frei=root.querySelectorAll('.gm-collect-card').length;
+  assert.ok(frei<alle,'filtering narrows the grid: '+frei+' of '+alle);
+  click('Im Dienst');await flush();
+  assert.equal(root.querySelectorAll('.gm-collect-card').length,game.state.truppe.length,'the squad is exactly what is on duty');
+  click('Alle');await flush();
+  assert.equal(root.querySelectorAll('.gm-collect-card').length,alle,'and back to everything');
+  /* Die Aussenpostenliste zeigt die Besatzung und den Verteilknopf. */
+  click('⚑ Außenposten');await flush();
+  assert.ok(root.textContent.includes('ohne Dienst'),'the outpost list counts free Mons');
   /* Das Tauschbrett in Stockhafen baut sich auf. */
   click('♛ Stockhafen');await flush();
   assert.ok(root.textContent.includes('Tauschbrett'),'the trading board renders');

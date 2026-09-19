@@ -331,4 +331,38 @@ await test('Computer territories fight by a plan of their own',()=>{
   /* Der Grenzstein hat gar keinen Pfleger - dort heilt nie jemand. */
   assert.equal(A.defenders(1).some(m=>m.typ===2),false,'the Grenzstein has no healer at all');
 });
+await test('Auto-assignment fills free Mons into the most valuable posts, one of each role',async()=>{
+  let time=mon;const db=store(),handler=createHandler({store:db,presenceStore:store(),now:()=>time});let serial=0;
+  async function call(code,op,extra={}){const r=await handler(new Request('http://localhost/api/gehstockmon',{method:'POST',body:JSON.stringify({code,op,name:code,requestId:'auto-test-'+(++serial),...extra})}));return{status:r.status,...await r.json()};}
+  const a=await call(ca,'join');
+  const p=db.data.players[a.playerId];
+  /* Ohne Gebiet gibt es nichts zu verteilen. */
+  let r=await call(ca,'besatzung_auto');
+  assert.equal(r.status,400);assert.match(r.error,/keinen Außenposten/);
+  Object.assign(db.data.territories[0],{ownerId:a.playerId,level:1,...E.outpost(null,time)});
+  Object.assign(db.data.territories[4],{ownerId:a.playerId,...E.outpost(null,time),level:3});
+  /* Mit nur vier Mons - dem Kampfteam - ist keiner frei. */
+  r=await call(ca,'besatzung_auto');
+  assert.equal(r.status,400);assert.match(r.error,/nicht genug freie/);
+  p.besitz=D.KATALOG.slice(0,14).map(k=>k.id);
+  r=await call(ca,'besatzung_auto');
+  assert.equal(r.status,200,r.error);
+  assert.equal(Object.keys(r.profile.posten).length,2,'both posts get a garrison');
+  /* Der wertvollere Posten bekommt die staerkeren Mons. */
+  const wert=(squad)=>squad.reduce((s,id)=>s+X.kampfwert(p,id),0);
+  assert.ok(wert(r.profile.posten[5])>=wert(r.profile.posten[1]),'the upgraded post gets the stronger crew');
+  /* Jede Besatzung deckt moeglichst alle vier Rollen ab. */
+  for(const id of [1,5]){
+    const rollen=new Set(r.profile.posten[id].map(mid=>D.mon(mid).typ));
+    assert.equal(rollen.size,4,'post '+id+' covers all four roles');
+  }
+  /* Und niemand steht doppelt - auch nicht im Kampfteam. */
+  const alle=r.profile.truppe.concat(r.profile.posten[1],r.profile.posten[5]);
+  assert.equal(new Set(alle).size,alle.length,'nobody serves twice');
+  /* Ein zweiter Lauf raeumt nichts ab, was schon steht. */
+  const vorher=JSON.stringify(r.profile.posten);
+  const nochmal=await call(ca,'besatzung_auto');
+  assert.equal(nochmal.status,400,'nothing left to fill');
+  assert.equal(JSON.stringify((await call(ca,'world')).profile.posten),vorher,'existing garrisons are untouched');
+});
 console.log('\n'+checks+' Kampf- und Tauschpruefungen bestanden.');

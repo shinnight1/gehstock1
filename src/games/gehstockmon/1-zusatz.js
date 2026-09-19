@@ -50,6 +50,52 @@
     }
     return null;
   };
+  /* Wie stark ein Mon im Feld ist - ein Wert, der Leben und Schlagkraft
+     zusammenzieht. Nur zum Sortieren gedacht, nicht fuer den Kampf. */
+  X.kampfwert=function(p,monId){
+    var A=SG.gehstockmon.arena,m=X.mon(p,monId);
+    if(!m)return 0;
+    var st=A.stats(m);
+    return st.hp+st.ang*4;
+  };
+  /* Besatzungen von selbst verteilen. Neun Gebiete mit je vier Plaetzen von
+     Hand zu besetzen sind sechsunddreissig Auswahlen - das macht niemand
+     zweimal. Diese Verteilung nimmt die freien Mons, legt die staerksten auf
+     die wertvollsten Posten und achtet darauf, dass auf jedem Posten moeglichst
+     jede Rolle einmal steht: ein Wall haelt, ein Pfleger heilt, eine Schneide
+     trifft, ein Stoerer bricht die Deckung.
+
+     Angeruehrt wird nur, was frei ist. Wer schon eine Besatzung gesetzt hat,
+     behaelt sie - sonst raeumte ein Knopf die eigene Planung ab. */
+  X.autoBesetzen=function(p,gebiete){
+    var frei=(p.besitz||[]).filter(function(id){
+      var ort=X.einsatzOrt(p,id);
+      return ort===null||ort===undefined;
+    }).sort(function(a,b){return X.kampfwert(p,b)-X.kampfwert(p,a);});
+    /* Wertvollste Posten zuerst: hoehere Ausbaustufe, dann schwierigeres Feld. */
+    var offen=(gebiete||[]).filter(function(g){return !X.posten(p,g.id);})
+      .sort(function(a,b){return (b.level||1)-(a.level||1)||b.id-a.id;});
+    var ergebnis=[];
+    offen.forEach(function(g){
+      if(frei.length<X.TRUPPE)return;
+      var gewaehlt=[],rollen={};
+      /* Erst je Rolle den staerksten, dann auffuellen. */
+      frei.forEach(function(id){
+        if(gewaehlt.length>=X.TRUPPE)return;
+        var typ=D.mon(id).typ;
+        if(rollen[typ])return;
+        rollen[typ]=true;gewaehlt.push(id);
+      });
+      frei.forEach(function(id){
+        if(gewaehlt.length>=X.TRUPPE||gewaehlt.indexOf(id)>=0)return;
+        gewaehlt.push(id);
+      });
+      if(gewaehlt.length<X.TRUPPE)return;
+      gewaehlt.forEach(function(id){frei.splice(frei.indexOf(id),1);});
+      ergebnis.push({id:g.id,squad:gewaehlt});
+    });
+    return ergebnis;
+  };
   X.STADT_OPS=['arena_rang','champion_fordern','tagwerk','findelei','brutplatz_kaufen','tausch_anbieten','tausch_annehmen','tausch_zuruecknehmen'];
   X.OPS=['survey','gather','trainer_start','quest_claim','shop_buy','equip','raid_start','raid_turn','raid_arena','raid_cancel','mon_upgrade','leuchtturm_spenden','zerhacker_schlagen','waffe_schleifen','panzer_anlegen','fehde_fordern','fehde_annehmen'].concat(X.STADT_OPS).concat(X.DUNGEON_OPS);
   X.SPAWN={x:0,z:30};X.SPAWN_TIME=60*60000;

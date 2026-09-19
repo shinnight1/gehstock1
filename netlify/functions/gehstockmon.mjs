@@ -20,7 +20,7 @@ function volatileStore() {
     },
   };
 }
-const mutations = ['arena_start', 'arena_turn', 'arena_flee', 'collect', 'incubate', 'hatch', 'upgrade', 'defend', 'plan', 'besatzung',...X.OPS];
+const mutations = ['arena_start', 'arena_turn', 'arena_flee', 'collect', 'incubate', 'hatch', 'upgrade', 'defend', 'plan', 'besatzung', 'besatzung_auto',...X.OPS];
 /* Verschenken und Nachlesen sind Verwaltung, kein Spielzug: sie brauchen
    keinen eigenen Spielstand und richten sich nicht nach den Oeffnungszeiten. */
 const ADMIN_OPS = ['admin_grant', 'admin_log'];
@@ -290,6 +290,20 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
           if (body.op === 'defend') {
             verteidigungenAuffrischen(world, p, id);
             extra.message = 'Dein Kampfteam steht. Außenposten ohne eigene Besatzung halten damit ihre Stellung.';
+          }
+          if (body.op === 'besatzung_auto') {
+            /* Neun Posten von Hand zu besetzen sind sechsunddreissig
+               Auswahlen. Hier verteilt das Spiel die freien Mons selbst -
+               und laesst alles stehen, was schon gesetzt ist. */
+            const meine = world.territories.filter((t) => t.ownerId === id);
+            if (!meine.length) throw new GameError('Du hältst noch keinen Außenposten.');
+            const plan = X.autoBesetzen(p, meine.map((t) => ({ id: t.id, level: t.level })));
+            if (!plan.length) throw new GameError('Dafür sind nicht genug freie Mons da. Jeder Posten braucht vier, die nirgends sonst Dienst tun.');
+            for (const eintrag of plan) p.posten[eintrag.id] = eintrag.squad.slice();
+            verteidigungenAuffrischen(world, p, id);
+            extra.message = plan.length === 1
+              ? D.FELDER[plan[0].id - 1].name + ' hat jetzt eine eigene Besatzung.'
+              : plan.length + ' Außenposten haben jetzt eigene Besatzungen.';
           }
           if (body.op === 'besatzung') {
             const t = target(world, body.territoryId);

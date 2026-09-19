@@ -16,6 +16,7 @@
   function saveAdmin(on) { try{if(on)sessionStorage.setItem(adminKey(),'1');else sessionStorage.removeItem(adminKey());}catch(e){} }
   function mount(host) {
     var st=D.neuerStand(null), online=null, connected=false, world, dead=false, busy=false, animating=false, drawerView=null;
+    var sammlungFilter='alle';
     var selected=6, battle=null, visual=null, lastNear=null, lastPoll=0, timeOffset=0, tickCount=0, animationToken=0, requestEpoch=0, polling=false;
     var peerList=[],peerLabels={},presenceBusy=false,lastPresence=0,lastPresenceReply=0;
     var access=null,closeTimer=null,adminHits=0,adminResetTimer=null,adminNotice=null;
@@ -95,7 +96,25 @@
     }
     function showCollection(){if(!openDrawer('Deine Mons · '+st.besitz.length+'/'+D.KATALOG.length+'','mons'))return;drawer.appendChild(el('p','Deine Truppe · Das erste Mon beginnt jeden Arenakampf.'));
       var squad=el('div',undefined,'gm-squad-preview');st.truppe.forEach(function(id,i){var k=D.mon(id),b=button('',function(){showMon(id);},'gm-party-card');b.style.setProperty('--rarity',D.SELTENHEITEN[k.seltenheit].farbe);b.appendChild(art(k));b.appendChild(el('strong',(i+1)+'. '+k.name));squad.appendChild(b);});drawer.appendChild(squad);
-      var grid=el('div',undefined,'gm-collection');D.KATALOG.slice().sort(function(a,b){return b.seltenheit-a.seltenheit||a.name.localeCompare(b.name,'de');}).forEach(function(k){var have=st.besitz.indexOf(k.id)>=0,b=button('',function(){showMon(k.id);},'gm-collect-card'+(have?'':' gm-unowned'));b.style.setProperty('--rarity',D.SELTENHEITEN[k.seltenheit].farbe);b.appendChild(artGross(k));b.appendChild(el('strong',k.name));b.appendChild(el('span',D.SELTENHEITEN[k.seltenheit].name));b.appendChild(el('small',st.truppe.indexOf(k.id)>=0?'IN DER TRUPPE':have?k.rolle:'SCHLÜPFT AUS EINEM EI'));grid.appendChild(b);});drawer.appendChild(grid);
+      /* Filter. Seit jeder Aussenposten eine eigene Besatzung hat, ist "wer ist
+         noch frei" die haeufigste Frage vor dem Aufstellen - deshalb steht sie
+         als eigener Knopf da. */
+      var leiste=el('div',undefined,'gm-filter');
+      [['alle','Alle'],['frei','Ohne Dienst'],['dienst','Im Dienst'],['fehlend','Fehlt mir']].forEach(function(v){
+        var b=button(v[1],function(){sammlungFilter=v[0];showCollection();},'gm-filter-knopf'+(sammlungFilter===v[0]?' aktiv':''));
+        leiste.appendChild(b);
+      });
+      drawer.appendChild(leiste);
+      var grid=el('div',undefined,'gm-collection'),gezeigt=0;D.KATALOG.slice().sort(function(a,b){return b.seltenheit-a.seltenheit||a.name.localeCompare(b.name,'de');}).filter(function(k){
+        var hat=st.besitz.indexOf(k.id)>=0,ort=X.einsatzOrt(st,k.id),imDienst=ort!==null&&ort!==undefined;
+        if(sammlungFilter==='frei')return hat&&!imDienst;
+        if(sammlungFilter==='dienst')return hat&&imDienst;
+        if(sammlungFilter==='fehlend')return !hat;
+        return true;
+      }).forEach(function(k){gezeigt++;var have=st.besitz.indexOf(k.id)>=0,b=button('',function(){showMon(k.id);},'gm-collect-card'+(have?'':' gm-unowned'));b.style.setProperty('--rarity',D.SELTENHEITEN[k.seltenheit].farbe);b.appendChild(artGross(k));b.appendChild(el('strong',k.name));b.appendChild(el('span',D.SELTENHEITEN[k.seltenheit].name));var wo=X.einsatzOrt(st,k.id);
+        b.appendChild(el('small',wo==='kampfteam'?'IM KAMPFTEAM':Number.isFinite(wo)?X.einsatzText(wo).toUpperCase():have?k.rolle:'SCHLÜPFT AUS EINEM EI'));grid.appendChild(b);});
+      if(!gezeigt)drawer.appendChild(el('p','Hier ist gerade nichts.','gm-plan-hinweis'));
+      drawer.appendChild(grid);
     }
     /* Der Kampfplan: drei Wenn-Dann-Zeilen, die deine Truppe abarbeitet, wenn
        du nicht selbst am Zug bist - beim Verteidigen deiner Gebiete, in der
@@ -166,7 +185,25 @@
       });
       drawer.appendChild(el('p','Besiege alle gegnerischen Mons. Jeder Zug gehört dir: angreifen, schützen, heilen oder wechseln.'));drawer.appendChild(button('Eigene Truppe ansehen',showCollection,'gm-button gm-primary'));}
     function showOutposts(){if(!openDrawer('Deine Außenposten','posts'))return;var ts=territories().filter(own);drawer.appendChild(el('p',ts.length+' Gebiete · '+income()+' Gold pro Stunde. Einnahmen werden automatisch gutgeschrieben.'));if(!ts.length)drawer.appendChild(el('p','Erobere dein erstes Gebiet in einem Arenakampf. Dort beginnen die Gold- und Eierproduktion.'));
-      ts.forEach(function(t){var card=el('article',undefined,'gm-post-card');card.appendChild(el('h3',D.FELDER[t.id-1].name));card.appendChild(el('p',E.LEVELS[t.level].name+' · +'+E.LEVELS[t.level].income+' Gold/Std. · '+t.eggStock+'/3 Eier'));card.appendChild(button('Außenposten verwalten',function(){showPost(t.id);}));drawer.appendChild(card);});
+      /* Wer neun Posten von Hand besetzt, klickt sechsunddreissig Mal. Ein Knopf
+         verteilt die freien Mons selbst und laesst gesetzte Besatzungen stehen. */
+      if(ts.length){
+        var offen=ts.filter(function(t){return X.notbesatzung(st,t.id);});
+        var frei=st.besitz.filter(function(mid){var o=X.einsatzOrt(st,mid);return o===null||o===undefined;});
+        drawer.appendChild(el('p',frei.length+' Mons ohne Dienst · '+offen.length+' Posten ohne eigene Besatzung'));
+        if(offen.length){
+          var auto=button('Freie Mons verteilen',function(){perform('besatzung_auto',{},'posts');},'gm-button gm-primary');
+          auto.disabled=busy||frei.length<X.TRUPPE;
+          drawer.appendChild(auto);
+          if(frei.length<X.TRUPPE)drawer.appendChild(el('p','Für einen weiteren Posten fehlen dir '+(X.TRUPPE-frei.length)+' freie Mons.','gm-plan-hinweis'));
+        }
+      }
+      ts.forEach(function(t){var card=el('article',undefined,'gm-post-card');card.appendChild(el('h3',D.FELDER[t.id-1].name));card.appendChild(el('p',E.LEVELS[t.level].name+' · +'+E.LEVELS[t.level].income+' Gold/Std. · '+t.eggStock+'/3 Eier'));
+        /* Die Besatzung steht direkt dabei - sonst muesste man neun Fenster
+           oeffnen, um zu sehen, wer wo Dienst tut. */
+        var wer=X.besatzung(st,t.id).map(function(mid){var k=D.mon(mid);return k?k.name:'?';}).join(', ');
+        card.appendChild(el('small',(X.notbesatzung(st,t.id)?'Kampfteam hält die Stellung: ':'Besatzung: ')+wer,X.notbesatzung(st,t.id)?'gm-plan-hinweis':'gm-post-besatzung'));
+        card.appendChild(button('Außenposten verwalten',function(){showPost(t.id);}));drawer.appendChild(card);});
     }
     function showPost(id){var t=territories()[id-1];if(!own(t)){showOutposts();notify('Dieser Außenposten gehört inzwischen einem anderen Spieler.');return;}if(!openDrawer(D.FELDER[id-1].name,'post:'+id))return;var l=E.LEVELS[t.level];drawer.appendChild(el('div',undefined,'gm-post-illustration level-'+t.level));drawer.appendChild(el('h3',l.name+' · Stufe '+t.level));drawer.appendChild(el('p','+'+l.income+' Gold/Std. · Verteidiger: +'+Math.round(l.bonus*100)+' % KP, +'+Math.round(l.bonus*50)+' % Angriff.'));var row=el('p',t.eggStock+'/3 Eier bereit. Nächstes Ei: ');deadline(row,E.nextEggAt(t),'bereit');drawer.appendChild(row);drawer.appendChild(el('p','Wochenende: 2 Eier, automatisch nach dem Wochenende.'));
       var collect=button('Eier abholen',function(){perform('collect',{territoryId:id});},'gm-button gm-primary');collect.disabled=!t.eggStock;drawer.appendChild(collect);
@@ -263,7 +300,19 @@
       var header=el('header',undefined,'gm-arena-header');header.appendChild(el('div',battle.title||'GEBIETSARENA · '+f.name,'gm-eyebrow'));header.appendChild(el('strong','Runde '+Math.min(battle.round,60)+' · '+(battle.kind==='rang'||battle.kind==='champion'?'Große Arena':E.LEVELS[battle.level].name)));arenaBox.appendChild(header);
       var scene=el('div',undefined,'gm-arena-scene');scene.appendChild(el('div',undefined,'gm-arena-horizon'));
       [0,1].forEach(function(side){var u=state.teams[side][state.active[side]],mon=D.mon(u.monId),unit=el('div',undefined,'gm-arena-unit '+(side===0?'ally':'enemy')+(entry?' gm-send':''));unit.setAttribute('data-unit',u.uid);
-        var health=el('div',undefined,'gm-arena-health');health.appendChild(el('strong',u.name));health.appendChild(el('span',Math.ceil(u.hp)+' / '+u.maxHp+' KP'));health.appendChild(UI.el('progress',{value:u.hp,max:u.maxHp,'aria-label':u.name+' Lebenspunkte'}));unit.appendChild(health);
+        var health=el('div',undefined,'gm-arena-health');health.appendChild(el('strong',u.name));health.appendChild(el('span',Math.ceil(u.hp)+' / '+u.maxHp+' KP'));health.appendChild(UI.el('progress',{value:u.hp,max:u.maxHp,'aria-label':u.name+' Lebenspunkte'}));
+        /* Seit es zwoelf Faehigkeiten gibt, weiss man sonst erst was der
+           Gegner kann, wenn er es einsetzt - und dann ist es zu spaet. Rolle,
+           Faehigkeit und die eigene Trefferwirkung stehen deshalb offen da. */
+        var gegner=state.teams[1-side][state.active[1-side]];
+        var zeile=(D.KREATUREN[u.role]?D.KREATUREN[u.role].rolle:'')+' · '+A.faehigkeit(u).name;
+        var faktor=gegner?A.rollenFaktor(u.role,gegner.role):1;
+        if(faktor!==1)zeile+=' · '+(faktor>1?'+':'')+Math.round((faktor-1)*100)+' % gegen '+gegner.name;
+        var kunde=el('small',zeile,'gm-arena-kunde');
+        if(faktor>1)kunde.classList.add('gut');else if(faktor<1)kunde.classList.add('schlecht');
+        health.appendChild(kunde);
+        if(u.wesen)health.appendChild(el('small',u.wesen+'es Wesen','gm-arena-wesen'));
+        unit.appendChild(health);
         var pedestal=el('div',undefined,'gm-arena-pedestal');unit.appendChild(pedestal);unit.appendChild(el('div',undefined,'gm-throw-orb'));var img=art(mon);img.classList.add('gm-arena-mon');if(u.hp<=0)img.classList.add('fainted');unit.appendChild(img);
         var status=[];if(u.shield)status.push('Geschützt');if(u.weakened)status.push('Geschwächt');unit.appendChild(el('span',status.join(' · '),'gm-arena-status'));scene.appendChild(unit);
       });arenaBox.appendChild(scene);
