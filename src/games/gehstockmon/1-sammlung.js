@@ -100,6 +100,10 @@
     var fest=D.FAEHIGKEIT_FEST[mon.id];
     return Number.isFinite(fest)?fest:Math.max(0,Math.floor(mon.spriteIndex||0))%3;
   };
+  /* Der Welt-Atlas gm-mons-atlas.webp traegt 6 x 7 eigens freigestellte
+     Grafiken - die ersten 42 Mons. Wer dahinter steht, hat keine Zelle mehr
+     und laeuft mit seinem Einzelbild ueber die Insel. */
+  D.ATLAS_MONS=42;
   D.VORSCHAUEN=['novaorakel','zeitphoenix','risskaiser'];
   D.KATALOG.forEach(function(k,i){k.spriteIndex=i;k.worldSize=D.MON_SIZES[i];
     if(D.VORSCHAUEN.indexOf(k.id)>=0)k.vorschau=k.bild+'-vorschau';});

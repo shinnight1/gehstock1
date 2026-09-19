@@ -220,4 +220,15 @@ await test('A saved defence carries its plan, and a plan change reaches every ou
   const gesehen=gegner.territories[0].defense.find(m=>m.id===meins);
   assert.ok(gesehen,'the defender is visible');
 });
+await test('World sprites come from the atlas for the first 42 and from single files after',()=>{
+  /* Der Atlas traegt 6 x 7 eigens freigestellte Zellen. Wer dahinter steht, hat
+     keine mehr - aber die 42 davor duerfen nicht auf ihr Sammlungsportrait
+     zurueckfallen, sonst laufen sie ploetzlich mit einem anderen Bild herum. */
+  assert.equal(D.ATLAS_MONS,42);
+  const imAtlas=D.KATALOG.filter(k=>k.spriteIndex<D.ATLAS_MONS);
+  assert.equal(imAtlas.length,42);
+  assert.deepEqual(imAtlas.map(k=>k.spriteIndex),Array.from({length:42},(_,i)=>i),'the atlas covers exactly the first block');
+  for(const k of D.KATALOG.filter(k=>k.spriteIndex>=D.ATLAS_MONS))
+    assert.ok(k.bild&&k.bild.startsWith('gm-'),k.id+' needs its own image');
+});
 console.log('\n'+checks+' Kampf- und Tauschpruefungen bestanden.');
