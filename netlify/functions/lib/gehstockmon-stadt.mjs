@@ -44,9 +44,14 @@ function log(world,text,id,now){
 function truppe(squad){
   return (squad||[]).map(e=>Object.assign({},D.mon(e.id||e.monId)||D.KATALOG[0],{upgrade:X.upgradeLevel(e.upgrade)}));
 }
-/* Die eigene Aufstellung, wie sie ein Angreifer zu sehen bekommt. */
+/* Die eigene Aufstellung, wie sie ein Angreifer zu sehen bekommt - das
+   Kampfteam samt Runenstufe, Wesen und Plan. In der Arena verteidigt immer
+   das Kampfteam, nie eine Gebietsbesatzung: die halten ihre Posten. */
 export function aufstellung(p){
-  return (p.truppe||[]).map(mid=>({id:mid,upgrade:X.mon(p,mid).upgrade}));
+  return (p.truppe||[]).map(mid=>{
+    const m=X.mon(p,mid);
+    return {id:mid,upgrade:m.upgrade,wesen:m.wesenId||null,plan:A.planOder(p.plaene&&p.plaene[mid])};
+  });
 }
 function gegnerliste(world,id,now){
   const ich=world.players[id],meinRuhm=X.ruhm(ich);

@@ -38,7 +38,17 @@
   A.UPGRADE_BONUS = .03; A.LADUNG_AB = 4; A.LADUNGEN = 2; A.SCHNELL_AB = 3; A.POWER_PAUSE = 3;
   A.ladungen = function (mon) { return A.LADUNGEN + (SG.gehstockmon.abenteuer.upgradeLevel(mon.upgrade) >= A.LADUNG_AB ? 1 : 0); };
   A.powerPause = function (mon) { return A.POWER_PAUSE - (SG.gehstockmon.abenteuer.upgradeLevel(mon.upgrade) >= A.SCHNELL_AB ? 1 : 0); };
-  A.stats = function (mon) { var s = stats[mon.typ],factor=[.78,1.16,1.38,1.64,1.98,2.4,3][mon.seltenheit],bonus=1+SG.gehstockmon.abenteuer.upgradeLevel(mon.upgrade)*A.UPGRADE_BONUS; return { hp: Math.floor(Math.round(s[0]*factor)*bonus), ang: Math.floor(Math.round(s[1]*factor)*bonus), tempo: s[2] }; };
+  /* Grundwerte mal Seltenheit, dann die Runenstufe, dann das Wesen. Das Wesen
+     kam frueher gar nicht hier an - es wurde in X.mon auf die Grundwerte
+     addiert, und die benutzt diese Rechnung nicht. Damit war jedes wilde Mon
+     im Kampf genauso stark wie jedes ruhige. */
+  A.stats = function (mon) {
+    var s = stats[mon.typ],factor=[.78,1.16,1.38,1.64,1.98,2.4,3][mon.seltenheit],bonus=1+SG.gehstockmon.abenteuer.upgradeLevel(mon.upgrade)*A.UPGRADE_BONUS;
+    var w = mon.wesenId ? SG.gehstockmon.abenteuer.wesen(mon.wesenId) : null;
+    var hp = Math.floor(Math.round(s[0]*factor)*bonus), ang = Math.floor(Math.round(s[1]*factor)*bonus), tempo = s[2];
+    if (w) { hp = Math.max(1, Math.round(hp*(1+w.hp))); ang = Math.max(1, Math.round(ang*(1+w.ang))); tempo = Math.max(1, tempo+w.tempo); }
+    return { hp: hp, ang: ang, tempo: tempo };
+  };
   A.moves = function (u, round) {
     var voll = u.maxCharges || A.LADUNGEN, pause = (u.powerPause || A.POWER_PAUSE) - 1, f = A.faehigkeit(u);
     /* Ein Pfleger darf seine Faehigkeit nur bei Schaden einsetzen - sonst
@@ -53,10 +63,10 @@
   };
   function unit(mon, side, i, bonus) {
     var s = A.stats(mon), hp = Math.round(s.hp * (1 + bonus)), laden = A.ladungen(mon), pause = A.powerPause(mon);
-    return { uid: side + i, monId: mon.id, name: mon.name, role: mon.typ, skill: D.faehigkeitVon(mon), maxHp: hp, hp: hp, ang: Math.round(s.ang * (1 + bonus / 2)), speed: s.tempo, powerReady: 1, charges: laden, maxCharges: laden, powerPause: pause, shield: 0, weakened: false, dornen: false, geschaerft: false, plan: mon.plan || null };
+    return { uid: side + i, monId: mon.id, name: mon.name, role: mon.typ, skill: D.faehigkeitVon(mon), wesen: mon.wesen || null, maxHp: hp, hp: hp, ang: Math.round(s.ang * (1 + bonus / 2)), speed: s.tempo, powerReady: 1, charges: laden, maxCharges: laden, powerPause: pause, shield: 0, weakened: false, dornen: false, geschaerft: false, plan: mon.plan || null };
   }
   A.defenders = function (fieldId, saved) {
-    if (saved && saved.length) return saved.map(function (e) { return Object.assign({},D.mon(e.id || e.monId) || D.KATALOG[0],{upgrade:SG.gehstockmon.abenteuer.upgradeLevel(e.upgrade),plan:A.planGueltig(e.plan)?e.plan:null}); });
+    if (saved && saved.length) return saved.map(function (e) { return Object.assign({},D.mon(e.id || e.monId) || D.KATALOG[0],{upgrade:SG.gehstockmon.abenteuer.upgradeLevel(e.upgrade),wesenId:e.wesen||null,plan:A.planGueltig(e.plan)?e.plan:null}); });
     var roster = [['moosling','rostknirps'], ['sumpfschnapper','nebelmolch','klinge'], ['kieselkrabb','glutfuchs','donnerwidder'], ['dornenwolf','pilzhueter','nachtflatter'], ['runengolem','frostklaue','seelenqualle','obsidianrabe']];
     /* Das Sonnengrab war ein Abklatsch des Horsts und damit die leichteste
        Stufe unter "Sehr schwer", die es je gab. Jetzt stehen dort vier
@@ -65,8 +75,37 @@
        zu brechen, heilt er alles wieder weg. */
     roster.push(['tauhupfer'],['grabesritter','sternengeweih','vulkanmantis','leerenwyrm'],['aetherdrache','chronoschreiter','grabesritter','frostorakel'],['endrichter','nullwyrm','chronoschreiter','aetherdrache']);
     var ids = roster[fieldId - 1].slice();
-    return ids.map(D.mon);
+    /* Auch die Computergebiete kaempfen nach einem Plan. Ohne einen stand beim
+       Aufklaeren neunmal "kein eigener Plan", und die ganze Aufklaerung lohnte
+       sich erst gegen echte Spieler - von denen es wenige gibt. Jeder Plan
+       passt zur Lehre seines Feldes, sodass man ihn lesen und kontern kann. */
+    return ids.map(function (id) {
+      var mon = D.mon(id);
+      return mon ? Object.assign({}, mon, { plan: A.FELD_PLAENE[fieldId - 1] || null }) : mon;
+    });
   };
+  /* Ein Plan je Gebiet, gelesen wie die Lehre des Feldes:
+
+       1 Grenzstein   schlaegt stur zu - hier lernt man nur zuzusehen
+       2 Alte Furt    die Pfleger heilen, sobald es eng wird
+       3 Schieferbruch der Brecher holt aus, sobald er kann
+       4 Nebelsenke   deckt sich, wenn man selbst stark dasteht
+       5 Der Horst    liest die Lage und wechselt zwischen Angriff und Schutz
+       6 Tauwiese     ein sanfter Einstieg, fast ohne Gegenwehr
+       7 Sonnengrab   heilt frueh und hartnaeckig - der Pfleger muss zuerst fallen
+       8 Donnergrat   spart die Faehigkeit fuer den Moment der Schwaeche
+       9 Weltenschlund schlaegt mit allem zu, was geladen ist */
+  A.FELD_PLAENE = [
+    [['immer','strike'],   ['aus','strike'],        ['aus','strike']],
+    [['ich_schwach','special'], ['immer','strike'],  ['aus','strike']],
+    [['kraft_bereit','power'],  ['immer','strike'],  ['aus','strike']],
+    [['feind_stark','guard'],   ['ladung_da','special'], ['immer','strike']],
+    [['ich_schwach','special'], ['feind_schwach','power'], ['immer','strike']],
+    [['immer','strike'],   ['aus','strike'],        ['aus','strike']],
+    [['ich_schwach','special'], ['geschuetzt','special'], ['immer','power']],
+    [['feind_schwach','special'],['kraft_bereit','power'], ['immer','strike']],
+    [['kraft_bereit','power'],  ['ladung_da','special'],  ['immer','strike']]
+  ];
   A.create = function (roster, enemies, options) {
     var o = options || {};
     return { id: o.id || 'local', territoryId: o.territoryId || 1, territoryVersion: o.version || 1,

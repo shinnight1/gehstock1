@@ -20,7 +20,7 @@ function volatileStore() {
     },
   };
 }
-const mutations = ['arena_start', 'arena_turn', 'arena_flee', 'collect', 'incubate', 'hatch', 'upgrade', 'defend', 'plan',...X.OPS];
+const mutations = ['arena_start', 'arena_turn', 'arena_flee', 'collect', 'incubate', 'hatch', 'upgrade', 'defend', 'plan', 'besatzung',...X.OPS];
 /* Verschenken und Nachlesen sind Verwaltung, kein Spielzug: sie brauchen
    keinen eigenen Spielstand und richten sich nicht nach den Oeffnungszeiten. */
 const ADMIN_OPS = ['admin_grant', 'admin_log'];
@@ -99,10 +99,19 @@ function migrateAndSettle(world, now) {
   settleDungeons(world,now);
   championSold(world,now);
 }
-/* Die gespeicherte Verteidigung traegt jetzt auch den Kampfplan mit. Ohne ihn
-   kaempfte jedes Gebiet nach derselben festen Heuristik - egal wem es gehoert. */
-function verteidigung(p) {
-  return p.truppe.map((mid) => ({ id: mid, upgrade: X.mon(p, mid).upgrade, plan: A.planOder(p.plaene && p.plaene[mid]) }));
+/* Die gespeicherte Verteidigung eines Gebiets: seine eigene Besatzung, sonst
+   das Kampfteam. Sie traegt Runenstufe, Wesen und Kampfplan mit - ohne die
+   kaempfte jedes Gebiet nach derselben festen Heuristik, egal wem es gehoert. */
+function verteidigung(p, territoryId) {
+  return X.besatzung(p, territoryId).map((mid) => {
+    const m = X.mon(p, mid);
+    return { id: mid, upgrade: m.upgrade, wesen: m.wesenId || null, plan: A.planOder(p.plaene && p.plaene[mid]) };
+  });
+}
+/* Nach jeder Aenderung an Truppe, Besatzung oder Planen: alle eigenen Gebiete
+   auf den neuen Stand bringen. */
+function verteidigungenAuffrischen(world, p, id) {
+  for (const t of world.territories) if (t.ownerId === id) { t.defense = verteidigung(p, t.id); t.ownerName = p.name; t.version++; }
 }
 function validateSquad(p, squad) {
   if (!Array.isArray(squad) || squad.length !== 4 || new Set(squad).size !== 4 || squad.some((id) => typeof id !== 'string' || !p.besitz.includes(id) || !D.mon(id))) throw new GameError('Wähle vier verschiedene Mons aus deiner Sammlung.');
@@ -160,7 +169,10 @@ function settleBattle(world, p, id, now, requestId) {
       const defender = defenderId && world.players[defenderId];
       if (defender && now - defender.lastSeen >= 12 * E.HOUR) defender.lastOfflineLoss = now;
       const level = t.level; E.capture(p, t.id, now);
-      Object.assign(t, E.outpost(null, now), { level, ownerId: id, ownerName: p.name, defense: verteidigung(p), version: t.version + 1 });
+      /* Der Verlierer zieht seine Besatzung ab - die vier stehen ihm sofort
+         wieder fuer andere Posten zur Verfuegung. */
+      if (defender && defender.posten) delete defender.posten[t.id];
+      Object.assign(t, E.outpost(null, now), { level, ownerId: id, ownerName: p.name, defense: verteidigung(p, t.id), version: t.version + 1 });
       b.message = 'Gebiet erobert! +40 Gold. Dein Außenposten produziert jetzt Gold und alle 2 Stunden ein Ei.';
     }
   } else b.message = b.winner === 'fled' ? 'Zurückgezogen. Das Gebiet bleibt beim Verteidiger.' : 'Deine Truppe ist zurück im Lager. Versuche andere Attacken oder eine andere Aufstellung.';
@@ -271,11 +283,29 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
           else if(X.OPS.includes(body.op))Object.assign(extra,await adventureAction({world,p,id,body,now:timestamp,draw,presence:presenceStore||speicher('hgh-gehstockmon-presence'),validateSquad}));
           if (body.op === 'arena_start' || body.op === 'defend') {
             if (p.arena && p.arena.phase !== 'finished') throw new GameError('Beende zuerst deinen aktuellen Arenakampf.', 409);
-            p.truppe = validateSquad(p, body.squad);
+            const fehler = X.truppePruefen(p, body.squad, 'kampfteam');
+            if (fehler) throw new GameError(fehler);
+            p.truppe = body.squad.slice();
           }
           if (body.op === 'defend') {
-            for (const t of world.territories) if (t.ownerId === id) { t.defense = verteidigung(p); t.ownerName = p.name; t.version++; }
-            extra.message = 'Deine Truppe verteidigt jetzt alle deine Außenposten.';
+            verteidigungenAuffrischen(world, p, id);
+            extra.message = 'Dein Kampfteam steht. Außenposten ohne eigene Besatzung halten damit ihre Stellung.';
+          }
+          if (body.op === 'besatzung') {
+            const t = target(world, body.territoryId);
+            if (t.ownerId !== id) throw new GameError('Dieser Außenposten gehört dir nicht.', 403);
+            if (body.squad === null) {
+              /* Abziehen: das Gebiet faellt auf das Kampfteam zurueck und die
+                 vier Mons stehen wieder zur Verfuegung. */
+              delete p.posten[t.id];
+              extra.message = D.FELDER[t.id - 1].name + ' wird wieder vom Kampfteam gehalten.';
+            } else {
+              const fehler = X.truppePruefen(p, body.squad, t.id);
+              if (fehler) throw new GameError(fehler);
+              p.posten[t.id] = body.squad.slice();
+              extra.message = D.FELDER[t.id - 1].name + ' hat jetzt eine eigene Besatzung.';
+            }
+            verteidigungenAuffrischen(world, p, id);
           }
           if (body.op === 'arena_start') {
             const t = target(world, body.territoryId);
@@ -302,7 +332,7 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
             if (!A.planGueltig(body.plan)) throw new GameError('Dieser Kampfplan ist nicht gültig.');
             p.plaene = p.plaene || {}; p.plaene[mon.id] = body.plan.map((z) => z.slice(0, 2));
             /* Der Plan gilt sofort auf jedem Aussenposten, auf dem das Mon steht. */
-            if (p.truppe.includes(mon.id)) for (const t of world.territories) if (t.ownerId === id) { t.defense = verteidigung(p); t.version++; }
+            verteidigungenAuffrischen(world, p, id);
             extra.monId = mon.id;
             extra.message = mon.name + ' kämpft jetzt nach deinem Plan - auch wenn du offline bist.';
           }
@@ -327,8 +357,7 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
             /* Steht das Mon in einer Verteidigung, kaempft es dort sofort mit
                der neuen Stufe - sonst haette der Zwilling auf dem eigenen Land
                keine Wirkung. */
-            if (!schlupf.neu && schlupf.stufe) for (const t of world.territories)
-              if (t.ownerId === id && t.defense.some((m) => m.id === mon.id)) { t.defense.forEach((m) => { if (m.id === mon.id) m.upgrade = schlupf.stufe; }); t.version++; }
+            if (!schlupf.neu && schlupf.stufe) verteidigungenAuffrischen(world, p, id);
           }
           deliverRewards(p,timestamp);
           const weekendEggs = activeArena(p)||activeDuel(p)?0:E.deliverWeekend(p, timestamp);

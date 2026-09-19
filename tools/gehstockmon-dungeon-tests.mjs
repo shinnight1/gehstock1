@@ -85,7 +85,20 @@ await test('Harder dungeon tiers have stronger bosses, scale with group size and
   const a=await fixture(),b=await fixture();assert.ok((await group(b,4)).dungeon.boss.maxHp>(await group(a,1)).dungeon.boss.maxHp);
 });
 await test('A common solo Mon can clear the beginner dungeon and four top Mons can beat the final boss',async()=>{
-  for(const [count,tier,mon] of [[1,0,'glutfuchs'],[4,6,'endrichter']]){const f=await fixture();const r=await play(f,await group(f,count,tier,mon),count);assert.equal(r.dungeon.winner,'players','tier '+tier+' must be beatable with an appropriate team');}
+  /* "Passend" heisst seit dem Rollen-Dreieck auch: die richtige Rolle. Der
+     Boss der Wurzelhoehle ist ein Wall, gegen den ein Stoerer ein Viertel mehr
+     austeilt und eine Schneide ein Viertel weniger - beide stehen im
+     Starterset, die Wahl gehoert also von Anfang an zum Spiel. */
+  for(const [count,tier,mon] of [[1,0,'rostknirps'],[4,6,'endrichter']]){const f=await fixture();const r=await play(f,await group(f,count,tier,mon),count);assert.equal(r.dungeon.winner,'players','tier '+tier+' must be beatable with an appropriate team');}
+  /* Und die Rolle wirkt wirklich: derselbe Kampf, nur mit der schlechten Rolle,
+     nimmt dem Boss deutlich weniger ab. */
+  const stoerer=await fixture(), schneide=await fixture();
+  const aStoerer=await group(stoerer,1,0,'rostknirps'), aSchneide=await group(schneide,1,0,'glutfuchs');
+  const nachStoerer=ok(await call(stoerer,0,'dungeon_turn',{roomId:aStoerer.dungeon.id,round:1,move:'strike'}));
+  const nachSchneide=ok(await call(schneide,0,'dungeon_turn',{roomId:aSchneide.dungeon.id,round:1,move:'strike'}));
+  const wegStoerer=aStoerer.dungeon.boss.hp-nachStoerer.dungeon.boss.hp;
+  const wegSchneide=aSchneide.dungeon.boss.hp-nachSchneide.dungeon.boss.hp;
+  assert.ok(wegStoerer>wegSchneide,'the scout out-damages the blade against a wall boss: '+wegStoerer+' vs '+wegSchneide);
 });
 await test('Runes enforce rarity, growing costs, stale-level checks, cap and consistent saved defense stats',async()=>{
   const f=await fixture(),id=f.players[0].playerId;pSetup();function pSetup(){const p=player(f,0);p.besitz.push('sumpfschnapper');p.runes=[15,0,100,100,100,100,100];f.db.data.territories[0].ownerId=id;f.db.data.territories[0].defense=[{id:'glutfuchs'}];}

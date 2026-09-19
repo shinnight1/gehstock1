@@ -231,4 +231,104 @@ await test('World sprites come from the atlas for the first 42 and from single f
   for(const k of D.KATALOG.filter(k=>k.spriteIndex>=D.ATLAS_MONS))
     assert.ok(k.bild&&k.bild.startsWith('gm-'),k.id+' needs its own image');
 });
+await test('A nature now changes the numbers it promises, in percent of the scaled values',()=>{
+  /* Frueher wurden die Wesenspunkte in X.mon auf die Grundwerte addiert, und
+     A.stats benutzte die Grundwerte gar nicht - das Wesen war reine Anzeige. */
+  const p=D.neuerStand(null,mon);
+  const ohne=A.stats(X.mon(p,'endrichter'));
+  for(const w of X.WESEN){
+    p.wesen={endrichter:w.id};
+    const mit=A.stats(X.mon(p,'endrichter'));
+    if(w.hp)assert.notEqual(mit.hp,ohne.hp,w.id+' must move KP');
+    if(w.ang)assert.notEqual(mit.ang,ohne.ang,w.id+' must move attack');
+    if(w.tempo)assert.equal(mit.tempo,ohne.tempo+w.tempo,w.id+' moves speed by an exact step');
+    assert.ok(mit.hp>0&&mit.ang>0&&mit.tempo>0,w.id+' never zeroes a value');
+  }
+  /* Anteilig heisst: bei einem seltenen Mon wiegt dasselbe Wesen mehr Punkte. */
+  p.wesen={moosling:'stur',endrichter:'stur'};
+  const klein=A.stats(X.mon(p,'moosling')),gross=A.stats(X.mon(p,'endrichter'));
+  const ohneKlein=A.stats(D.mon('moosling')),ohneGross=A.stats(D.mon('endrichter'));
+  assert.ok(gross.hp-ohneGross.hp>klein.hp-ohneKlein.hp,'the same nature is worth more on a rarer Mon');
+  /* Und es kommt im Kampf an, nicht nur in der Rechnung. */
+  p.wesen={klinge:'wild'};
+  const wild=A.create([X.mon(p,'klinge')],[D.mon('bollwerk')],{});
+  const roh=A.create([D.mon('klinge')],[D.mon('bollwerk')],{});
+  assert.ok(wild.teams[0][0].ang>roh.teams[0][0].ang,'a wild blade hits harder in an actual fight');
+  assert.ok(wild.teams[0][0].maxHp<roh.teams[0][0].maxHp,'and pays for it in KP');
+});
+await test('Every outpost holds its own garrison, and no Mon serves twice',async()=>{
+  let time=mon;const db=store(),handler=createHandler({store:db,presenceStore:store(),now:()=>time});let serial=0;
+  async function call(code,op,extra={}){const r=await handler(new Request('http://localhost/api/gehstockmon',{method:'POST',body:JSON.stringify({code,op,name:code,requestId:'posten-test-'+(++serial),...extra})}));return{status:r.status,...await r.json()};}
+  const a=await call(ca,'join');
+  const p=db.data.players[a.playerId];
+  p.besitz=D.KATALOG.slice(0,16).map(k=>k.id);
+  Object.assign(db.data.territories[0],{ownerId:a.playerId,...E.outpost(null,time)});
+  Object.assign(db.data.territories[1],{ownerId:a.playerId,...E.outpost(null,time)});
+  /* Ohne eigene Besatzung haelt das Kampfteam die Stellung - der bisherige Zustand. */
+  let r=await call(ca,'defend',{squad:p.besitz.slice(0,4)});
+  assert.equal(r.status,200,r.error);
+  assert.deepEqual(r.territories[0].defense.map(m=>m.id),p.besitz.slice(0,4),'the squad stands in as a stopgap');
+  /* Eine eigene Besatzung loest es ab. */
+  const wache=p.besitz.slice(4,8);
+  r=await call(ca,'besatzung',{territoryId:1,squad:wache});
+  assert.equal(r.status,200,r.error);
+  assert.deepEqual(r.territories[0].defense.map(m=>m.id),wache,'the garrison takes over');
+  assert.deepEqual(r.territories[1].defense.map(m=>m.id),p.besitz.slice(0,4),'the other outpost is untouched');
+  /* Dasselbe Mon darf nicht zweimal Dienst tun - weder auf zwei Posten ... */
+  r=await call(ca,'besatzung',{territoryId:2,squad:wache});
+  assert.equal(r.status,400);assert.match(r.error,/steht schon/);
+  /* ... noch zusaetzlich im Kampfteam. */
+  r=await call(ca,'defend',{squad:[wache[0]].concat(p.besitz.slice(8,11))});
+  assert.equal(r.status,400);assert.match(r.error,/steht schon/);
+  /* Abziehen gibt die vier wieder frei. */
+  r=await call(ca,'besatzung',{territoryId:1,squad:null});
+  assert.equal(r.status,200,r.error);
+  r=await call(ca,'besatzung',{territoryId:2,squad:wache});
+  assert.equal(r.status,200,r.error,'freed Mons can serve elsewhere');
+  /* Wer sein Gebiet verliert, bekommt seine Besatzung zurueck. */
+  const b=await call(cb,'join');
+  const gegner=db.data.players[b.playerId];
+  gegner.besitz=D.KATALOG.map(k=>k.id);
+  gegner.truppe=['endrichter','nullwyrm','risskaiser','aetherdrache'];
+  let kampf=await call(cb,'arena_start',{territoryId:2,version:db.data.territories[1].version,squad:gegner.truppe});
+  assert.equal(kampf.status,200,kampf.error);
+  for(let i=0;kampf.arena.phase!=='finished'&&i<300;i++){
+    const s=kampf.arena,u=s.teams[0][s.active[0]];
+    kampf=await call(cb,'arena_turn',{battleId:s.id,revision:s.revision,
+      action:s.phase==='replace'?{kind:'switch',slot:s.teams[0].findIndex(m=>m.hp>0)}:{kind:'move',move:s.round>=u.powerReady?'power':'strike'}});
+  }
+  assert.equal(kampf.arena.winner,'wir','an apocalyptic squad takes the outpost');
+  const nachher=await call(ca,'world');
+  assert.equal(nachher.profile.posten[2],undefined,'the loser gets his garrison back');
+});
+await test('Computer territories fight by a plan of their own',()=>{
+  assert.equal(A.FELD_PLAENE.length,D.FELDER.length,'one plan per field');
+  for(const plan of A.FELD_PLAENE)assert.ok(A.planGueltig(plan),'and each one is valid');
+  for(const f of D.FELDER)for(const m of A.defenders(f.id))
+    assert.ok(A.planGueltig(m.plan),'field '+f.id+' defender '+m.id+' has a plan');
+  /* Eine gespeicherte Spielerverteidigung geht vor - sie bringt ihren eigenen mit. */
+  const eigen=A.defenders(1,[{id:'moosling',plan:[['immer','guard'],['immer','strike'],['immer','strike']]}]);
+  assert.deepEqual(eigen[0].plan[0],['immer','guard']);
+  /* Und die Plaene wirken wirklich. Der Pfleger des Sonnengrabs hat als erste
+     Zeile "ich unter 40 % -> Faehigkeit": angeschlagen heilt er sich sofort,
+     statt wie die alte Faustregel erst bei zwei Dritteln. */
+  const pfleger=A.defenders(7).find(m=>m.typ===2);
+  assert.ok(pfleger,'the Sonnengrab has a healer');
+  let b=A.create([D.mon('klinge')],[pfleger],{});
+  b.teams[1][0].hp=Math.round(b.teams[1][0].maxHp*0.3);
+  b=A.turn(b,{kind:'move',move:'strike'});
+  assert.ok(b.events.some(e=>e.delta>0&&String(e.actor).startsWith('sie')),'a wounded Sonnengrab healer heals at once');
+  /* Derselbe Pfleger ohne Plan wartet laenger - daran sieht man, dass der Plan
+     und nicht die Faustregel entschieden hat. */
+  const ohnePlan=Object.assign({},pfleger,{plan:null});
+  let o=A.create([D.mon('klinge')],[ohnePlan],{});
+  o.teams[1][0].hp=Math.round(o.teams[1][0].maxHp*0.7);
+  o=A.turn(o,{kind:'move',move:'strike'});
+  let mitPlan=A.create([D.mon('klinge')],[pfleger],{});
+  mitPlan.teams[1][0].hp=Math.round(mitPlan.teams[1][0].maxHp*0.7);
+  mitPlan=A.turn(mitPlan,{kind:'move',move:'strike'});
+  assert.equal(mitPlan.events.some(e=>e.delta>0&&String(e.actor).startsWith('sie')),false,'at 70 % the plan says attack, not heal');
+  /* Der Grenzstein hat gar keinen Pfleger - dort heilt nie jemand. */
+  assert.equal(A.defenders(1).some(m=>m.typ===2),false,'the Grenzstein has no healer at all');
+});
 console.log('\n'+checks+' Kampf- und Tauschpruefungen bestanden.');

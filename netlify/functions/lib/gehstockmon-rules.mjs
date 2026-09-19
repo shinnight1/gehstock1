@@ -507,6 +507,54 @@ const SG = { rules: {} };
 (function(SG){
   var D=SG.gehstockmon.daten,E=SG.gehstockmon.wirtschaft,H=SG.gehstockmon.zeiten,X=SG.gehstockmon.abenteuer={};
   X.DUNGEON_OPS=['dungeon_create','dungeon_join','dungeon_ready','dungeon_start','dungeon_turn','dungeon_leave'];
+  /* Wo ein Mon im Dienst steht. Bisher hielt eine einzige Truppe her: dieselben
+     vier griffen an und verteidigten jeden Aussenposten gleichzeitig. Wer 57
+     Mons sammelte, benutzte vier davon.
+
+     Jetzt hat jeder Aussenposten seine eigene Besatzung, und kein Mon steht an
+     zwei Stellen zugleich - weder auf zwei Gebieten noch zusaetzlich im
+     Kampfteam. Mit neun Gebieten sind das vierzig Mons im Dienst statt vier.
+
+     Ein Gebiet ohne eigene Besatzung wird vom Kampfteam gehalten. Das ist der
+     bisherige Zustand und damit der sanfte Einstieg: niemand verliert Land,
+     nur weil er noch keine Besatzung gesetzt hat. */
+  X.TRUPPE=4;
+  X.posten=function(p,id){
+    var t=p&&p.posten&&p.posten[id];
+    return Array.isArray(t)&&t.length===X.TRUPPE?t.slice():null;
+  };
+  /* Die Truppe, die ein Gebiet tatsaechlich haelt - eigene Besatzung, sonst
+     das Kampfteam als Notbesatzung. */
+  X.besatzung=function(p,id){return X.posten(p,id)||((p&&p.truppe)||[]).slice();};
+  X.notbesatzung=function(p,id){return !X.posten(p,id);};
+  /* Wo dieses Mon gerade steht: 'kampfteam', eine Gebietsnummer, oder nichts. */
+  X.einsatzOrt=function(p,monId,ausser){
+    if(!p)return null;
+    if(ausser!=='kampfteam'&&(p.truppe||[]).indexOf(monId)>=0)return 'kampfteam';
+    var gefunden=null;
+    Object.keys(p.posten||{}).forEach(function(id){
+      if(String(id)===String(ausser)||gefunden)return;
+      if((p.posten[id]||[]).indexOf(monId)>=0)gefunden=Number(id);
+    });
+    return gefunden;
+  };
+  X.einsatzText=function(ort){
+    if(ort==='kampfteam')return 'im Kampfteam';
+    return Number.isFinite(ort)?'auf '+(D.FELDER[ort-1]?D.FELDER[ort-1].name:'Gebiet '+ort):'';
+  };
+  /* Prueft eine Aufstellung: vier verschiedene eigene Mons, und keines davon
+     steht schon woanders im Dienst. */
+  X.truppePruefen=function(p,squad,ziel){
+    if(!Array.isArray(squad)||squad.length!==X.TRUPPE||new Set(squad).size!==X.TRUPPE)
+      return 'Wähle vier verschiedene Mons.';
+    for(var i=0;i<squad.length;i++){
+      var id=squad[i];
+      if(typeof id!=='string'||!D.mon(id)||(p.besitz||[]).indexOf(id)<0)return 'Wähle vier Mons aus deiner Sammlung.';
+      var ort=X.einsatzOrt(p,id,ziel);
+      if(ort!==null&&ort!==undefined)return D.mon(id).name+' steht schon '+X.einsatzText(ort)+'. Jedes Mon kann nur an einer Stelle Dienst tun.';
+    }
+    return null;
+  };
   X.STADT_OPS=['arena_rang','champion_fordern','tagwerk','findelei','brutplatz_kaufen','tausch_anbieten','tausch_annehmen','tausch_zuruecknehmen'];
   X.OPS=['survey','gather','trainer_start','quest_claim','shop_buy','equip','raid_start','raid_turn','raid_arena','raid_cancel','mon_upgrade','leuchtturm_spenden','zerhacker_schlagen','waffe_schleifen','panzer_anlegen','fehde_fordern','fehde_annehmen'].concat(X.STADT_OPS).concat(X.DUNGEON_OPS);
   X.SPAWN={x:0,z:30};X.SPAWN_TIME=60*60000;
@@ -614,15 +662,23 @@ const SG = { rules: {} };
   /* Was ein Schlag austraegt, haengt an der eigenen Truppe - wer aufruestet,
      merkt es hier. */
   X.zerhackerSchaden=function(p){
-    var summe=0;(p&&p.truppe||[]).forEach(function(id){var m=X.mon(p,id);if(m)summe+=m.ang+m.upgrade*2;});
+    /* Dieselbe Rechnung wie im Kampf: Runenstufen und Wesen zaehlen hier genau
+       so viel wie dort. Vorher stand hier eine eigene Formel mit zwei Punkten
+       je Runenstufe - wer aufruestete, sah den Schaden anders steigen als
+       erwartet. */
+    var A=SG.gehstockmon.arena,summe=0;
+    (p&&p.truppe||[]).forEach(function(id){var m=X.mon(p,id);if(m)summe+=A.stats(m).ang;});
     return Math.max(150,Math.round(summe*X.ZERHACKER.schadenJeStufe/100*X.rangBonus(p)));
   };
 
   X.upgradeLevel=function(n){return Number.isFinite(n)?Math.max(0,Math.min(X.UPGRADE_LIMIT,Math.floor(n))):0;};
+  /* Das Wesen wird nicht mehr auf die Grundwerte gerechnet, sondern als Kennung
+     durchgereicht - A.stats wendet es an, und nur dort kennt man den
+     Seltenheitsfaktor, auf den es sich beziehen muss. */
   X.mon=function(p,id){var m=D.mon(id);if(!m)return m;
     var w=X.wesenVon&&X.wesenVon(p,id);
     return Object.assign({},m,{upgrade:X.upgradeLevel(p&&p.monUpgrades&&p.monUpgrades[id])},
-      w?{hp:Math.max(20,m.hp+w.hp),ang:Math.max(1,m.ang+w.ang),tempo:Math.max(1,m.tempo+w.tempo),wesen:w.name}:{});};
+      w?{wesenId:w.id,wesen:w.name}:{});};
   X.DUNGEONS=[['Wurzelhöhle','Einfach','moosling',0,40],['Versunkene Grotte','Leicht','sumpfschnapper',35,105],['Kristallstollen','Mittel','donnerwidder',110,85],['Schattengewölbe','Schwer','runengolem',-80,-25],['Königsgrab','Sehr schwer','grabesritter',-110,-150],['Zeitenriss','Extrem','chronoschreiter',100,-95],['Abgrundtor','Apokalyptisch','endrichter',20,-130]].map(function(v,i){return{id:'dungeon-'+i,name:v[0],difficulty:v[1],bossId:v[2],x:v[3],z:v[4],rarity:i,reward:2+i%2};});
   X.SKINS=[{id:'wanderer',name:'Wanderer',color:'#ffffff',price:0},{id:'waldlaeufer',name:'Waldläufer',color:'#8ee6ad',price:150},{id:'frostwanderer',name:'Frostwanderer',color:'#83cfff',price:300},{id:'aschenritter',name:'Ascheritter',color:'#ff9576',price:500},{id:'trainermeister',name:'Trainermeister',color:'#ffe07b',quest:'trainer3'},{id:'runensucher',name:'Runensucher',color:'#bd90ff',quest:'gather6'},{id:'weltenwanderer',name:'Weltenwanderer',color:'#71ffe3',quest:'visit9'}];
   X.SKINS.push({id:'knochenkoenig',name:'Knochenkönig',color:'#f0dfb5',price:2400},{id:'leerenreaper',name:'Leerenschnitter',color:'#ad79ff',price:5000},{id:'drachenritter',name:'Drachenritter',color:'#ff6254',price:8000});
@@ -775,14 +831,29 @@ const SG = { rules: {} };
 
   /* Jedes geschluepfte Mon bringt ein Wesen mit. Damit ist nicht mehr jeder
      Donnerwidder derselbe - und es gibt einen Grund, Eier zu tauschen. */
+  /* Anteile statt fester Punkte. Frueher stand hier "+8 KP" auf den Grundwert
+     - und der wird im Kampf mit dem Seltenheitsfaktor multipliziert. Bei einem
+     Apokalyptischen waren acht Punkte von knapp vierhundert nichts, und in
+     A.stats kamen sie ohnehin nie an: das Wesen war reine Anzeige. Jetzt
+     zaehlt es bei jedem Mon gleich viel. Tempo bleibt absolut, weil es die
+     einzige Zahl ist, die nicht mitskaliert. */
   X.WESEN=[
-    {id:'ruhig',    name:'ruhig',     hp: 8, ang: 0, tempo: 0},
-    {id:'stuermisch',name:'stuermisch',hp:-4, ang: 0, tempo: 2},
-    {id:'stur',     name:'stur',      hp:12, ang:-1, tempo:-1},
-    {id:'wild',     name:'wild',      hp:-6, ang: 3, tempo: 0},
-    {id:'flink',    name:'flink',     hp: 0, ang:-1, tempo: 3},
-    {id:'treu',     name:'treu',      hp: 5, ang: 1, tempo: 0}
+    {id:'ruhig',    name:'ruhig',     hp: .06, ang:    0, tempo: 0},
+    {id:'stuermisch',name:'stuermisch',hp:-.04, ang:    0, tempo: 1},
+    {id:'stur',     name:'stur',      hp: .09, ang: -.03, tempo: 0},
+    {id:'wild',     name:'wild',      hp:-.05, ang:  .07, tempo: 0},
+    {id:'flink',    name:'flink',     hp:    0, ang: -.03, tempo: 2},
+    {id:'treu',     name:'treu',      hp: .04, ang:  .02, tempo: 0}
   ];
+  /* Wie ein Wesen sich anfuehlt, in einem Satz fuer die Anzeige. */
+  X.wesenText=function(w){
+    if(!w)return '';
+    var teile=[];
+    if(w.hp)teile.push((w.hp>0?'+':'')+Math.round(w.hp*100)+' % KP');
+    if(w.ang)teile.push((w.ang>0?'+':'')+Math.round(w.ang*100)+' % Angriff');
+    if(w.tempo)teile.push((w.tempo>0?'+':'')+w.tempo+' Tempo');
+    return teile.join(' · ');
+  };
   X.wesen=function(id){return X.WESEN.find(function(v){return v.id===id;})||null;};
   X.wesenVon=function(p,monId){return X.wesen(p&&p.wesen&&p.wesen[monId]);};
   X.wesenZuweisen=function(p,monId,zufall){
@@ -847,6 +918,18 @@ const SG = { rules: {} };
     if(A&&A.planGueltig)p.besitz.forEach(function(id){
       var alt=old.plaene&&old.plaene[id];
       if(A.planGueltig(alt))p.plaene[id]=alt.map(function(z){return z.slice(0,2);});
+    });
+    /* Besatzungen ueberleben nur, solange sie vollstaendig sind, dem Spieler
+       gehoeren und sich nirgends ueberschneiden. Ein getauschtes oder
+       verschenktes Mon raeumt seinen Posten damit von selbst. */
+    p.posten={};var belegt={};
+    (p.truppe||[]).forEach(function(id){belegt[id]=true;});
+    D.FELDER.forEach(function(f){
+      var t=old.posten&&old.posten[f.id];
+      if(!Array.isArray(t)||t.length!==X.TRUPPE||new Set(t).size!==X.TRUPPE)return;
+      if(t.some(function(id){return typeof id!=='string'||!D.mon(id)||p.besitz.indexOf(id)<0||belegt[id];}))return;
+      t.forEach(function(id){belegt[id]=true;});
+      p.posten[f.id]=t.slice();
     });
     p.brutplaetze=X.gekaufteBrutplaetze(old);
     p.arenaRuhm=X.ruhm(old);p.arenaSiege=X.arenaSiege(old);
@@ -966,7 +1049,17 @@ const SG = { rules: {} };
   A.UPGRADE_BONUS = .03; A.LADUNG_AB = 4; A.LADUNGEN = 2; A.SCHNELL_AB = 3; A.POWER_PAUSE = 3;
   A.ladungen = function (mon) { return A.LADUNGEN + (SG.gehstockmon.abenteuer.upgradeLevel(mon.upgrade) >= A.LADUNG_AB ? 1 : 0); };
   A.powerPause = function (mon) { return A.POWER_PAUSE - (SG.gehstockmon.abenteuer.upgradeLevel(mon.upgrade) >= A.SCHNELL_AB ? 1 : 0); };
-  A.stats = function (mon) { var s = stats[mon.typ],factor=[.78,1.16,1.38,1.64,1.98,2.4,3][mon.seltenheit],bonus=1+SG.gehstockmon.abenteuer.upgradeLevel(mon.upgrade)*A.UPGRADE_BONUS; return { hp: Math.floor(Math.round(s[0]*factor)*bonus), ang: Math.floor(Math.round(s[1]*factor)*bonus), tempo: s[2] }; };
+  /* Grundwerte mal Seltenheit, dann die Runenstufe, dann das Wesen. Das Wesen
+     kam frueher gar nicht hier an - es wurde in X.mon auf die Grundwerte
+     addiert, und die benutzt diese Rechnung nicht. Damit war jedes wilde Mon
+     im Kampf genauso stark wie jedes ruhige. */
+  A.stats = function (mon) {
+    var s = stats[mon.typ],factor=[.78,1.16,1.38,1.64,1.98,2.4,3][mon.seltenheit],bonus=1+SG.gehstockmon.abenteuer.upgradeLevel(mon.upgrade)*A.UPGRADE_BONUS;
+    var w = mon.wesenId ? SG.gehstockmon.abenteuer.wesen(mon.wesenId) : null;
+    var hp = Math.floor(Math.round(s[0]*factor)*bonus), ang = Math.floor(Math.round(s[1]*factor)*bonus), tempo = s[2];
+    if (w) { hp = Math.max(1, Math.round(hp*(1+w.hp))); ang = Math.max(1, Math.round(ang*(1+w.ang))); tempo = Math.max(1, tempo+w.tempo); }
+    return { hp: hp, ang: ang, tempo: tempo };
+  };
   A.moves = function (u, round) {
     var voll = u.maxCharges || A.LADUNGEN, pause = (u.powerPause || A.POWER_PAUSE) - 1, f = A.faehigkeit(u);
     /* Ein Pfleger darf seine Faehigkeit nur bei Schaden einsetzen - sonst
@@ -981,10 +1074,10 @@ const SG = { rules: {} };
   };
   function unit(mon, side, i, bonus) {
     var s = A.stats(mon), hp = Math.round(s.hp * (1 + bonus)), laden = A.ladungen(mon), pause = A.powerPause(mon);
-    return { uid: side + i, monId: mon.id, name: mon.name, role: mon.typ, skill: D.faehigkeitVon(mon), maxHp: hp, hp: hp, ang: Math.round(s.ang * (1 + bonus / 2)), speed: s.tempo, powerReady: 1, charges: laden, maxCharges: laden, powerPause: pause, shield: 0, weakened: false, dornen: false, geschaerft: false, plan: mon.plan || null };
+    return { uid: side + i, monId: mon.id, name: mon.name, role: mon.typ, skill: D.faehigkeitVon(mon), wesen: mon.wesen || null, maxHp: hp, hp: hp, ang: Math.round(s.ang * (1 + bonus / 2)), speed: s.tempo, powerReady: 1, charges: laden, maxCharges: laden, powerPause: pause, shield: 0, weakened: false, dornen: false, geschaerft: false, plan: mon.plan || null };
   }
   A.defenders = function (fieldId, saved) {
-    if (saved && saved.length) return saved.map(function (e) { return Object.assign({},D.mon(e.id || e.monId) || D.KATALOG[0],{upgrade:SG.gehstockmon.abenteuer.upgradeLevel(e.upgrade),plan:A.planGueltig(e.plan)?e.plan:null}); });
+    if (saved && saved.length) return saved.map(function (e) { return Object.assign({},D.mon(e.id || e.monId) || D.KATALOG[0],{upgrade:SG.gehstockmon.abenteuer.upgradeLevel(e.upgrade),wesenId:e.wesen||null,plan:A.planGueltig(e.plan)?e.plan:null}); });
     var roster = [['moosling','rostknirps'], ['sumpfschnapper','nebelmolch','klinge'], ['kieselkrabb','glutfuchs','donnerwidder'], ['dornenwolf','pilzhueter','nachtflatter'], ['runengolem','frostklaue','seelenqualle','obsidianrabe']];
     /* Das Sonnengrab war ein Abklatsch des Horsts und damit die leichteste
        Stufe unter "Sehr schwer", die es je gab. Jetzt stehen dort vier
@@ -993,8 +1086,37 @@ const SG = { rules: {} };
        zu brechen, heilt er alles wieder weg. */
     roster.push(['tauhupfer'],['grabesritter','sternengeweih','vulkanmantis','leerenwyrm'],['aetherdrache','chronoschreiter','grabesritter','frostorakel'],['endrichter','nullwyrm','chronoschreiter','aetherdrache']);
     var ids = roster[fieldId - 1].slice();
-    return ids.map(D.mon);
+    /* Auch die Computergebiete kaempfen nach einem Plan. Ohne einen stand beim
+       Aufklaeren neunmal "kein eigener Plan", und die ganze Aufklaerung lohnte
+       sich erst gegen echte Spieler - von denen es wenige gibt. Jeder Plan
+       passt zur Lehre seines Feldes, sodass man ihn lesen und kontern kann. */
+    return ids.map(function (id) {
+      var mon = D.mon(id);
+      return mon ? Object.assign({}, mon, { plan: A.FELD_PLAENE[fieldId - 1] || null }) : mon;
+    });
   };
+  /* Ein Plan je Gebiet, gelesen wie die Lehre des Feldes:
+
+       1 Grenzstein   schlaegt stur zu - hier lernt man nur zuzusehen
+       2 Alte Furt    die Pfleger heilen, sobald es eng wird
+       3 Schieferbruch der Brecher holt aus, sobald er kann
+       4 Nebelsenke   deckt sich, wenn man selbst stark dasteht
+       5 Der Horst    liest die Lage und wechselt zwischen Angriff und Schutz
+       6 Tauwiese     ein sanfter Einstieg, fast ohne Gegenwehr
+       7 Sonnengrab   heilt frueh und hartnaeckig - der Pfleger muss zuerst fallen
+       8 Donnergrat   spart die Faehigkeit fuer den Moment der Schwaeche
+       9 Weltenschlund schlaegt mit allem zu, was geladen ist */
+  A.FELD_PLAENE = [
+    [['immer','strike'],   ['aus','strike'],        ['aus','strike']],
+    [['ich_schwach','special'], ['immer','strike'],  ['aus','strike']],
+    [['kraft_bereit','power'],  ['immer','strike'],  ['aus','strike']],
+    [['feind_stark','guard'],   ['ladung_da','special'], ['immer','strike']],
+    [['ich_schwach','special'], ['feind_schwach','power'], ['immer','strike']],
+    [['immer','strike'],   ['aus','strike'],        ['aus','strike']],
+    [['ich_schwach','special'], ['geschuetzt','special'], ['immer','power']],
+    [['feind_schwach','special'],['kraft_bereit','power'], ['immer','strike']],
+    [['kraft_bereit','power'],  ['ladung_da','special'],  ['immer','strike']]
+  ];
   A.create = function (roster, enemies, options) {
     var o = options || {};
     return { id: o.id || 'local', territoryId: o.territoryId || 1, territoryVersion: o.version || 1,
