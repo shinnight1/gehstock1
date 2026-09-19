@@ -138,7 +138,7 @@
     bus.emit('aenderung', daten);
     if (!V.verfuegbar()) return Promise.resolve(daten);
     offeneSchreiben++;
-    return Rel.post({ op: 'verw:write', daten: daten }, 8000).then(function (res) {
+    return Rel.post({ op: 'verw:write', code: Rel.ich().code, daten: daten }, 8000).then(function (res) {
       offeneSchreiben--;
       if (res && typeof res.version === 'number') {
         version = res.version;

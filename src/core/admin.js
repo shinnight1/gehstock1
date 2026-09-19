@@ -23,6 +23,7 @@
 (function (SG) {
   var UI = SG.ui;
   var A = SG.auth;
+  var U = SG.util;
 
   var Adm = SG.admin = {};
 
@@ -182,7 +183,7 @@
           UI.el('p.small.muted.center', { text: A.rolleName(rolle) + ' · zum Weitergeben:' }),
           UI.el('div.room-code', { text: A.schoen(code) }),
           UI.el('div.notice', {
-            html: '<b>Besser noch:</b> gib <b>' + einladung + '</b> weiter. '
+            html: '<b>Besser noch:</b> gib <b>' + U.esc(einladung) + '</b> weiter. '
               + 'Dann kennt auch ein fremdes Gerät gleich den Namen — '
               + 'die Tür nimmt beides an.',
           }),
@@ -220,7 +221,7 @@
 
       body2.appendChild(UI.el('div.notice', {
         html: '<b>' + (owner ? '👑 ' : '') + A.rolleIcon(e.rolle) + ' '
-          + (e.name || 'ohne Namen') + '</b><br>'
+          + U.esc(e.name || 'ohne Namen') + '</b><br>'
           + A.schoen(e.code) + ' · ' + A.rolleName(e.rolle)
           + (owner ? ' · Owner' : ''),
       }));
@@ -250,7 +251,7 @@
       if (bann) {
         body2.appendChild(UI.el('div.notice.warn', {
           style: { marginTop: '10px' },
-          html: '<b>⛔ Gesperrt</b> von ' + bann.von + '<br>' + bann.grund,
+          html: '<b>⛔ Gesperrt</b> von ' + U.esc(bann.von) + '<br>' + U.esc(bann.grund),
         }));
         body2.appendChild(UI.btn('Sperre aufheben', function () {
           A.bannLoesen(e.code);
@@ -672,7 +673,7 @@
 
       if (!A.binOwner()) {
         ziel.appendChild(UI.el('div.notice', {
-          html: '<b>👑 ' + name + '</b><br>An den Owner kommt kein Admin heran. '
+          html: '<b>👑 ' + U.esc(name) + '</b><br>An den Owner kommt kein Admin heran. '
             + 'Weitergeben kann die Rolle nur er selbst.',
         }));
         return;
@@ -740,7 +741,7 @@
     function sitzung(ziel) {
       ziel.appendChild(UI.el('div.notice', {
         html: '<b>' + A.rolleIcon(A.aktuell.rolle) + ' '
-          + (A.aktuell.name || 'Admin') + '</b><br>'
+          + U.esc(A.aktuell.name || 'Admin') + '</b><br>'
           + A.schoen(A.aktuell.code) + ' · ' + A.rolleName(A.aktuell.rolle),
       }));
       ziel.appendChild(UI.el('p.small.muted', {
