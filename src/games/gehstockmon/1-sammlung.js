@@ -79,6 +79,27 @@
   /* Drei Mons haben ein eigenes Schaubild mit Hintergrund. Es steht nur in
      der Sammlung; auf der Insel laufen weiterhin die freigestellten Bilder,
      sonst traegt der Begleiter eine Landschaft mit sich herum. */
+  /* Welche der drei Faehigkeiten seiner Rolle ein Mon beherrscht. Grundregel
+     ist die Position im Katalog - der waechst nur hinten, also bleibt jede
+     Zuordnung ueber Spielstaende hinweg stehen. Wo die Lore etwas anderes
+     verlangt, steht es in der Tabelle darunter. */
+  D.FAEHIGKEIT_FEST={
+    bollwerk:0,klinge:0,waerter:0,spaeher:0,
+    moosling:0,glutfuchs:0,nebelmolch:0,rostknirps:0,
+    kieselkrabb:1,titanenkrone:1,runengolem:1,salzkrabbe:1,
+    wurzelzahn:2,dornenwolf:2,kupferskorp:2,sporenbison:2,runenminotaur:2,risskaiser:2,
+    klingenwolf:1,aschenhydra:1,vulkanmantis:1,obsidianbehemoth:1,
+    weltenfresser:2,sonnenkoenig:2,glutbasilisk:2,blitzotter:2,
+    pilzhueter:1,seelenqualle:1,korallenwacht:1,prismensalamander:1,
+    mondhexe:2,sternengeweih:2,frostorakel:2,novaorakel:2,nebelkrake:2,
+    nachtflatter:1,kristallspinne:1,obsidianrabe:1,stahlkolibri:1,
+    leerenwyrm:2,chronoschreiter:2,zeitphoenix:2,frostmanta:2,mondluchs:2
+  };
+  D.faehigkeitVon=function(mon){
+    if(!mon)return 0;
+    var fest=D.FAEHIGKEIT_FEST[mon.id];
+    return Number.isFinite(fest)?fest:Math.max(0,Math.floor(mon.spriteIndex||0))%3;
+  };
   D.VORSCHAUEN=['novaorakel','zeitphoenix','risskaiser'];
   D.KATALOG.forEach(function(k,i){k.spriteIndex=i;k.worldSize=D.MON_SIZES[i];
     if(D.VORSCHAUEN.indexOf(k.id)>=0)k.vorschau=k.bild+'-vorschau';});
@@ -87,15 +108,9 @@
   D.neuerStand = function (save) {
     var collection=save&&Array.isArray(save.besitz)?Array.from(new Set(save.besitz.filter(function(id){return !!D.mon(id);} ))):[];
     D.STARTER.forEach(function(id){if(collection.length<4&&collection.indexOf(id)<0)collection.push(id);});
+    /* Die Kampfplaene stehen in 1-zusatz.js: sie richten sich nach den
+       Bausteinen der Arena, und die ist hier noch nicht geladen. */
     var st = { plaene: {}, geschafft: [], besitz: collection, truppe: collection.slice(0,4), essenz: 60, siege: 0, beschwoerungen: 0 };
-    D.KATALOG.forEach(function (k) {
-      var basis = D.KREATUREN[k.typ];
-      var p = save && save.plaene && save.plaene[k.id];
-      st.plaene[k.id] = D.START_PLAN[basis.id].map(function (r, i) {
-        var v = p && p[i];
-        return v && Array.isArray(v) && D.BEDINGUNGEN.some(function (b) { return b.id === v[0]; }) && D.AKTIONEN.some(function (a) { return a.id === v[1]; }) ? v.slice(0, 2) : r.slice();
-      });
-    });
     if (!save || typeof save !== 'object') return st;
     if (Array.isArray(save.geschafft)) st.geschafft = D.FELDER.map(function (f) { return f.id; }).filter(function (id) { return save.geschafft.indexOf(id) >= 0; });
     if (Array.isArray(save.besitz)) save.besitz.forEach(function (id) { if (D.mon(id) && st.besitz.indexOf(id) < 0) st.besitz.push(id); });

@@ -79,6 +79,35 @@ export async function checkUi(D,E,A,handler,code,clock,otherCode){
   await jump(SG.gehstockmon.zeiten.access(clock.value).closesAt);releaseReply();await flush();assert.ok(root.querySelector('.gm-closed-card'));assert.equal(root.querySelector('.gm-arena').hidden,true,'late combat response cannot reopen the closed game');
   game.destroy();timers.clear();while(stage.firstChild)stage.removeChild(stage.firstChild);game=mount();await flush();assert.ok(root.querySelector('.gm-closed-card'),'loading while closed shows hours rather than a connection error');assert.ok(blocked);
   await jump(SG.gehstockmon.zeiten.access(clock.value).nextOpenAt);assert.equal(root.querySelector('.gm-connection').hidden,true);assert.ok(game.state.eggs.some(e=>e.id.startsWith('weekend-')),'weekend eggs arrive when reopening');
+  /* Die Fenster, die mit den Kampfplaenen dazugekommen sind: Planeditor,
+     Aufklaerung mit offenem Gegnerplan, Kampfbericht und Tauschbrett. Sie
+     bauen viel DOM auf und sind genau die Stellen, an denen ein Tippfehler
+     erst im Browser auffaellt. */
+  timers.clear();while(stage.firstChild)stage.removeChild(stage.firstChild);game=mount();await flush();
+  await jump(SG.gehstockmon.zeiten.access(clock.value).nextOpenAt);await flush();
+  const eigenes=game.state.truppe[0];
+  click('▦ Mons');await flush();
+  find(e=>e.tagName==='button'&&e.textContent.includes(D.mon(eigenes).name)).fire('click');await flush();
+  assert.ok(root.querySelector('.gm-plan-row'),'the plan editor renders');
+  assert.equal(root.querySelectorAll('.gm-plan-row').length,A.START_PLAN.length,'one row per rule');
+  const wahl=root.querySelectorAll('.gm-plan-row')[0].children.filter(e=>e.tagName==='select');
+  assert.equal(wahl.length,2,'each rule has a condition and an action');
+  wahl[0].value='ich_schwach';wahl[1].value='guard';
+  click('Plan speichern');await flush();
+  const geschickt=requests.filter(r=>r.op==='plan').at(-1);
+  assert.ok(geschickt,'a plan request goes out, last ops: '+requests.slice(-3).map(r=>r.op).join(','));
+  assert.deepEqual(geschickt.plan[0],['ich_schwach','guard'],'with the edited first rule');
+  /* Ob der Server ihn behaelt, prueft gehstockmon-kampf-tests.mjs - hier zaehlt,
+     dass die Oberflaeche die richtige Anfrage baut. */
+  assert.ok(game.state.besitz.includes(geschickt.monId),'for a Mon that is actually owned');
+  /* Aufklaeren zeigt den Plan der Gegenseite offen. */
+  click('Aufklären');await flush();
+  assert.ok(root.querySelector('.gm-plan-karte'),'scouting lists how they fight');
+  assert.ok(root.textContent.includes('Wie sie kämpfen'));
+  /* Das Tauschbrett in Stockhafen baut sich auf. */
+  click('♛ Stockhafen');await flush();
+  assert.ok(root.textContent.includes('Tauschbrett'),'the trading board renders');
+  assert.ok(root.textContent.includes('Der Gehstock-Champion'));
   game.destroy();
   assert.equal(listeners.offline,undefined);assert.equal(listeners.online,undefined);
   // A direct offline-file route is gated too, even though the catalog hides it.

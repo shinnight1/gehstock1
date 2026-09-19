@@ -10,6 +10,7 @@
    Haus: die Tafel ist damit nie leer, und der Titel ist vom ersten Tag an
    etwas, das man jemandem abnehmen kann. */
 import {data as D,economy as E,arena as A,hours as H,adventure as X} from './gehstockmon-rules.mjs';
+const activeArena=(p)=>p.arena&&p.arena.phase!=='finished';
 const fail=(message)=>{throw new Error(message);};
 
 /* Der amtierende Champion. Ohne Titeltraeger uebernimmt der Meister des
@@ -55,6 +56,14 @@ function gegnerliste(world,id,now){
     .sort((a,b)=>Math.abs(a.ruhm-meinRuhm)-Math.abs(b.ruhm-meinRuhm)).slice(0,5);
   return echte.concat(X.ARENA_GEGNER.map(v=>({...v,squad:v.squad.slice()})));
 }
+/* Die offenen Tauschangebote. Abgelaufene fallen beim Lesen heraus, damit
+   niemand auf ein Angebot antwortet, das es nicht mehr gibt. */
+export function tauschliste(world,now){
+  if(!Array.isArray(world.tausch))world.tausch=[];
+  world.tausch=world.tausch.filter(v=>v&&world.players[v.vonId]&&now-v.seit<X.TAUSCH_DAUER
+    &&world.players[v.vonId].besitz.includes(v.gebe)&&!world.players[v.vonId].truppe.includes(v.gebe));
+  return world.tausch;
+}
 /* Was der Client von der Arena sehen darf. */
 export function arenaStand(world,id,now){
   const c=champion(world,now),p=world.players[id];
@@ -70,7 +79,12 @@ export function arenaStand(world,id,now){
       tagwerkIn:X.tagwerkWartezeit(p,now),tagwerkLohn:X.TAGWERK_LOHN,
       findelei:X.findeleiFertig(p,now),findeleiIn:X.findeleiWartezeit(p,now),
       brutplaetze:X.brutplaetze(world.leuchtturm,p),gekauft:X.gekaufteBrutplaetze(p),
-      preis:X.BRUTPLATZ_PREISE[X.gekaufteBrutplaetze(p)]||null}};
+      preis:X.BRUTPLATZ_PREISE[X.gekaufteBrutplaetze(p)]||null},
+    tausch:tauschliste(world,now).map(v=>({id:v.id,name:world.players[v.vonId]?.name||'Unbekannt',
+      selbst:v.vonId===id,gebe:v.gebe,suche:v.suche,seit:v.seit,
+      /* Ob ich das Gesuchte ueberhaupt anbieten kann, entscheidet der Server -
+         der Client soll nicht raten muessen. */
+      moeglich:v.vonId!==id&&!X.tauschErlaubt(p,v.suche,v.gebe)}))};
 }
 
 /* Abrechnung eines Arenakampfes. Wird aus finishEncounter gerufen, sobald
@@ -150,6 +164,51 @@ export async function stadtAction({world,p,id,body,now,presence}){
     p.findeleiAt=now;
     p.eggs.push({id:'findel-'+now+'-'+(++p.eggSerial),territoryId:X.FINDELEI_FELD,producedAt:now,startedAt:null,readyAt:null});
     extra.message='Das Findelhaus gibt dir ein Ei. Auch ohne Gebiet waechst deine Sammlung weiter.';
+    return extra;
+  }
+  if(op==='tausch_anbieten'){
+    const liste=tauschliste(world,now);
+    if(liste.filter(v=>v.vonId===id).length>=3)fail('Du hast schon drei Angebote am Brett. Nimm erst eins zurueck.');
+    if(liste.length>=X.TAUSCH_MAX)fail('Das Tauschbrett ist voll. Versuch es spaeter noch einmal.');
+    const fehler=X.tauschErlaubt(p,body.gebe,body.suche);
+    if(fehler)fail(fehler);
+    if(p.besitz.includes(body.suche))fail('Dieses Mon hast du bereits.');
+    liste.push({id:body.requestId,vonId:id,gebe:body.gebe,suche:body.suche,seit:now});
+    extra.message=D.mon(body.gebe).name+' haengt am Brett. Wer dir '+D.mon(body.suche).name+' bringt, bekommt ihn.';
+    return extra;
+  }
+  if(op==='tausch_zuruecknehmen'){
+    const liste=tauschliste(world,now),at=liste.findIndex(v=>v.id===body.tauschId&&v.vonId===id);
+    if(at<0)fail('Dieses Angebot gibt es nicht mehr.');
+    liste.splice(at,1);
+    extra.message='Angebot zurueckgenommen.';
+    return extra;
+  }
+  if(op==='tausch_annehmen'){
+    const liste=tauschliste(world,now),angebot=liste.find(v=>v.id===body.tauschId);
+    if(!angebot)fail('Dieses Angebot gibt es nicht mehr.');
+    if(angebot.vonId===id)fail('Das ist dein eigenes Angebot.');
+    const andere=world.players[angebot.vonId];
+    if(!andere)fail('Dieser Spieler ist nicht mehr in der Welt.');
+    /* Ich gebe das Gesuchte und bekomme das Angebotene - beides mit denselben
+       Regeln geprueft wie beim Anbieten. */
+    const fehler=X.tauschErlaubt(p,angebot.suche,angebot.gebe);
+    if(fehler)fail(fehler);
+    if(p.besitz.includes(angebot.gebe))fail('Dieses Mon hast du bereits.');
+    if(andere.besitz.includes(angebot.suche))fail('Der andere hat dieses Mon inzwischen selbst.');
+    if(!andere.besitz.includes(angebot.gebe)||andere.truppe.includes(angebot.gebe))fail('Der andere kann sein Angebot gerade nicht einloesen.');
+    if(activeArena(andere))fail('Der andere kaempft gerade. Versuch es gleich noch einmal.');
+    function umziehen(von,nach,monId){
+      von.besitz=von.besitz.filter(v=>v!==monId);
+      delete von.monUpgrades[monId];delete von.wesen[monId];delete von.plaene[monId];
+      if(!nach.besitz.includes(monId))nach.besitz.push(monId);
+    }
+    umziehen(andere,p,angebot.gebe);
+    umziehen(p,andere,angebot.suche);
+    liste.splice(liste.indexOf(angebot),1);
+    log(world,p.name+' tauscht mit '+andere.name+': '+D.mon(angebot.suche).name+' gegen '+D.mon(angebot.gebe).name+'.',id,now);
+    extra.monId=angebot.gebe;
+    extra.message='Getauscht! '+D.mon(angebot.gebe).name+' gehoert jetzt dir - '+D.mon(angebot.suche).name+' ist weg, samt Runenstufe und Wesen.';
     return extra;
   }
   /* Beide Kaempfe laufen ueber dieselbe Maschine wie ein Gebietsangriff. Der

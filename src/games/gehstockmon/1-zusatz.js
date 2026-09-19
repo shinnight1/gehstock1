@@ -2,7 +2,7 @@
 (function(SG){
   var D=SG.gehstockmon.daten,E=SG.gehstockmon.wirtschaft,H=SG.gehstockmon.zeiten,X=SG.gehstockmon.abenteuer={};
   X.DUNGEON_OPS=['dungeon_create','dungeon_join','dungeon_ready','dungeon_start','dungeon_turn','dungeon_leave'];
-  X.STADT_OPS=['arena_rang','champion_fordern','tagwerk','findelei','brutplatz_kaufen'];
+  X.STADT_OPS=['arena_rang','champion_fordern','tagwerk','findelei','brutplatz_kaufen','tausch_anbieten','tausch_annehmen','tausch_zuruecknehmen'];
   X.OPS=['survey','gather','trainer_start','quest_claim','shop_buy','equip','raid_start','raid_turn','raid_arena','raid_cancel','mon_upgrade','leuchtturm_spenden','zerhacker_schlagen','waffe_schleifen','panzer_anlegen','fehde_fordern','fehde_annehmen'].concat(X.STADT_OPS).concat(X.DUNGEON_OPS);
   X.SPAWN={x:0,z:30};X.SPAWN_TIME=60*60000;
   X.UPGRADE_LIMIT=5;
@@ -145,6 +145,19 @@
     return {id:beste.id,anzahl:beste.anzahl,gold:beste.anzahl*X.KOPFGELD_JE_GEBIET};
   };
 
+  /* Die Aussenseiterhilfe. Das Kopfgeld bremst den Fuehrenden nur bei
+     Ueberfaellen - beim Kampf um Gebiete half es niemandem, und genau dort
+     entscheidet sich, wer davonzieht. Wer weniger Land haelt als sein Ziel,
+     schlaegt jetzt haerter zu: acht Prozent je Gebiet Unterschied, bei vierzig
+     gedeckelt. Dem Fuehrenden wird dabei nichts weggenommen - er wird nur
+     angreifbar, und das ist der Unterschied zwischen Bremse und Strafe. */
+  X.AUSSENSEITER_JE_GEBIET=.08;X.AUSSENSEITER_MAX=.4;
+  X.aussenseiterBonus=function(meine,seine){
+    var m=Math.max(0,Math.floor(meine)||0),s=Math.max(0,Math.floor(seine)||0);
+    if(s<=m)return 0;
+    return Math.min(X.AUSSENSEITER_MAX,(s-m)*X.AUSSENSEITER_JE_GEBIET);
+  };
+
   /* Die Fehde: eine Woche lang gegeneinander, aus allem was man ohnehin tut.
      Verloren geht dabei nichts ausser der Woche - genau deshalb kann man sie
      unter Freunden austragen. */
@@ -236,6 +249,25 @@
     return Math.max(0,H.productionAt(H.openTime(p.findeleiAt)+X.FINDELEI_ZEIT)-now);
   };
 
+  /* Der Tauschposten in Stockhafen. Es gibt Zwillinge, es gibt Wesen, es gibt
+     57 Mons - aber bisher keinen Weg, ein misslungenes Wesen loszuwerden oder
+     gezielt an ein fehlendes Mon zu kommen. Getauscht wird Mon gegen Mon, und
+     zwar nur innerhalb derselben Seltenheit: sonst fuettert ein zweites Konto
+     in einer Viertelstunde das erste hoch.
+
+     Was man verschenkt, verliert man wirklich - samt Runenstufe und Wesen.
+     Das haelt den Tausch zu einer Entscheidung und nicht zu einem Verleih. */
+  X.TAUSCH_MAX=12;X.TAUSCH_DAUER=7*86400000;
+  X.tauschErlaubt=function(p,gebeId,sucheId){
+    var gebe=D.mon(gebeId),suche=D.mon(sucheId);
+    if(!gebe||!suche)return 'Dieses Mon gibt es nicht.';
+    if(gebe.id===suche.id)return 'Such dir etwas anderes aus, als du anbietest.';
+    if(gebe.seltenheit!==suche.seltenheit)return 'Getauscht wird nur innerhalb derselben Seltenheit.';
+    if(!p.besitz||p.besitz.indexOf(gebe.id)<0)return 'Dieses Mon besitzt du nicht.';
+    if((p.truppe||[]).indexOf(gebe.id)>=0)return 'Nimm es erst aus deiner Truppe.';
+    return null;
+  };
+
   /* Jedes geschluepfte Mon bringt ein Wesen mit. Damit ist nicht mehr jeder
      Donnerwidder derselbe - und es gibt einen Grund, Eier zu tauschen. */
   X.WESEN=[
@@ -303,6 +335,14 @@
     p.runes=D.SELTENHEITEN.map(function(r,i){var n=old.runes&&old.runes[i];return Number.isFinite(n)?Math.max(0,Math.min(9999,Math.floor(n))):0;});
     p.monUpgrades={};p.besitz.forEach(function(id){var n=X.upgradeLevel(old.monUpgrades&&old.monUpgrades[id]);if(n)p.monUpgrades[id]=n;});
     p.raidCooldown=Number(old.raidCooldown)||0;p.raidShield=Number(old.raidShield)||0;
+    /* Ein Plan wird nur behalten, wenn er zu den heutigen Bausteinen passt.
+       Wer keinen gesetzt hat, bekommt keinen - ohne Plan greift im Kampf die
+       alte Heuristik, und das ist genau der bisherige Zustand. */
+    var A=SG.gehstockmon.arena;p.plaene={};
+    if(A&&A.planGueltig)p.besitz.forEach(function(id){
+      var alt=old.plaene&&old.plaene[id];
+      if(A.planGueltig(alt))p.plaene[id]=alt.map(function(z){return z.slice(0,2);});
+    });
     p.brutplaetze=X.gekaufteBrutplaetze(old);
     p.arenaRuhm=X.ruhm(old);p.arenaSiege=X.arenaSiege(old);
     p.arenaCooldown=Number(old.arenaCooldown)||0;p.titelCooldown=Number(old.titelCooldown)||0;

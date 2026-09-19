@@ -102,6 +102,66 @@
       b.disabled=c.busy()||state().gold<s.preis;
       drawer.appendChild(b);
     }
+    /* Das Tauschbrett. Nur gleiche Seltenheit gegen gleiche Seltenheit - das
+       ist die Regel, die verhindert, dass ein zweites Konto das erste hochzieht. */
+    function tauschTeil(liste){
+      drawer.appendChild(el('h3','Das Tauschbrett'));
+      drawer.appendChild(el('p','Mon gegen Mon, immer innerhalb derselben Seltenheit. Was du weggibst, ist weg - samt Runenstufe und Wesen. Was in deiner Truppe steht, kannst du nicht anbieten.'));
+      var s=state(),eigene=(liste||[]).filter(function(v){return v.selbst;});
+      (liste||[]).forEach(function(v){
+        var gebe=D.mon(v.gebe),suche=D.mon(v.suche);if(!gebe||!suche)return;
+        var karte=el('article',undefined,'gm-quest-card');
+        karte.style.setProperty('--rarity',D.SELTENHEITEN[gebe.seltenheit].farbe);
+        karte.appendChild(el('h3',(v.selbst?'Dein Angebot':v.name)+' · '+D.SELTENHEITEN[gebe.seltenheit].name));
+        karte.appendChild(el('p','gibt '+gebe.name+' · sucht '+suche.name));
+        karte.appendChild(truppenreihe([{id:v.gebe},{id:v.suche}]));
+        if(v.selbst){
+          var weg=button('Zurücknehmen',function(){run('tausch_zuruecknehmen',{tauschId:v.id});},'gm-button');
+          weg.disabled=c.busy();karte.appendChild(weg);
+        }else{
+          var hat=s.besitz.indexOf(v.suche)>=0,drin=s.truppe.indexOf(v.suche)>=0,doppelt=s.besitz.indexOf(v.gebe)>=0;
+          var b=button(doppelt?gebe.name+' hast du schon':!hat?suche.name+' fehlt dir':drin?suche.name+' steht in deiner Truppe':'Tauschen',
+            function(){run('tausch_annehmen',{tauschId:v.id});},'gm-button gm-primary');
+          b.disabled=c.busy()||!v.moeglich;karte.appendChild(b);
+        }
+        drawer.appendChild(karte);
+      });
+      if(!(liste||[]).length)drawer.appendChild(el('p','Das Brett ist leer. Häng das erste Angebot auf.'));
+      if(eigene.length>=3){drawer.appendChild(el('p','Du hast drei Angebote am Brett - mehr gehen nicht.'));return;}
+      /* Ein eigenes Angebot aufhaengen: nur Mons, die weder in der Truppe noch
+         schon am Brett sind, und gesucht wird nur, was fehlt. */
+      drawer.appendChild(el('h3','Eigenes Angebot'));
+      var haengt=eigene.map(function(v){return v.gebe;});
+      var gebbar=s.besitz.filter(function(id){return s.truppe.indexOf(id)<0&&haengt.indexOf(id)<0;});
+      if(!gebbar.length){drawer.appendChild(el('p','Du hast gerade nichts, das du entbehren kannst.'));return;}
+      var gebeWahl=el('select'),sucheWahl=el('select');
+      gebeWahl.setAttribute('aria-label','Mon, das du abgibst');
+      sucheWahl.setAttribute('aria-label','Mon, das du suchst');
+      function fuelleSuche(){
+        SG.ui.clear(sucheWahl);
+        /* Ohne gesetzten Wert steht die erste Zeile zur Wahl - ein Auswahlfeld
+           ohne Auswahl gibt es sonst nur, bis der Browser selbst eine setzt. */
+        var gewaehlt=D.mon(gebeWahl.value)||D.mon(gebbar[0]);
+        if(!gewaehlt)return;
+        gebeWahl.value=gewaehlt.id;
+        var rang=gewaehlt.seltenheit;
+        D.KATALOG.filter(function(k){return k.seltenheit===rang&&s.besitz.indexOf(k.id)<0;})
+          .forEach(function(k){var o=el('option',k.name);o.value=k.id;sucheWahl.appendChild(o);});
+        if(!sucheWahl.childNodes.length){var o=el('option','In dieser Seltenheit fehlt dir nichts');o.value='';sucheWahl.appendChild(o);}
+      }
+      gebbar.forEach(function(id){var k=D.mon(id),o=el('option',k.name+' · '+D.SELTENHEITEN[k.seltenheit].name);o.value=id;gebeWahl.appendChild(o);});
+      gebeWahl.value=gebbar[0];
+      gebeWahl.addEventListener('change',fuelleSuche);fuelleSuche();
+      var zeile=el('div',undefined,'gm-plan-row');
+      zeile.appendChild(gebeWahl);zeile.appendChild(el('span','→','gm-plan-pfeil'));zeile.appendChild(sucheWahl);
+      drawer.appendChild(zeile);
+      var anbieten=button('Angebot aufhängen',function(){
+        if(!sucheWahl.value)return;
+        run('tausch_anbieten',{gebe:gebeWahl.value,suche:sucheWahl.value});
+      },'gm-button gm-primary');
+      anbieten.disabled=c.busy();
+      drawer.appendChild(anbieten);
+    }
     function chronikTeil(t){
       if(!t.chronik||!t.chronik.length)return;
       drawer.appendChild(el('h3','Die Tafel der Champions'));
@@ -117,11 +177,12 @@
       rangTeil(stand.turnier);
       hafenTeil(stand.stadt);
       brutTeil(stand.stadt);
+      tauschTeil(stand.tausch);
       chronikTeil(stand.turnier);
     }
     return {
       menu:zeigeStadt,
-      apply:function(res){if(res&&res.turnier)stand={turnier:res.turnier,stadt:res.stadt};},
+      apply:function(res){if(res&&res.turnier)stand={turnier:res.turnier,stadt:res.stadt,tausch:res.tausch||[]};},
       champion:function(){return stand&&stand.turnier&&stand.turnier.champion;},
       refresh:function(view){if(view==='stadt')zeigeStadt();}
     };

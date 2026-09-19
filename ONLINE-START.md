@@ -85,6 +85,7 @@ node tools/gehstockmon-expansion-tests.mjs
 node tools/gehstockmon-egg-hours-tests.mjs
 node tools/gehstockmon-dungeon-tests.mjs
 node tools/gehstockmon-stadt-tests.mjs
+node tools/gehstockmon-kampf-tests.mjs
 node tools/speicher-tests.mjs
 npm test --prefix arena
 npm run typecheck --prefix arena
