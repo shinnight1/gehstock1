@@ -119,8 +119,11 @@
           var weg=button('Zurücknehmen',function(){run('tausch_zuruecknehmen',{tauschId:v.id});},'gm-button');
           weg.disabled=c.busy();karte.appendChild(weg);
         }else{
-          var hat=s.besitz.indexOf(v.suche)>=0,drin=s.truppe.indexOf(v.suche)>=0,doppelt=s.besitz.indexOf(v.gebe)>=0;
-          var b=button(doppelt?gebe.name+' hast du schon':!hat?suche.name+' fehlt dir':drin?suche.name+' steht in deiner Truppe':'Tauschen',
+          /* Im Dienst ist im Dienst: das Kampfteam ebenso wie eine
+             Gebietsbesatzung. Frueher stand hier nur die Truppe, und ein Mon
+             von einem Aussenposten liess sich weggeben. */
+          var hat=s.besitz.indexOf(v.suche)>=0,dienst=X.einsatzOrt(s,v.suche),drin=dienst!==null&&dienst!==undefined,doppelt=s.besitz.indexOf(v.gebe)>=0;
+          var b=button(doppelt?gebe.name+' hast du schon':!hat?suche.name+' fehlt dir':drin?suche.name+' steht '+X.einsatzText(dienst):'Tauschen',
             function(){run('tausch_annehmen',{tauschId:v.id});},'gm-button gm-primary');
           b.disabled=c.busy()||!v.moeglich;karte.appendChild(b);
         }
@@ -128,11 +131,11 @@
       });
       if(!(liste||[]).length)drawer.appendChild(el('p','Das Brett ist leer. Häng das erste Angebot auf.'));
       if(eigene.length>=3){drawer.appendChild(el('p','Du hast drei Angebote am Brett - mehr gehen nicht.'));return;}
-      /* Ein eigenes Angebot aufhaengen: nur Mons, die weder in der Truppe noch
-         schon am Brett sind, und gesucht wird nur, was fehlt. */
+      /* Ein eigenes Angebot aufhaengen: nur Mons, die nirgends Dienst tun und
+         nicht schon am Brett haengen, und gesucht wird nur, was fehlt. */
       drawer.appendChild(el('h3','Eigenes Angebot'));
       var haengt=eigene.map(function(v){return v.gebe;});
-      var gebbar=s.besitz.filter(function(id){return s.truppe.indexOf(id)<0&&haengt.indexOf(id)<0;});
+      var gebbar=s.besitz.filter(function(id){var ort=X.einsatzOrt(s,id);return (ort===null||ort===undefined)&&haengt.indexOf(id)<0;});
       if(!gebbar.length){drawer.appendChild(el('p','Du hast gerade nichts, das du entbehren kannst.'));return;}
       var gebeWahl=el('select'),sucheWahl=el('select');
       gebeWahl.setAttribute('aria-label','Mon, das du abgibst');

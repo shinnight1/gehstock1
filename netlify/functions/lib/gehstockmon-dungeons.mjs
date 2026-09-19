@@ -1,5 +1,5 @@
 import {data as D, arena as A, adventure as X} from './gehstockmon-rules.mjs';
-import {wochenschritt} from './gehstockmon-adventure.mjs';
+import {wochenschritt, fehdeSchritt} from './gehstockmon-adventure.mjs';
 
 const fail = message => { throw new Error(message); };
 export const activeDungeon = (world, p) => {
@@ -18,6 +18,7 @@ function finish(world, room, winner, now) {
     if (p && member.reward) {
       p.runes[dungeon.rarity] = Math.min(9999, p.runes[dungeon.rarity] + member.reward);
       wochenschritt(world, p, member.id, 'tiefe', now);
+      fehdeSchritt(world, member.id, 'tiefe', now);
       /* Wer einen Boss zum ersten Mal legt, nimmt sein Fundstueck mit. */
       const fund = X.ruestungFuer(dungeon.id);
       if (fund && !(p.ruestungen || []).includes(fund.id)) {
@@ -62,7 +63,11 @@ function faehigkeitEinsetzen(room, member, log) {
   else if (f.id === 'sammelruf') { heilen(.18); member.schild = .35; }
   else if (f.id === 'laeuterung') { heilen(.22); member.geschaerft = true; }
   else if (f.id === 'runenstoerung') { treffer(f.faktor, f.name); room.boss.geschwaecht = true; }
-  else if (f.id === 'blendstoss') { treffer(f.faktor, f.name); room.boss.geschwaecht = true; }
+  /* Ein Boss hat keine Ladungen, die Blendstoss ihm nehmen koennte. Beide auf
+     dieselbe einrundige Schwaechung zu legen machte ihn aber zur strikt
+     schlechteren Runenstoerung - gleicher Effekt, weniger Schaden. Er blendet
+     darum laenger: zwei Runden statt einer. */
+  else if (f.id === 'blendstoss') { treffer(f.faktor, f.name); room.boss.blendung = 2; }
   else if (f.id === 'windschnitt') { treffer(f.faktor * 1.15, f.name); }
   else treffer(f.faktor, f.name);
 }
@@ -89,7 +94,7 @@ function resolveRound(world, room, now) {
   for (const member of targets) {
     let roh = room.boss.attack * (room.round % 3 === 0 ? 1.35 : 1) * (member.guarding ? .4 : 1);
     roh *= A.rollenFaktor(room.boss.role, member.role);
-    if (room.boss.geschwaecht) roh *= .65;
+    if (room.boss.geschwaecht || room.boss.blendung > 0) roh *= .65;
     /* Ein Schild aus der eigenen Faehigkeit haelt genau einen Schlag. */
     if (member.schild) { roh *= 1 - member.schild; member.schild = 0; }
     const hit = Math.max(1, Math.round(roh));
@@ -103,6 +108,7 @@ function resolveRound(world, room, now) {
     }
   }
   room.boss.geschwaecht = false;
+  if (room.boss.blendung > 0) room.boss.blendung--;
   if (room.boss.hp <= 0) { finish(world, room, 'players', now); return; }
   if (!living(room).length || room.round >= 30) { finish(world, room, 'boss', now); return; }
   room.round++; room.revision++; room.actions = {}; room.deadline = now + 45000;
@@ -140,7 +146,12 @@ export async function dungeonAction({world, p, id, body, now, presence}) {
     if (p.runes[mon.seltenheit] < cost) fail('Du brauchst mehr Runen derselben Seltenheit.');
     p.runes[mon.seltenheit] -= cost; p.monUpgrades[mon.id] = level + 1;
     for (const t of world.territories) if (t.ownerId === id && t.defense.some(m => m.id === mon.id)) { t.defense.forEach(m => { if (m.id === mon.id) m.upgrade = level + 1; }); t.version++; }
-    return {monId:mon.id, message:mon.name + ' erreicht Runenstufe ' + (level + 1) + '/5. KP und Angriff: +' + ((level + 1) * 2) + ' %.'};
+    /* Die Prozente kommen aus A.UPGRADE_BONUS. Hier stand eine eigene Zwei,
+       die seit dem Rebalance auf drei Prozent nicht mehr gestimmt hat. */
+    const schwelle = level + 1 === A.SCHNELL_AB ? ' Ab jetzt lädt der Kraftschlag eine Runde schneller.'
+      : level + 1 === A.LADUNG_AB ? ' Ab jetzt hat die Fähigkeit eine dritte Ladung.' : '';
+    return {monId:mon.id, message:mon.name + ' erreicht Runenstufe ' + (level + 1) + '/' + X.UPGRADE_LIMIT
+      + '. KP und Angriff: +' + Math.round((level + 1) * A.UPGRADE_BONUS * 100) + ' %.' + schwelle};
   }
   let room = world.dungeons?.[p.dungeonId];
   async function nearby(dungeon) {
@@ -155,7 +166,8 @@ export async function dungeonAction({world, p, id, body, now, presence}) {
        Arena - sonst kaempft dasselbe Mon hier anders als dort. */
     return {id, name:p.name, monId, upgrade:mon.upgrade, role:mon.typ, skill:D.faehigkeitVon(mon),
       maxHp:stats.hp, hp:stats.hp, attack:stats.ang, ready:false, powerReady:1,
-      powerPause:A.powerPause(mon), heals:A.ladungen(mon), schild:0, dornen:false, geschaerft:false,
+      powerPause:A.powerPause(mon), heals:A.ladungen(mon), maxHeals:A.ladungen(mon),
+      schild:0, dornen:false, geschaerft:false,
       contributions:0, missed:0};
   }
   if (op === 'dungeon_create' || op === 'dungeon_join') {
@@ -208,7 +220,12 @@ export async function dungeonAction({world, p, id, body, now, presence}) {
   if (op === 'dungeon_turn') {
     if (room.phase !== 'battle' || body.round !== room.round || me.hp <= 0 || room.actions[id]) fail('Die Runde hat sich verändert oder deine Aktion steht bereits fest.');
     if (!['strike','power','guard','heal'].includes(body.move)) fail('Wähle eine Dungeon-Aktion.');
-    if (body.move === 'power' && room.round < me.powerReady || body.move === 'heal' && (me.heals <= 0 || me.hp >= me.maxHp)) fail('Diese Aktion ist noch nicht verfügbar.');
+    /* Die Faehigkeit haengt an ihren Ladungen, nicht am eigenen Schaden. Die
+       alte Sperre stammte aus der Zeit, als sie fuer alle dasselbe geheilt
+       hat: seit die zwoelf Faehigkeiten auch hier gelten, war damit jede
+       Schadensfaehigkeit bis zum ersten Treffer gesperrt - und in Runde 1 ist
+       jeder auf vollem Leben. Nur eine reine Heilung verpufft dann wirklich. */
+    if (body.move === 'power' && room.round < me.powerReady || body.move === 'heal' && (me.heals <= 0 || A.nurBeiSchaden(me) && me.hp >= me.maxHp)) fail('Diese Aktion ist noch nicht verfügbar.');
     room.actions[id] = body.move; room.revision++;
     if (living(room).every(m => room.actions[m.id])) resolveRound(world,room,now);
   }

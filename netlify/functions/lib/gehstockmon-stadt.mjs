@@ -41,8 +41,12 @@ function log(world,text,id,now){
   world.reports.push({id:'arena-'+id+'-'+now,time:now,attackerId:id,defenderId:null,territoryId:1,text});
   world.reports=world.reports.slice(-150);
 }
+/* Dieselbe Uebersetzung wie beim Gebietskampf. Vorher stand hier ein eigener
+   Nachbau, der nur die Runenstufe mitnahm: der Champion und jeder Gegner der
+   Rangliste kaempften damit ohne ihr Wesen und ohne den Plan, den ihr
+   Besitzer gesetzt hatte - obwohl der Planeditor genau das verspricht. */
 function truppe(squad){
-  return (squad||[]).map(e=>Object.assign({},D.mon(e.id||e.monId)||D.KATALOG[0],{upgrade:X.upgradeLevel(e.upgrade)}));
+  return (squad||[]).map(e=>A.ausSpeicher(e));
 }
 /* Die eigene Aufstellung, wie sie ein Angreifer zu sehen bekommt - das
    Kampfteam samt Runenstufe, Wesen und Plan. In der Arena verteidigt immer
@@ -65,8 +69,15 @@ function gegnerliste(world,id,now){
    niemand auf ein Angebot antwortet, das es nicht mehr gibt. */
 export function tauschliste(world,now){
   if(!Array.isArray(world.tausch))world.tausch=[];
-  world.tausch=world.tausch.filter(v=>v&&world.players[v.vonId]&&now-v.seit<X.TAUSCH_DAUER
-    &&world.players[v.vonId].besitz.includes(v.gebe)&&!world.players[v.vonId].truppe.includes(v.gebe));
+  /* Ein Angebot faellt heraus, sobald das Mon wieder Dienst tut - im
+     Kampfteam oder auf einem Aussenposten. Vorher zaehlte nur das Kampfteam,
+     und ein Mon liess sich von seinem Posten wegtauschen. */
+  world.tausch=world.tausch.filter(v=>{
+    const wer=v&&world.players[v.vonId];
+    if(!wer||now-v.seit>=X.TAUSCH_DAUER||!wer.besitz.includes(v.gebe))return false;
+    const ort=X.einsatzOrt(wer,v.gebe);
+    return ort===null||ort===undefined;
+  });
   return world.tausch;
 }
 /* Was der Client von der Arena sehen darf. */
@@ -201,7 +212,8 @@ export async function stadtAction({world,p,id,body,now,presence}){
     if(fehler)fail(fehler);
     if(p.besitz.includes(angebot.gebe))fail('Dieses Mon hast du bereits.');
     if(andere.besitz.includes(angebot.suche))fail('Der andere hat dieses Mon inzwischen selbst.');
-    if(!andere.besitz.includes(angebot.gebe)||andere.truppe.includes(angebot.gebe))fail('Der andere kann sein Angebot gerade nicht einloesen.');
+    const seinOrt=X.einsatzOrt(andere,angebot.gebe);
+    if(!andere.besitz.includes(angebot.gebe)||(seinOrt!==null&&seinOrt!==undefined))fail('Der andere kann sein Angebot gerade nicht einloesen.');
     if(activeArena(andere))fail('Der andere kaempft gerade. Versuch es gleich noch einmal.');
     function umziehen(von,nach,monId){
       von.besitz=von.besitz.filter(v=>v!==monId);

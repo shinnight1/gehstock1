@@ -56,6 +56,11 @@ export function schenken(welt, { code, name = '', mons = [], gebiete = [], gold 
     if (vorbesitzer) {
       vorbesitzer.geschafft = (vorbesitzer.geschafft || []).filter((v) => v !== gebietId);
       if (vorbesitzer.outposts) delete vorbesitzer.outposts[gebietId];
+      /* Seine Besatzung zieht ab, genau wie nach einer verlorenen Schlacht.
+         Blieb sie stehen, waren vier Mons an einen Posten gebunden, den er
+         nicht mehr halten und ueber die Oberflaeche auch nicht mehr erreichen
+         konnte - sie liessen sich nie wieder einsetzen. */
+      if (vorbesitzer.posten) delete vorbesitzer.posten[gebietId];
       bericht.genommen.push({ id: gebietId, name: vorbesitzer.name });
     }
     /* Ausbaustufe bleibt am Gebiet, genau wie bei einer Eroberung im Spiel. */

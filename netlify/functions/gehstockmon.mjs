@@ -1,7 +1,7 @@
 import { speicher } from './lib/speicher.mjs';
 import { createHash } from 'node:crypto';
 import { data as D, economy as E, arena as A, hours as H, adventure as X } from './lib/gehstockmon-rules.mjs';
-import {adventureAction,finishEncounter,expireAdventure,deliverRewards,activeArena,activeDuel,weltprojekte,wochenschritt} from './lib/gehstockmon-adventure.mjs';
+import {adventureAction,finishEncounter,expireAdventure,deliverRewards,activeArena,activeDuel,weltprojekte,wochenschritt,fehdeSchritt,zerhacker,wochenaufgabe,fehden} from './lib/gehstockmon-adventure.mjs';
 import {activeDungeon,settleDungeons,dungeonResult,dungeonAction} from './lib/gehstockmon-dungeons.mjs';
 import {stadtAction,arenaStand,championSold} from './lib/gehstockmon-stadt.mjs';
 import {schenken,schenkungen} from './lib/gehstockmon-schenken.mjs';
@@ -94,10 +94,34 @@ function migrateAndSettle(world, now) {
   for (const [id,p] of Object.entries(world.players)) {
     p.geschafft = world.territories.filter(t=>t.ownerId===id).map(t=>t.id);
     p.outposts = Object.fromEntries(world.territories.filter(t=>t.ownerId===id).map(t=>[t.id,E.outpost(t,now)]));
+    /* Eine Besatzung auf Land, das einem nicht mehr gehoert, bindet vier Mons
+       an einen Posten, den man ueber die Oberflaeche nicht mehr erreicht -
+       sie liessen sich nie wieder einsetzen. Wer ein Gebiet verliert, verliert
+       darum hier auch seine Besatzung, egal auf welchem Weg. */
+    for (const key of Object.keys(p.posten || {})) if (!p.geschafft.includes(Number(key))) delete p.posten[key];
   }
   expireAdventure(world,now);
   settleDungeons(world,now);
   championSold(world,now);
+  /* Die Wochenwechsel gehoeren vor das Schreiben. Bisher stiessen sie erst in
+     publicResult an - also nachdem der Spielstand schon abgelegt war, und alles
+     was sie dabei gutschrieben, war mit der Antwort wieder weg. */
+  zerhacker(world,now);wochenaufgabe(world,now);fehden(world,now);
+  verteidigungenPruefen(world);
+}
+/* Die gespeicherte Verteidigung soll immer das sein, was der Besitzer gerade
+   aufgestellt hat. Sie an jeder einzelnen Stelle nachzuziehen ging schief:
+   ein weggetauschtes Mon kaempfte auf seinem alten Posten weiter, obwohl es
+   laengst einem anderen gehoerte. Darum wird sie hier einmal fuer alle
+   Gebiete geprueft - und die Version nur erhoeht, wenn sich wirklich etwas
+   geaendert hat, sonst liefe jedem Angreifer sein Kampf davon. */
+function verteidigungenPruefen(world) {
+  for (const t of world.territories) {
+    const p = t.ownerId && world.players[t.ownerId];
+    if (!p) continue;
+    const neu = verteidigung(p, t.id);
+    if (JSON.stringify(neu) !== JSON.stringify(t.defense)) { t.defense = neu; t.version++; }
+  }
 }
 /* Die gespeicherte Verteidigung eines Gebiets: seine eigene Besatzung, sonst
    das Kampfteam. Sie traegt Runenstufe, Wesen und Kampfplan mit - ohne die
@@ -168,7 +192,7 @@ function settleBattle(world, p, id, now, requestId) {
     } else {
       const defender = defenderId && world.players[defenderId];
       if (defender && now - defender.lastSeen >= 12 * E.HOUR) defender.lastOfflineLoss = now;
-      const level = t.level; E.capture(p, t.id, now);
+      const level = t.level; E.capture(p, t.id, now); fehdeSchritt(world, id, 'gebiet', now);
       /* Der Verlierer zieht seine Besatzung ab - die vier stehen ihm sofort
          wieder fuer andere Posten zur Verfuegung. */
       if (defender && defender.posten) delete defender.posten[t.id];
@@ -269,6 +293,11 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
           }
         }
         const p = world.players[id]; p.name = name || p.name; p.lastSeen = timestamp;
+        /* Beim ersten Kontakt der Woche beginnt die Zerhacker-Uhr. Sie stand
+           frueher in weltprojekte und damit hinter dem Schreiben: der Stand
+           wurde jedes Mal neu gesetzt und nie abgelegt, der Beutel blieb auf
+           null, und der Wochenboss war schlicht unerreichbar. */
+        X.zerhackerUhrStellen(p, timestamp);
         if(body.op==='join'){p.dailyDelivery=E.deliverDaily(p);p.lastJoinAt=timestamp;p.spawn=X.outside(X.SPAWN,X.layout(world.territories));}
         const receipts = p.actionReceipts || [], receipt = receipts.find((r) => r.id === body.requestId && r.op === body.op);
         if (receipt) return json(publicResult(world, id, timestamp, { ...receipt.extra, duplicate: true, adminOverride: bypass }));
@@ -359,7 +388,7 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
           if (body.op === 'incubate') { E.incubate(p,body.eggId,timestamp,X.brutplaetze(world.leuchtturm,p)); extra.message = 'Die Brutzeit hat begonnen: 1 Stunde.'; }
           if (body.op === 'hatch') {
             const schlupf = E.hatch(p,body.eggId,timestamp,draw), mon = schlupf.mon;
-            p.progress.hatched++; wochenschritt(world, p, id, 'eier', timestamp);
+            p.progress.hatched++; wochenschritt(world, p, id, 'eier', timestamp); fehdeSchritt(world, id, 'ei', timestamp);
             X.wesenZuweisen(p, mon.id, draw); extra.monId = mon.id; extra.schlupf = schlupf;
             /* Ein Zwilling ist kein Trostpreis: entweder hebt er die Runenstufe
                des Mons, das schon da ist, oder er zerfaellt zu Runen. */

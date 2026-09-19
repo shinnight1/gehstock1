@@ -9,6 +9,9 @@ let checks=0;async function test(name,fn){await fn();checks++;console.log('ok',n
 function store(){let data=null,v=0;return{get data(){return data;},async getWithMetadata(){return data?{data:structuredClone(data),etag:String(v)}:null;},async setJSON(k,next,o){if(o.onlyIfNew&&data||o.onlyIfMatch!==undefined&&o.onlyIfMatch!==String(v))return{modified:false};data=structuredClone(next);v++;return{modified:true};}};}
 function codeAt(index){let codes=[];for(let n=0;n<10000;n++){const code=String(n).padStart(4,'0'),text='code:'+code+':gehstock:hideout:2026:kellergewoelbe';let h=0x811c9dc5;for(const c of text){h^=c.charCodeAt(0);h=(h+(h<<1)+(h<<4)+(h<<7)+(h<<8)+(h<<24))>>>0;}if(h%97===0)codes.push(code);}return codes[index];}
 const ca=codeAt(0),cb=codeAt(1);
+/* Dieselbe Rollenableitung wie im Server - fuer die Pruefungen, die einen
+   echten Administrator brauchen. */
+function adminCode(){for(let n=0;n<10000;n++){const code=String(n).padStart(4,'0'),text='code:'+code+':gehstock:hideout:2026:kellergewoelbe';let h=0x811c9dc5;for(const c of text){h^=c.charCodeAt(0);h=(h+(h<<1)+(h<<4)+(h<<7)+(h<<8)+(h<<24))>>>0;}if(h%97===0&&['S','K','A'][Math.floor(h/97)%3]==='A')return code;}throw new Error('kein Admin-Code');}
 /* Ein Kampf mit einem festen Zug, bis er zu Ende ist. */
 function auskaempfen(b,zug){
   for(let i=0;b.phase!=='finished'&&i<300;i++){
@@ -365,4 +368,60 @@ await test('Auto-assignment fills free Mons into the most valuable posts, one of
   assert.equal(nochmal.status,400,'nothing left to fill');
   assert.equal(JSON.stringify((await call(ca,'world')).profile.posten),vorher,'existing garrisons are untouched');
 });
+/* Ein Mon auf einem Aussenposten ist im Dienst. Vorher sperrte das Tauschbrett
+   nur das Kampfteam: wer ein Mon von seinem Posten weggab, liess dort eine
+   Verteidigung stehen, die ihm nicht mehr gehoerte - dauerhaft, samt
+   Runenstufe. */
+await test('A garrisoned Mon cannot be traded away, and a stale defence is pulled straight',async()=>{
+  let time=mon;const db=store(),handler=createHandler({store:db,presenceStore:store(),now:()=>time});let serial=0;
+  async function call(code,op,extra={}){const r=await handler(new Request('http://localhost/api/gehstockmon',{method:'POST',body:JSON.stringify({code,op,name:code,requestId:'dienst-test-'+(++serial),...extra})}));return{status:r.status,...await r.json()};}
+  const a=await call(ca,'join');
+  const pa=db.data.players[a.playerId];
+  const wache=['kieselkrabb','wurzelzahn','pilzhueter','nachtflatter'];
+  pa.besitz=pa.besitz.concat(wache);
+  pa.monUpgrades.kieselkrabb=5;
+  Object.assign(db.data.territories[0],{ownerId:a.playerId,...E.outpost(null,time)});
+  let r=await call(ca,'besatzung',{territoryId:1,squad:wache});
+  assert.equal(r.status,200,r.error);
+  /* Anbieten ist gesperrt, und zwar mit dem Ort im Klartext. */
+  const partner=D.KATALOG.find(k=>k.seltenheit===D.mon('kieselkrabb').seltenheit&&!pa.besitz.includes(k.id));
+  r=await call(ca,'tausch_anbieten',{gebe:'kieselkrabb',suche:partner.id});
+  assert.equal(r.status,400);
+  assert.match(r.error,/Mooswacht/,'the message names the post: '+r.error);
+  /* Eine von Hand veraltete Verteidigung wird beim naechsten Aufruf ersetzt. */
+  db.data.territories[0].defense=[{id:'endrichter',upgrade:5,wesen:null,plan:null}];
+  const stand=(await call(ca,'world')).territories[0];
+  assert.deepEqual(stand.defense.map(d=>d.id),wache,'the saved defence follows the garrison again');
+  assert.equal(stand.defense[0].upgrade,5,'and keeps the rune level of the Mon that really stands there');
+});
+/* Wer ein Gebiet verliert, bekommt seine Besatzung zurueck - auch wenn es ihm
+   ein Admin weggenommen hat. Blieb sie stehen, waren vier Mons an einen
+   Posten gebunden, den er ueber die Oberflaeche nicht mehr erreichen konnte. */
+await test('A territory taken by an admin releases the loser garrison',async()=>{
+  let time=mon;const db=store(),handler=createHandler({store:db,presenceStore:store(),now:()=>time});let serial=0;
+  async function call(code,op,extra={}){const r=await handler(new Request('http://localhost/api/gehstockmon',{method:'POST',body:JSON.stringify({code,op,name:code,requestId:'wegnehmen-test-'+(++serial),...extra})}));return{status:r.status,...await r.json()};}
+  const chef=adminCode(),opfer=[ca,cb].find(c=>c!==chef)||cb;
+  const o=await call(opfer,'join');await call(chef,'join');
+  const po=db.data.players[o.playerId];
+  const wache=['kieselkrabb','wurzelzahn','pilzhueter','nachtflatter'];
+  po.besitz=po.besitz.concat(wache);
+  Object.assign(db.data.territories[0],{ownerId:o.playerId,...E.outpost(null,time)});
+  assert.equal((await call(opfer,'besatzung',{territoryId:1,squad:wache})).status,200);
+  const r=await call(chef,'admin_grant',{zielCode:chef,zielName:'Chef',gebiete:[1],wegnehmen:true});
+  assert.equal(r.status,200,r.error);
+  const nach=await call(opfer,'world');
+  assert.deepEqual(nach.profile.posten,{},'the garrison is gone with the land');
+  for(const id of wache)assert.equal(X.einsatzOrt(nach.profile,id),null,id+' is free again');
+  assert.equal(X.truppePruefen(nach.profile,wache,'kampfteam'),null,'and can take the field again');
+});
+/* Erkundete Biome zaehlten frueher nicht: die Summe griff nach
+   p.progress.visited, und dort steht nichts. */
+await test('Explored biomes count towards the trainer rank',()=>{
+  const p=D.neuerStand(null,mon);
+  assert.equal(X.erfahrung(p),0);
+  p.visited=D.FELDER.map(f=>f.id);
+  assert.equal(X.erfahrung(p),D.FELDER.length*8);
+  assert.ok(X.rang(p).stufe>=1,'nine biomes alone lift the first rank');
+});
+
 console.log('\n'+checks+' Kampf- und Tauschpruefungen bestanden.');

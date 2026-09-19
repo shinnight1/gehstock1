@@ -239,7 +239,7 @@ const SG = { rules: {} };
     moosling:0,glutfuchs:0,nebelmolch:0,rostknirps:0,
     kieselkrabb:1,titanenkrone:1,runengolem:1,salzkrabbe:1,
     wurzelzahn:2,dornenwolf:2,kupferskorp:2,sporenbison:2,runenminotaur:2,risskaiser:2,
-    klingenwolf:1,aschenhydra:1,vulkanmantis:1,obsidianbehemoth:1,
+    aschenhydra:1,vulkanmantis:1,obsidianbehemoth:1,
     weltenfresser:2,sonnenkoenig:2,glutbasilisk:2,blitzotter:2,
     pilzhueter:1,seelenqualle:1,korallenwacht:1,prismensalamander:1,
     mondhexe:2,sternengeweih:2,frostorakel:2,novaorakel:2,nebelkrake:2,
@@ -643,7 +643,7 @@ const SG = { rules: {} };
   /* Reichweite mit Rand: Er zieht mit gut einem Schritt je Sekunde weiter,
      und die Standortmeldung darf bis zu 15 Sekunden alt sein. Bei 22 stand
      man neben ihm und der Server sah trotzdem einen zu grossen Abstand. */
-  X.ZERHACKER={runde:11*60000,radius:150,kraft:5000,
+  X.ZERHACKER={runde:11*60000,radius:150,kraft:5000,kraftJeSpieler:1800,kraftMax:30000,
                nachschub:10*60000,vorratMax:12,
                schadenJeStufe:800,beuteRunen:6,beuteGold:400,reichweite:34};
   /* Jede Woche eine gemeinsame Aufgabe, an der alle zusammen zaehlen. Anders
@@ -704,7 +704,14 @@ const SG = { rules: {} };
     return {x:Math.cos(t)*Z.radius,z:Math.sin(t)*Z.radius*0.72-20,
             heading:Math.atan2(-Math.sin(t)*Z.radius,Math.cos(t)*Z.radius*0.72)};
   };
-  X.zerhackerKraft=function(){return X.ZERHACKER.kraft;};
+  /* Seine Lebenskraft waechst mit der Zahl der Leute in der Welt. Beide
+     Aufrufstellen haben die Spielerzahl immer schon uebergeben - die Funktion
+     hat sie nur nie angesehen und stur fuenftausend geliefert. Allein bleibt
+     es dabei, jeder weitere legt achtzehnhundert drauf. */
+  X.zerhackerKraft=function(spieler){
+    var n=Math.max(1,Math.floor(spieler)||1),Z=X.ZERHACKER;
+    return Math.min(Z.kraftMax,Z.kraft+(n-1)*Z.kraftJeSpieler);
+  };
   /* Was ein Schlag austraegt, haengt an der eigenen Truppe - wer aufruestet,
      merkt es hier. */
   X.zerhackerSchaden=function(p){
@@ -769,6 +776,11 @@ const SG = { rules: {} };
      Verloren geht dabei nichts ausser der Woche - genau deshalb kann man sie
      unter Freunden austragen. */
   X.FEHDE_PUNKTE={trainer:10,rune:4,ei:6,tiefe:25,zerhacker:1/200,gebiet:15};
+  /* Am Wochenwechsel wird abgerechnet. Das fehlte: die Punkte standen in der
+     Oberflaeche, und montags waren sie samt Woche verschwunden, ohne dass
+     jemand etwas davon hatte. Verlieren kann man dabei weiterhin nichts - der
+     Unterlegene nimmt seinen Trost mit. */
+  X.FEHDE_LOHN=500;X.FEHDE_TROST=150;
   X.fehdePunkte=function(zaehler){
     var z=zaehler||{},P=X.FEHDE_PUNKTE;
     return Math.round((z.trainer||0)*P.trainer+(z.rune||0)*P.rune+(z.ei||0)*P.ei
@@ -781,9 +793,13 @@ const SG = { rules: {} };
   X.RAENGE=[{name:'Wanderer',ab:0},{name:'Spaeher',ab:60},{name:'Faehrtenleser',ab:150},
             {name:'Hueter',ab:300},{name:'Meister',ab:550},{name:'Legende',ab:900}];
   X.erfahrung=function(p){
-    var g=(p&&p.progress)||{};
+    /* Die erkundeten Biome stehen in p.visited und nicht in p.progress - dort
+       hat die Summe frueher danach gegriffen und dabei immer null gefunden.
+       Neun Gebiete sind zweiundsiebzig Punkte, und die zweite Rangstufe
+       beginnt bei sechzig: der Fehler hat den halben Aufstieg verschluckt. */
+    var g=(p&&p.progress)||{},besucht=((p&&p.visited)||[]).length;
     return (g.trainerWins||0)*10+(g.gathered||0)*4+(g.hatched||0)*6
-         +(g.visited||0)*8+(g.upgrades||0)*5+Math.floor((p&&p.zerhackerGesamt||0)/400);
+         +besucht*8+(g.upgrades||0)*5+Math.floor((p&&p.zerhackerGesamt||0)/400);
   };
   X.rang=function(p){
     var e=X.erfahrung(p),stufe=0;
@@ -871,7 +887,11 @@ const SG = { rules: {} };
     if(gebe.id===suche.id)return 'Such dir etwas anderes aus, als du anbietest.';
     if(gebe.seltenheit!==suche.seltenheit)return 'Getauscht wird nur innerhalb derselben Seltenheit.';
     if(!p.besitz||p.besitz.indexOf(gebe.id)<0)return 'Dieses Mon besitzt du nicht.';
-    if((p.truppe||[]).indexOf(gebe.id)>=0)return 'Nimm es erst aus deiner Truppe.';
+    /* Auch eine Gebietsbesatzung ist Dienst. Vorher sperrte nur das Kampfteam,
+       und wer ein Mon von einem Aussenposten weggab, liess dort eine
+       Verteidigung stehen, die ihm nicht mehr gehoerte. */
+    var ort=X.einsatzOrt(p,gebe.id);
+    if(ort!==null&&ort!==undefined)return gebe.name+' steht '+X.einsatzText(ort)+'. Zieh es erst ab.';
     return null;
   };
 
@@ -1073,7 +1093,11 @@ const SG = { rules: {} };
     [ { id:'sichelstreich',name:'Sichelstreich',text:'Stärker gegen geschwächte Ziele',            faktor:1.35 },
       { id:'doppelhieb',  name:'Doppelhieb',   text:'Zwei Treffer hintereinander',                faktor:.72 },
       { id:'aderlass',    name:'Aderlass',     text:'Schaden, und ein Teil davon heilt dich',     faktor:1.05 } ],
-    [ { id:'lebensquell', name:'Lebensquell',  text:'Heilt 32 % deiner KP',                       faktor:0 },
+    /* nurVerletzt bekommt, was bei vollem Leben wirklich nichts tut. Frueher
+       hing die Sperre an der Rolle, und damit waren auch Sammelruf und
+       Laeuterung bei vollem Leben tot - obwohl ihr Schild und ihr geschaerfter
+       Treffer genau dann am meisten wert sind. */
+    [ { id:'lebensquell', name:'Lebensquell',  text:'Heilt 32 % deiner KP',                       faktor:0, nurVerletzt:true },
       { id:'sammelruf',   name:'Sammelruf',    text:'Heilt 18 % und gibt ein Schild',             faktor:0 },
       { id:'laeuterung',  name:'Läuterung',    text:'Heilt 22 % und schärft deinen nächsten Treffer', faktor:0 } ],
     [ { id:'runenstoerung',name:'Runenstörung',text:'Schwächt den nächsten Treffer des Gegners',  faktor:.8 },
@@ -1081,6 +1105,11 @@ const SG = { rules: {} };
       { id:'windschnitt', name:'Windschnitt',  text:'Geht durch Deckung und Schilde hindurch',    faktor:1.15 } ]
   ];
   A.faehigkeit = function (u) { return A.FAEHIGKEITEN[u.role][u.skill || 0] || A.FAEHIGKEITEN[u.role][0]; };
+  /* Ob eine Faehigkeit bei vollem Leben verpufft. Dungeon und Arena fragen
+     dieselbe Stelle, sonst gilt im einen Kampf eine andere Regel als im
+     anderen - und genau das war der Fall: im Dungeon war jede Faehigkeit bis
+     zum ersten Treffer gesperrt, auch die reinen Schadensfaehigkeiten. */
+  A.nurBeiSchaden = function (u) { return !!A.faehigkeit(u).nurVerletzt; };
   /* Was eine Runenstufe bringt. Drei Prozent je Stufe auf KP und Angriff statt
      bisher zwei, also bis zu +15 %. Mehr geht nicht: bei +18 % schlaegt ein
      voll aufgewertetes Aussergewoehnliches ein frisches Episches, und damit
@@ -1108,9 +1137,9 @@ const SG = { rules: {} };
   };
   A.moves = function (u, round) {
     var voll = u.maxCharges || A.LADUNGEN, pause = (u.powerPause || A.POWER_PAUSE) - 1, f = A.faehigkeit(u);
-    /* Ein Pfleger darf seine Faehigkeit nur bei Schaden einsetzen - sonst
-       verpufft sie. Die uebrigen gehen immer, solange eine Ladung da ist. */
-    var heiler = f.faktor === 0 && u.role === 2;
+    /* Eine reine Heilung darf nur bei Schaden eingesetzt werden - sonst
+       verpufft sie. Alles andere geht immer, solange eine Ladung da ist. */
+    var heiler = A.nurBeiSchaden(u);
     return [
       { id: 'strike', name: 'Stockhieb', text: 'Zuverlässiger Angriff', damage: u.ang, enabled: true },
       { id: 'power', name: 'Kraftschlag', text: round < u.powerReady ? 'Bereit ab Runde ' + u.powerReady : 'Danach ' + pause + (pause === 1 ? ' Runde Pause' : ' Runden Pause'), damage: Math.round(u.ang * 1.55), enabled: round >= u.powerReady },
@@ -1122,8 +1151,19 @@ const SG = { rules: {} };
     var s = A.stats(mon), hp = Math.round(s.hp * (1 + bonus)), laden = A.ladungen(mon), pause = A.powerPause(mon);
     return { uid: side + i, monId: mon.id, name: mon.name, role: mon.typ, skill: D.faehigkeitVon(mon), wesen: mon.wesen || null, maxHp: hp, hp: hp, ang: Math.round(s.ang * (1 + bonus / 2)), speed: s.tempo, powerReady: 1, charges: laden, maxCharges: laden, powerPause: pause, shield: 0, weakened: false, dornen: false, geschaerft: false, plan: mon.plan || null };
   }
+  /* Ein gespeicherter Verteidiger, wie ihn die Welt haelt. Runenstufe, Wesen
+     und Plan gehoeren dazu, und zwar ueberall gleich: die Grosse Arena hat
+     sich ihre Gegner lange selbst zusammengebaut und dabei Wesen und Plan
+     fallen lassen. Der Champion kaempfte dann nach der Faustregel statt nach
+     dem Plan, den sein Besitzer gesetzt hatte. */
+  A.ausSpeicher = function (e) {
+    var X = SG.gehstockmon.abenteuer, w = X.wesen(e && e.wesen);
+    return Object.assign({}, D.mon(e && (e.id || e.monId)) || D.KATALOG[0],
+      { upgrade: X.upgradeLevel(e && e.upgrade), wesenId: w ? w.id : null, wesen: w ? w.name : null,
+        plan: A.planGueltig(e && e.plan) ? e.plan : null });
+  };
   A.defenders = function (fieldId, saved) {
-    if (saved && saved.length) return saved.map(function (e) { return Object.assign({},D.mon(e.id || e.monId) || D.KATALOG[0],{upgrade:SG.gehstockmon.abenteuer.upgradeLevel(e.upgrade),wesenId:e.wesen||null,plan:A.planGueltig(e.plan)?e.plan:null}); });
+    if (saved && saved.length) return saved.map(function (e) { return A.ausSpeicher(e); });
     var roster = [['moosling','rostknirps'], ['sumpfschnapper','nebelmolch','klinge'], ['kieselkrabb','glutfuchs','donnerwidder'], ['dornenwolf','pilzhueter','nachtflatter'], ['runengolem','frostklaue','seelenqualle','obsidianrabe']];
     /* Das Sonnengrab war ein Abklatsch des Horsts und damit die leichteste
        Stufe unter "Sehr schwer", die es je gab. Jetzt stehen dort vier

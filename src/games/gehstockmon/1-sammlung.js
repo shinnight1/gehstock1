@@ -88,7 +88,7 @@
     moosling:0,glutfuchs:0,nebelmolch:0,rostknirps:0,
     kieselkrabb:1,titanenkrone:1,runengolem:1,salzkrabbe:1,
     wurzelzahn:2,dornenwolf:2,kupferskorp:2,sporenbison:2,runenminotaur:2,risskaiser:2,
-    klingenwolf:1,aschenhydra:1,vulkanmantis:1,obsidianbehemoth:1,
+    aschenhydra:1,vulkanmantis:1,obsidianbehemoth:1,
     weltenfresser:2,sonnenkoenig:2,glutbasilisk:2,blitzotter:2,
     pilzhueter:1,seelenqualle:1,korallenwacht:1,prismensalamander:1,
     mondhexe:2,sternengeweih:2,frostorakel:2,novaorakel:2,nebelkrake:2,

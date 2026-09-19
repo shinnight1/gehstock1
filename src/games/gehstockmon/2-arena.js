@@ -16,7 +16,11 @@
     [ { id:'sichelstreich',name:'Sichelstreich',text:'Stärker gegen geschwächte Ziele',            faktor:1.35 },
       { id:'doppelhieb',  name:'Doppelhieb',   text:'Zwei Treffer hintereinander',                faktor:.72 },
       { id:'aderlass',    name:'Aderlass',     text:'Schaden, und ein Teil davon heilt dich',     faktor:1.05 } ],
-    [ { id:'lebensquell', name:'Lebensquell',  text:'Heilt 32 % deiner KP',                       faktor:0 },
+    /* nurVerletzt bekommt, was bei vollem Leben wirklich nichts tut. Frueher
+       hing die Sperre an der Rolle, und damit waren auch Sammelruf und
+       Laeuterung bei vollem Leben tot - obwohl ihr Schild und ihr geschaerfter
+       Treffer genau dann am meisten wert sind. */
+    [ { id:'lebensquell', name:'Lebensquell',  text:'Heilt 32 % deiner KP',                       faktor:0, nurVerletzt:true },
       { id:'sammelruf',   name:'Sammelruf',    text:'Heilt 18 % und gibt ein Schild',             faktor:0 },
       { id:'laeuterung',  name:'Läuterung',    text:'Heilt 22 % und schärft deinen nächsten Treffer', faktor:0 } ],
     [ { id:'runenstoerung',name:'Runenstörung',text:'Schwächt den nächsten Treffer des Gegners',  faktor:.8 },
@@ -24,6 +28,11 @@
       { id:'windschnitt', name:'Windschnitt',  text:'Geht durch Deckung und Schilde hindurch',    faktor:1.15 } ]
   ];
   A.faehigkeit = function (u) { return A.FAEHIGKEITEN[u.role][u.skill || 0] || A.FAEHIGKEITEN[u.role][0]; };
+  /* Ob eine Faehigkeit bei vollem Leben verpufft. Dungeon und Arena fragen
+     dieselbe Stelle, sonst gilt im einen Kampf eine andere Regel als im
+     anderen - und genau das war der Fall: im Dungeon war jede Faehigkeit bis
+     zum ersten Treffer gesperrt, auch die reinen Schadensfaehigkeiten. */
+  A.nurBeiSchaden = function (u) { return !!A.faehigkeit(u).nurVerletzt; };
   /* Was eine Runenstufe bringt. Drei Prozent je Stufe auf KP und Angriff statt
      bisher zwei, also bis zu +15 %. Mehr geht nicht: bei +18 % schlaegt ein
      voll aufgewertetes Aussergewoehnliches ein frisches Episches, und damit
@@ -51,9 +60,9 @@
   };
   A.moves = function (u, round) {
     var voll = u.maxCharges || A.LADUNGEN, pause = (u.powerPause || A.POWER_PAUSE) - 1, f = A.faehigkeit(u);
-    /* Ein Pfleger darf seine Faehigkeit nur bei Schaden einsetzen - sonst
-       verpufft sie. Die uebrigen gehen immer, solange eine Ladung da ist. */
-    var heiler = f.faktor === 0 && u.role === 2;
+    /* Eine reine Heilung darf nur bei Schaden eingesetzt werden - sonst
+       verpufft sie. Alles andere geht immer, solange eine Ladung da ist. */
+    var heiler = A.nurBeiSchaden(u);
     return [
       { id: 'strike', name: 'Stockhieb', text: 'Zuverlässiger Angriff', damage: u.ang, enabled: true },
       { id: 'power', name: 'Kraftschlag', text: round < u.powerReady ? 'Bereit ab Runde ' + u.powerReady : 'Danach ' + pause + (pause === 1 ? ' Runde Pause' : ' Runden Pause'), damage: Math.round(u.ang * 1.55), enabled: round >= u.powerReady },
@@ -65,8 +74,19 @@
     var s = A.stats(mon), hp = Math.round(s.hp * (1 + bonus)), laden = A.ladungen(mon), pause = A.powerPause(mon);
     return { uid: side + i, monId: mon.id, name: mon.name, role: mon.typ, skill: D.faehigkeitVon(mon), wesen: mon.wesen || null, maxHp: hp, hp: hp, ang: Math.round(s.ang * (1 + bonus / 2)), speed: s.tempo, powerReady: 1, charges: laden, maxCharges: laden, powerPause: pause, shield: 0, weakened: false, dornen: false, geschaerft: false, plan: mon.plan || null };
   }
+  /* Ein gespeicherter Verteidiger, wie ihn die Welt haelt. Runenstufe, Wesen
+     und Plan gehoeren dazu, und zwar ueberall gleich: die Grosse Arena hat
+     sich ihre Gegner lange selbst zusammengebaut und dabei Wesen und Plan
+     fallen lassen. Der Champion kaempfte dann nach der Faustregel statt nach
+     dem Plan, den sein Besitzer gesetzt hatte. */
+  A.ausSpeicher = function (e) {
+    var X = SG.gehstockmon.abenteuer, w = X.wesen(e && e.wesen);
+    return Object.assign({}, D.mon(e && (e.id || e.monId)) || D.KATALOG[0],
+      { upgrade: X.upgradeLevel(e && e.upgrade), wesenId: w ? w.id : null, wesen: w ? w.name : null,
+        plan: A.planGueltig(e && e.plan) ? e.plan : null });
+  };
   A.defenders = function (fieldId, saved) {
-    if (saved && saved.length) return saved.map(function (e) { return Object.assign({},D.mon(e.id || e.monId) || D.KATALOG[0],{upgrade:SG.gehstockmon.abenteuer.upgradeLevel(e.upgrade),wesenId:e.wesen||null,plan:A.planGueltig(e.plan)?e.plan:null}); });
+    if (saved && saved.length) return saved.map(function (e) { return A.ausSpeicher(e); });
     var roster = [['moosling','rostknirps'], ['sumpfschnapper','nebelmolch','klinge'], ['kieselkrabb','glutfuchs','donnerwidder'], ['dornenwolf','pilzhueter','nachtflatter'], ['runengolem','frostklaue','seelenqualle','obsidianrabe']];
     /* Das Sonnengrab war ein Abklatsch des Horsts und damit die leichteste
        Stufe unter "Sehr schwer", die es je gab. Jetzt stehen dort vier

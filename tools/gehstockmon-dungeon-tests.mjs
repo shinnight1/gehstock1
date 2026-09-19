@@ -101,7 +101,11 @@ await test('A common solo Mon can clear the beginner dungeon and four top Mons c
   assert.ok(wegStoerer>wegSchneide,'the scout out-damages the blade against a wall boss: '+wegStoerer+' vs '+wegSchneide);
 });
 await test('Runes enforce rarity, growing costs, stale-level checks, cap and consistent saved defense stats',async()=>{
-  const f=await fixture(),id=f.players[0].playerId;pSetup();function pSetup(){const p=player(f,0);p.besitz.push('sumpfschnapper');p.runes=[15,0,100,100,100,100,100];f.db.data.territories[0].ownerId=id;f.db.data.territories[0].defense=[{id:'glutfuchs'}];}
+  /* Die Verteidigung wird nicht mehr von Hand hingelegt: der Server leitet sie
+     bei jedem Aufruf aus dem Kampfteam des Besitzers ab, damit kein Mon dort
+     stehen bleibt, das ihm gar nicht mehr gehoert. Glutfuchs kommt darum auf
+     Platz eins der Truppe. */
+  const f=await fixture(),id=f.players[0].playerId;pSetup();function pSetup(){const p=player(f,0);p.besitz.push('sumpfschnapper');p.runes=[15,0,100,100,100,100,100];p.truppe=['glutfuchs','moosling','nebelmolch','rostknirps'];f.db.data.territories[0].ownerId=id;}
   assert.equal((await call(f,0,'mon_upgrade',{monId:'sumpfschnapper',level:0,rarity:2,cost:0})).status,400);
   for(let level=0;level<5;level++){
     const requestId='upgrade-level-'+level;let r=ok(await call(f,0,'mon_upgrade',{monId:'glutfuchs',level,requestId}));assert.equal(r.profile.monUpgrades.glutfuchs,level+1);const remaining=r.profile.runes[0];r=ok(await call(f,0,'mon_upgrade',{monId:'glutfuchs',level,requestId}));assert.equal(r.profile.runes[0],remaining);assert.equal(r.territories[0].defense[0].upgrade,level+1);
@@ -133,4 +137,47 @@ await test('Testzone dungeons and upgrades share one temporary session and never
   r=await invoke('join');assert.equal(r.profile.runes[0],1);assert.equal(r.profile.monUpgrades.glutfuchs,1,'the active temporary session survives reloads');
   testTime+=300001;r=await invoke('join');assert.equal(r.profile.runes[0],0);assert.equal(r.profile.monUpgrades.glutfuchs,undefined);assert.equal(r.dungeon,null,'an idle test session starts fresh');
 });
+/* Die zwoelf Faehigkeiten gelten auch im Dungeon - die Sperre davor war aber
+   die alte "heilen nur, wenn verletzt" geblieben. In Runde 1 ist jeder auf
+   vollem Leben, also konnte niemand mit Doppelhieb, Windschnitt oder
+   Dornenpanzer eroeffnen. Nur eine reine Heilung verpufft dann wirklich. */
+await test('Damage abilities open a dungeon round at full health, pure healing does not',async()=>{
+  const f=await fixture();
+  /* Glutfuchs ist eine Schneide mit Sichelstreich: reiner Schaden. */
+  let r=await group(f,1,0,'glutfuchs');
+  const roomId=r.dungeon.id,me=r.dungeon.players[0];
+  assert.equal(A.nurBeiSchaden(me),false,'a blade ability is not pure healing');
+  assert.equal(me.hp,me.maxHp,'and the round starts at full health');
+  assert.equal(me.maxHeals,me.heals,'the UI can show x of y charges');
+  const vorher=r.dungeon.boss.hp;
+  r=ok(await call(f,0,'dungeon_turn',{roomId,round:r.dungeon.round,move:'heal'}));
+  assert.ok(r.dungeon.boss.hp<vorher,'the ability hits: '+r.dungeon.log.join(' | '));
+  assert.ok(r.dungeon.log.some(l=>/Sichelstreich/.test(l)),'and it is the one this Mon carries');
+  /* Ein reiner Heiler bleibt bei vollem Leben gesperrt. */
+  const g=await fixture();
+  const heiler=D.KATALOG.find(k=>k.typ===2&&A.FAEHIGKEITEN[2][D.faehigkeitVon(k)].id==='lebensquell');
+  assert.ok(heiler,'at least one Mon carries Lebensquell');
+  let s=await group(g,1,0,heiler.id);
+  assert.equal((await call(g,0,'dungeon_turn',{roomId:s.dungeon.id,round:s.dungeon.round,move:'heal'})).status,400);
+});
+/* Blendstoss und Runenstoerung schwaechten den Boss beide genau eine Runde -
+   bei weniger Schaden war Blendstoss damit strikt die schlechtere Wahl. */
+await test('Blendstoss blinds the boss longer than Runenstoerung weakens it',()=>{
+  const blend=A.FAEHIGKEITEN[3].find(f=>f.id==='blendstoss'),rune=A.FAEHIGKEITEN[3].find(f=>f.id==='runenstoerung');
+  assert.ok(blend.faktor<rune.faktor,'it still hits softer');
+  const raum=()=>({boss:{hp:1000,maxHp:1000,attack:100,role:0,geschwaecht:false},
+    players:[{id:'x',name:'X',hp:100,maxHp:100,attack:10,role:3,guarding:false,schild:0,missed:0,contributions:0}],
+    actions:{},round:1,revision:0,log:[],deadline:0,phase:'battle',expiresAt:1e15,id:'r',dungeonId:'dungeon-0',players2:null});
+  /* Zwei Runden ohne weiteren Einsatz: die Blendung haelt beide durch. */
+  const r=raum();r.boss.blendung=2;
+  let roh=r.boss.attack*(r.boss.geschwaecht||r.boss.blendung>0?.65:1);
+  assert.equal(roh,65,'round one is softened');
+  r.boss.blendung--;
+  roh=r.boss.attack*(r.boss.geschwaecht||r.boss.blendung>0?.65:1);
+  assert.equal(roh,65,'round two as well');
+  r.boss.blendung--;
+  roh=r.boss.attack*(r.boss.geschwaecht||r.boss.blendung>0?.65:1);
+  assert.equal(roh,100,'and then it is over');
+});
+
 console.log('\n'+checks+' dungeon and balance checks passed.');

@@ -1,6 +1,6 @@
 /* Gemeinsame Expeditionen: eine Lobby und ein synchroner Bosskampf für alle. */
 (function(SG){
-  var R=SG.gehstockmon,D=R.daten,X=R.abenteuer;
+  var R=SG.gehstockmon,D=R.daten,A=R.arena,X=R.abenteuer;
   R.mountDungeons=function(c){
     var el=c.el,button=c.button,room=null,lobbies=[],dismissed=null,pins=[],choice=null;
     function active(){return !!room&&(room.phase!=='finished'||dismissed!==room.id);}
@@ -25,7 +25,7 @@
     function menu(){if(active()){show();return;}if(!c.open('Dungeons & Runen','dungeons'))return;var drawer=c.drawer;
       drawer.appendChild(el('p','Kämpft zusammen gegen einen Boss. Jede Person steuert ein eigenes Mon. Wählt eure Züge gemeinsam; nach 45 Sekunden gehen fehlende Spieler automatisch in Deckung.'));
       X.DUNGEONS.forEach(function(d){var at=c.world().position(),card=el('article',undefined,'gm-quest-card');card.style.setProperty('--rarity',D.SELTENHEITEN[d.rarity].farbe);card.appendChild(el('h3',d.name+' · '+d.difficulty));card.appendChild(el('p',d.reward+' × '+D.SELTENHEITEN[d.rarity].name+'-Rune · '+Math.round(Math.hypot(at.x-d.x,at.z-d.z))+' m'));card.appendChild(button('Dungeon ansehen',function(){entrance(d);}));drawer.appendChild(card);});
-      drawer.appendChild(el('h3','Deine Runen'));D.SELTENHEITEN.forEach(function(r,i){drawer.appendChild(el('p',r.name+': '+c.state().runes[i]));});drawer.appendChild(el('p','Upgrades findest du bei deinen Mons. Nur passende Runen zählen: maximal Stufe 5 und +10 % KP/Angriff. Für die fünf Stufen brauchst du 1, 2, 3, 4 und 5 Runen.'));
+      drawer.appendChild(el('h3','Deine Runen'));D.SELTENHEITEN.forEach(function(r,i){drawer.appendChild(el('p',r.name+': '+c.state().runes[i]));});drawer.appendChild(el('p','Upgrades findest du bei deinen Mons. Nur passende Runen zählen: maximal Stufe '+X.UPGRADE_LIMIT+' und +'+Math.round(X.UPGRADE_LIMIT*A.UPGRADE_BONUS*100)+' % KP/Angriff. Ab Stufe '+A.SCHNELL_AB+' lädt der Kraftschlag eine Runde schneller, ab Stufe '+A.LADUNG_AB+' gibt es eine dritte Ladung. Für die fünf Stufen brauchst du 1, 2, 3, 4 und 5 Runen.'));
     }
     function show(){
       if(!active())return;c.openCombat();var box=c.arenaBox;SG.ui.clear(box);box.className='gm-arena gm-dungeon';
@@ -40,7 +40,12 @@
         panel.appendChild(el('p','Andere Spieler können dieser Gruppe am selben Eingang beitreten. Die Lobby bleibt fünf Minuten offen.'));
       }
       if(room.phase==='battle'&&me){panel.appendChild(el('p','Rundenende in höchstens '+Math.max(0,Math.ceil((room.deadline-c.now())/1000))+' Sekunden. Drei verpasste Runden beenden deine Teilnahme.'));
-        var moves=el('div',undefined,'gm-moves');[['strike','Angreifen','Zuverlässiger Treffer'],['power','Kraftschlag','155 % Schaden · 2 Runden Pause'],['guard','Deckung','60 % weniger Schaden'],['heal','Erholen','25 % KP · '+me.heals+'/2 übrig']].forEach(function(v){var b=button('',function(){run('dungeon_turn',{roomId:room.id,round:room.round,move:v[0]});},'gm-move');b.appendChild(el('strong',v[1]));b.appendChild(el('span',v[2]));b.disabled=c.busy()||me.hp<=0||!!room.actions[me.id]||v[0]==='power'&&room.round<me.powerReady||v[0]==='heal'&&(me.heals<=0||me.hp>=me.maxHp);moves.appendChild(b);});panel.appendChild(moves);(room.log||[]).forEach(function(line){panel.appendChild(el('small',line,'gm-dungeon-log'));});
+        /* Der vierte Knopf hiess "Erholen · 25 % KP" und war damit von der
+           Zeit, als im Dungeon alle dasselbe geheilt haben. Er setzt laengst
+           die Faehigkeit des Mons ein - also steht auch ihr Name daran, ihre
+           Ladungen und die Pause des Kraftschlags, wie sie dieses Mon hat. */
+        var f=A.faehigkeit(me),voll=me.maxHeals||A.LADUNGEN,pause=(me.powerPause||A.POWER_PAUSE)-1;
+        var moves=el('div',undefined,'gm-moves');[['strike','Angreifen','Zuverlässiger Treffer'],['power','Kraftschlag','155 % Schaden · '+pause+(pause===1?' Runde Pause':' Runden Pause')],['guard','Deckung','60 % weniger Schaden'],['heal',f.name,f.text+' · '+me.heals+'/'+voll+' übrig']].forEach(function(v){var b=button('',function(){run('dungeon_turn',{roomId:room.id,round:room.round,move:v[0]});},'gm-move');b.appendChild(el('strong',v[1]));b.appendChild(el('span',v[2]));b.disabled=c.busy()||me.hp<=0||!!room.actions[me.id]||v[0]==='power'&&room.round<me.powerReady||v[0]==='heal'&&(me.heals<=0||A.nurBeiSchaden(me)&&me.hp>=me.maxHp);moves.appendChild(b);});panel.appendChild(moves);(room.log||[]).forEach(function(line){panel.appendChild(el('small',line,'gm-dungeon-log'));});
       }
       var leave=button(room.phase==='finished'?'Zurück zur Karte':'Expedition verlassen',function(){if(room.phase==='finished'){dismissed=room.id;c.closeCombat();}else run('dungeon_leave',{roomId:room.id});},'gm-button gm-secondary');leave.disabled=c.busy();panel.appendChild(leave);
       var retry=button('Expedition prüfen',function(){c.request(R.online.pending()?'resume':'world').then(function(res){c.apply(res);if(active())show();}).catch(c.error);});retry.disabled=c.busy();panel.appendChild(retry);box.appendChild(panel);

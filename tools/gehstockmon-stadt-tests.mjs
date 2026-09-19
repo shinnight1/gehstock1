@@ -214,4 +214,37 @@ await test('A twin from an egg raises the rune level and reaches the saved defen
   const verteidiger=r.territories[0].defense.find(m=>m.id===ziel.id);
   assert.equal(verteidiger.upgrade,1,'the saved defence fights with the new level right away');
 });
+/* Die Grosse Arena baute ihre Gegner frueher selbst zusammen und nahm dabei
+   nur die Runenstufe mit. Wesen und Kampfplan blieben liegen - der Champion
+   kaempfte nach der Faustregel statt nach dem Plan seines Besitzers, obwohl
+   der Planeditor genau das verspricht. */
+await test('A ladder opponent fights with the nature and the plan its owner saved',async()=>{
+  let time=mon;const db=store(),presence=store(),handler=createHandler({store:db,presenceStore:presence,now:()=>time});let serial=0;
+  async function call(code,op,extra={}){const r=await handler(new Request('http://localhost/api/gehstockmon',{method:'POST',body:JSON.stringify({code,op,name:code,requestId:'plan-arena-'+(++serial),...extra})}));return{status:r.status,...await r.json()};}
+  const a=await call(ca,'join'),b=await call(cb,'join');
+  await hinstellen(presence,db,a.playerId,X.STADT_TOR,time);
+  /* Der Verteidiger setzt ein Wesen und einen Plan, der sich am Verhalten
+     ablesen laesst: er geht immer in Deckung. */
+  const pb=db.data.players[b.playerId];
+  pb.wesen={};pb.truppe.forEach(id=>{pb.wesen[id]='wild';});
+  const deckung=[['immer','guard'],['aus','strike'],['aus','strike']];
+  for(const id of pb.truppe)assert.equal((await call(cb,'plan',{monId:id,plan:deckung})).status,200);
+  const liste=await call(ca,'world');
+  const gegner=liste.turnier.gegner.find(g=>g.id===b.playerId);
+  assert.ok(gegner,'the other player is on the ladder');
+  assert.equal(gegner.squad[0].wesen,'wild','the stored line-up carries the nature');
+  assert.deepEqual(gegner.squad[0].plan,deckung,'and the plan');
+  let r=await call(ca,'arena_rang',{targetId:b.playerId});
+  assert.equal(r.status,200,r.error);
+  /* Im Kampf steht beides wirklich drin. */
+  const feind=r.arena.teams[1][0];
+  assert.equal(feind.wesen,X.wesen('wild').name,'the opponent shows its nature in the fight');
+  assert.deepEqual(feind.plan,deckung,'and carries its plan into the fight');
+  const mit=A.stats(X.mon(pb,pb.truppe[0]));
+  assert.equal(feind.maxHp,mit.hp,'and fights with the numbers the nature gives it');
+  /* Und der Plan wirkt: der Gegner deckt sich, statt zurueckzuschlagen. */
+  r=await call(ca,'arena_turn',{battleId:r.arena.id,revision:r.arena.revision,action:{kind:'move',move:'strike'}});
+  assert.ok(r.arena.events.some(e=>/Deckung/.test(e.text)),'he guards, as his plan says: '+r.arena.events.map(e=>e.text).join(' | '));
+});
+
 console.log('\n'+checks+' Stockhafen checks passed.');

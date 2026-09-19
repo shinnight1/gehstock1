@@ -67,8 +67,15 @@ await test('Raids need no seniority any more: a fresh player can rob and be robb
   f.time+=30*60000+1000;await position(f,0,f.players[0].spawn);await position(f,1,f.players[1].spawn);
   assert.equal((await call(f,0,'raid_start',{targetId:f.players[1].playerId})).status,200,'nach 30 Minuten wieder');
 });
-await test('The Zerhacker is reachable: 5000 HP, a lead-aimed walk and a position report that lags behind',async()=>{
+await test('The Zerhacker scales with the crowd, takes a lead-aimed walk and a lagging position report',async()=>{
   const f=await fixture();assert.equal(X.ZERHACKER.kraft,5000);
+  /* Allein bleibt er bei fuenftausend, jeder weitere legt drauf. Die Funktion
+     hat die Spielerzahl lange entgegengenommen und nie angesehen. */
+  assert.equal(X.zerhackerKraft(1),5000);
+  assert.equal(X.zerhackerKraft(3),5000+2*X.ZERHACKER.kraftJeSpieler);
+  assert.equal(X.zerhackerKraft(500),X.ZERHACKER.kraftMax);
+  const kraft=X.zerhackerKraft(Object.keys(f.store.data.players).length);
+  assert.ok(kraft>5000,'die Testwelt hat mehrere Leute: '+kraft);
   const p=mature(f,0);p.zerhackerStand=stamp-40*60000;
   assert.ok(X.zerhackerVorrat(p,f.time)>=1,'Schläge im Beutel');
   /* Derselbe Treffpunkt, den die Oberfläche anpeilt: wo er sein wird, wenn man ankommt. */
@@ -81,11 +88,54 @@ await test('The Zerhacker is reachable: 5000 HP, a lead-aimed walk and a positio
   f.time+=10000;
   const r=await call(f,0,'zerhacker_schlagen');
   assert.equal(r.status,200,r.error);
-  assert.ok(r.zerhacker.hp<5000&&r.zerhacker.hp>0,'Treffer sitzt: '+r.zerhacker.hp);
-  assert.equal(r.zerhacker.maxHp,5000);
+  assert.ok(r.zerhacker.hp<kraft&&r.zerhacker.hp>0,'Treffer sitzt: '+r.zerhacker.hp);
+  assert.equal(r.zerhacker.maxHp,kraft);
   /* Eine laufende Woche mit altem Wert zieht sofort nach, ohne den Schaden zu verlieren. */
-  f.store.data.zerhacker.maxHp=25000;f.store.data.zerhacker.hp=25000-800;
+  f.store.data.zerhacker.maxHp=90000;f.store.data.zerhacker.hp=90000-800;
   const nach=await call(f,0,'world');
-  assert.equal(nach.zerhacker.maxHp,5000);assert.equal(nach.zerhacker.hp,5000-800);
+  assert.equal(nach.zerhacker.maxHp,kraft);assert.equal(nach.zerhacker.hp,kraft-800);
 });
+/* Der Beutel muss sich von selbst fuellen. Er tat es nicht: die Uhr wurde in
+   publicResult gestellt, also erst nach dem Schreiben, und war mit der
+   Antwort wieder weg - der Wochenboss war in normalem Spiel unerreichbar. */
+await test('The Zerhacker clock starts on the first visit of the week and survives the write',async()=>{
+  const f=await fixture();
+  const id=Object.keys(f.store.data.players)[0];
+  assert.ok(Number.isFinite(f.store.data.players[id].zerhackerStand),'die Uhr steht im Spielstand');
+  f.store.data.players[id].zerhackerStand=f.time-25*60000;
+  const r=await call(f,0,'world');
+  assert.ok(r.zerhacker.vorrat>=2,'zwei Schlaege nach 25 Minuten: '+r.zerhacker.vorrat);
+});
+/* Die Fehde wurde nie abgerechnet: die Punkte standen die Woche ueber in der
+   Oberflaeche und waren montags samt Woche verschwunden, obwohl die Meldung
+   "Freitag um 13 Uhr wird abgerechnet" etwas anderes versprach. Und von den
+   sechs Punktarten wurden nur drei ueberhaupt gezaehlt. */
+await test('A feud is settled at the turn of the week, and every point type counts',async()=>{
+  const f=await fixture();
+  const a=f.players[0].playerId,b=f.players[1].playerId;
+  assert.equal(await call(f,0,'fehde_fordern',{targetId:b}).then(r=>r.status),200);
+  let r=await call(f,1,'fehde_annehmen',{targetId:a});
+  assert.equal(r.status,200,r.error);
+  /* Alle sechs Arten lassen sich zaehlen - frueher fehlten Ei, Tiefe und Gebiet. */
+  const paar=f.store.data.fehden.paare[0];
+  for(const art of Object.keys(X.FEHDE_PUNKTE))assert.ok(X.FEHDE_PUNKTE[art]>0,art+' is worth something');
+  Object.assign(paar.zaehlerA,{trainer:2,rune:3,ei:1,tiefe:1,gebiet:1});
+  Object.assign(paar.zaehlerB,{rune:1});
+  const meine=X.fehdePunkte(paar.zaehlerA),seine=X.fehdePunkte(paar.zaehlerB);
+  assert.ok(meine>seine,'the first side is ahead: '+meine+' to '+seine);
+  const stand=await call(f,0,'world');
+  assert.equal(stand.fehde.meine,meine);assert.equal(stand.fehde.seine,seine);
+  const goldA=f.store.data.players[a].gold,goldB=f.store.data.players[b].gold;
+  /* Eine Woche weiter: abgerechnet wird beim Wechsel, und zwar vor dem Schreiben. */
+  f.time+=7*86400000;
+  r=await call(f,0,'world');
+  assert.equal(r.status,200,r.error);
+  assert.equal(f.store.data.players[a].gold,goldA+X.FEHDE_LOHN,'the winner is paid');
+  assert.equal(f.store.data.players[b].gold,goldB+X.FEHDE_TROST,'the other side keeps its consolation');
+  const bericht=r.reports.find(v=>/Fehde gegen/.test(v.text||''));
+  assert.ok(bericht,'the result is readable afterwards: '+r.reports.map(v=>v.text).join(' | '));
+  assert.match(bericht.text,/gewonnen/);
+  assert.equal(f.store.data.fehden.paare.length,0,'and the new week starts empty');
+});
+
 console.log('\n'+count+' adventure integration checks passed.');

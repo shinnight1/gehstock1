@@ -138,7 +138,7 @@
   /* Reichweite mit Rand: Er zieht mit gut einem Schritt je Sekunde weiter,
      und die Standortmeldung darf bis zu 15 Sekunden alt sein. Bei 22 stand
      man neben ihm und der Server sah trotzdem einen zu grossen Abstand. */
-  X.ZERHACKER={runde:11*60000,radius:150,kraft:5000,
+  X.ZERHACKER={runde:11*60000,radius:150,kraft:5000,kraftJeSpieler:1800,kraftMax:30000,
                nachschub:10*60000,vorratMax:12,
                schadenJeStufe:800,beuteRunen:6,beuteGold:400,reichweite:34};
   /* Jede Woche eine gemeinsame Aufgabe, an der alle zusammen zaehlen. Anders
@@ -199,7 +199,14 @@
     return {x:Math.cos(t)*Z.radius,z:Math.sin(t)*Z.radius*0.72-20,
             heading:Math.atan2(-Math.sin(t)*Z.radius,Math.cos(t)*Z.radius*0.72)};
   };
-  X.zerhackerKraft=function(){return X.ZERHACKER.kraft;};
+  /* Seine Lebenskraft waechst mit der Zahl der Leute in der Welt. Beide
+     Aufrufstellen haben die Spielerzahl immer schon uebergeben - die Funktion
+     hat sie nur nie angesehen und stur fuenftausend geliefert. Allein bleibt
+     es dabei, jeder weitere legt achtzehnhundert drauf. */
+  X.zerhackerKraft=function(spieler){
+    var n=Math.max(1,Math.floor(spieler)||1),Z=X.ZERHACKER;
+    return Math.min(Z.kraftMax,Z.kraft+(n-1)*Z.kraftJeSpieler);
+  };
   /* Was ein Schlag austraegt, haengt an der eigenen Truppe - wer aufruestet,
      merkt es hier. */
   X.zerhackerSchaden=function(p){
@@ -264,6 +271,11 @@
      Verloren geht dabei nichts ausser der Woche - genau deshalb kann man sie
      unter Freunden austragen. */
   X.FEHDE_PUNKTE={trainer:10,rune:4,ei:6,tiefe:25,zerhacker:1/200,gebiet:15};
+  /* Am Wochenwechsel wird abgerechnet. Das fehlte: die Punkte standen in der
+     Oberflaeche, und montags waren sie samt Woche verschwunden, ohne dass
+     jemand etwas davon hatte. Verlieren kann man dabei weiterhin nichts - der
+     Unterlegene nimmt seinen Trost mit. */
+  X.FEHDE_LOHN=500;X.FEHDE_TROST=150;
   X.fehdePunkte=function(zaehler){
     var z=zaehler||{},P=X.FEHDE_PUNKTE;
     return Math.round((z.trainer||0)*P.trainer+(z.rune||0)*P.rune+(z.ei||0)*P.ei
@@ -276,9 +288,13 @@
   X.RAENGE=[{name:'Wanderer',ab:0},{name:'Spaeher',ab:60},{name:'Faehrtenleser',ab:150},
             {name:'Hueter',ab:300},{name:'Meister',ab:550},{name:'Legende',ab:900}];
   X.erfahrung=function(p){
-    var g=(p&&p.progress)||{};
+    /* Die erkundeten Biome stehen in p.visited und nicht in p.progress - dort
+       hat die Summe frueher danach gegriffen und dabei immer null gefunden.
+       Neun Gebiete sind zweiundsiebzig Punkte, und die zweite Rangstufe
+       beginnt bei sechzig: der Fehler hat den halben Aufstieg verschluckt. */
+    var g=(p&&p.progress)||{},besucht=((p&&p.visited)||[]).length;
     return (g.trainerWins||0)*10+(g.gathered||0)*4+(g.hatched||0)*6
-         +(g.visited||0)*8+(g.upgrades||0)*5+Math.floor((p&&p.zerhackerGesamt||0)/400);
+         +besucht*8+(g.upgrades||0)*5+Math.floor((p&&p.zerhackerGesamt||0)/400);
   };
   X.rang=function(p){
     var e=X.erfahrung(p),stufe=0;
@@ -366,7 +382,11 @@
     if(gebe.id===suche.id)return 'Such dir etwas anderes aus, als du anbietest.';
     if(gebe.seltenheit!==suche.seltenheit)return 'Getauscht wird nur innerhalb derselben Seltenheit.';
     if(!p.besitz||p.besitz.indexOf(gebe.id)<0)return 'Dieses Mon besitzt du nicht.';
-    if((p.truppe||[]).indexOf(gebe.id)>=0)return 'Nimm es erst aus deiner Truppe.';
+    /* Auch eine Gebietsbesatzung ist Dienst. Vorher sperrte nur das Kampfteam,
+       und wer ein Mon von einem Aussenposten weggab, liess dort eine
+       Verteidigung stehen, die ihm nicht mehr gehoerte. */
+    var ort=X.einsatzOrt(p,gebe.id);
+    if(ort!==null&&ort!==undefined)return gebe.name+' steht '+X.einsatzText(ort)+'. Zieh es erst ab.';
     return null;
   };
 
