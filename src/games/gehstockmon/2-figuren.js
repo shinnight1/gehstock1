@@ -10,5 +10,21 @@
     if(entry){if(entry.ready)draw(entry.image);else entry.wait.push(draw);return;}
     var img=new Image();entry=loaded[key]={image:img,ready:false,wait:[draw]};img.onload=function(){entry.ready=true;entry.wait.splice(0).forEach(function(fn){fn(img);});};img.src=SG.assets[key];
   };
-  R.skinIndex=function(id){var at=R.abenteuer.SKINS.findIndex(function(s){return s.id===id;});return Math.max(0,at);};
+  /* Was in der Welt laeuft. Die ersten 42 Mons haben eine eigens freigestellte
+     Zelle im Atlas - die sieht in der Welt deutlich besser aus als das
+     Sammlungsportrait und bleibt deshalb ihre Quelle. Nur wer dahinter steht,
+     bekommt sein Einzelbild, denn der Atlas hat keinen Platz mehr.
+
+     In beiden Faellen steht die Figur am unteren Rand ihrer Flaeche auf. Wird
+     sie stattdessen mittig gesetzt, schwebt sie ueber dem Boden. */
+  R.drawMon=function(canvas,mon,done){
+    var index=mon&&Number(mon.spriteIndex);
+    if(Number.isFinite(index)&&index<R.daten.ATLAS_MONS)return R.drawAtlas(canvas,'mons',index,done);
+    var key=mon&&mon.bild,entry=loaded[key];
+    function draw(img){var ctx=canvas.getContext('2d'),w=img.naturalWidth||img.width,h=img.naturalHeight||img.height,scale=Math.min(canvas.width/w,canvas.height/h)*.94;
+      ctx.clearRect(0,0,canvas.width,canvas.height);ctx.imageSmoothingEnabled=true;ctx.drawImage(img,(canvas.width-w*scale)/2,canvas.height-h*scale,w*scale,h*scale);if(done)done();
+    }
+    if(entry){if(entry.ready)draw(entry.image);else entry.wait.push(draw);return;}
+    var img=new Image();entry=loaded[key]={image:img,ready:false,wait:[draw]};img.onload=function(){entry.ready=true;entry.wait.splice(0).forEach(function(fn){fn(img);});};img.src=SG.assets[key]||SG.assets['gm-bollwerk'];
+  };  R.skinIndex=function(id){var at=R.abenteuer.SKINS.findIndex(function(s){return s.id===id;});return Math.max(0,at);};
 })(SG);

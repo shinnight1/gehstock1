@@ -72,6 +72,82 @@ function codeGueltig(code) {
   return streu('code:' + c + ':' + GEHEIM) % RASTER === 0;
 }
 
+/* Dieselbe Rollenrechnung wie in src/core/auth.js. Der Server verlaesst
+   sich NICHT auf ein rolle-Feld aus der Anfrage - das koennte jeder
+   faelschen -, sondern rechnet die Rolle aus dem Code selbst nach.
+   Liefert 'S' | 'K' | 'A' oder null (kein gueltiger Code). */
+function rolleVonCode(code) {
+  const c = String(code || '').replace(/\D/g, '');
+  if (c.length !== 4) return null;
+  const h = streu('code:' + c + ':' + GEHEIM);
+  if (h % RASTER !== 0) return null;
+  return ['S', 'K', 'A'][Math.floor(h / RASTER) % 3];
+}
+
+/* Ein Name darf nie zu HTML werden. < und > raus, Steuerzeichen raus,
+   Laenge deckeln - dieselbe Grenze wie der Spielserver. Zweiter Boden
+   unter dem Escapen in der Anzeige (src/core/util.js U.esc). */
+function reinerName(s) {
+  return String(s == null ? '' : s)
+    .replace(/[\x00-\x1f]/g, '')
+    .replace(/[<>]/g, '')
+    .slice(0, 30);
+}
+function reinerText(s, max) {
+  return String(s == null ? '' : s).replace(/[<>]/g, '').slice(0, max || 280);
+}
+
+function banneReinigen(map) {
+  if (!map || typeof map !== 'object') return;
+  for (const k of Object.keys(map)) {
+    const b = map[k];
+    if (b && typeof b === 'object') { b.von = reinerName(b.von); b.grund = reinerText(b.grund, 200); }
+  }
+}
+
+/* Was ein Admin ablegt, wird vor dem Speichern von HTML befreit -
+   Namen, Ansage, Sperrgruende. Kein XSS ueber diese Felder mehr. */
+function verwaltungEntschaerfen(d) {
+  const out = (d && typeof d === 'object') ? JSON.parse(JSON.stringify(d)) : {};
+  if (Array.isArray(out.profile)) {
+    for (const p of out.profile) if (p && typeof p === 'object') p.name = reinerName(p.name);
+  }
+  if (out.ansage && typeof out.ansage === 'object') {
+    out.ansage.text = reinerText(out.ansage.text, 400);
+    out.ansage.von = reinerName(out.ansage.von);
+  }
+  banneReinigen(out.banne);
+  banneReinigen(out.geraeteBanne);
+  if (out.geklaert && typeof out.geklaert === 'object') {
+    for (const k of Object.keys(out.geklaert)) {
+      const g = out.geklaert[k];
+      if (g && typeof g === 'object') { g.von = reinerName(g.von); g.notiz = reinerText(g.notiz, 200); }
+    }
+  }
+  return out;
+}
+
+/* Ein Nicht-Admin darf nur sein EIGENES anfassen: den eigenen Namen und
+   das eigene Geraet. Alles andere in der Verwaltung (Sperren, Owner,
+   BND, fremde Profile) bleibt so, wie es der Server schon kennt. */
+function eigenesUebernehmen(bestand, eingang, code) {
+  const ziel = (bestand && typeof bestand === 'object') ? JSON.parse(JSON.stringify(bestand)) : {};
+  const ein = (eingang && typeof eingang === 'object') ? eingang : {};
+  ziel.profile = Array.isArray(ziel.profile) ? ziel.profile : [];
+  const wunsch = (Array.isArray(ein.profile) ? ein.profile : []).find((e) => e && e.code === code);
+  let eintrag = ziel.profile.find((e) => e && e.code === code);
+  if (!eintrag) { eintrag = { code }; ziel.profile.push(eintrag); }
+  const name = reinerName(wunsch && wunsch.name);
+  if (name) eintrag.name = name;
+  eintrag.rolle = rolleVonCode(code) || 'S';
+  const meineGeraete = ein.geraete && typeof ein.geraete === 'object' ? ein.geraete[code] : null;
+  if (Array.isArray(meineGeraete)) {
+    ziel.geraete = (ziel.geraete && typeof ziel.geraete === 'object') ? ziel.geraete : {};
+    ziel.geraete[code] = meineGeraete.slice(-8);
+  }
+  return ziel;
+}
+
 function store() {
   return speicher('hgh-rooms');
 }
@@ -733,27 +809,30 @@ async function befehl(st, msg) {
    Spielstand sucht.
 
    Darum sagt jede Auslieferung auf Nachfrage, worauf sie schreibt.
-   Zurueck kommen nur Zahlen, keine Namen und keine Codes - genug, um
-   zwei Adressen zu vergleichen: Gleiche Verwaltungsversion und gleiche
+   Zurueck kommen nur Zahlen, keine Namen und keine Codes - deutlich
+   weniger also, als verw:read ohnehin herausgibt. Genug, um zwei
+   Adressen zu vergleichen: Gleiche Verwaltungsversion und gleiche
    Spielerzahl heisst dieselbe Datenbank.
    ================================================================== */
 
 async function status(st) {
-  const v = await st.get('verwaltung', { type: 'json' });
-  let spieler = 0, weltVersion = 0;
+  /* Kein Lesefehler darf die Auskunft verschlucken: Gerade wenn der
+     Speicher nicht erreichbar ist, will man sie hoeren. Dann steht die
+     Speicherart da und daneben, woran es gehakt hat. */
+  const antwort = { speicher: speicherArt(), verwaltung: null, gehstockmon: null, fehler: [] };
   try {
-    const welt = await speicher('hgh-gehstockmon').get('world-v2', { type: 'json' });
-    spieler = Object.keys((welt && welt.players) || {}).length;
-    weltVersion = (welt && welt.version) || 0;
-  } catch (e) { /* die Spielerwelt kann fehlen, das ist kein Fehler */ }
-  return json({
-    speicher: speicherArt(),
-    verwaltung: {
+    const v = await st.get('verwaltung', { type: 'json' });
+    antwort.verwaltung = {
       version: (v && v.version) || 0,
       profile: ((v && v.daten && v.daten.profile) || []).length,
-    },
-    gehstockmon: { spieler: spieler, version: weltVersion },
-  });
+    };
+  } catch (e) { antwort.fehler.push('verwaltung: ' + String((e && e.message) || e)); }
+  try {
+    const welt = await speicher('hgh-gehstockmon').get('world-v2', { type: 'json' });
+    antwort.gehstockmon = { spieler: Object.keys((welt && welt.players) || {}).length, version: (welt && welt.version) || 0 };
+  } catch (e) { antwort.fehler.push('spielerwelt: ' + String((e && e.message) || e)); }
+  if (!antwort.fehler.length) delete antwort.fehler;
+  return json(antwort);
 }
 
 /* ==================================================================
@@ -762,11 +841,23 @@ async function status(st) {
 
 async function verwaltung(st, op, msg) {
   if (op === 'verw:write') {
-    const neu = await mutiere(st, 'verwaltung', (roh) => ({
-      version: ((roh && roh.version) || 0) + 1,
-      daten: msg.daten && typeof msg.daten === 'object' ? msg.daten : {},
-      t: Date.now(),
-    }));
+    /* Ausweiskontrolle. Ohne gueltigen Code gar nichts - das schliesst
+       den anonymen Vollzugriff, mit dem sich frueher jeder die ganze
+       Verwaltung (Sperren, Owner, Profile) ueberschreiben konnte. */
+    const rolle = rolleVonCode(msg.code);
+    if (!rolle) return fail('kein_zugang', 403);
+    const code = String(msg.code).replace(/\D/g, '');
+    const eingang = msg.daten && typeof msg.daten === 'object' ? msg.daten : {};
+    const neu = await mutiere(st, 'verwaltung', (roh) => {
+      const bestand = roh && roh.daten && typeof roh.daten === 'object' ? roh.daten : {};
+      /* Admin darf die ganze Verwaltung setzen (nur von HTML befreit);
+         alle anderen duerfen ausschliesslich ihren eigenen Namen und
+         ihr eigenes Geraet schreiben. */
+      const daten = rolle === 'A'
+        ? verwaltungEntschaerfen(eingang)
+        : eigenesUebernehmen(bestand, eingang, code);
+      return { version: ((roh && roh.version) || 0) + 1, daten, t: Date.now() };
+    });
     await weltBump(st, (w) => { w.verw = (neu && neu.version) || (w.verw + 1); });
     return json(neu || { version: 0, daten: {} });
   }

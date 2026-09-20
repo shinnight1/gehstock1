@@ -1,5 +1,6 @@
 import {data as D,economy as E,arena as A,adventure as X} from './gehstockmon-rules.mjs';
 import {activeDungeon} from './gehstockmon-dungeons.mjs';
+import {stadtSettle} from './gehstockmon-stadt.mjs';
 const fail=(message)=>{throw new Error(message);};
 export const activeArena=p=>p.arena&&p.arena.phase!=='finished';
 export const activeDuel=p=>p.duel&&['choose','won'].includes(p.duel.phase);
@@ -15,6 +16,7 @@ function egg(p,territoryId,now){p.eggs.push({id:'reward-'+territoryId+'-'+now+'-
 export function finishEncounter(world,p,id,now){
   const b=p.arena;if(!b?.kind||b.phase!=='finished'||b.settled)return false;
   b.settled=true;
+  if(b.kind==='rang'||b.kind==='champion')return stadtSettle(world,p,id,now);
   if(b.kind==='trainer'){
     if(b.winner==='wir'&&!p.encounterClaims.includes(b.encounterId)){
       p.encounterClaims=p.encounterClaims.concat(b.encounterId).slice(-100);p.progress.trainerWins++;p.gold+=25;wochenschritt(world,p,id,'trainer',now);fehdeSchritt(world,id,'trainer',now);
@@ -27,7 +29,10 @@ export function finishEncounter(world,p,id,now){
     const target=world.players[b.targetId],lock=target?.raidLock;
     if(b.winner==='wir'&&lock?.attackerId===id&&lock.until>now&&lock.battleId===b.id){
       const stolen=target.eggs.find(e=>e.id===lock.eggId);
-      if(stolen&&p.eggs.length<E.BAG_LIMIT&&(stolen.startedAt===null||p.eggs.filter(e=>e.startedAt!==null).length<E.INCUBATORS)){
+      /* Gekaufte Brutplaetze zaehlen auch hier. Vorher rechnete der Ueberfall
+         gegen die drei festen, und wer sich welche dazugekauft hatte, konnte
+         trotzdem kein bruetendes Ei mitnehmen. */
+      if(stolen&&p.eggs.length<E.BAG_LIMIT&&(stolen.startedAt===null||p.eggs.filter(e=>e.startedAt!==null).length<X.brutplaetze(world.leuchtturm,p))){
         target.eggs=target.eggs.filter(e=>e.id!==stolen.id);p.eggs.push({...stolen,id:'stolen-'+now+'-'+(++p.eggSerial)});target.raidShield=now+2*E.HOUR;
         b.message='Überfall gewonnen! Ein Ei aus '+target.name+'s Tasche gehört dir. Seine Brutzeit bleibt erhalten.';log(world,p,id,b.targetId,'erbeutet ein Ei von '+target.name+'.',now);
         /* Wer den Fuehrenden stellt, kassiert das Kopfgeld. */
@@ -78,8 +83,36 @@ export function zerhacker(world,now){
    Woche, in der sie ausgesprochen wurde. */
 export function fehden(world,now){
   const woche=X.zerhackerWoche(now);
-  if(!world.fehden||world.fehden.woche!==woche)world.fehden={woche,offen:{},paare:[]};
+  if(!world.fehden||world.fehden.woche!==woche){
+    fehdenAbrechnen(world,world.fehden,now);
+    world.fehden={woche,offen:{},paare:[]};
+  }
   return world.fehden;
+}
+/* Beim Wochenwechsel wird abgerechnet. Vorher passierte hier gar nichts: die
+   Punktestaende standen die Woche ueber in der Oberflaeche und waren montags
+   samt Woche verschwunden, ohne dass jemand etwas davon hatte. Der Sieger
+   bekommt Gold, der Unterlegene seinen Trost - verlieren kann man in einer
+   Fehde weiterhin nichts ausser der Woche. */
+export function fehdenAbrechnen(world,alt,now){
+  if(!alt||!Array.isArray(alt.paare))return;
+  for(const paar of alt.paare){
+    const a=world.players[paar.a],b=world.players[paar.b];
+    const pa=X.fehdePunkte(paar.zaehlerA),pb=X.fehdePunkte(paar.zaehlerB);
+    if(!a||!b||(!pa&&!pb))continue;
+    const gleich=pa===pb,siegerId=gleich?null:(pa>pb?paar.a:paar.b);
+    for(const [pid,wer,eigen,fremd] of [[paar.a,a,pa,pb],[paar.b,b,pb,pa]]){
+      const gewonnen=siegerId===pid;
+      wer.gold+=gleich?X.FEHDE_LOHN:gewonnen?X.FEHDE_LOHN:X.FEHDE_TROST;
+      const gegner=(pid===paar.a?b:a).name;
+      world.reports.push({id:'fehde-'+pid+'-'+alt.woche,time:now,attackerId:pid,defenderId:null,territoryId:1,
+        text:'Fehde gegen '+gegner+' beendet: '+eigen+' zu '+fremd+' Punkten · '
+          +(gleich?'unentschieden, beide bekommen '+X.FEHDE_LOHN+' Gold.'
+            :gewonnen?'gewonnen! +'+X.FEHDE_LOHN+' Gold.'
+            :'verloren. '+X.FEHDE_TROST+' Gold Trost.')});
+    }
+  }
+  world.reports=world.reports.slice(-150);
 }
 export function fehdeVon(world,id,now){
   const f=fehden(world,now);
@@ -117,8 +150,11 @@ export function wochenschritt(world,p,id,art,now,anzahl=1){
 
 /* Was der Client von beidem sehen darf. Die Spenderliste wird auf die groessten
    zehn gekuerzt - mehr passt ohnehin nicht auf die Tafel. */
+/* Nur lesen. Die Zerhacker-Uhr wurde frueher hier gestellt - und weil
+   publicResult erst nach dem Schreiben laeuft, ist sie nie im Spielstand
+   gelandet: der Beutel blieb auf null und niemand konnte je zuschlagen. Sie
+   wird jetzt im Handler gestellt, vor dem Schreiben. */
 export function weltprojekte(world,id,now){
-  X.zerhackerUhrStellen(world.players[id],now);
   const bau=leuchtturm(world),z=zerhacker(world,now),a=wochenaufgabe(world,now),ziel=X.wochenziel(now),namen=(eintraege)=>
     Object.entries(eintraege).sort((a,b)=>b[1]-a[1]).slice(0,10)
       .map(([pid,wert])=>({name:world.players[pid]?.name||'Unbekannt',wert,selbst:pid===id}));
@@ -255,7 +291,7 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
     if(X.protected(target,now))fail('Dieser Spieler steht nach einem Diebstahl zwei Stunden unter Schutz.');
     if(p.raidCooldown>now||target.raidLock?.until>now||activeArena(target)||activeDuel(target)||activeDungeon(world,target))fail('Dieser Überfall ist gerade nicht möglich.');
     if(p.eggs.length>=E.BAG_LIMIT)fail('Du brauchst einen freien Platz für ein erbeutetes Ei.');
-    const targetPos=await position(body.targetId);await nearby(targetPos);const victimEgg=target.eggs.find(e=>e.startedAt!==null&&p.eggs.filter(e=>e.startedAt!==null).length<E.INCUBATORS)||target.eggs.find(e=>e.startedAt===null);if(!victimEgg)fail('Dieser Spieler trägt kein Ei, das in deine Brutstation passt.');
+    const targetPos=await position(body.targetId);await nearby(targetPos);const plaetze=X.brutplaetze(world.leuchtturm,p),belegt=p.eggs.filter(e=>e.startedAt!==null).length;const victimEgg=(belegt<plaetze?target.eggs.find(e=>e.startedAt!==null):null)||target.eggs.find(e=>e.startedAt===null);if(!victimEgg)fail('Dieser Spieler trägt kein Ei, das in deine Brutstation passt.');
     p.raidCooldown=now+X.UEBERFALL_PAUSE;p.duel={id:body.requestId,targetId:body.targetId,targetName:target.name,revision:0,round:1,phase:'choose',hp:100,enemyHp:100,weapon:p.weapon,enemyWeapon:target.weapon,enemySkin:target.skin,enemyPanzer:target.panzer||null,until:now+10*60000,message:'Gewinne zuerst das Waffenduell, danach den Mon-Kampf.'};target.raidLock={attackerId:id,eggId:victimEgg.id,until:p.duel.until};
   }
   if(op==='raid_turn'){

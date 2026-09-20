@@ -75,39 +75,66 @@
     for (var i = 0; i < count; i++) st.eggs.push({ id: 'egg-' + id + '-' + now + '-' + (++st.eggSerial), territoryId: id, producedAt: now, startedAt: null, readyAt: null });
     post.eggStock -= count; return count;
   };
-  E.incubate = function (st, id, now) {
+  /* Wie viele Brutplaetze jemand hat, haengt am Leuchtturm und an gekauften
+     Plaetzen - beides weiss nur der Aufrufer. Ohne Angabe bleiben es die drei
+     festen. */
+  E.incubate = function (st, id, now, plaetze) {
+    var frei = Number.isFinite(plaetze) ? Math.max(E.INCUBATORS, plaetze) : E.INCUBATORS;
     var egg = st.eggs.find(function (e) { return e.id === id; });
     if (!egg) throw new Error('Dieses Ei ist nicht in deiner Bruttasche.');
     if (egg.startedAt !== null) throw new Error('Dieses Ei wird bereits ausgebrütet.');
-    if (st.eggs.filter(function (e) { return e.startedAt !== null; }).length >= E.INCUBATORS) throw new Error('Alle drei Brutplätze sind belegt.');
+    if (st.eggs.filter(function (e) { return e.startedAt !== null; }).length >= frei) throw new Error('Alle ' + frei + ' Brutplätze sind belegt.');
     egg.startedAt = Math.max(now, st.clockAt); egg.readyAt = egg.startedAt + E.HATCH_TIME; return egg;
   };
   /* Was aus einem Ei kommt, entscheidet die Seltenheit - und das, was in der
-     Sammlung noch fehlt. Ein Mon, das man schon hat, kann nicht noch einmal
-     kommen; mit jedem Fund verschieben sich also die Aussichten. Genau
-     deshalb rechnet die Anzeige mit demselben Vorrat wie das Schluepfen
+     Sammlung noch fehlt. Ein Mon, das man schon hat, kann wiederkommen, zieht
+     dabei aber nur noch einen Bruchteil des Gewichts auf sich: am Anfang ist
+     fast jedes Ei ein neues Gesicht, gegen Ende sind es lauter Zwillinge.
+     Deshalb rechnet die Anzeige mit demselben Vorrat wie das Schluepfen
      selbst, statt feste Prozente hinzuschreiben, die nach dem dritten Ei
      nicht mehr stimmen. */
   E.SCHLUPF_GEWICHTE = [8, 5, 3.8, 3, 1, .25, .05];
-  E.schlupfChancen = function (st) {
-    var pool = D.KATALOG.filter(function (k) { return st.besitz.indexOf(k.id) < 0; });
-    var summe = pool.reduce(function (s, k) { return s + E.SCHLUPF_GEWICHTE[k.seltenheit]; }, 0);
-    return D.SELTENHEITEN.map(function (r, i) {
-      var offen = pool.filter(function (k) { return k.seltenheit === i; }).length;
-      return { name: r.name, farbe: r.farbe, offen: offen,
-        anteil: summe ? offen * E.SCHLUPF_GEWICHTE[i] / summe : 0 };
-    }).filter(function (v) { return v.offen > 0; });
+  E.DOPPEL_GEWICHT = .35;
+  E.schlupfVorrat = function (st) {
+    return D.KATALOG.map(function (k) {
+      var doppelt = st.besitz.indexOf(k.id) >= 0;
+      return { mon: k, doppelt: doppelt, gewicht: E.SCHLUPF_GEWICHTE[k.seltenheit] * (doppelt ? E.DOPPEL_GEWICHT : 1) };
+    });
   };
+  E.schlupfChancen = function (st) {
+    var vorrat = E.schlupfVorrat(st);
+    var summe = vorrat.reduce(function (s, v) { return s + v.gewicht; }, 0);
+    return D.SELTENHEITEN.map(function (r, i) {
+      var teil = vorrat.filter(function (v) { return v.mon.seltenheit === i; });
+      var gewicht = teil.reduce(function (s, v) { return s + v.gewicht; }, 0);
+      var neu = teil.filter(function (v) { return !v.doppelt; });
+      return { name: r.name, farbe: r.farbe, offen: neu.length,
+        anteil: summe ? gewicht / summe : 0,
+        neuAnteil: summe ? neu.reduce(function (s, v) { return s + v.gewicht; }, 0) / summe : 0 };
+    }).filter(function (v) { return v.anteil > 0; });
+  };
+  /* Ein Zwilling geht nicht verloren: Er steckt seine Kraft in das Mon, das
+     schon da ist, und hebt es eine Runenstufe. Steht es schon auf der
+     hoechsten, zerfaellt er zu Runen seiner eigenen Seltenheit - und die
+     sind umso wertvoller, je seltener er war. */
   E.hatch = function (st, id, now, random) {
+    var X = SG.gehstockmon.abenteuer;
     var egg = st.eggs.find(function (e) { return e.id === id; });
     if (!egg || egg.readyAt === null || now < egg.readyAt) throw new Error('Das Ei ist noch nicht fertig ausgebrütet.');
-    var pool = D.KATALOG.filter(function (k) { return st.besitz.indexOf(k.id) < 0; }), weights = E.SCHLUPF_GEWICHTE, chosen = null;
-    if (pool.length) {
-      var total = pool.reduce(function (sum, k) { return sum + weights[k.seltenheit]; }, 0), pick = Math.max(0, Math.min(0.9999999, Number.isFinite(random) ? random : Math.random())) * total;
-      chosen = pool[pool.length - 1]; for (var i = 0; i < pool.length; i++) { pick -= weights[pool[i].seltenheit]; if (pick < 0) { chosen = pool[i]; break; } }
-      st.besitz.push(chosen.id); st.beschwoerungen++;
-    } else st.gold += 75;
-    st.eggs = st.eggs.filter(function (e) { return e.id !== id; }); return chosen;
+    var vorrat = E.schlupfVorrat(st), chosen = vorrat[vorrat.length - 1];
+    var total = vorrat.reduce(function (sum, v) { return sum + v.gewicht; }, 0);
+    var pick = Math.max(0, Math.min(0.9999999, Number.isFinite(random) ? random : Math.random())) * total;
+    for (var i = 0; i < vorrat.length; i++) { pick -= vorrat[i].gewicht; if (pick < 0) { chosen = vorrat[i]; break; } }
+    st.eggs = st.eggs.filter(function (e) { return e.id !== id; });
+    var mon = chosen.mon;
+    if (!chosen.doppelt) { st.besitz.push(mon.id); st.beschwoerungen++; return { mon: mon, neu: true, stufe: 0, runen: 0 }; }
+    st.monUpgrades = st.monUpgrades || {};
+    var stufe = X.upgradeLevel(st.monUpgrades[mon.id]);
+    if (stufe < X.UPGRADE_LIMIT) { st.monUpgrades[mon.id] = stufe + 1; return { mon: mon, neu: false, stufe: stufe + 1, runen: 0 }; }
+    st.runes = st.runes || D.SELTENHEITEN.map(function () { return 0; });
+    var runen = X.UPGRADE_LIMIT;
+    st.runes[mon.seltenheit] = Math.min(9999, (st.runes[mon.seltenheit] || 0) + runen);
+    return { mon: mon, neu: false, stufe: stufe, runen: runen };
   };
   E.upgrade = function (st, post, now) {
     E.settle(st, post, now); var price = E.LEVELS[post.level].cost;

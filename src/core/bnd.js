@@ -640,7 +640,7 @@
       if (gesperrt) {
         body.appendChild(UI.el('div.notice.warn', {
           style: { marginTop: '10px' },
-          html: '<b>⛔ Gesperrt</b> von ' + gesperrt.von + '<br>' + gesperrt.grund,
+          html: '<b>⛔ Gesperrt</b> von ' + U.esc(gesperrt.von) + '<br>' + U.esc(gesperrt.grund),
         }));
       }
 
@@ -791,7 +791,7 @@
       if (b) {
         body.appendChild(UI.el('div.notice.warn', {
           style: { marginTop: '10px' },
-          html: '<b>Gesperrt</b> von ' + b.von + '<br>' + b.grund,
+          html: '<b>Gesperrt</b> von ' + U.esc(b.von) + '<br>' + U.esc(b.grund),
         }));
       }
 
@@ -804,7 +804,7 @@
       ]));
       if (kl && A.abgedeckt(p.code)) {
         body.appendChild(UI.el('div.notice', {
-          html: '<b>✅ Geprüft</b> von ' + kl.von + ' am '
+          html: '<b>✅ Geprüft</b> von ' + U.esc(kl.von) + ' am '
             + new Date(kl.t).toLocaleDateString('de-DE')
             + (kl.notiz ? '<br>' + kl.notiz : '')
             + '<br><span class="small">Kommt ein weiteres Gerät dazu, '
@@ -919,7 +919,7 @@
         title: '📨 Antrag an die Administration',
         body: [
           UI.el('div.notice', {
-            html: '<b>' + (p.name || 'ohne Namen') + '</b> · ' + A.bndKennung(p.code),
+            html: '<b>' + U.esc(p.name || 'ohne Namen') + '</b> · ' + A.bndKennung(p.code),
           }),
           UI.el('div.sec-head', null, [UI.el('h2', { text: 'Art' })]),
           wahl,

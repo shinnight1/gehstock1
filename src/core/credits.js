@@ -23,7 +23,7 @@
       name: 'Louis',
       rolle: 'Head Developer & Quality Assurance',
       text: 'GehstockMon ist seins — handgemacht entwickelt, von der gemeinsamen '
-        + 'Spielerwelt über die Insel bis zum letzten der 42 Mons. Die Arena hat '
+        + 'Spielerwelt über die Insel bis zum letzten der 57 Mons. Die Arena hat '
         + 'er ebenfalls gebaut. Und was hier erscheint, hat er vorher geprüft.',
     },
     {

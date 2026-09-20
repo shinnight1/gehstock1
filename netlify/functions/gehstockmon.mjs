@@ -1,8 +1,9 @@
 import { speicher } from './lib/speicher.mjs';
 import { createHash } from 'node:crypto';
 import { data as D, economy as E, arena as A, hours as H, adventure as X } from './lib/gehstockmon-rules.mjs';
-import {adventureAction,finishEncounter,expireAdventure,deliverRewards,activeArena,activeDuel,weltprojekte,wochenschritt} from './lib/gehstockmon-adventure.mjs';
+import {adventureAction,finishEncounter,expireAdventure,deliverRewards,activeArena,activeDuel,weltprojekte,wochenschritt,fehdeSchritt,zerhacker,wochenaufgabe,fehden} from './lib/gehstockmon-adventure.mjs';
 import {activeDungeon,settleDungeons,dungeonResult,dungeonAction} from './lib/gehstockmon-dungeons.mjs';
+import {stadtAction,arenaStand,championSold} from './lib/gehstockmon-stadt.mjs';
 import {schenken,schenkungen} from './lib/gehstockmon-schenken.mjs';
 
 const KEY = 'world-v2';
@@ -19,7 +20,7 @@ function volatileStore() {
     },
   };
 }
-const mutations = ['arena_start', 'arena_turn', 'arena_flee', 'collect', 'incubate', 'hatch', 'upgrade', 'defend',...X.OPS];
+const mutations = ['arena_start', 'arena_turn', 'arena_flee', 'collect', 'incubate', 'hatch', 'upgrade', 'defend', 'plan', 'besatzung', 'besatzung_auto',...X.OPS];
 /* Verschenken und Nachlesen sind Verwaltung, kein Spielzug: sie brauchen
    keinen eigenen Spielstand und richten sich nicht nach den Oeffnungszeiten. */
 const ADMIN_OPS = ['admin_grant', 'admin_log'];
@@ -93,9 +94,48 @@ function migrateAndSettle(world, now) {
   for (const [id,p] of Object.entries(world.players)) {
     p.geschafft = world.territories.filter(t=>t.ownerId===id).map(t=>t.id);
     p.outposts = Object.fromEntries(world.territories.filter(t=>t.ownerId===id).map(t=>[t.id,E.outpost(t,now)]));
+    /* Eine Besatzung auf Land, das einem nicht mehr gehoert, bindet vier Mons
+       an einen Posten, den man ueber die Oberflaeche nicht mehr erreicht -
+       sie liessen sich nie wieder einsetzen. Wer ein Gebiet verliert, verliert
+       darum hier auch seine Besatzung, egal auf welchem Weg. */
+    for (const key of Object.keys(p.posten || {})) if (!p.geschafft.includes(Number(key))) delete p.posten[key];
   }
   expireAdventure(world,now);
   settleDungeons(world,now);
+  championSold(world,now);
+  /* Die Wochenwechsel gehoeren vor das Schreiben. Bisher stiessen sie erst in
+     publicResult an - also nachdem der Spielstand schon abgelegt war, und alles
+     was sie dabei gutschrieben, war mit der Antwort wieder weg. */
+  zerhacker(world,now);wochenaufgabe(world,now);fehden(world,now);
+  verteidigungenPruefen(world);
+}
+/* Die gespeicherte Verteidigung soll immer das sein, was der Besitzer gerade
+   aufgestellt hat. Sie an jeder einzelnen Stelle nachzuziehen ging schief:
+   ein weggetauschtes Mon kaempfte auf seinem alten Posten weiter, obwohl es
+   laengst einem anderen gehoerte. Darum wird sie hier einmal fuer alle
+   Gebiete geprueft - und die Version nur erhoeht, wenn sich wirklich etwas
+   geaendert hat, sonst liefe jedem Angreifer sein Kampf davon. */
+function verteidigungenPruefen(world) {
+  for (const t of world.territories) {
+    const p = t.ownerId && world.players[t.ownerId];
+    if (!p) continue;
+    const neu = verteidigung(p, t.id);
+    if (JSON.stringify(neu) !== JSON.stringify(t.defense)) { t.defense = neu; t.version++; }
+  }
+}
+/* Die gespeicherte Verteidigung eines Gebiets: seine eigene Besatzung, sonst
+   das Kampfteam. Sie traegt Runenstufe, Wesen und Kampfplan mit - ohne die
+   kaempfte jedes Gebiet nach derselben festen Heuristik, egal wem es gehoert. */
+function verteidigung(p, territoryId) {
+  return X.besatzung(p, territoryId).map((mid) => {
+    const m = X.mon(p, mid);
+    return { id: mid, upgrade: m.upgrade, wesen: m.wesenId || null, plan: A.planOder(p.plaene && p.plaene[mid]) };
+  });
+}
+/* Nach jeder Aenderung an Truppe, Besatzung oder Planen: alle eigenen Gebiete
+   auf den neuen Stand bringen. */
+function verteidigungenAuffrischen(world, p, id) {
+  for (const t of world.territories) if (t.ownerId === id) { t.defense = verteidigung(p, t.id); t.ownerName = p.name; t.version++; }
 }
 function validateSquad(p, squad) {
   if (!Array.isArray(squad) || squad.length !== 4 || new Set(squad).size !== 4 || squad.some((id) => typeof id !== 'string' || !p.besitz.includes(id) || !D.mon(id))) throw new GameError('Wähle vier verschiedene Mons aus deiner Sammlung.');
@@ -112,7 +152,7 @@ function protectedOwner(world, t, now) {
 function publicResult(world, id, now, extra = {}) {
   const p = world.players[id];
   return { playerId: id, serverTime: now, access: accessFor(now, extra.adminOverride === true), mapVersion: world.mapVersion, dailyDelivery:extra.joining?p.dailyDelivery||0:0,profile: D.neuerStand(p, now), arena: p.arena || null,duel:p.duel||null,spawn:p.spawn,encounters:X.encounters(now,world.territories).filter(e=>!p.encounterClaims.includes(e.id)),
-    ...dungeonResult(world,p), ...weltprojekte(world,id,now), territories: world.territories.map((t) => ({ id: t.id, ownerId: t.ownerId, ownerName: world.players[t.ownerId]?.name || t.ownerName, version: t.version, level: t.level,
+    ...dungeonResult(world,p), ...weltprojekte(world,id,now), ...arenaStand(world,id,now), territories: world.territories.map((t) => ({ id: t.id, ownerId: t.ownerId, ownerName: world.players[t.ownerId]?.name || t.ownerName, version: t.version, level: t.level,
       defense: A.defenders(t.id, t.ownerId ? t.defense : null).map((k) => ({ id: k.id, name: k.name, upgrade:k.upgrade||0 })),
       eggStock: t.ownerId === id ? t.eggStock : 0, eggAt: t.ownerId === id ? t.eggAt : null })),
     reports: world.reports.filter((r) => r.attackerId === id || r.defenderId === id).slice(-20), ...extra };
@@ -135,7 +175,7 @@ async function updatePresence(db, world, id, position, timestamp, clock, bypass 
     if(!route)return json({serverTime:timestamp,access:accessFor(timestamp,bypass),position:{x:from.x,z:from.z,heading:from.heading||0},positionCorrected:true,peers:Object.values(players).filter(v=>v.id!==id).map(({credit,spawnAt,...peer})=>peer)});
     let traveled=0,cursor=from;for(const point of route){traveled+=Math.hypot(point.x-cursor.x,point.z-cursor.z);cursor=point;}
     if (!players[id] || players[id].updatedAt<=timestamp) players[id] = { id, name:p.name, x:Math.round(position.x*100)/100, z:Math.round(position.z*100)/100,
-      heading:position.heading, activity:activeArena(p)||activeDuel(p)||activeDungeon(world,p)?'arena':'map', updatedAt:timestamp,spawnAt:p.lastJoinAt,credit:Math.max(0,credit-traveled),skin:p.skin,weapon:p.weapon,squad:p.truppe.slice(),protected:X.protected(p,timestamp),eier:p.eggs.length };
+      heading:position.heading, activity:activeArena(p)||activeDuel(p)||activeDungeon(world,p)?'arena':'map', updatedAt:timestamp,spawnAt:p.lastJoinAt,credit:Math.max(0,credit-traveled),skin:p.skin,weapon:p.weapon,squad:p.truppe.slice(),protected:X.protected(p,timestamp),eier:p.eggs.length,champion:world.champion?.id===id };
     requireOpen(clock(), bypass);
     const result=await db.setJSON('presence-v1',{players},entry?{onlyIfMatch:entry.etag}:{onlyIfNew:true});
     if(result.modified)return json({serverTime:timestamp,access:accessFor(timestamp,bypass),peers:Object.values(players).filter(v=>v.id!==id).map(({credit,spawnAt,...peer})=>peer)});
@@ -152,13 +192,21 @@ function settleBattle(world, p, id, now, requestId) {
     } else {
       const defender = defenderId && world.players[defenderId];
       if (defender && now - defender.lastSeen >= 12 * E.HOUR) defender.lastOfflineLoss = now;
-      const level = t.level; E.capture(p, t.id, now);
-      Object.assign(t, E.outpost(null, now), { level, ownerId: id, ownerName: p.name, defense: p.truppe.map((mid) => ({ id: mid, upgrade:X.mon(p,mid).upgrade })), version: t.version + 1 });
+      const level = t.level; E.capture(p, t.id, now); fehdeSchritt(world, id, 'gebiet', now);
+      /* Der Verlierer zieht seine Besatzung ab - die vier stehen ihm sofort
+         wieder fuer andere Posten zur Verfuegung. */
+      if (defender && defender.posten) delete defender.posten[t.id];
+      Object.assign(t, E.outpost(null, now), { level, ownerId: id, ownerName: p.name, defense: verteidigung(p, t.id), version: t.version + 1 });
       b.message = 'Gebiet erobert! +40 Gold. Dein Außenposten produziert jetzt Gold und alle 2 Stunden ein Ei.';
     }
   } else b.message = b.winner === 'fled' ? 'Zurückgezogen. Das Gebiet bleibt beim Verteidiger.' : 'Deine Truppe ist zurück im Lager. Versuche andere Attacken oder eine andere Aufstellung.';
   world.reports.push({ id: requestId, time: now, attackerId: id, defenderId, territoryId: t.id, winner: b.winner,
-    text: p.name + (b.winner === 'wir' ? ' erobert ' : b.winner === 'fled' ? ' verlässt ' : ' scheitert an ') + D.FELDER[t.id - 1].name });
+    text: p.name + (b.winner === 'wir' ? ' erobert ' : b.winner === 'fled' ? ' verlässt ' : ' scheitert an ') + D.FELDER[t.id - 1].name,
+    /* Der ganze Kampf zum Nachlesen - vor allem fuer den Verteidiger, der
+       nicht dabei war. Beide Aufstellungen stehen dabei, sonst ist der
+       Verlauf spaeter nicht mehr zu deuten. */
+    runden: b.round, angreifer: b.teams[0].map((u) => u.name), verteidiger: b.teams[1].map((u) => u.name),
+    verlauf: (b.verlauf || []).slice(-60) });
   world.reports = world.reports.slice(-150);
 }
 
@@ -245,6 +293,11 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
           }
         }
         const p = world.players[id]; p.name = name || p.name; p.lastSeen = timestamp;
+        /* Beim ersten Kontakt der Woche beginnt die Zerhacker-Uhr. Sie stand
+           frueher in weltprojekte und damit hinter dem Schreiben: der Stand
+           wurde jedes Mal neu gesetzt und nie abgelegt, der Beutel blieb auf
+           null, und der Wochenboss war schlicht unerreichbar. */
+        X.zerhackerUhrStellen(p, timestamp);
         if(body.op==='join'){p.dailyDelivery=E.deliverDaily(p);p.lastJoinAt=timestamp;p.spawn=X.outside(X.SPAWN,X.layout(world.territories));}
         const receipts = p.actionReceipts || [], receipt = receipts.find((r) => r.id === body.requestId && r.op === body.op);
         if (receipt) return json(publicResult(world, id, timestamp, { ...receipt.extra, duplicate: true, adminOverride: bypass }));
@@ -255,21 +308,59 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
           if(activeDungeon(world,p)&&mutations.includes(body.op)&&!X.DUNGEON_OPS.includes(body.op))throw new GameError('Beende zuerst deine Dungeon-Expedition.',409);
           if(p.raidLock?.until>timestamp&&(['arena_start','trainer_start','raid_start','defend'].includes(body.op)||(['hatch','incubate'].includes(body.op)&&body.eggId===p.raidLock.eggId)))throw new GameError('Deine Verteidigung hält gerade einen Überfall ab. Dieses Ei bleibt bis zum Ergebnis reserviert.',409);
           if(X.DUNGEON_OPS.includes(body.op)||body.op==='mon_upgrade')Object.assign(extra,await dungeonAction({world,p,id,body,now:timestamp,presence:presenceStore||speicher('hgh-gehstockmon-presence')}));
+          else if(X.STADT_OPS.includes(body.op))Object.assign(extra,await stadtAction({world,p,id,body,now:timestamp,presence:presenceStore||speicher('hgh-gehstockmon-presence')}));
           else if(X.OPS.includes(body.op))Object.assign(extra,await adventureAction({world,p,id,body,now:timestamp,draw,presence:presenceStore||speicher('hgh-gehstockmon-presence'),validateSquad}));
           if (body.op === 'arena_start' || body.op === 'defend') {
             if (p.arena && p.arena.phase !== 'finished') throw new GameError('Beende zuerst deinen aktuellen Arenakampf.', 409);
-            p.truppe = validateSquad(p, body.squad);
+            const fehler = X.truppePruefen(p, body.squad, 'kampfteam');
+            if (fehler) throw new GameError(fehler);
+            p.truppe = body.squad.slice();
           }
           if (body.op === 'defend') {
-            for (const t of world.territories) if (t.ownerId === id) { t.defense = p.truppe.map((mid) => ({ id: mid, upgrade:X.mon(p,mid).upgrade })); t.ownerName = p.name; t.version++; }
-            extra.message = 'Deine Truppe verteidigt jetzt alle deine Außenposten.';
+            verteidigungenAuffrischen(world, p, id);
+            extra.message = 'Dein Kampfteam steht. Außenposten ohne eigene Besatzung halten damit ihre Stellung.';
+          }
+          if (body.op === 'besatzung_auto') {
+            /* Neun Posten von Hand zu besetzen sind sechsunddreissig
+               Auswahlen. Hier verteilt das Spiel die freien Mons selbst -
+               und laesst alles stehen, was schon gesetzt ist. */
+            const meine = world.territories.filter((t) => t.ownerId === id);
+            if (!meine.length) throw new GameError('Du hältst noch keinen Außenposten.');
+            const plan = X.autoBesetzen(p, meine.map((t) => ({ id: t.id, level: t.level })));
+            if (!plan.length) throw new GameError('Dafür sind nicht genug freie Mons da. Jeder Posten braucht vier, die nirgends sonst Dienst tun.');
+            for (const eintrag of plan) p.posten[eintrag.id] = eintrag.squad.slice();
+            verteidigungenAuffrischen(world, p, id);
+            extra.message = plan.length === 1
+              ? D.FELDER[plan[0].id - 1].name + ' hat jetzt eine eigene Besatzung.'
+              : plan.length + ' Außenposten haben jetzt eigene Besatzungen.';
+          }
+          if (body.op === 'besatzung') {
+            const t = target(world, body.territoryId);
+            if (t.ownerId !== id) throw new GameError('Dieser Außenposten gehört dir nicht.', 403);
+            if (body.squad === null) {
+              /* Abziehen: das Gebiet faellt auf das Kampfteam zurueck und die
+                 vier Mons stehen wieder zur Verfuegung. */
+              delete p.posten[t.id];
+              extra.message = D.FELDER[t.id - 1].name + ' wird wieder vom Kampfteam gehalten.';
+            } else {
+              const fehler = X.truppePruefen(p, body.squad, t.id);
+              if (fehler) throw new GameError(fehler);
+              p.posten[t.id] = body.squad.slice();
+              extra.message = D.FELDER[t.id - 1].name + ' hat jetzt eine eigene Besatzung.';
+            }
+            verteidigungenAuffrischen(world, p, id);
           }
           if (body.op === 'arena_start') {
             const t = target(world, body.territoryId);
             if (t.ownerId === id) throw new GameError('Dieses Gebiet gehört dir bereits.');
             if (t.version !== body.version) throw new GameError('Die Verteidigung hat sich verändert. Aktualisiere die Spielerwelt.', 409);
             if (protectedOwner(world, t, timestamp)) throw new GameError('Abwesenheitsschutz: Dieser Spieler hat bereits ein Gebiet verloren.', 409);
-            p.arena = A.create(p.truppe.map(mid=>X.mon(p,mid)), A.defenders(t.id, t.ownerId ? t.defense : null), { id: body.requestId, territoryId: t.id, version: t.version, level: t.level, npcTerritory: !t.ownerId, now: timestamp });
+            /* Wer weniger Land haelt als sein Ziel, schlaegt haerter zu. */
+            const meine = world.territories.filter((v) => v.ownerId === id).length;
+            const seine = t.ownerId ? world.territories.filter((v) => v.ownerId === t.ownerId).length : 0;
+            const aussenseiter = X.aussenseiterBonus(meine, seine);
+            p.arena = A.create(p.truppe.map(mid=>X.mon(p,mid)), A.defenders(t.id, t.ownerId ? t.defense : null), { id: body.requestId, territoryId: t.id, version: t.version, level: t.level, npcTerritory: !t.ownerId, aussenseiter, now: timestamp });
+            if (aussenseiter) extra.message = 'Außenseiterhilfe: +' + Math.round(aussenseiter * 100) + ' % KP und Angriff, weil ' + t.ownerName + ' mehr Gebiete hält als du.';
           }
           if (body.op === 'arena_turn' || body.op === 'arena_flee') {
             const b = p.arena;
@@ -278,14 +369,39 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
             p.arena = body.op === 'arena_flee' ? A.flee(b) : A.turn(b, body.action);
             p.arena.lastActionAt = timestamp; settleBattle(world, p, id, timestamp, body.requestId);
           }
+          if (body.op === 'plan') {
+            const mon = D.mon(body.monId);
+            if (!mon || !p.besitz.includes(mon.id)) throw new GameError('Wähle ein Mon aus deiner Sammlung.');
+            if (!A.planGueltig(body.plan)) throw new GameError('Dieser Kampfplan ist nicht gültig.');
+            p.plaene = p.plaene || {}; p.plaene[mon.id] = body.plan.map((z) => z.slice(0, 2));
+            /* Der Plan gilt sofort auf jedem Aussenposten, auf dem das Mon steht. */
+            verteidigungenAuffrischen(world, p, id);
+            extra.monId = mon.id;
+            extra.message = mon.name + ' kämpft jetzt nach deinem Plan - auch wenn du offline bist.';
+          }
           if (body.op === 'collect' || body.op === 'upgrade') {
             const t = target(world, body.territoryId);
             if (t.ownerId !== id) throw new GameError('Dieser Außenposten gehört dir nicht.', 403);
             if (body.op === 'collect') extra.message = E.collect(p,t,t.id,timestamp) + ' Ei(er) in deiner Bruttasche.';
             else { E.upgrade(p,t,timestamp); p.progress.upgrades++;t.version++; extra.message = E.LEVELS[t.level].name + ' fertig: mehr Einkommen und stärkere Verteidigung.'; }
           }
-          if (body.op === 'incubate') { E.incubate(p,body.eggId,timestamp); extra.message = 'Die Brutzeit hat begonnen: 1 Stunde.'; }
-          if (body.op === 'hatch') { const mon = E.hatch(p,body.eggId,timestamp,draw);p.progress.hatched++; wochenschritt(world, p, id, 'eier', timestamp); if (mon) X.wesenZuweisen(p, mon.id, draw); extra.monId = mon && mon.id; extra.message = mon ? mon.name + ' ist geschlüpft' + (X.wesenVon(p, mon.id) ? ' - ein ' + X.wesenVon(p, mon.id).name + 'es Wesen!' : '!') : 'Sammlung vollständig! Das Ei bringt dir 75 Gold.'; }
+          if (body.op === 'incubate') { E.incubate(p,body.eggId,timestamp,X.brutplaetze(world.leuchtturm,p)); extra.message = 'Die Brutzeit hat begonnen: 1 Stunde.'; }
+          if (body.op === 'hatch') {
+            const schlupf = E.hatch(p,body.eggId,timestamp,draw), mon = schlupf.mon;
+            p.progress.hatched++; wochenschritt(world, p, id, 'eier', timestamp); fehdeSchritt(world, id, 'ei', timestamp);
+            X.wesenZuweisen(p, mon.id, draw); extra.monId = mon.id; extra.schlupf = schlupf;
+            /* Ein Zwilling ist kein Trostpreis: entweder hebt er die Runenstufe
+               des Mons, das schon da ist, oder er zerfaellt zu Runen. */
+            extra.message = schlupf.neu
+              ? mon.name + ' ist geschlüpft' + (X.wesenVon(p, mon.id) ? ' - ein ' + X.wesenVon(p, mon.id).name + 'es Wesen!' : '!')
+              : schlupf.runen
+                ? 'Ein zweiter ' + mon.name + '! Er steht schon auf Runenstufe 5 - sein Zwilling zerfällt zu ' + schlupf.runen + ' ' + D.SELTENHEITEN[mon.seltenheit].name + '-Runen.'
+                : 'Ein zweiter ' + mon.name + '! Beide werden eins: Runenstufe ' + schlupf.stufe + '/' + X.UPGRADE_LIMIT + ', jetzt +' + Math.round(schlupf.stufe * A.UPGRADE_BONUS * 100) + ' % KP und Angriff.';
+            /* Steht das Mon in einer Verteidigung, kaempft es dort sofort mit
+               der neuen Stufe - sonst haette der Zwilling auf dem eigenen Land
+               keine Wirkung. */
+            if (!schlupf.neu && schlupf.stufe) verteidigungenAuffrischen(world, p, id);
+          }
           deliverRewards(p,timestamp);
           const weekendEggs = activeArena(p)||activeDuel(p)?0:E.deliverWeekend(p, timestamp);
           if (weekendEggs) extra.weekendDelivery = weekendEggs;

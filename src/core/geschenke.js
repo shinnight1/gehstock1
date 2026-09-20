@@ -21,6 +21,7 @@
 (function (SG) {
   var UI = SG.ui;
   var A = SG.auth;
+  var U = SG.util;
 
   var G = SG.geschenke = {};
 
@@ -226,7 +227,7 @@
       wide: true,
       body: [
         UI.el('div.notice', {
-          html: '<b>' + (person.name || 'ohne Namen') + '</b><br>' + A.schoen(person.code)
+          html: '<b>' + U.esc(person.name || 'ohne Namen') + '</b><br>' + A.schoen(person.code)
             + '<br><span class="small">Wer noch nie gespielt hat, bekommt das '
             + 'Konto gleich mit angelegt.</span>',
         }),

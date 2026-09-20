@@ -14,8 +14,21 @@ async function position(f,index,at){return call(f,index,'presence',{position:{..
 async function walk(f,index,target){const p=f.players[index],route=X.route(X.layout(f.store.data.territories),p.position||p.spawn,target,p.playerId);assert.ok(route,'destination reachable');let at={...(p.position||p.spawn)};await position(f,index,at);for(const to of route){let distance=Math.hypot(to.x-at.x,to.z-at.z);while(distance>.01){const step=Math.min(18,distance);at={x:at.x+(to.x-at.x)/distance*step,z:at.z+(to.z-at.z)/distance*step};f.time+=2000;const r=await position(f,index,at);assert.ok(!r.positionCorrected,'valid walk accepted');distance=Math.hypot(to.x-at.x,to.z-at.z);}}p.position=at;if(target.kind==='trainer'){const live=X.encounterPosition(target,f.time);if(Math.hypot(live.x-at.x,live.z-at.z)>3)return walk(f,index,{...target,...live});}return at;}
 function mature(f,index){const p=f.store.data.players[f.players[index].playerId];p.joinedAt=stamp-48*E.HOUR;p.besitz=D.KATALOG.map(k=>k.id);p.gold=2500;return p;}
 function seedEggs(p,now){p.eggs=[{id:'warm-egg',territoryId:6,producedAt:now-2*E.HOUR,startedAt:now-30*60000,readyAt:now+30*60000},{id:'bag-egg',territoryId:1,producedAt:now,startedAt:null,readyAt:null}];}
-await test('Nine regions, seven rarities, two apocalyptic Mons, and four distinct new difficulty levels',()=>{
-  assert.equal(D.KATALOG.length,42);assert.equal(D.SELTENHEITEN.length,7);assert.deepEqual(D.KATALOG.filter(k=>k.seltenheit===6).map(k=>k.id),['endrichter','nullwyrm']);
+await test('Nine regions, seven rarities, three apocalyptic Mons, and four distinct new difficulty levels',()=>{
+  assert.equal(D.KATALOG.length,57);assert.equal(new Set(D.KATALOG.map(k=>k.id)).size,57);assert.equal(D.SELTENHEITEN.length,7);
+  assert.deepEqual(D.KATALOG.filter(k=>k.seltenheit===6).map(k=>k.id),['endrichter','nullwyrm','risskaiser']);
+  /* Die fuenfzehn Nachzuegler kamen nach dem Seltenheits-Shift hinein und
+     verteilen sich 3/4/3/2/2/1 ueber Selten bis Apokalyptisch. */
+  const neue=['blitzotter','mondluchs','salzkrabbe','sporenbison','prismensalamander','nebelkrake','stahlkolibri','glutbasilisk','runenminotaur','frostmanta','aurorabaer','obsidianbehemoth','novaorakel','zeitphoenix','risskaiser'];
+  assert.equal(neue.length,15);
+  const verteilung=[0,0,0,0,0,0,0];for(const id of neue){const m=D.mon(id);assert.ok(m,id);verteilung[m.seltenheit]++;}
+  assert.deepEqual(verteilung,[0,3,4,3,2,2,1]);
+  /* Jedes Mon traegt eine der vier Rollen und ein eigenes Bild. */
+  for(const id of neue){const m=D.mon(id);assert.ok(m.typ>=0&&m.typ<4,id);assert.equal(m.bild,'gm-'+id);assert.ok(m.worldSize>0,id);}
+  assert.ok(D.mon('risskaiser').worldSize>D.mon('nullwyrm').worldSize,'the world-ender towers over the Nullwyrm');
+  /* Die drei Schaubilder haengen genau an den drei vorgesehenen Mons. */
+  assert.deepEqual(D.KATALOG.filter(k=>k.vorschau).map(k=>k.id),['novaorakel','zeitphoenix','risskaiser']);
+  for(const k of D.KATALOG.filter(k=>k.vorschau))assert.equal(k.vorschau,k.bild+'-vorschau');
   const strength=id=>A.defenders(id).reduce((s,k)=>s+A.stats(k).hp+A.stats(k).ang,0),old=Math.max(...[1,2,3,4,5].map(strength));assert.ok(strength(6)<strength(1));assert.ok(strength(7)>old);assert.ok(strength(8)>strength(7));assert.ok(strength(9)>strength(8));
   let b=A.create(D.STARTER.map(D.mon),A.defenders(6),{});for(let i=0;i<80&&b.phase!=='finished';i++)b=A.turn(b,move(b));assert.equal(b.winner,'wir');
 });
@@ -54,8 +67,15 @@ await test('Raids need no seniority any more: a fresh player can rob and be robb
   f.time+=30*60000+1000;await position(f,0,f.players[0].spawn);await position(f,1,f.players[1].spawn);
   assert.equal((await call(f,0,'raid_start',{targetId:f.players[1].playerId})).status,200,'nach 30 Minuten wieder');
 });
-await test('The Zerhacker is reachable: 5000 HP, a lead-aimed walk and a position report that lags behind',async()=>{
+await test('The Zerhacker scales with the crowd, takes a lead-aimed walk and a lagging position report',async()=>{
   const f=await fixture();assert.equal(X.ZERHACKER.kraft,5000);
+  /* Allein bleibt er bei fuenftausend, jeder weitere legt drauf. Die Funktion
+     hat die Spielerzahl lange entgegengenommen und nie angesehen. */
+  assert.equal(X.zerhackerKraft(1),5000);
+  assert.equal(X.zerhackerKraft(3),5000+2*X.ZERHACKER.kraftJeSpieler);
+  assert.equal(X.zerhackerKraft(500),X.ZERHACKER.kraftMax);
+  const kraft=X.zerhackerKraft(Object.keys(f.store.data.players).length);
+  assert.ok(kraft>5000,'die Testwelt hat mehrere Leute: '+kraft);
   const p=mature(f,0);p.zerhackerStand=stamp-40*60000;
   assert.ok(X.zerhackerVorrat(p,f.time)>=1,'Schläge im Beutel');
   /* Derselbe Treffpunkt, den die Oberfläche anpeilt: wo er sein wird, wenn man ankommt. */
@@ -68,11 +88,54 @@ await test('The Zerhacker is reachable: 5000 HP, a lead-aimed walk and a positio
   f.time+=10000;
   const r=await call(f,0,'zerhacker_schlagen');
   assert.equal(r.status,200,r.error);
-  assert.ok(r.zerhacker.hp<5000&&r.zerhacker.hp>0,'Treffer sitzt: '+r.zerhacker.hp);
-  assert.equal(r.zerhacker.maxHp,5000);
+  assert.ok(r.zerhacker.hp<kraft&&r.zerhacker.hp>0,'Treffer sitzt: '+r.zerhacker.hp);
+  assert.equal(r.zerhacker.maxHp,kraft);
   /* Eine laufende Woche mit altem Wert zieht sofort nach, ohne den Schaden zu verlieren. */
-  f.store.data.zerhacker.maxHp=25000;f.store.data.zerhacker.hp=25000-800;
+  f.store.data.zerhacker.maxHp=90000;f.store.data.zerhacker.hp=90000-800;
   const nach=await call(f,0,'world');
-  assert.equal(nach.zerhacker.maxHp,5000);assert.equal(nach.zerhacker.hp,5000-800);
+  assert.equal(nach.zerhacker.maxHp,kraft);assert.equal(nach.zerhacker.hp,kraft-800);
 });
+/* Der Beutel muss sich von selbst fuellen. Er tat es nicht: die Uhr wurde in
+   publicResult gestellt, also erst nach dem Schreiben, und war mit der
+   Antwort wieder weg - der Wochenboss war in normalem Spiel unerreichbar. */
+await test('The Zerhacker clock starts on the first visit of the week and survives the write',async()=>{
+  const f=await fixture();
+  const id=Object.keys(f.store.data.players)[0];
+  assert.ok(Number.isFinite(f.store.data.players[id].zerhackerStand),'die Uhr steht im Spielstand');
+  f.store.data.players[id].zerhackerStand=f.time-25*60000;
+  const r=await call(f,0,'world');
+  assert.ok(r.zerhacker.vorrat>=2,'zwei Schlaege nach 25 Minuten: '+r.zerhacker.vorrat);
+});
+/* Die Fehde wurde nie abgerechnet: die Punkte standen die Woche ueber in der
+   Oberflaeche und waren montags samt Woche verschwunden, obwohl die Meldung
+   "Freitag um 13 Uhr wird abgerechnet" etwas anderes versprach. Und von den
+   sechs Punktarten wurden nur drei ueberhaupt gezaehlt. */
+await test('A feud is settled at the turn of the week, and every point type counts',async()=>{
+  const f=await fixture();
+  const a=f.players[0].playerId,b=f.players[1].playerId;
+  assert.equal(await call(f,0,'fehde_fordern',{targetId:b}).then(r=>r.status),200);
+  let r=await call(f,1,'fehde_annehmen',{targetId:a});
+  assert.equal(r.status,200,r.error);
+  /* Alle sechs Arten lassen sich zaehlen - frueher fehlten Ei, Tiefe und Gebiet. */
+  const paar=f.store.data.fehden.paare[0];
+  for(const art of Object.keys(X.FEHDE_PUNKTE))assert.ok(X.FEHDE_PUNKTE[art]>0,art+' is worth something');
+  Object.assign(paar.zaehlerA,{trainer:2,rune:3,ei:1,tiefe:1,gebiet:1});
+  Object.assign(paar.zaehlerB,{rune:1});
+  const meine=X.fehdePunkte(paar.zaehlerA),seine=X.fehdePunkte(paar.zaehlerB);
+  assert.ok(meine>seine,'the first side is ahead: '+meine+' to '+seine);
+  const stand=await call(f,0,'world');
+  assert.equal(stand.fehde.meine,meine);assert.equal(stand.fehde.seine,seine);
+  const goldA=f.store.data.players[a].gold,goldB=f.store.data.players[b].gold;
+  /* Eine Woche weiter: abgerechnet wird beim Wechsel, und zwar vor dem Schreiben. */
+  f.time+=7*86400000;
+  r=await call(f,0,'world');
+  assert.equal(r.status,200,r.error);
+  assert.equal(f.store.data.players[a].gold,goldA+X.FEHDE_LOHN,'the winner is paid');
+  assert.equal(f.store.data.players[b].gold,goldB+X.FEHDE_TROST,'the other side keeps its consolation');
+  const bericht=r.reports.find(v=>/Fehde gegen/.test(v.text||''));
+  assert.ok(bericht,'the result is readable afterwards: '+r.reports.map(v=>v.text).join(' | '));
+  assert.match(bericht.text,/gewonnen/);
+  assert.equal(f.store.data.fehden.paare.length,0,'and the new week starts empty');
+});
+
 console.log('\n'+count+' adventure integration checks passed.');

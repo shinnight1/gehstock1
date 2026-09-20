@@ -104,15 +104,65 @@
         crystal.rotation.z = (c - 2) * 0.12;
       }
     }
-    for(var n=0;n<260;n++){var tx=Math.sin(n*83.17)*260,tz=Math.cos(n*47.31)*230;if(!X.walkable({x:tx,z:tz})||R.orte.some(function(o){return Math.hypot(o.x-tx,o.z-tz)<25;})||X.DUNGEONS.some(function(d){return Math.hypot(d.x-tx,d.z-tz)<10;}))continue;tree(tx,tz,2+n%4*.7,false);if(n%3===0)mesh(fixed,'rock','#768479',tx+3,.6,tz+2,2,1.2,2);}
+    for(var n=0;n<260;n++){var tx=Math.sin(n*83.17)*260,tz=Math.cos(n*47.31)*230;if(!X.walkable({x:tx,z:tz})||X.inStadt({x:tx,z:tz})||R.orte.some(function(o){return Math.hypot(o.x-tx,o.z-tz)<25;})||X.DUNGEONS.some(function(d){return Math.hypot(d.x-tx,d.z-tz)<10;}))continue;tree(tx,tz,2+n%4*.7,false);if(n%3===0)mesh(fixed,'rock','#768479',tx+3,.6,tz+2,2,1.2,2);}
     building(X.SPAWN.x-10, X.SPAWN.z-7, 2, '#366d79');
     var altar = mesh(fixed, 'ring', '#e4bd69', X.SPAWN.x, 0.15, X.SPAWN.z, 4, 4, 4, '#766132'); altar.rotation.x = Math.PI / 2;
     X.DUNGEONS.forEach(function(d){var color=R.daten.SELTENHEITEN[d.rarity].farbe;mesh(fixed,'rock','#444b50',d.x-2,2,d.z,2,4.5,2.8);mesh(fixed,'rock','#444b50',d.x+2,2,d.z,2,4.5,2.8);mesh(fixed,'rock','#626569',d.x,4.3,d.z,5.8,1.8,3);mesh(fixed,'ring',color,d.x,2.1,d.z+.3,3.8,3.8,1,color);mesh(fixed,'box','#121724',d.x,1.8,d.z,2.6,3.5,.3);});
 
+    /* Stockhafen. Das Rund in der Mitte ist die Grosse Arena und zugleich ein
+       massives Hindernis: X.walkable sperrt genau diesen Kreis, also laeuft man
+       aussen herum. Sichtbar wird das durch eine geschlossene Mauer mit einem
+       verriegelten Tor - wer hineinwill, tritt an, statt durchzuspazieren. */
+    (function () {
+      var S = X.STADT, B = X.ARENA_BAU, ecken = 24;
+      /* 'land' statt 'cylinder': derselbe Koerper, aber mit 96 statt 10 Kanten.
+         Mit zehn sah der Stadtplatz aus wie ein Achteck. */
+      var platz = mesh(fixed, 'land', '#9c9281', S.x, 0.06, S.z, S.radius * 2, 0.12, S.radius * 2);
+      platz.castShadow = false;
+      mesh(fixed, 'land', '#8a7f6e', S.x, 0.1, S.z, (B.radius + 4) * 2, 0.1, (B.radius + 4) * 2).castShadow = false;
+      /* Aussenmauer aus einzelnen Quadern: ein Ring aus Boxen wirft saubere
+         Schatten und kostet nichts gegenueber einer echten Roehre. */
+      for (var e = 0; e < ecken; e++) {
+        var winkel = e / ecken * Math.PI * 2;
+        var wx = B.x + Math.cos(winkel) * B.radius, wz = B.z + Math.sin(winkel) * B.radius;
+        var stein = mesh(fixed, 'box', e % 2 ? '#a79a86' : '#96897a', wx, 4.2, wz, 3.5, 8.4, 2.4);
+        stein.rotation.y = -winkel;
+        /* Zinnen: jede zweite Luecke bleibt frei, das gibt dem Rund oben Kante. */
+        if (e % 2 === 0) { var zinne = mesh(fixed, 'box', '#b3a793', wx, 8.9, wz, 1.6, 1.2, 2.4); zinne.rotation.y = -winkel; }
+      }
+      /* Das Tor nach Sueden: ein Torhaus, das ueber die Mauer hinausragt, damit
+         man von weitem sieht, wo man hinlaufen muss. Verriegelt bleibt es
+         trotzdem - hineingekaempft wird im Kampfbildschirm. */
+      var tz = B.z + B.radius + 0.6;
+      mesh(fixed, 'box', '#b3a793', B.x, 5.5, tz, 9, 11, 3.2);
+      mesh(fixed, 'box', '#6d5738', B.x, 3.2, tz + 1.5, 5.4, 6.4, 0.6);
+      mesh(fixed, 'box', '#f0b429', B.x, 5.1, tz + 1.9, 4.6, 0.55, 0.35, '#7a5c14');
+      mesh(fixed, 'box', '#f0b429', B.x, 3.2, tz + 1.9, 0.4, 6, 0.3, '#7a5c14');
+      mesh(fixed, 'cone', '#c8402f', B.x, 12.2, tz, 10.5, 3, 4.4).rotation.y = Math.PI / 4;
+      /* Drei Stufen hinauf und zwei Bannermasten davor. */
+      for (var stufe = 0; stufe < 3; stufe++)
+        mesh(fixed, 'box', '#8d8578', B.x, 0.25 + stufe * 0.28, tz + 4.4 - stufe * 0.9, 7.6 - stufe * 0.7, 0.55, 1.1);
+      [-5.6, 5.6].forEach(function (seite) {
+        mesh(fixed, 'cylinder', '#5e5344', B.x + seite, 4.6, tz + 3.4, 0.45, 9.2, 0.45);
+        mesh(fixed, 'box', '#c8402f', B.x + seite, 7.2, tz + 3.7, 0.2, 4, 2.1);
+      });
+      var siegel = mesh(fixed, 'ring', '#f0b429', B.x, 0.2, B.z + B.radius + 8.5, 5.2, 5.2, 1, '#7a5c14');
+      siegel.rotation.x = Math.PI / 2; siegel.castShadow = false;
+      /* Haeuser im Ring dazwischen: nur dort, wo wirklich Platz ist. */
+      /* Der Sueden zwischen 1.2 und 2.0 bleibt frei: dort steht das Torhaus,
+         und ein Dach davor nimmt genau die Sicht, die den Weg weist. */
+      var haeuser = [[0.15, '#a24e34'], [0.75, '#497f92'], [2.25, '#b98841'], [2.85, '#a24e34'],
+                     [3.45, '#65518c'], [4.05, '#497f92'], [4.75, '#a95037'], [5.45, '#cda95c']];
+      haeuser.forEach(function (v, i) {
+        var r = B.radius + 6.5 + (i % 3) * 2.2;
+        building(S.x + Math.cos(v[0]) * r, S.z + Math.sin(v[0]) * r, 1 + i % 3, v[1]);
+      });
+    })();
+
     /* Clumps, flower patches, ruins and shoreline reeds add depth to the ground. */
     for (var tuft = 0; tuft < 2100; tuft++) {
       var tx = Math.sin(tuft * 83.17) * 274, tz = Math.cos(tuft * 47.31) * 244;
-      if (!X.walkable({x:tx,z:tz}) || R.orte.some(function (o) { return Math.hypot(o.x-tx,o.z-tz)<7; })) continue;
+      if (!X.walkable({x:tx,z:tz}) || X.inStadt({x:tx,z:tz}) || R.orte.some(function (o) { return Math.hypot(o.x-tx,o.z-tz)<7; })) continue;
       var kind=R.biomeAt(tx,tz),colors=kind===8?['#664354','#982f57','#38314d']:kind===7?['#6c648c','#84769b','#4b455e']:kind===6?['#c2a26e','#e0bc78','#b58b55']:kind===5?['#8f9e5e','#b5b878','#7c954f']:kind===4?['#c8dfdf','#e0eae8','#b6cfd4']:kind===2?['#56443d','#a04d32','#6e5748']:kind===3?['#607878','#647b91','#4d6169']:['#537343','#71884c','#3f673c'];
       var grass = mesh(fixed, 'cone', colors[tuft%3], tx, .24, tz, .20, .48 + tuft%3*.09, .12); grass.rotation.z = .22;grass.castShadow=false;
       if (tuft % 13 === 0) mesh(fixed, 'sphere', kind===4?'#e1ece7':kind===2?'#d87542':kind===3?'#99acc7':tuft%2 ? '#d3b269' : '#bccba1', tx, .35, tz, .25, .18, .25);
@@ -168,7 +218,7 @@
         texture.minFilter = T.NearestFilter; texture.magFilter = T.NearestFilter; texture.generateMipmaps = false;
         texture.name = key; ctx.imageSmoothingEnabled = false;
       }
-      if(mon){R.drawAtlas(surface,'mons',mon.spriteIndex,function(){texture.needsUpdate=true;});texture.name='mon-'+mon.id;return texture;}
+      if(mon){R.drawMon(surface,mon,function(){texture.needsUpdate=true;});texture.name='mon-'+mon.id;return texture;}
       if(key.indexOf('skin-')===0){R.drawAtlas(surface,'skins',Number(key.slice(5)),function(){texture.needsUpdate=true;});texture.name=key;texture.magFilter=T.NearestFilter;return texture;}
       var img = new Image();
       img.onload = function () {
@@ -499,6 +549,8 @@
         }
         if(p.updatedAt!==info.updatedAt){p.from.copy(p.group.position);p.to.set(info.x,.15,info.z);p.duration=T.MathUtils.clamp((info.updatedAt-p.updatedAt)/1000,.15,3);p.elapsed=0;if(p.from.distanceTo(p.to)>45){p.group.position.copy(p.to);p.from.copy(p.to);}}
         if(p.skin!==skin){p.skin=skin;p.group.userData.ring.material=mat(X.skin(skin).color);anziehen(p.group,skin);}
+        /* Der Champion traegt einen goldenen Ring - daran erkennt man ihn quer ueber die Insel. */
+        var gold=!!info.champion;if(p.champion!==gold){p.champion=gold;p.group.userData.ring.material=gold?mat('#f0b429','#f0b429'):mat(X.skin(skin).color);}
         var squad=(info.squad||[]).filter(function(id){return !!R.daten.mon(id);}).slice(0,4),squadKey=squad.join(',');if(p.squadKey!==squadKey){p.followers.forEach(disposeUnit);p.followers=squad.map(function(id,i){var mon=R.daten.mon(id),g=creature(mon.typ,mon.seltenheit,false,id);g.name='peer-mon-'+info.id+'-'+id;g.position.copy(p.group.position);scene.add(g);return{group:g};});p.offsets=followOffsets(squad.map(R.daten.mon));p.squadKey=squadKey;}
 p.updatedAt=info.updatedAt;p.age=Math.max(0,(serverTime-info.updatedAt)/1000);p.heading=info.heading||0;p.info=info;
       });Object.keys(peers).forEach(function(id){if(!keep[id])removePeer(id);});

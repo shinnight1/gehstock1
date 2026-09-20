@@ -79,3 +79,32 @@
   .gm-target{bottom:70px;max-height:52vh;overflow:auto}
   .gm-joystick{width:104px;height:104px;bottom:72px}
 }
+
+/* Kampfplan-Editor, Aufklaerung und Kampfberichte */
+.gm-plan-row{display:flex;align-items:center;gap:8px;margin:8px 0}
+.gm-plan-row select{flex:1;min-width:0;padding:10px;border:1px solid #799297;border-radius:8px;background:#102f38;color:#fff;font-size:14px}
+.gm-plan-nr{color:#8fb0b8;font-size:13px;width:18px;flex:none}
+.gm-plan-pfeil{color:#f0ca80;flex:none}
+.gm-plan-hinweis{color:#9fb8be;font-size:13px}
+.gm-plan-karte{margin:10px 0;padding:12px;border:1px solid #2f5560;border-radius:10px;background:#0f2831}
+.gm-plan-karte h3{margin:0 0 4px;font-size:15px;color:#f0ca80}
+.gm-plan-karte p{margin:3px 0;font-size:13px}
+.gm-plan-zeile{color:#b9d3d8}
+.gm-mon-rolle{color:#9ecbd6;font-size:13px}
+.gm-badge-hilfe{color:#8ee6ad!important;border-color:#8ee6ad66!important}
+.gm-report-karte{margin:8px 0;padding:10px;border:1px solid #2f5560;border-radius:10px;background:#0f2831}
+.gm-report-karte small{display:block;color:#93aeb5;font-size:12px;margin-top:4px}
+.gm-report-knopf{width:100%;text-align:left;background:none;border:0;color:inherit;font:inherit;cursor:pointer;padding:0}
+.gm-report-knopf:hover{color:#f0ca80}
+.gm-report-seite{color:#b9d3d8;font-size:13px;margin:2px 0}
+.gm-report-zeile{margin:2px 0;font-size:13px;color:#cfe3e7;border-left:2px solid #2f5560;padding-left:8px}
+.gm-mon-wesen{color:#d8b66f;font-size:13px}
+.gm-mon-dienst{color:#8ee6ad;font-size:13px}
+.gm-arena-kunde{display:block;font-size:11px;color:#b9d3d8;margin-top:3px;line-height:1.35}
+.gm-arena-kunde.gut{color:#8ee6ad}
+.gm-arena-kunde.schlecht{color:#ffad8d}
+.gm-arena-wesen{display:block;font-size:11px;color:#d8b66f}
+.gm-filter{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+.gm-filter-knopf{flex:1;min-width:88px;padding:8px 10px;border:1px solid #3b6672;border-radius:999px;background:#102f38;color:#b9d3d8;font-size:13px;cursor:pointer}
+.gm-filter-knopf.aktiv{background:#1d4d5c;border-color:#d8b66f;color:#f0ca80;font-weight:600}
+.gm-post-besatzung{display:block;color:#93aeb5;font-size:12px;margin:4px 0}

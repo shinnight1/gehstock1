@@ -1,4 +1,4 @@
-/* 42 eigenstaendige Mons, vier taktische Rollen. Seltenheit ist sichtbar,
+/* 57 eigenstaendige Mons, vier taktische Rollen. Seltenheit ist sichtbar,
    ersetzt aber keinen guten Plan. Bestehende Startwerte bleiben erhalten. */
 (function (SG) {
   var D = SG.gehstockmon.daten;
@@ -52,26 +52,69 @@
   D.SELTENHEITEN.splice(2,0,{name:'Außergewöhnlich',farbe:'#69dcad',rang:3,text:'Erwachte Naturkraft · seltene Mutationen'});
   D.SELTENHEITEN.forEach(function(r,i){r.rang=i+1;});
   D.KATALOG.forEach(function(k){if(k.seltenheit>=2)k.seltenheit++;if(['donnerwidder','frostklaue','dornenwolf','obsidianrabe','korallenwacht','duenenschakal','bernsteinkaefer'].indexOf(k.id)>=0)k.seltenheit=2;});
+  /* Neue Mons kommen nach dem Seltenheits-Shift mit ihren finalen Rängen
+     hinein. Damit bleiben alle alten gespeicherten IDs und Raritäten stabil. */
+  [
+    ['blitzotter','Blitzotter',1,1,'blitzotter','Ein Stromstoß aus seinen Schnurrhaaren lässt selbst Rüstung beben.'],
+    ['mondluchs','Mondluchs',3,1,'mondluchs','Folgt nur Pfaden, die im Mondlicht sichtbar werden.'],
+    ['salzkrabbe','Salzkrabbe',0,1,'salzkrabbe','Ihr Kristallpanzer bricht Wellen und Angriffe gleichermaßen.'],
+    ['sporenbison','Sporenbison',0,2,'sporenbison','In seiner Mähne leuchten Pilze, die alte Wunden schließen.'],
+    ['prismensalamander','Prismensalamander',2,2,'prismensalamander','Sein Kristallrücken teilt Licht in heilende Farben.'],
+    ['nebelkrake','Nebelkrake',2,2,'nebelkrake','Schwebt durch jeden Spalt und lässt den Gegner ins Leere greifen.'],
+    ['stahlkolibri','Stahlkolibri',3,2,'stahlkolibri','Seine Flügel schlagen schneller als ein gezogener Plan.'],
+    ['glutbasilisk','Glutbasilisk',1,3,'glutbasilisk','Unter seinen Schuppen glimmt ein Herd aus uraltem Feuer.'],
+    ['runenminotaur','Runenminotaur',0,3,'runenminotaur','Jede eingeritzte Rune macht ihn schwerer aufzuhalten.'],
+    ['frostmanta','Frostmanta',3,3,'frostmanta','Gleitet auf eisigen Strömungen über jede Gefahr hinweg.'],
+    ['aurorabaer','Aurorabär',0,4,'aurorabaer','Sein Fell trägt das Nordlicht und sein Brüllen schützt die Truppe.'],
+    ['obsidianbehemoth','Obsidianbehemoth',1,4,'obsidianbehemoth','Ein Schritt von ihm lässt selbst Basalt erzittern.'],
+    ['novaorakel','Novaorakel',2,5,'novaorakel','Ein sechsäugiger Sternenwolf, dessen Geweih den Untergang vorhersagt.'],
+    ['zeitphoenix','Zeitphönix',3,5,'zeitphoenix','Der Donneradler reißt Sekunden aus dem Kampf und lässt nur Asche zurück.'],
+    ['risskaiser','Risskaiser',0,6,'risskaiser','Ein urzeitlicher Weltzerstörer; Mauern und Berge zerbrechen unter seinem Brüllen.']
+  ].forEach(function(v){var basis=D.KREATUREN[v[2]];D.KATALOG.push({id:v[0],name:v[1],typ:v[2],seltenheit:v[3],bild:'gm-'+v[4],lore:v[5],rolle:basis.rolle,hp:basis.hp,ang:basis.ang,tempo:basis.tempo,faeh:basis.faeh,mono:basis.mono});});
   /* Der Spaeher ist breiter als hoch und fuellt seine hochkantige Atlaszelle
      nur zu gut sechzig Prozent. Ohne den groesseren Wert liefe er als
      Zwerg ueber die Insel; 4.4 bringt ihn auf dieselbe Hoehe wie vorher und
      laesst die Fluegel zu ihrer Breite kommen. */
-  D.MON_SIZES=[3.8,3.2,3.4,4.4,1.25,1.55,1.2,1.25,2.1,1.7,1.2,1.2,3.4,3.1,2.8,2.6,1.6,1.5,3.2,4.6,3.6,5,4.6,2.4,2.1,4.6,5.5,5.8,4.3,5.5,1.2,1,2.6,1.7,4.5,3.5,3.9,3.8,5.8,4.2,6.8,7.5];
-  D.KATALOG.forEach(function(k,i){k.spriteIndex=i;k.worldSize=D.MON_SIZES[i];});
+  D.MON_SIZES=[3.8,3.2,3.4,4.4,1.25,1.55,1.2,1.25,2.1,1.7,1.2,1.2,3.4,3.1,2.8,2.6,1.6,1.5,3.2,4.6,3.6,5,4.6,2.4,2.1,4.6,5.5,5.8,4.3,5.5,1.2,1,2.6,1.7,4.5,3.5,3.9,3.8,5.8,4.2,6.8,7.5,2.4,2.8,2.7,4.8,3.1,3.4,1.9,4.6,5.7,4.4,6.4,6.8,7.1,7.3,10.5];
+  /* Drei Mons haben ein eigenes Schaubild mit Hintergrund. Es steht nur in
+     der Sammlung; auf der Insel laufen weiterhin die freigestellten Bilder,
+     sonst traegt der Begleiter eine Landschaft mit sich herum. */
+  /* Welche der drei Faehigkeiten seiner Rolle ein Mon beherrscht. Grundregel
+     ist die Position im Katalog - der waechst nur hinten, also bleibt jede
+     Zuordnung ueber Spielstaende hinweg stehen. Wo die Lore etwas anderes
+     verlangt, steht es in der Tabelle darunter. */
+  D.FAEHIGKEIT_FEST={
+    bollwerk:0,klinge:0,waerter:0,spaeher:0,
+    moosling:0,glutfuchs:0,nebelmolch:0,rostknirps:0,
+    kieselkrabb:1,titanenkrone:1,runengolem:1,salzkrabbe:1,
+    wurzelzahn:2,dornenwolf:2,kupferskorp:2,sporenbison:2,runenminotaur:2,risskaiser:2,
+    aschenhydra:1,vulkanmantis:1,obsidianbehemoth:1,
+    weltenfresser:2,sonnenkoenig:2,glutbasilisk:2,blitzotter:2,
+    pilzhueter:1,seelenqualle:1,korallenwacht:1,prismensalamander:1,
+    mondhexe:2,sternengeweih:2,frostorakel:2,novaorakel:2,nebelkrake:2,
+    nachtflatter:1,kristallspinne:1,obsidianrabe:1,stahlkolibri:1,
+    leerenwyrm:2,chronoschreiter:2,zeitphoenix:2,frostmanta:2,mondluchs:2
+  };
+  D.faehigkeitVon=function(mon){
+    if(!mon)return 0;
+    var fest=D.FAEHIGKEIT_FEST[mon.id];
+    return Number.isFinite(fest)?fest:Math.max(0,Math.floor(mon.spriteIndex||0))%3;
+  };
+  /* Der Welt-Atlas gm-mons-atlas.webp traegt 6 x 7 eigens freigestellte
+     Grafiken - die ersten 42 Mons. Wer dahinter steht, hat keine Zelle mehr
+     und laeuft mit seinem Einzelbild ueber die Insel. */
+  D.ATLAS_MONS=42;
+  D.VORSCHAUEN=['novaorakel','zeitphoenix','risskaiser'];
+  D.KATALOG.forEach(function(k,i){k.spriteIndex=i;k.worldSize=D.MON_SIZES[i];
+    if(D.VORSCHAUEN.indexOf(k.id)>=0)k.vorschau=k.bild+'-vorschau';});
   D.mon = function (id) { return D.KATALOG.find(function (k) { return k.id === id; }) || null; };
   D.STARTER = ['moosling','glutfuchs','nebelmolch','rostknirps'];
   D.neuerStand = function (save) {
     var collection=save&&Array.isArray(save.besitz)?Array.from(new Set(save.besitz.filter(function(id){return !!D.mon(id);} ))):[];
     D.STARTER.forEach(function(id){if(collection.length<4&&collection.indexOf(id)<0)collection.push(id);});
+    /* Die Kampfplaene stehen in 1-zusatz.js: sie richten sich nach den
+       Bausteinen der Arena, und die ist hier noch nicht geladen. */
     var st = { plaene: {}, geschafft: [], besitz: collection, truppe: collection.slice(0,4), essenz: 60, siege: 0, beschwoerungen: 0 };
-    D.KATALOG.forEach(function (k) {
-      var basis = D.KREATUREN[k.typ];
-      var p = save && save.plaene && save.plaene[k.id];
-      st.plaene[k.id] = D.START_PLAN[basis.id].map(function (r, i) {
-        var v = p && p[i];
-        return v && Array.isArray(v) && D.BEDINGUNGEN.some(function (b) { return b.id === v[0]; }) && D.AKTIONEN.some(function (a) { return a.id === v[1]; }) ? v.slice(0, 2) : r.slice();
-      });
-    });
     if (!save || typeof save !== 'object') return st;
     if (Array.isArray(save.geschafft)) st.geschafft = D.FELDER.map(function (f) { return f.id; }).filter(function (id) { return save.geschafft.indexOf(id) >= 0; });
     if (Array.isArray(save.besitz)) save.besitz.forEach(function (id) { if (D.mon(id) && st.besitz.indexOf(id) < 0) st.besitz.push(id); });

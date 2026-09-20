@@ -1,5 +1,5 @@
 import {data as D, arena as A, adventure as X} from './gehstockmon-rules.mjs';
-import {wochenschritt} from './gehstockmon-adventure.mjs';
+import {wochenschritt, fehdeSchritt} from './gehstockmon-adventure.mjs';
 
 const fail = message => { throw new Error(message); };
 export const activeDungeon = (world, p) => {
@@ -18,6 +18,7 @@ function finish(world, room, winner, now) {
     if (p && member.reward) {
       p.runes[dungeon.rarity] = Math.min(9999, p.runes[dungeon.rarity] + member.reward);
       wochenschritt(world, p, member.id, 'tiefe', now);
+      fehdeSchritt(world, member.id, 'tiefe', now);
       /* Wer einen Boss zum ersten Mal legt, nimmt sein Fundstueck mit. */
       const fund = X.ruestungFuer(dungeon.id);
       if (fund && !(p.ruestungen || []).includes(fund.id)) {
@@ -31,6 +32,45 @@ function finish(world, room, winner, now) {
   room.revision++;
 }
 
+/* Die Faehigkeit eines Mons, uebersetzt auf den Gruppenkampf gegen einen Boss.
+   Vorher gab es hier fuer alle dieselbe Heilung, und die zwoelf Faehigkeiten
+   aus der Arena galten im Dungeon nicht - man lernte ein System und traf im
+   Dungeon ein anderes. Was sich nicht eins zu eins uebersetzen laesst, weil
+   ein Boss keine Ladungen und keine Deckung hat, wird zum naechstliegenden
+   Effekt: Blendstoss daempft seinen naechsten Schlag, Windschnitt geht durch
+   seine Haerte. */
+function faehigkeitEinsetzen(room, member, log) {
+  const f = A.FAEHIGKEITEN[member.role][member.skill || 0] || A.FAEHIGKEITEN[member.role][0];
+  const treffer = (faktor, name) => {
+    const roh = member.attack * faktor * A.rollenFaktor(member.role, room.boss.role);
+    const n = Math.max(1, Math.round(roh));
+    room.boss.hp = Math.max(0, room.boss.hp - n);
+    log.push(member.name + ': ' + name + ' trifft für ' + n + ' Schaden.');
+    return n;
+  };
+  const heilen = (anteil) => {
+    const n = Math.min(member.maxHp - member.hp, Math.round(member.maxHp * anteil));
+    if (n > 0) { member.hp += n; log.push(member.name + ': ' + f.name + ' heilt ' + n + ' KP.'); }
+    else log.push(member.name + ' setzt ' + f.name + ' ein.');
+  };
+  if (f.id === 'schildstoss') { treffer(f.faktor, f.name); member.schild = .35; }
+  else if (f.id === 'steinwall') { member.schild = .75; heilen(.1); }
+  else if (f.id === 'dornenpanzer') { treffer(f.faktor, f.name); member.dornen = true; }
+  else if (f.id === 'sichelstreich') { treffer(room.boss.hp <= room.boss.maxHp * .35 ? 1.9 : f.faktor, f.name); }
+  else if (f.id === 'doppelhieb') { treffer(f.faktor, f.name); if (room.boss.hp > 0) treffer(f.faktor, f.name + ' (zweiter Hieb)'); }
+  else if (f.id === 'aderlass') { const n = treffer(f.faktor, f.name); const zurueck = Math.min(member.maxHp - member.hp, Math.round(n * .45)); if (zurueck > 0) { member.hp += zurueck; log.push(member.name + ' saugt ' + zurueck + ' KP heraus.'); } }
+  else if (f.id === 'lebensquell') heilen(.32);
+  else if (f.id === 'sammelruf') { heilen(.18); member.schild = .35; }
+  else if (f.id === 'laeuterung') { heilen(.22); member.geschaerft = true; }
+  else if (f.id === 'runenstoerung') { treffer(f.faktor, f.name); room.boss.geschwaecht = true; }
+  /* Ein Boss hat keine Ladungen, die Blendstoss ihm nehmen koennte. Beide auf
+     dieselbe einrundige Schwaechung zu legen machte ihn aber zur strikt
+     schlechteren Runenstoerung - gleicher Effekt, weniger Schaden. Er blendet
+     darum laenger: zwei Runden statt einer. */
+  else if (f.id === 'blendstoss') { treffer(f.faktor, f.name); room.boss.blendung = 2; }
+  else if (f.id === 'windschnitt') { treffer(f.faktor * 1.15, f.name); }
+  else treffer(f.faktor, f.name);
+}
 function resolveRound(world, room, now) {
   const team = living(room), log = [];
   for (const member of team) {
@@ -38,10 +78,13 @@ function resolveRound(world, room, now) {
     if (!room.actions[member.id]) member.missed++; else { member.missed = 0; member.contributions++; }
     if (member.missed >= 3) { member.left = true; log.push(member.name + ' hat die Verbindung verloren.'); continue; }
     member.guarding = move === 'guard';
-    if (move === 'heal') { member.heals--; member.hp = Math.min(member.maxHp, member.hp + Math.round(member.maxHp * .25)); log.push(member.name + ' heilt sein Mon.'); }
+    if (move === 'guard') member.schild = 0;
+    if (move === 'heal') { member.heals--; faehigkeitEinsetzen(room, member, log); }
     else if (move !== 'guard') {
-      const damage = Math.round(member.attack * (move === 'power' ? 1.55 : 1));
-      if (move === 'power') member.powerReady = room.round + 3;
+      let roh = member.attack * (move === 'power' ? 1.55 : 1) * A.rollenFaktor(member.role, room.boss.role);
+      if (member.geschaerft) { roh *= 1.3; member.geschaerft = false; }
+      const damage = Math.max(1, Math.round(roh));
+      if (move === 'power') member.powerReady = room.round + (member.powerPause || A.POWER_PAUSE);
       room.boss.hp = Math.max(0, room.boss.hp - damage); log.push(member.name + ': ' + damage + ' Schaden.');
     }
   }
@@ -49,10 +92,24 @@ function resolveRound(world, room, now) {
   if (room.boss.hp <= 0) { finish(world, room, 'players', now); return; }
   const survivors=living(room), targets=room.round%3===0?survivors:[survivors.find(m=>m.id===room.targetId)||survivors[0]].filter(Boolean);
   for (const member of targets) {
-    const hit = Math.round(room.boss.attack * (room.round % 3 === 0 ? 1.35 : 1) * (member.guarding ? .4 : 1));
+    let roh = room.boss.attack * (room.round % 3 === 0 ? 1.35 : 1) * (member.guarding ? .4 : 1);
+    roh *= A.rollenFaktor(room.boss.role, member.role);
+    if (room.boss.geschwaecht || room.boss.blendung > 0) roh *= .65;
+    /* Ein Schild aus der eigenen Faehigkeit haelt genau einen Schlag. */
+    if (member.schild) { roh *= 1 - member.schild; member.schild = 0; }
+    const hit = Math.max(1, Math.round(roh));
     member.hp = Math.max(0, member.hp - hit);
     room.log.push(member.name + ' erleidet ' + hit + ' Schaden.');
+    if (member.dornen && member.hp > 0) {
+      member.dornen = false;
+      const zurueck = Math.max(1, Math.round(hit * .4));
+      room.boss.hp = Math.max(0, room.boss.hp - zurueck);
+      room.log.push(member.name + ': Dornenpanzer wirft ' + zurueck + ' Schaden zurück.');
+    }
   }
+  room.boss.geschwaecht = false;
+  if (room.boss.blendung > 0) room.boss.blendung--;
+  if (room.boss.hp <= 0) { finish(world, room, 'players', now); return; }
   if (!living(room).length || room.round >= 30) { finish(world, room, 'boss', now); return; }
   room.round++; room.revision++; room.actions = {}; room.deadline = now + 45000;
   const next=living(room)[(room.round-1)%living(room).length];room.targetId=next.id;
@@ -89,7 +146,12 @@ export async function dungeonAction({world, p, id, body, now, presence}) {
     if (p.runes[mon.seltenheit] < cost) fail('Du brauchst mehr Runen derselben Seltenheit.');
     p.runes[mon.seltenheit] -= cost; p.monUpgrades[mon.id] = level + 1;
     for (const t of world.territories) if (t.ownerId === id && t.defense.some(m => m.id === mon.id)) { t.defense.forEach(m => { if (m.id === mon.id) m.upgrade = level + 1; }); t.version++; }
-    return {monId:mon.id, message:mon.name + ' erreicht Runenstufe ' + (level + 1) + '/5. KP und Angriff: +' + ((level + 1) * 2) + ' %.'};
+    /* Die Prozente kommen aus A.UPGRADE_BONUS. Hier stand eine eigene Zwei,
+       die seit dem Rebalance auf drei Prozent nicht mehr gestimmt hat. */
+    const schwelle = level + 1 === A.SCHNELL_AB ? ' Ab jetzt lädt der Kraftschlag eine Runde schneller.'
+      : level + 1 === A.LADUNG_AB ? ' Ab jetzt hat die Fähigkeit eine dritte Ladung.' : '';
+    return {monId:mon.id, message:mon.name + ' erreicht Runenstufe ' + (level + 1) + '/' + X.UPGRADE_LIMIT
+      + '. KP und Angriff: +' + Math.round((level + 1) * A.UPGRADE_BONUS * 100) + ' %.' + schwelle};
   }
   let room = world.dungeons?.[p.dungeonId];
   async function nearby(dungeon) {
@@ -100,7 +162,13 @@ export async function dungeonAction({world, p, id, body, now, presence}) {
   function member(monId) {
     if (!p.besitz.includes(monId) || !D.mon(monId)) fail('Wähle ein eigenes Mon für die Expedition.');
     const mon = X.mon(p,monId), stats = A.stats(mon);
-    return {id, name:p.name, monId, upgrade:mon.upgrade, maxHp:stats.hp, hp:stats.hp, attack:stats.ang, ready:false, powerReady:1, heals:2, contributions:0, missed:0};
+    /* Rolle, Faehigkeit und Runenwerte kommen aus derselben Quelle wie in der
+       Arena - sonst kaempft dasselbe Mon hier anders als dort. */
+    return {id, name:p.name, monId, upgrade:mon.upgrade, role:mon.typ, skill:D.faehigkeitVon(mon),
+      maxHp:stats.hp, hp:stats.hp, attack:stats.ang, ready:false, powerReady:1,
+      powerPause:A.powerPause(mon), heals:A.ladungen(mon), maxHeals:A.ladungen(mon),
+      schild:0, dornen:false, geschaerft:false,
+      contributions:0, missed:0};
   }
   if (op === 'dungeon_create' || op === 'dungeon_join') {
     if (activeDungeon(world,p) || p.raidLock?.until > now) fail('Beende zuerst deine aktuelle Expedition oder Verteidigung.');
@@ -142,7 +210,9 @@ export async function dungeonAction({world, p, id, body, now, presence}) {
     if (room.phase !== 'lobby' || room.leaderId !== id || !room.players.every(m => m.ready)) fail('Nur die Gruppenleitung kann starten, wenn alle bereit sind.');
     const dungeon = X.DUNGEONS.find(d => d.id === room.dungeonId), boss = D.mon(dungeon.bossId), stats = A.stats({...boss,seltenheit:dungeon.rarity});
     const hp = Math.round(stats.hp * (2.2 + (room.players.length - 1) * 1.7));
-    room.boss = {monId:boss.id,name:boss.name,maxHp:hp,hp,attack:Math.round(stats.ang * (.55 + dungeon.rarity * .1))};
+    /* Der Boss traegt seine Rolle mit: damit gilt das Rollen-Dreieck auch hier,
+       und wer die richtige Truppe mitbringt, merkt es. */
+    room.boss = {monId:boss.id,name:boss.name,role:boss.typ,maxHp:hp,hp,attack:Math.round(stats.ang * (.55 + dungeon.rarity * .1)),geschwaecht:false};
     room.phase = 'battle'; room.round = 1; room.deadline = now + 45000; room.expiresAt = now + 1200000; room.revision++;
     room.targetId=room.players[0].id;
     room.message = 'Gemeinsam gegen ' + boss.name + '! Ziel: '+room.players[0].name+'. Jede dritte Runde trifft der Boss alle stärker.';
@@ -150,7 +220,12 @@ export async function dungeonAction({world, p, id, body, now, presence}) {
   if (op === 'dungeon_turn') {
     if (room.phase !== 'battle' || body.round !== room.round || me.hp <= 0 || room.actions[id]) fail('Die Runde hat sich verändert oder deine Aktion steht bereits fest.');
     if (!['strike','power','guard','heal'].includes(body.move)) fail('Wähle eine Dungeon-Aktion.');
-    if (body.move === 'power' && room.round < me.powerReady || body.move === 'heal' && (me.heals <= 0 || me.hp >= me.maxHp)) fail('Diese Aktion ist noch nicht verfügbar.');
+    /* Die Faehigkeit haengt an ihren Ladungen, nicht am eigenen Schaden. Die
+       alte Sperre stammte aus der Zeit, als sie fuer alle dasselbe geheilt
+       hat: seit die zwoelf Faehigkeiten auch hier gelten, war damit jede
+       Schadensfaehigkeit bis zum ersten Treffer gesperrt - und in Runde 1 ist
+       jeder auf vollem Leben. Nur eine reine Heilung verpufft dann wirklich. */
+    if (body.move === 'power' && room.round < me.powerReady || body.move === 'heal' && (me.heals <= 0 || A.nurBeiSchaden(me) && me.hp >= me.maxHp)) fail('Diese Aktion ist noch nicht verfügbar.');
     room.actions[id] = body.move; room.revision++;
     if (living(room).every(m => room.actions[m.id])) resolveRound(world,room,now);
   }

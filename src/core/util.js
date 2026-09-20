@@ -195,6 +195,19 @@
   /* Kurzt Text mit Auslassungszeichen */
   U.trunc = function (s, n) { return s.length > n ? s.slice(0, n - 1) + '…' : s; };
 
+  /* Macht aus Nutzertext harmlosen HTML-Text. Immer anwenden, bevor ein
+     fremder Name oder Grund in ein html: einer Anzeige verkettet wird -
+     sonst wird aus einem Namen wie <img onerror=...> ein Befehl im
+     Browser dessen, der ihn ansieht. */
+  U.esc = function (s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  };
+
   /* ---------------------------------------------------------- Datenhelfer */
 
   U.clone = function (o) {
