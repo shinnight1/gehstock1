@@ -40,7 +40,9 @@ Geht etwas schief, holt `vercel rollback` die vorherige Veröffentlichung sofort
 
 Die Spielstände liegen in einer Redis-Datenbank (Upstash), die im Vercel-Projekt unter **Storage** hängt. `netlify/functions/lib/speicher.mjs` entscheidet anhand der Umgebung, ob Redis oder die alten Netlify-Blobs benutzt werden; derselbe Code läuft dadurch auf beiden Plattformen.
 
-Die alte Adresse `gehstock.netlify.app` bleibt vorerst als Rückweg stehen, hat aber ihre eigene, getrennte Spielerwelt. Dorthin wird nicht mehr veröffentlicht.
+Ein weiterer Weg führt über [gehstockmon.netlify.app](https://gehstockmon.netlify.app) — dieselbe Seite und dieselbe Spielerwelt, nur bei Netlify. Veröffentlicht wird dorthin von Hand mit `netlify deploy --prod`.
+
+Die alten Adressen `gehstock.netlify.app` und `gehstock-hideout.netlify.app` sind tot: Das Konto dahinter hat sein Kontingent aufgebraucht.
 
 ## Ein Übergabepaket bauen
 

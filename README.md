@@ -70,9 +70,13 @@ anhand der Umgebung: Liegen die Redis-Zugangsdaten vor, ist es Redis, sonst
 sind es die Netlify-Blobs. Derselbe Code läuft damit auf beiden Plattformen,
 und der Rückweg bleibt offen.
 
-Die alte Adresse `gehstock.netlify.app` steht noch als Rückweg, hat aber ihre
-eigene, getrennte Spielerwelt. Dort wird nicht mehr veröffentlicht und nicht
-mehr gespielt — sonst laufen die beiden Welten auseinander.
+Ein dritter Weg führt über [gehstockmon.netlify.app](https://gehstockmon.netlify.app)
+— dieselbe Seite, dieselbe Spielerwelt, nur ein anderer Anbieter. Sie ist der
+Ausweichweg für Netze, die `vercel.app` sperren.
+
+Die beiden alten Adressen `gehstock.netlify.app` und `gehstock-hideout.netlify.app`
+sind tot: Das Konto dahinter hat sein Kontingent aufgebraucht. Sie laufen nicht
+wieder an und brauchen niemanden mehr.
 
 ---
 

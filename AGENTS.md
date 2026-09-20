@@ -113,9 +113,22 @@ Beide Auslieferungen sind getrennt. Ein `vercel --prod` allein ändert am Spiege
 nichts und umgekehrt - nach einer Änderung, die beide zeigen sollen, gehen beide
 Befehle.
 
-Die alte Adresse `gehstock.netlify.app` bleibt vorerst als Rückweg stehen. Dorthin
-wird **nicht** mehr veröffentlicht: Beide Seiten haben eigene, getrennte
-Spielerwelten, und ein Deploy dorthin lässt die Spielstände auseinanderlaufen.
+### Die Ausweichadresse bei Netlify
+
+`gehstockmon.netlify.app` liefert dieselbe Seite ein drittes Mal aus - für Netze,
+die `vercel.app` sperren. Sie hängt über `UPSTASH_REDIS_REST_URL` und
+`UPSTASH_REDIS_REST_TOKEN` an **derselben** Spielerwelt wie Vercel; wer dort
+spielt, spielt mit allen zusammen.
+
+Veröffentlicht wird von Hand, die Seite ist nicht mit dem Repo verbunden:
+
+```sh
+netlify deploy --prod
+```
+
+Die alten Adressen `gehstock.netlify.app` und `gehstock-hideout.netlify.app` sind
+tot - das Konto dahinter hat sein Kontingent aufgebraucht. Dorthin führt nichts
+mehr zurück.
 
 ## Wo die Daten liegen — und was bei einem Umzug zählt
 
