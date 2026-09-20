@@ -117,6 +117,43 @@ Die alte Adresse `gehstock.netlify.app` bleibt vorerst als Rückweg stehen. Dort
 wird **nicht** mehr veröffentlicht: Beide Seiten haben eigene, getrennte
 Spielerwelten, und ein Deploy dorthin lässt die Spielstände auseinanderlaufen.
 
+## Wo die Daten liegen — und was bei einem Umzug zählt
+
+Spielerwelt, Verwaltung, Chatbretter und Pixelkarte liegen in **einer**
+Redis-Datenbank (Upstash), die am Vercel-Projekt hängt. Die Hoster sind
+austauschbar, die Datenbank ist es nicht: Wer eine neue Adresse aufsetzt, muss
+ihr genau zwei Werte mitgeben, sonst läuft sie auf einer eigenen, leeren Welt —
+und das merkt niemand, bis jemand seinen Spielstand sucht.
+
+```
+UPSTASH_REDIS_REST_URL
+UPSTASH_REDIS_REST_TOKEN
+```
+
+Die Werte holt `vercel env pull .env.local --environment=production`. Ob eine
+Auslieferung wirklich an der gemeinsamen Datenbank hängt, sagt sie selbst:
+
+```sh
+curl -sS -X POST https://<adresse>/api/room -H 'Content-Type: application/json' -d '{"op":"status"}'
+```
+
+Antwortet sie `"speicher":"redis"` und dieselbe Profilzahl wie die anderen
+Adressen, ist es dieselbe Welt. Steht dort `netlify-blobs` oder null Profile,
+fehlen die beiden Werte.
+
+Vor jedem Umzug eine Sicherung ziehen — sie lässt sich mit
+`tools/welt-einspielen.mjs` auch in eine *andere* Datenbank zurückspielen:
+
+```sh
+node --env-file=.env.local tools/redis-sichern.mjs
+```
+
+**Warum kostenlose Kontingente hier schnell leerlaufen:** Die Anwesenheit auf der
+Insel kostet je Spieler eine Serveranfrage alle zwei Sekunden, und das Relais
+hält für Chat und Verwaltung eine Verbindung dauerhaft offen. Das sind pro
+Spielstunde rund 2000 Aufrufe. Ein Anbieterwechsel setzt nur die Uhr zurück;
+wer das Limit dauerhaft unterschreiten will, muss diese beiden Takte senken.
+
 ## Berichten
 
 Über Git redest du nur in einer Zeile. Nach einem Push hängst du ans Ende deiner

@@ -157,6 +157,14 @@ Selbsttest prüft das in acht Etappen je Spiel, nicht nur am Ende — ein Fehler
 der sich zwei Züge später von selbst wieder auflöst, fiele sonst nicht auf.
 
 ```bash
+node --env-file=.env.local tools/redis-sichern.mjs
+```
+Zieht alles aus der Redis-Datenbank in einen Ordner unter `backup/`: Spielerwelt,
+Verwaltung, Chatbretter, Pixelkarte und Bilder. Kurzlebiges (Räume, Bildschirme,
+Anwesenheit) bleibt draußen. Zurück geht es mit `tools/welt-einspielen.mjs` —
+auch in eine andere Datenbank, und genau das ist der Weg bei einem Anbieterwechsel.
+
+```bash
 node --env-file=.env.local tools/spieler-ausstatten.mjs 5572 \
   --mons sturmhorn,seelenqualle --gebiete 2,4 --gold 500
 ```

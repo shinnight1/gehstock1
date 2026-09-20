@@ -33,7 +33,7 @@
    die Liste der Zuege, jeder Client rechnet sie selbst nach.
    ------------------------------------------------------------------ */
 
-import { speicher } from './lib/speicher.mjs';
+import { speicher, speicherArt } from './lib/speicher.mjs';
 
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // ohne 0/O/1/I
 const ROOM_TTL_MS = 20 * 60 * 1000;                    // 20 Minuten ohne Aktivitaet
@@ -305,6 +305,7 @@ export default async (req) => {
     if (op === 'befehl') return await befehl(st, msg);
     if (op === 'log') return await protokoll(st, msg);
 
+    if (op === 'status') return await status(st);
     if (op === 'verw:read' || op === 'verw:write') return await verwaltung(st, op, msg);
     if (op === 'pix:read' || op === 'pix:write') return await pixel(st, op, msg);
 
@@ -720,6 +721,39 @@ async function befehl(st, msg) {
     });
   });
   return json({ ok: true, id: id });
+}
+
+/* ==================================================================
+   Woran haengt diese Seite?
+
+   Ein Umzug auf einen anderen Anbieter geht leise schief: Fehlen die
+   beiden Redis-Zugangsdaten in der Umgebung, faellt speicher.mjs auf
+   den Speicher des Anbieters zurueck - die neue Adresse laeuft dann
+   auf einer eigenen, leeren Welt. Niemand merkt das, bis jemand seinen
+   Spielstand sucht.
+
+   Darum sagt jede Auslieferung auf Nachfrage, worauf sie schreibt.
+   Zurueck kommen nur Zahlen, keine Namen und keine Codes - genug, um
+   zwei Adressen zu vergleichen: Gleiche Verwaltungsversion und gleiche
+   Spielerzahl heisst dieselbe Datenbank.
+   ================================================================== */
+
+async function status(st) {
+  const v = await st.get('verwaltung', { type: 'json' });
+  let spieler = 0, weltVersion = 0;
+  try {
+    const welt = await speicher('hgh-gehstockmon').get('world-v2', { type: 'json' });
+    spieler = Object.keys((welt && welt.players) || {}).length;
+    weltVersion = (welt && welt.version) || 0;
+  } catch (e) { /* die Spielerwelt kann fehlen, das ist kein Fehler */ }
+  return json({
+    speicher: speicherArt(),
+    verwaltung: {
+      version: (v && v.version) || 0,
+      profile: ((v && v.daten && v.daten.profile) || []).length,
+    },
+    gehstockmon: { spieler: spieler, version: weltVersion },
+  });
 }
 
 /* ==================================================================

@@ -223,7 +223,13 @@
     function tick(){if(dead)return;tickCount++;updateResources();
       if(access&&access.open&&now()>=access.closesAt)showClosed(H.access(now()));
       if(access&&!access.open&&!busy&&!document.hidden&&now()>=access.nextOpenAt){access=null;connectWorld();}
-      if(connected&&Date.now()-lastPresence>=2000)syncPresence();
+      /* Anwesenheit kostet eine Serveranfrage alle zwei Sekunden - das ist
+         der mit Abstand teuerste Takt im ganzen Hideout und der Grund,
+         warum ein kostenloses Kontingent in Tagen aufgebraucht ist. Ist
+         gerade niemand sonst auf der Insel, sieht die schnelle Folge auch
+         niemand: dann reichen sechs Sekunden. Sobald ein Mitspieler da ist,
+         laeuft es wieder fluessig. */
+      if(connected&&Date.now()-lastPresence>=(peerList.length?2000:6000))syncPresence();
       if(connected&&adventures.dungeonActive()&&!busy&&!polling&&!document.hidden&&Date.now()-lastPoll>2500){lastPoll=Date.now();polling=true;var dungeonEpoch=requestEpoch;R.online.request('world').then(function(res){if(dead||!connected||dungeonEpoch!==requestEpoch||busy)return;applyOnline(res);}).catch(function(err){if(dungeonEpoch===requestEpoch)onlineError(err);}).finally(function(){polling=false;});}
       if(peerList.length&&Date.now()-lastPresenceReply>15000)applyPeers([],now());
       root.querySelectorAll('[data-until]').forEach(function(node){var until=Number(node.getAttribute('data-until'));node.textContent=until<=now()?node.getAttribute('data-ready'):duration(until-now());});
