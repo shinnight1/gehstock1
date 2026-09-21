@@ -9,7 +9,7 @@
    Darum steht die Logik hier und nicht in einem der beiden. Wer den
    Ablauf aendert, aendert ihn fuer beide.
 
-   Vergeben werden Mons, Aussenposten und Gold.
+   Vergeben werden Mons, Aussenposten, Gold und Eier.
 
    Jede Schenkung kommt ins Buch: wer, an wen, was, woher. Sich selbst
    zu beschenken ist erlaubt und faellt genau deshalb auf - im Buch
@@ -25,7 +25,7 @@ export const spielerId = (code) => createHash('sha256').update('gehstockmon-play
 
 export const BUCH_LIMIT = 100;
 
-export function schenken(welt, { code, name = '', mons = [], gebiete = [], gold = 0, now = Date.now(), wegnehmen = false, von = null, quelle = 'Adminmenü', id = null }) {
+export function schenken(welt, { code, name = '', mons = [], gebiete = [], gold = 0, eier = 0, now = Date.now(), wegnehmen = false, von = null, quelle = 'Adminmenü', id = null }) {
   if (!/^\d{4}$/.test(String(code))) throw new Error('Der Zugangscode besteht aus vier Ziffern.');
   /* Eine alte Karte wird beim naechsten Spielzug umgerechnet, und dabei
      wandern Gebiete. Erst spielen, dann verschenken. */
@@ -38,7 +38,7 @@ export function schenken(welt, { code, name = '', mons = [], gebiete = [], gold 
 
   const ziel = spielerId(String(code));
   const gabe = Math.min(10000000, Math.max(0, Math.floor(Number(gold) || 0)));
-  const bericht = { id: ziel, neu: false, name: '', mons: [], schonDa: [], gebiete: [], schonSeine: [], genommen: [], gold: 0 };
+  const bericht = { id: ziel, neu: false, name: '', mons: [], schonDa: [], gebiete: [], schonSeine: [], genommen: [], gold: 0, eier: 0, eierAbgelehnt: 0 };
   let p = welt.players[ziel];
   if (!p) { p = welt.players[ziel] = { ...D.neuerStand(null, now), name: name || 'Wanderer', lastSeen: now, lastOfflineLoss: 0 }; bericht.neu = true; }
   bericht.name = p.name;
@@ -74,7 +74,30 @@ export function schenken(welt, { code, name = '', mons = [], gebiete = [], gold 
 
   if (gabe) { p.gold = Math.min(10000000, (p.gold || 0) + gabe); bericht.gold = gabe; }
 
-  if (!bericht.mons.length && !bericht.gebiete.length && !bericht.gold) return bericht;
+  /* Eier kommen roh in die Tasche, genau wie am eigenen Aussenposten
+     abgeholte: Ausbrueten muss der Beschenkte selbst, sonst waere ein
+     Geschenk mehr wert als eine Stunde Spielzeit.
+
+     Die Tasche fasst zwoelf. Mehr wird nicht hineingezwaengt, sondern
+     zurueckgemeldet - sonst wirft D.neuerStand den Ueberschuss beim
+     naechsten Laden still weg, und niemand wuesste, wo die Eier blieben.
+
+     Das Herkunftsgebiet ist reine Beschriftung ("Ei aus ..."). Genommen
+     wird der erste eigene Aussenposten des Beschenkten, damit es stimmig
+     aussieht; hat er keinen, steht das erste Feld darunter. */
+  const gewuenscht = Math.min(99, Math.max(0, Math.floor(Number(eier) || 0)));
+  if (gewuenscht) {
+    const platz = Math.max(0, E.BAG_LIMIT - p.eggs.length);
+    const anzahl = Math.min(gewuenscht, platz);
+    const herkunft = (p.geschafft && p.geschafft[0]) || D.FELDER[0].id;
+    for (let i = 0; i < anzahl; i++) {
+      p.eggs.push({ id: 'geschenk-' + now + '-' + (++p.eggSerial), territoryId: herkunft, producedAt: now, startedAt: null, readyAt: null });
+    }
+    bericht.eier = anzahl;
+    bericht.eierAbgelehnt = gewuenscht - anzahl;
+  }
+
+  if (!bericht.mons.length && !bericht.gebiete.length && !bericht.gold && !bericht.eier) return bericht;
 
   welt.version = (welt.version || 1) + 1;
   welt.schenkungen = (welt.schenkungen || []).concat({
@@ -88,6 +111,7 @@ export function schenken(welt, { code, name = '', mons = [], gebiete = [], gold 
     mons: bericht.mons.slice(),
     gebiete: bericht.gebiete.slice(),
     gold: bericht.gold,
+    eier: bericht.eier,
     genommen: bericht.genommen.slice(),
     quelle: quelle,
   }).slice(-BUCH_LIMIT);

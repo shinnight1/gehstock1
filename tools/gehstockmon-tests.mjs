@@ -189,13 +189,37 @@ await test('The admin gift tab and the server agree on every field',async()=>{
   vm.runInContext(fs.readFileSync('src/core/geschenke.js','utf8'),vm.createContext({SG,fetch:fetchStub,Promise,Object,Math,Date,Number,String,JSON,console}));
   const G=SG.geschenke;
   assert.deepEqual((await G.senden('admin_log',{})).schenkungen,[]);
-  const r=await G.senden('admin_grant',{zielCode:cb,zielName:'Test B',mons:['sturmhorn'],gebiete:[2],gold:500,wegnehmen:false,requestId:'geschenk-0001'});
-  assert.deepEqual([r.bericht.mons,r.bericht.gebiete,r.bericht.gold,r.bericht.neu],[['sturmhorn'],[2],500,true]);
+  const r=await G.senden('admin_grant',{zielCode:cb,zielName:'Test B',mons:['sturmhorn'],gebiete:[2],gold:500,eier:2,wegnehmen:false,requestId:'geschenk-0001'});
+  assert.deepEqual([r.bericht.mons,r.bericht.gebiete,r.bericht.gold,r.bericht.eier,r.bericht.neu],[['sturmhorn'],[2],500,2,true]);
   const buch=(await G.senden('admin_log',{})).schenkungen;
-  assert.equal(buch.length,1);assert.equal(buch[0].vonName,'Test A');assert.equal(buch[0].quelle,'Adminmenü');
+  assert.equal(buch.length,1);assert.equal(buch[0].vonName,'Test A');assert.equal(buch[0].quelle,'Adminmenü');assert.equal(buch[0].eier,2);
   await assert.rejects(G.senden('admin_grant',{zielCode:ca,zielName:'Test A',mons:[],gebiete:[2],gold:0,requestId:'geschenk-0002'}),
     (e)=>/^Gebiet \d+ .* gehört /.test(e.message),'die Oberfläche erkennt genau diesen Wortlaut wieder');
   SG.auth.aktuell={code:cb,name:'Test B'};
   await assert.rejects(G.senden('admin_grant',{zielCode:cb,mons:['endrichter'],gebiete:[],gold:0,requestId:'geschenk-0003'}),/nur ein Administrator/);
+});
+await test('Gifted eggs land raw in the bag, respect the twelve-egg limit and are written down',async()=>{
+  const store=memoryStore(),h=createHandler({store,now:()=>stamp});
+  let r=await call(h,ca,'admin_grant',{zielCode:cb,zielName:'Test B',eier:3});
+  assert.equal(r.status,200,r.error);assert.equal(r.bericht.eier,3);assert.equal(r.bericht.eierAbgelehnt,0);
+  const b=await call(h,cb,'join');
+  assert.equal(b.profile.eggs.length,3);
+  assert.ok(b.profile.eggs.every(e=>e.startedAt===null&&e.readyAt===null),'roh, nicht vorgebrütet');
+  assert.equal(new Set(b.profile.eggs.map(e=>e.id)).size,3,'jedes Ei hat seine eigene Kennung');
+  assert.ok(b.profile.eggs.every(e=>D.FELDER.some(f=>f.id===e.territoryId)),'Herkunftsgebiet gibt es');
+  // Die Tasche fasst zwölf: was nicht hineinpasst, wird gemeldet statt still verworfen.
+  r=await call(h,ca,'admin_grant',{zielCode:cb,eier:20});
+  assert.equal(r.bericht.eier,E.BAG_LIMIT-3);assert.equal(r.bericht.eierAbgelehnt,20-(E.BAG_LIMIT-3));
+  assert.equal((await call(h,cb,'world')).profile.eggs.length,E.BAG_LIMIT);
+  // Volle Tasche: gar nichts mehr, und das steht auch nicht im Buch.
+  const vorher=(await call(h,ca,'admin_log')).schenkungen.length;
+  r=await call(h,ca,'admin_grant',{zielCode:cb,eier:5});
+  assert.equal(r.bericht.eier,0);assert.equal(r.bericht.eierAbgelehnt,5);
+  const buch=(await call(h,ca,'admin_log')).schenkungen;
+  assert.equal(buch.length,vorher,'ein wirkungsloses Geschenk kommt nicht ins Buch');
+  assert.equal(buch[0].eier,E.BAG_LIMIT-3,'das Buch nennt die Zahl der Eier');
+  // Ein geschenktes Ei lässt sich ganz normal ausbrüten.
+  const ei=(await call(h,cb,'world')).profile.eggs[0].id;
+  assert.equal((await call(h,cb,'incubate',{eggId:ei})).status,200);
 });
 console.log('\n'+passed+' GehstockMon regression checks passed.');

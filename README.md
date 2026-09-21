@@ -170,9 +170,9 @@ auch in eine andere Datenbank, und genau das ist der Weg bei einem Anbieterwechs
 
 ```bash
 node --env-file=.env.local tools/spieler-ausstatten.mjs 5572 \
-  --mons sturmhorn,seelenqualle --gebiete 2,4 --gold 500
+  --mons sturmhorn,seelenqualle --gebiete 2,4 --gold 500 --eier 3
 ```
-Schenkt einem GehstockMon-Konto Mons, Außenposten und Gold — dasselbe, was im
+Schenkt einem GehstockMon-Konto Mons, Außenposten, Gold und Eier — dasselbe, was im
 Admin-Menü der Reiter *🎁 Geben* tut, nur ohne Browser. Welches Konto gemeint
 ist, sagt allein der vierstellige Zugangscode; aus ihm leitet auch der
 Spielserver die Spielerkennung ab. `--probe` schreibt nichts und zeigt nur, was
@@ -532,7 +532,7 @@ wurde.
 ### Geben — Mons, Außenposten und Gold verschenken
 
 Im Admin-Menü liegt der Reiter **🎁 Geben**. Person antippen, Mons ankreuzen,
-Außenposten ankreuzen, Gold eintragen, fertig. Das landet unmittelbar in der
+Außenposten ankreuzen, Gold und Eier eintragen, fertig. Das landet unmittelbar in der
 echten Spielerwelt — nicht in der Developer-Testzone, deren Stand nach fünf
 Minuten ohnehin verfällt.
 
@@ -547,6 +547,9 @@ Ein paar Eigenheiten, die Ärger ersparen:
   und nennt den Namen. Erst auf Rückfrage wird es übergeben — denn für den
   bisherigen Besitzer ist das ein Verlust.
 - Zweimal dasselbe verschenken ändert nichts. Was da ist, ist da.
+- Eier kommen **roh** in die Bruttasche — ausbrüten muss der Beschenkte selbst.
+  Die Tasche fasst zwölf; was nicht hineinpasst, wird nicht vergeben, sondern
+  gemeldet. Still verschwinden soll kein Geschenk.
 
 **Jede Schenkung steht im Buch**, unter der Liste: wer, an wen, was, woher
 (Menü oder Kommandozeile) und wann. Sich selbst zu beschenken ist erlaubt und

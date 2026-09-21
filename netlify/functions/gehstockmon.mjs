@@ -260,11 +260,11 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
         if (body.op === 'admin_grant') {
           let bericht;
           try {
-            bericht = schenken(world, { code: body.zielCode, name: body.zielName, mons: body.mons || [], gebiete: body.gebiete || [], gold: body.gold || 0,
+            bericht = schenken(world, { code: body.zielCode, name: body.zielName, mons: body.mons || [], gebiete: body.gebiete || [], gold: body.gold || 0, eier: body.eier || 0,
               now: timestamp, wegnehmen: body.wegnehmen === true, quelle: 'Adminmenü', id: body.requestId,
               von: { id, name: name || 'Admin' } });
           } catch (err) { throw new GameError(err.message); }
-          if (!bericht.mons.length && !bericht.gebiete.length && !bericht.gold) return json({ serverTime: timestamp, bericht, schenkungen: schenkungen(world) });
+          if (!bericht.mons.length && !bericht.gebiete.length && !bericht.gold && !bericht.eier) return json({ serverTime: timestamp, bericht, schenkungen: schenkungen(world) });
           const geschrieben = await db.setJSON(KEY, world, entry ? { onlyIfMatch: entry.etag } : { onlyIfNew: true });
           if (geschrieben.modified) return json({ serverTime: timestamp, bericht, schenkungen: schenkungen(world) });
           continue;

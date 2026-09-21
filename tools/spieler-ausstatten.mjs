@@ -1,12 +1,13 @@
 /* ------------------------------------------------------------------
    Stattet ein Konto in der GehstockMon-Spielerwelt aus: Mons ins
-   Besitzregal, Gebiete auf den Namen des Spielers.
+   Besitzregal, Gebiete auf den Namen des Spielers, Gold und Eier obendrauf.
 
    Aufruf:
      node --env-file=.env.local tools/spieler-ausstatten.mjs 5572 \
        --mons sturmhorn,seelenqualle,obsidianrabe,mondhexe --gebiete 2,4,5
 
      --gold <zahl>  Gold obendrauf
+     --eier <zahl>  rohe Eier in die Bruttasche (fasst zwoelf)
      --probe        schreibt nichts, zeigt nur, was passieren wuerde
      --name <name>  Anzeigename, falls das Konto die Welt noch nie betreten hat
      --wegnehmen    ein Gebiet auch dann uebergeben, wenn es schon einem
@@ -34,12 +35,13 @@ const KEY = 'world-v2';
 
 function argumente(argv) {
   const liste = (v) => String(v || '').split(',').map((s) => s.trim()).filter(Boolean);
-  const gelesen = { code: '', name: '', mons: [], gebiete: [], gold: 0, probe: false, wegnehmen: false };
+  const gelesen = { code: '', name: '', mons: [], gebiete: [], gold: 0, eier: 0, probe: false, wegnehmen: false };
   for (let i = 0; i < argv.length; i++) {
     const wert = argv[i + 1];
     if (argv[i] === '--mons') { gelesen.mons = liste(wert); i++; }
     else if (argv[i] === '--gebiete') { gelesen.gebiete = liste(wert).map(Number); i++; }
     else if (argv[i] === '--gold') { gelesen.gold = Number(wert) || 0; i++; }
+    else if (argv[i] === '--eier') { gelesen.eier = Number(wert) || 0; i++; }
     else if (argv[i] === '--name') { gelesen.name = String(wert || ''); i++; }
     else if (argv[i] === '--probe') gelesen.probe = true;
     else if (argv[i] === '--wegnehmen') gelesen.wegnehmen = true;
@@ -55,9 +57,11 @@ function zeigen(bericht, probe) {
   if (bericht.schonDa.length) console.log('  schon vorhanden: ' + bericht.schonDa.map((id) => D.mon(id).name).join(', '));
   if (bericht.gebiete.length) console.log('  ' + wuerde + 'Gebiete: ' + bericht.gebiete.map((id) => id + ' ' + D.FELDER[id - 1].name).join(', '));
   if (bericht.gold) console.log('  ' + wuerde + 'Gold: ' + bericht.gold);
+  if (bericht.eier) console.log('  ' + wuerde + 'Eier: ' + bericht.eier);
+  if (bericht.eierAbgelehnt) console.log('  ! ' + bericht.eierAbgelehnt + ' Ei(er) passten nicht in die Bruttasche (Platz fuer zwoelf).');
   if (bericht.schonSeine.length) console.log('  gehoerten ihm bereits: ' + bericht.schonSeine.join(', '));
   for (const weg of bericht.genommen) console.log('  ! Gebiet ' + weg.id + ' ' + wuerde + 'wechselt von ' + weg.name);
-  if (!bericht.mons.length && !bericht.gebiete.length && !bericht.gold) console.log('  Nichts zu tun.');
+  if (!bericht.mons.length && !bericht.gebiete.length && !bericht.gold && !bericht.eier) console.log('  Nichts zu tun.');
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -81,7 +85,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     catch (e) { console.log(e.message + (/gehört/.test(e.message) ? ' Mit --wegnehmen trotzdem übergeben.' : '')); process.exit(1); }
     zeigen(bericht, gelesen.probe);
     if (gelesen.probe) { console.log('\nProbe - nichts geschrieben.'); process.exit(0); }
-    if (!bericht.mons.length && !bericht.gebiete.length && !bericht.gold) process.exit(0);
+    if (!bericht.mons.length && !bericht.gebiete.length && !bericht.gold && !bericht.eier) process.exit(0);
     geschrieben = (await store.setJSON(KEY, welt, { onlyIfMatch: eintrag.etag })).modified;
     if (!geschrieben) console.log('  Die Welt hat sich zwischendurch geaendert - neuer Versuch.');
   }

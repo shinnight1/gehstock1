@@ -60,7 +60,7 @@
     }
 
     ziel.appendChild(UI.el('p.small.muted', {
-      text: 'Wähle eine Person aus und gib ihr Mons, Außenposten oder Gold. '
+      text: 'Wähle eine Person aus und gib ihr Mons, Außenposten, Gold oder Eier. '
         + 'Das landet sofort in der echten Spielerwelt — nicht in der Testzone.',
     }));
 
@@ -158,6 +158,7 @@
       }).join(', '));
     }
     if (s.gold) teile.push(s.gold + ' Gold');
+    if (s.eier) teile.push(s.eier + ' ' + (s.eier === 1 ? 'Ei' : 'Eier'));
     if (s.genommen && s.genommen.length) {
       teile.push('weggenommen von ' + s.genommen.map(function (g) { return g.name; }).join(', '));
     }
@@ -210,15 +211,18 @@
       });
     });
 
-    var goldfeld = UI.el('input', {
-      type: 'number', min: '0', step: '10', value: '0', inputMode: 'numeric',
-      style: {
-        width: '100%', height: '48px', background: '#0b0e15',
-        border: '1px solid var(--line)', borderRadius: '10px',
-        color: 'var(--text)', padding: '0 12px', outline: 'none', fontSize: '17px',
-        marginTop: '8px',
-      },
-    });
+    function zahlenfeld(schritt) {
+      return UI.el('input', {
+        type: 'number', min: '0', step: String(schritt), value: '0', inputMode: 'numeric',
+        style: {
+          width: '100%', height: '48px', background: '#0b0e15',
+          border: '1px solid var(--line)', borderRadius: '10px',
+          color: 'var(--text)', padding: '0 12px', outline: 'none', fontSize: '17px',
+          marginTop: '8px',
+        },
+      });
+    }
+    var goldfeld = zahlenfeld(10), eierfeld = zahlenfeld(1);
 
     var hinweis = UI.el('div.small', { style: { color: 'var(--red)', minHeight: '18px' } });
 
@@ -241,6 +245,13 @@
         gebietfeld,
         UI.el('div.sec-head', null, [UI.el('h2', { text: 'Gold' })]),
         goldfeld,
+        UI.el('div.sec-head', null, [UI.el('h2', { text: 'Eier' })]),
+        UI.el('p.small.muted', {
+          text: 'Kommen roh in die Bruttasche — ausbrüten muss sie die Person '
+            + 'selbst. Die Tasche fasst zwölf; was nicht hineinpasst, wird nicht '
+            + 'vergeben und hier gemeldet.',
+        }),
+        eierfeld,
         hinweis,
       ],
       actions: [
@@ -259,22 +270,27 @@
         mons: Object.keys(mons),
         gebiete: Object.keys(gebiete).map(Number),
         gold: Math.max(0, Math.floor(Number(goldfeld.value) || 0)),
+        eier: Math.max(0, Math.floor(Number(eierfeld.value) || 0)),
         wegnehmen: wegnehmen === true,
         requestId: 'geschenk-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10),
       };
-      if (!gabe.mons.length && !gabe.gebiete.length && !gabe.gold) {
+      if (!gabe.mons.length && !gabe.gebiete.length && !gabe.gold && !gabe.eier) {
         hinweis.textContent = 'Nichts ausgewählt.';
         return;
       }
       hinweis.textContent = '';
       G.senden('admin_grant', gabe).then(function (r) {
         var b = r.bericht || {};
-        if (!b.mons.length && !b.gebiete.length && !b.gold) {
-          hinweis.textContent = 'Das hat die Person schon alles.';
+        if (!b.mons.length && !b.gebiete.length && !b.gold && !b.eier) {
+          hinweis.textContent = b.eierAbgelehnt
+            ? 'Die Bruttasche ist voll — kein Ei passt hinein.'
+            : 'Das hat die Person schon alles.';
           return;
         }
         dlg.close();
-        UI.toast('Gegeben an ' + (b.name || person.name || person.code) + '.', 'good');
+        UI.toast('Gegeben an ' + (b.name || person.name || person.code)
+          + (b.eierAbgelehnt ? ' · ' + b.eierAbgelehnt + ' Ei(er) passten nicht in die Tasche' : '') + '.',
+          b.eierAbgelehnt ? null : 'good');
         SG.protokoll.schreiben('geschenk',
           'GehstockMon: ' + was(r.schenkungen && r.schenkungen[0] ? r.schenkungen[0] : b)
           + ' an ' + (b.name || person.name || person.code),
