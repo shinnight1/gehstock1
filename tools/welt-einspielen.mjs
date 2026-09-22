@@ -7,8 +7,13 @@
    --probe schreibt nichts, sondern zeigt nur, was geschrieben wuerde.
 
    Erwartet die beiden Zugaenge in der Umgebung:
-       KV_REST_API_URL
-       KV_REST_API_TOKEN
+       UPSTASH_REDIS_REST_URL   oder  KV_REST_API_URL
+       UPSTASH_REDIS_REST_TOKEN oder  KV_REST_API_TOKEN
+
+   Beide Namenspaare gelten, genau wie in netlify/functions/lib/speicher.mjs:
+   Vercel legt die Werte unter KV_ ab, Upstash selbst unter UPSTASH_. Wer
+   eine Sicherung in eine frisch angelegte Datenbank spielt, hat meistens
+   nur die UPSTASH_-Namen zur Hand.
 
    Vorhandene Eintraege werden ueberschrieben. Das ist gewollt: die
    Sicherung ist die Wahrheit, der Zielspeicher wird angeglichen.
@@ -25,8 +30,13 @@ if (!ordner) {
   console.log('Welcher Ordner? Beispiel:\n  node tools/welt-einspielen.mjs backup/2026-09-12-15-30');
   process.exit(1);
 }
-if (!probe && !(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN)) {
-  console.log('KV_REST_API_URL und KV_REST_API_TOKEN fehlen in der Umgebung.');
+const url = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
+const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
+
+if (!probe && !(url && token)) {
+  console.log('Die Redis-Zugangsdaten fehlen in der Umgebung.');
+  console.log('Erwartet werden UPSTASH_REDIS_REST_URL und UPSTASH_REDIS_REST_TOKEN');
+  console.log('(oder KV_REST_API_URL und KV_REST_API_TOKEN).');
   process.exit(1);
 }
 
@@ -35,8 +45,8 @@ if (!probe && !(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN)) {
    aus genau diesem Text ab - ein umformatierter Wert waere ein anderer
    Stempel und das erste Schreiben danach wuerde abgelehnt. */
 const r = probe ? null : new Redis({
-  url: process.env.KV_REST_API_URL,
-  token: process.env.KV_REST_API_TOKEN,
+  url: url,
+  token: token,
   automaticDeserialization: false,
 });
 
