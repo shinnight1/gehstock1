@@ -139,4 +139,28 @@ await pruefe('loeschen entfernt den Eintrag', async () => {
   assert.equal(await st.get('weg'), null);
 });
 
+/* Eine Datenbank am Kontingentende lehnt einen Teil der Befehle ab. Genau
+   dann darf die Speicherschicht nicht aufgeben - sonst meldet die Seite
+   "Verbindung zur Spielerwelt verloren", obwohl der naechste Versuch
+   durchgegangen waere. */
+await pruefe('Abgelehnte Befehle werden wiederholt, echte Fehler nicht', async () => {
+  const { _redisStore } = await import('../netlify/functions/lib/speicher.mjs');
+  let versuche = 0;
+  const wackelig = {
+    get: async (k) => { versuche++; if (versuche < 3) throw new Error('Command failed: ERR max requests limit exceeded. Limit: 500000'); return daten.get(k) || null; },
+    set: async (k, v) => { daten.set(k, v); return 'OK'; },
+    eval: fakeRedis.eval, del: fakeRedis.del, scan: async () => ['0', []],
+  };
+  daten.set('hgh:wackelig:welt', JSON.stringify({ da: true }));
+  const st = _redisStore('wackelig', wackelig);
+  assert.deepEqual(await st.get('welt'), { da: true }, 'nach zwei Absagen kommt der Wert');
+  assert.equal(versuche, 3, 'genau zwei Nachfragen, nicht mehr');
+
+  /* Ein echter Fehler soll sofort durchschlagen und nicht dreimal dauern. */
+  let echte = 0;
+  const kaputt = { ...wackelig, get: async () => { echte++; throw new Error('WRONGPASS invalid password'); } };
+  await assert.rejects(_redisStore('kaputt', kaputt).get('welt'), /WRONGPASS/);
+  assert.equal(echte, 1, 'kein Wiederholen bei einem echten Fehler');
+});
+
 console.log('\n' + bestanden + ' bestanden' + (process.exitCode ? ', Fehler siehe oben' : ', 0 durchgefallen') + '\n');

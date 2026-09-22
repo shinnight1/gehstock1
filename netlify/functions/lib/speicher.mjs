@@ -76,6 +76,38 @@ async function redis() {
 
 /* Alles eines Stores liegt unter einem gemeinsamen Namensraum, damit die
    drei Stores sich in einer Redis-Datenbank nicht ins Gehege kommen. */
+/* ------------------------------------------------------------------
+   Noch einmal fragen, bevor man aufgibt
+
+   Eine Datenbank am Kontingentende sagt nicht durchgehend nein, sondern
+   lehnt einen Teil der Befehle ab ("max requests limit exceeded").
+   Fuer den Spieler sah das aus wie ein Totalausfall: Ein Spielzug
+   braucht mehrere Befehle, einer davon fiel fast immer durch, und die
+   Seite meldete "Verbindung zur Spielerwelt verloren".
+
+   Zwei kurze Nachfragen holen die meisten davon herein. Sie gelten nur
+   fuer Absagen, die von selbst vorbeigehen - Kontingent, abgerissene
+   Leitung, Zeitueberschreitung. Ein echter Fehler (falsches Passwort,
+   kaputtes Kommando) wird sofort weitergereicht, sonst verschleppte das
+   Wiederholen nur die Diagnose.
+
+   Auch das Schreiben darf wiederholt werden: Es traegt seinen Stempel
+   mit sich. Kommt es doch zweimal an, laeuft der zweite Versuch ins
+   Leere, statt etwas zu ueberschreiben. */
+const VORUEBERGEHEND = /max requests|rate limit|too many|ECONNRESET|ETIMEDOUT|fetch failed|network|socket|timeout|502|503|504/i;
+const PAUSEN = [120, 350];
+
+async function nochmal(was) {
+  for (let i = 0; ; i++) {
+    try { return await was(); }
+    catch (e) {
+      const text = String((e && e.message) || e);
+      if (i >= PAUSEN.length || !VORUEBERGEHEND.test(text)) throw e;
+      await new Promise((ok) => setTimeout(ok, PAUSEN[i]));
+    }
+  }
+}
+
 function redisStore(name, verbindung = redis) {
   // Namensraum der bestehenden Vercel-Spielerwelt beibehalten.
   const prefix = 'hgh:' + name + ':';
@@ -83,7 +115,7 @@ function redisStore(name, verbindung = redis) {
 
   async function text(key) {
     const r = await verbindung();
-    const v = await r.get(d(key));
+    const v = await nochmal(() => r.get(d(key)));
     if (v === null || v === undefined) return null;
     return typeof v === 'string' ? v : JSON.stringify(v);
   }
@@ -106,24 +138,24 @@ function redisStore(name, verbindung = redis) {
     async setJSON(key, wert, opts) {
       const r = await verbindung();
       const neu = JSON.stringify(wert);
-      if (!opts) { await r.set(d(key), neu); return { modified: true, etag: stempelVon(neu) }; }
+      if (!opts) { await nochmal(() => r.set(d(key), neu)); return { modified: true, etag: stempelVon(neu) }; }
       /* Ein leeres onlyIfMatch ist kein "egal", sondern ein Fehler weiter
          oben. Es darf nie zum bedingungslosen Schreiben werden. */
       const bedingung = opts.onlyIfNew ? '@neu' : String(opts.onlyIfMatch || '');
       if (bedingung !== '@neu' && !bedingung) return { modified: false, etag: stempelVon(neu) };
-      const ok = await r.eval(CAS, [d(key)], [neu, bedingung]);
+      const ok = await nochmal(() => r.eval(CAS, [d(key)], [neu, bedingung]));
       return { modified: Number(ok) === 1, etag: stempelVon(neu) };
     },
 
     async list() {
       const r = await verbindung(); let cursor = '0', found = [];
-      do { const [next, keys] = await r.scan(cursor, { match: prefix + '*', count: 500 }); cursor = String(next); found.push(...keys); } while (cursor !== '0');
+      do { const [next, keys] = await nochmal(() => r.scan(cursor, { match: prefix + '*', count: 500 })); cursor = String(next); found.push(...keys); } while (cursor !== '0');
       return { blobs: found.filter(k => !k.endsWith(':v')).map(k => ({ key: k.slice(prefix.length) })) };
     },
 
     async delete(key) {
       const r = await verbindung();
-      await r.del(d(key), d(key) + ':v');
+      await nochmal(() => r.del(d(key), d(key) + ':v'));
     },
   };
 }
