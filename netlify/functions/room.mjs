@@ -38,7 +38,18 @@ import { speicher, speicherArt } from './lib/speicher.mjs';
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // ohne 0/O/1/I
 const ROOM_TTL_MS = 20 * 60 * 1000;                    // 20 Minuten ohne Aktivitaet
 const POLL_MS = 7500;                                  // unter dem Funktionslimit bleiben
-const POLL_TICK = 200;
+/* Zwischen zwei Blicken in die Datenbank. Der erste kommt schnell, damit
+   die eigene Nachricht sofort zurueckkommt; danach wird der Abstand groesser.
+
+   Vorher stand hier ein starres Raster von 200 ms: 38 Lesevorgaenge je
+   Langabfrage, rund 18000 in der Stunde und das pro offenem Fenster. Das
+   Freikontingent der Datenbank (500000 Befehle im Monat) war damit nach 27
+   Fensterstunden aufgebraucht - genau das ist passiert. Mit dem Rueckzug
+   sind es 7 Lesevorgaenge je Abfrage und rund 3400 in der Stunde; spuerbar
+   ist der Unterschied nur, wenn ueber Sekunden hinweg nichts passiert. */
+const POLL_TICK = 250;
+const POLL_TICK_MAX = 2000;
+const POLL_WACHSTUM = 1.6;
 const MAX_LOG = 4000;
 
 const CHAT_MAX = 250;                                  // Nachrichten je Brett
@@ -446,6 +457,7 @@ async function sync(st, msg) {
 
   const deadline = Date.now() + POLL_MS;
   let ersteRunde = true;
+  let takt = POLL_TICK;
 
   for (;;) {
     const w = await leseWelt(st);
@@ -524,7 +536,8 @@ async function sync(st, msg) {
     if (Date.now() >= deadline) {
       return json({ version: w.version, pv: w.pv, spiegelMich: beobachtet, leer: true });
     }
-    await schlaf(POLL_TICK);
+    await schlaf(takt);
+    takt = Math.min(POLL_TICK_MAX, Math.round(takt * POLL_WACHSTUM));
   }
 }
 
@@ -1102,11 +1115,13 @@ async function raum(st, op, msg) {
      er nicht in einer Fehlerschleife haengt. */
   if (op === 'poll') {
     const deadline = Date.now() + POLL_MS;
+    let takt = POLL_TICK;
     while (Date.now() < deadline) {
       const frisch = await readRoom(st, code);
       if (!frisch) return json({ closed: true, reason: 'room_gone' });
       if (frisch.version > (Number(msg.since) || 0)) return json(publicRoom(frisch));
-      await schlaf(POLL_TICK);
+      await schlaf(takt);
+      takt = Math.min(POLL_TICK_MAX, Math.round(takt * POLL_WACHSTUM));
     }
     const letzte = await readRoom(st, code);
     return json(letzte ? publicRoom(letzte) : { closed: true, reason: 'room_gone' });

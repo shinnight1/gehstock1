@@ -48,14 +48,31 @@ if (!url || !token) {
    diesem Text ab - ein umformatierter Wert waere ein anderer Stempel. */
 const r = new Redis({ url, token, automaticDeserialization: false });
 
+/* Eine Datenbank am Kontingentende lehnt einen Teil der Befehle ab
+   ("max requests limit exceeded"). Genau dann braucht man die Sicherung
+   am dringendsten - sie darf am ersten Fehlschlag nicht aufgeben, sondern
+   fragt mit wachsender Pause nach. */
+async function zaeh(was, beschreibung, versuche = 6) {
+  for (let i = 0; i < versuche; i++) {
+    try { return await was(); }
+    catch (e) {
+      const letzte = i === versuche - 1;
+      console.log('  ' + (letzte ? 'FEHLER' : 'erneut') + ' bei ' + beschreibung + ': ' + String(e && e.message || e).split('\n')[0]);
+      if (letzte) throw e;
+      await new Promise((ok) => setTimeout(ok, 500 * (i + 1)));
+    }
+  }
+}
+
 const ziel = path.join('backup', new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-'));
 let geholt = 0, uebersprungen = 0, bytes = 0;
+const fehlend = [];
 
 for (const store of STORES) {
   const prefix = 'hgh:' + store + ':';
   let cursor = '0', keys = [];
   do {
-    const [next, gefunden] = await r.scan(cursor, { match: prefix + '*', count: 500 });
+    const [next, gefunden] = await zaeh(() => r.scan(cursor, { match: prefix + '*', count: 500 }), 'Liste ' + store);
     cursor = String(next);
     keys.push(...gefunden);
   } while (cursor !== '0');
@@ -73,8 +90,14 @@ for (const store of STORES) {
      waere die Sicherung nicht einspielbar. */
   const verzeichnis = [];
   for (const key of eigene) {
-    const wert = await r.get(prefix + key);
-    if (wert === null || wert === undefined) continue;
+    let wert = null;
+    try { wert = await zaeh(() => r.get(prefix + key), key); }
+    catch (e) { fehlend.push(store + '/' + key + ' (' + String(e && e.message || e).split('\n')[0] + ')'); continue; }
+    /* Ein leerer Wert ist hier kein Grund zum Weitergehen: Der Schluessel
+       stand gerade noch in der Liste. Entweder wurde er in derselben Sekunde
+       geloescht, oder die Datenbank hat die Antwort verschluckt - beides
+       gehoert gemeldet, sonst fehlt er spaeter unbemerkt in der Sicherung. */
+    if (wert === null || wert === undefined) { fehlend.push(store + '/' + key + ' (leer zurueckgekommen)'); continue; }
     const inhalt = typeof wert === 'string' ? wert : JSON.stringify(wert);
     const name = key.replace(/[^a-zA-Z0-9._-]/g, '_') + '.json';
     await writeFile(path.join(ziel, store, name), inhalt);
@@ -87,5 +110,15 @@ for (const store of STORES) {
 
 console.log('\n' + geholt + ' Dateien gesichert, ' + uebersprungen + ' kurzlebige uebersprungen.');
 console.log('Gesamt: ' + (bytes / 1024 / 1024).toFixed(2) + ' MB in ' + ziel);
+
+if (fehlend.length) {
+  console.log('\n!! UNVOLLSTAENDIG - ' + fehlend.length + ' Schluessel fehlen:');
+  fehlend.forEach((v) => console.log('   ' + v));
+  console.log('\nDiese Sicherung nicht als vollstaendig ansehen. Noch einmal laufen');
+  console.log('lassen; bleibt es dabei, lehnt die Datenbank gerade Befehle ab');
+  console.log('(Kontingent) - dann spaeter erneut versuchen.');
+  process.exit(1);
+}
+
 console.log('\nZurueckspielen (auch in eine andere Datenbank):');
 console.log('  node --env-file=.env.local tools/welt-einspielen.mjs ' + ziel);

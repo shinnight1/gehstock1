@@ -213,6 +213,17 @@ function settleBattle(world, p, id, now, requestId) {
 /* Each turn, egg and upgrade is authoritative and atomically persisted. */
 export function createHandler({ store, presenceStore, now = Date.now, random = Math.random, sandbox = false } = {}) {
   let sharedSandbox = null;
+  /* Kurzes Gedaechtnis fuer die Anwesenheit, siehe unten bei op 'presence'. */
+  let weltMerker = null;
+  const WELT_FRISCH = 5000;
+  async function presenzWelt(db, id, jetzt) {
+    const frisch = weltMerker && jetzt - weltMerker.at < WELT_FRISCH && weltMerker.data.players[id];
+    if (frisch) return weltMerker.data;
+    const entry = await db.getWithMetadata(KEY, { type: 'json', consistency: 'strong' });
+    if (!entry) throw new GameError('Betritt zuerst die Spielerwelt.', 409);
+    weltMerker = { data: entry.data, at: jetzt };
+    return entry.data;
+  }
   function sandboxHandler(timestamp) {
     if (!sharedSandbox || timestamp - sharedSandbox.lastUsed >= SANDBOX_IDLE) {
       sharedSandbox = { lastUsed: timestamp, handler: createHandler({ store: volatileStore(), presenceStore: volatileStore(), now, random, sandbox: true }) };
@@ -246,9 +257,16 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
       const name = typeof body.name === 'string' ? body.name.trim().replace(/[\u0000-\u001f]/g, '').slice(0, 30) : '';
       const db = store || speicher('hgh-gehstockmon'), draw = random();
       if (body.op === 'presence') {
-        const entry=await db.getWithMetadata(KEY,{type:'json',consistency:'strong'});
-        if(!entry)throw new GameError('Betritt zuerst die Spielerwelt.',409);
-        return await updatePresence(presenceStore||speicher('hgh-gehstockmon-presence'),entry.data,id,body.position,timestamp,now,bypass);
+        /* Anwesenheit liest die Spielerwelt nur, um Namen, Skin, Truppe und
+           die Gebietsgrenzen zu kennen - geschrieben wird dort nichts. Das
+           war trotzdem der groesste Posten in der Datenbank: das ganze
+           Weltdokument, dreissigmal je Minute und Spieler.
+
+           Ein paar Sekunden alt darf es dafuer sein. Eine warme Funktion
+           haelt es deshalb kurz fest; erst wenn der Spieler darin fehlt
+           (er ist gerade erst beigetreten), wird sofort neu gelesen. */
+        const welt=await presenzWelt(db,id,timestamp);
+        return await updatePresence(presenceStore||speicher('hgh-gehstockmon-presence'),welt,id,body.position,timestamp,now,bypass);
       }
       for (let attempt = 0; attempt < 8; attempt++) {
         const entry = await db.getWithMetadata(KEY, { type: 'json', consistency: 'strong' });
