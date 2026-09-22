@@ -52,14 +52,21 @@ const r = new Redis({ url, token, automaticDeserialization: false });
    ("max requests limit exceeded"). Genau dann braucht man die Sicherung
    am dringendsten - sie darf am ersten Fehlschlag nicht aufgeben, sondern
    fragt mit wachsender Pause nach. */
-async function zaeh(was, beschreibung, versuche = 6) {
+async function zaeh(was, beschreibung, versuche = 12) {
   for (let i = 0; i < versuche; i++) {
     try { return await was(); }
     catch (e) {
       const letzte = i === versuche - 1;
-      console.log('  ' + (letzte ? 'FEHLER' : 'erneut') + ' bei ' + beschreibung + ': ' + String(e && e.message || e).split('\n')[0]);
+      /* Bei einer Datenbank, die nur noch jeden dritten Befehl annimmt,
+         ist Geduld die ganze Kunst: Zwoelf Versuche mit wachsender Pause
+         holen einen Schluessel mit an Sicherheit grenzender
+         Wahrscheinlichkeit herein. Die Sicherung darf dauern - sie ist
+         das Einzige, was zwischen einem schlechten Tag und einem
+         verlorenen Spielstand steht. */
+      if (!letzte && i % 3 === 2) console.log('  weiter bei ' + beschreibung + ' (Versuch ' + (i + 2) + ')');
+      if (letzte) console.log('  FEHLER bei ' + beschreibung + ': ' + String(e && e.message || e).split('\n')[0]);
       if (letzte) throw e;
-      await new Promise((ok) => setTimeout(ok, 500 * (i + 1)));
+      await new Promise((ok) => setTimeout(ok, Math.min(5000, 400 * Math.pow(1.5, i))));
     }
   }
 }
