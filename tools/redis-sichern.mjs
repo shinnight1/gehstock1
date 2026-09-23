@@ -128,5 +128,9 @@ if (fehlend.length) {
   process.exit(1);
 }
 
-console.log('\nZurueckspielen (auch in eine andere Datenbank):');
-console.log('  node --env-file=.env.local tools/welt-einspielen.mjs ' + ziel);
+/* Die Zieldatei nennt bewusst keinen festen Namen: Wer umzieht, hat den
+   Zugang zur neuen Datenbank meist in einer eigenen Datei. Ein fester
+   Vorschlag wie .env.local schriebe dann still in die falsche Datenbank. */
+console.log('\nZurueckspielen (auch in eine andere Datenbank) - mit der Datei, in der');
+console.log('der Zugang zur ZIEL-Datenbank steht:');
+console.log('  node --env-file=<zugang-zur-zieldatenbank> tools/welt-einspielen.mjs ' + ziel);
