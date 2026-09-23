@@ -115,7 +115,7 @@ Befehle.
 
 ### Die Ausweichadresse bei Netlify
 
-`gehstockmon.netlify.app` liefert dieselbe Seite ein drittes Mal aus - für Netze,
+`gehstock-mon.netlify.app` liefert dieselbe Seite ein drittes Mal aus - für Netze,
 die `vercel.app` sperren. Sie hängt über `UPSTASH_REDIS_REST_URL` und
 `UPSTASH_REDIS_REST_TOKEN` an **derselben** Spielerwelt wie Vercel; wer dort
 spielt, spielt mit allen zusammen.
@@ -126,9 +126,15 @@ Veröffentlicht wird von Hand, die Seite ist nicht mit dem Repo verbunden:
 netlify deploy --prod
 ```
 
-Die alten Adressen `gehstock.netlify.app` und `gehstock-hideout.netlify.app` sind
-tot - das Konto dahinter hat sein Kontingent aufgebraucht. Dorthin führt nichts
-mehr zurück.
+Tote Adressen, jede von einem Konto, dessen Kontingent aufgebraucht ist:
+`gehstock.netlify.app`, `gehstock-hideout.netlify.app` und seit dem 23.09.2026
+auch `gehstockmon.netlify.app`. Dorthin führt nichts mehr zurück - wer eine davon
+im Verlauf hat, landet auf einer Fehlerseite und muss die neue Adresse bekommen.
+
+Jeder Umzug braucht **zwei** Schritte, sonst läuft die neue Seite auf einer
+eigenen, leeren Welt: `netlify env:set` für die beiden UPSTASH-Werte, und eine
+eingespielte Sicherung (`tools/redis-sichern.mjs`, dann `tools/welt-einspielen.mjs`).
+Ob es geklappt hat, sagt die Statusabfrage weiter unten in einem Aufruf.
 
 ## Wo die Daten liegen — und was bei einem Umzug zählt
 
