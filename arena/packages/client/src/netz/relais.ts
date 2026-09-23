@@ -62,6 +62,15 @@ const STAPEL_TICKS = TICKS_PRO_SEKUNDE;
 const VORLAUF = 2;
 /** Abstand zwischen zwei Anfragen, wenn gerade nichts passiert. */
 const RUHE_MS = 300;
+/** Fester Takt, solange ein Duell laeuft.
+
+    Frueher fragte die Schleife nach jeder neuen Nachricht sofort wieder
+    und sonst alle 300 ms: rund drei Anfragen je Sekunde und Spieler. Jede
+    davon zaehlt beim Datenbank- und beim Netlify-Kontingent, und eine
+    Schulklasse hatte beide an einem Vormittag aufgebraucht. Ein Stapel
+    wirkt ohnehin erst zwei Sekunden nach dem Absenden (VORLAUF) - eine
+    gute halbe Sekunde Nachfragetakt faellt darin nicht auf. */
+const DUELL_MS = 600;
 
 interface Aktion {
   k: 'hallo' | 'bereit' | 'stapel' | 'auf';
@@ -250,9 +259,9 @@ export function relaisVerbindungAnlegen(o: VerbindungOptionen): Verbindung {
           return;
         }
         standVerarbeiten(raum);
-      } else {
-        await schlaf(RUHE_MS);
       }
+      if (gestartet) await schlaf(DUELL_MS);
+      else if (!raum) await schlaf(RUHE_MS);
     }
   }
 

@@ -1,6 +1,7 @@
 import {data as D,economy as E,arena as A,adventure as X} from './gehstockmon-rules.mjs';
 import {activeDungeon} from './gehstockmon-dungeons.mjs';
 import {stadtSettle} from './gehstockmon-stadt.mjs';
+import {anwesende} from './gehstockmon-anwesenheit.mjs';
 const fail=(message)=>{throw new Error(message);};
 export const activeArena=p=>p.arena&&p.arena.phase!=='finished';
 export const activeDuel=p=>p.duel&&['choose','won'].includes(p.duel.phase);
@@ -182,7 +183,7 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
   if(!X.OPS.includes(op))return extra;
   if(activeArena(p))fail('Beende zuerst deinen Mon-Kampf.');
   if(activeDuel(p)&&!['raid_turn','raid_arena','raid_cancel'].includes(op))fail('Beende zuerst deinen Überfall.');
-  async function position(pid){const data=await presence.getWithMetadata('presence-v1',{type:'json',consistency:'strong'}),v=data?.data?.players?.[pid];if(!v||now-v.updatedAt>=15000||v.spawnAt!==world.players[pid].lastJoinAt)fail('Die Kartenposition ist nicht aktuell. Warte kurz auf die Verbindung.');return v;}
+  async function position(pid){const v=(await anwesende(presence))[pid];if(!v||now-v.updatedAt>=15000||v.spawnAt!==world.players[pid].lastJoinAt)fail('Die Kartenposition ist nicht aktuell. Warte kurz auf die Verbindung.');return v;}
   async function nearby(point,distance=8){const at=await position(id);if(Math.hypot(at.x-point.x,at.z-point.z)>distance)fail('Laufe zuerst näher heran.');return at;}
   if(op==='survey'){const at=await position(id);let best=0;D.BIOME.forEach((b,i)=>{if(Math.hypot(b.x-at.x,b.z-at.z)<Math.hypot(D.BIOME[best].x-at.x,D.BIOME[best].z-at.z))best=i;});if(!p.visited.includes(best+1))p.visited.push(best+1);extra.message=D.BIOME[best].terrain+' erkundet.';}
   if(op==='gather'||op==='trainer_start'){

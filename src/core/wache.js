@@ -25,9 +25,11 @@
     SG.verwaltung.on('aenderung', pruefen);
     Rel.on('befehl', aufBefehl);
 
-    /* Ein Verhoer greift sofort, nicht erst beim naechsten Antippen.
+    /* Ein Verhoer greift von selbst, nicht erst beim naechsten Antippen.
        Deshalb haengt die Wache dauerhaft am Fallbrett - der Betreffende
-       landet innerhalb einer Sekunde im Raum, egal wo er gerade ist. */
+       landet im Raum, egal wo er gerade ist. Wie schnell, haengt am Takt
+       des Relais: in einer ruhigen Phase fragt es nur alle 15 Sekunden
+       nach, dafuer reicht das Datenbankkontingent fuer eine ganze Klasse. */
     Rel.beobachten(SG.verhoer.BRETT_FAELLE, function () {
       if (!A.aktuell) return;
       var haft = SG.verhoer.eigenePerson();

@@ -163,4 +163,27 @@ await pruefe('Abgelehnte Befehle werden wiederholt, echte Fehler nicht', async (
   assert.equal(echte, 1, 'kein Wiederholen bei einem echten Fehler');
 });
 
+/* Felder (Hash) fuer die Anwesenheit in GehstockMon. Der echte Client
+   liefert HGETALL ohne automatische Umwandlung als flache Liste
+   [feld, wert, feld, wert] - genau so antwortet der Nachbau hier. */
+await pruefe('Felder: jeder schreibt nur sein eigenes, alle lesen alle', async () => {
+  const hashes = new Map();
+  const mitHash = {
+    ...fakeRedis,
+    hgetall: async (k) => [...(hashes.get(k) || new Map())].flat(),
+    hset: async (k, kv) => { const h = hashes.get(k) || new Map(); for (const [f, v] of Object.entries(kv)) h.set(f, v); hashes.set(k, h); return 1; },
+    hdel: async (k, ...fs) => { const h = hashes.get(k); fs.forEach((f) => h && h.delete(f)); return fs.length; },
+  };
+  const st = _redisStore('feld-test', mitHash);
+  assert.deepEqual(await st.felder('anwesenheit'), {}, 'leer ist ein leeres Objekt, nicht null');
+  await Promise.all([st.feldSetzen('anwesenheit', 'a', { x: 1 }), st.feldSetzen('anwesenheit', 'b', { x: 2 })]);
+  assert.deepEqual(await st.felder('anwesenheit'), { a: { x: 1 }, b: { x: 2 } }, 'zwei gleichzeitige Schreiber, keiner verliert');
+  await st.felderWeg('anwesenheit', ['a']);
+  assert.deepEqual(await st.felder('anwesenheit'), { b: { x: 2 } });
+  assert.ok(hashes.has('hgh:feld-test:anwesenheit'), 'liegt im Namensraum des Stores');
+  /* Aeltere Clients liefern ein Objekt statt der Liste. */
+  const alt = _redisStore('feld-test', { ...mitHash, hgetall: async () => ({ b: JSON.stringify({ x: 2 }) }) });
+  assert.deepEqual(await alt.felder('anwesenheit'), { b: { x: 2 } });
+});
+
 console.log('\n' + bestanden + ' bestanden' + (process.exitCode ? ', Fehler siehe oben' : ', 0 durchgefallen') + '\n');

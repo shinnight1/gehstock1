@@ -48,7 +48,7 @@ Mehr ist es nicht. Vercel baut selbst und liest dafür `vercel.json`:
 | Build command | `npm ci --prefix arena && node tools/deploy-bauen.mjs` |
 | Output directory | `dist` |
 | Serverfunktionen | `api/room.mjs`, `api/gehstockmon.mjs` |
-| Laufzeit je Aufruf | 30 Sekunden — die Warteschleife hält 7,5 |
+| Laufzeit je Aufruf | 30 Sekunden erlaubt — gebraucht werden Bruchteile einer Sekunde |
 
 Der Ordner `api/` enthält nur Verweise. Die Logik liegt weiterhin unter
 `netlify/functions/`, damit die Tests und der lokale Server unverändert
@@ -318,22 +318,47 @@ Warteschleife des Spiels **schrieb** den Raum zurück, um Anwesenheit zu merken.
 Lief parallel ein Zug, überschrieb sie ihn. Der Zug war weg, und der Client
 wartete auf eine Version, die nie kam.
 
-Beides ist behoben. Es gibt jetzt genau **eine** offene Verbindung je Gerät
+Beides ist behoben. Es gibt jetzt genau **eine** Verbindung je Gerät
 (`src/core/relais.js`), und sie trägt alles: Spielraum, Chatbretter,
-Verwaltung, Anwesenheit, Bildschirme, Befehle. Gewartet wird über die Operation
-`sync`; **Warten schreibt nichts mehr**.
+Verwaltung, Anwesenheit, Bildschirme, Befehle. Gefragt wird über die Operation
+`sync`; **Fragen schreibt nichts**.
 
 | | |
 |---|---|
-| Warteschleife liest | ein einziges kleines Dokument (`welt`) — je Kanal nur eine Zahl |
+| Jede Abfrage liest | ein einziges kleines Dokument (`welt`) — je Kanal nur eine Zahl |
 | Große Dokumente | erst, wenn sich eine dieser Zahlen ändert |
-| Schreibvorgänge | lesen · ändern · schreiben · **zurücklesen**; stimmt die eigene Marke nicht, von vorn — so geht kein Zug mehr verloren |
+| Schreibvorgänge | lesen · ändern · schreiben **nur, wenn der Stand noch derselbe ist** (Stempel); sonst von vorn — so geht kein Zug verloren |
 | Gemessene Zustellung | 3–40 ms lokal; veröffentlicht kommt die Laufzeit zur Datenbank dazu |
 
-Nebeneffekt: ein Drittel der Anfragen bedeutet auch ein Drittel des
-Kontingents. Beim kostenlosen Plan zählt vor allem die Laufzeit der
-Funktionen — eine Dauerverbindung je Gerät statt drei verdreifacht die Zeit,
-die ihr spielen könnt, bevor irgendetwas an eine Grenze stößt.
+### Fragen statt warten
+
+Bis September 2026 hielt der Server jede `sync`-Anfrage bis zu 7,5 Sekunden
+offen, und der Browser fragte ohne Pause nach. Das war schnell, aber teuer:
+Netlify rechnet die **Laufzeit** der Funktionen ab, und jedes offene Fenster
+hielt eine davon ununterbrochen am Laufen. Dazu zählte die Datenbank je Fenster
+rund 80 Befehle in der Minute. Eine Schulklasse hat beide Gratiskontingente an
+einem Vormittag aufgebraucht.
+
+Jetzt fragt der Browser kurz (`kurz: true`), der Server antwortet sofort, und
+gewartet wird im Browser — so lange, wie es die Lage erlaubt:
+
+| Lage | Pause bis zur nächsten Frage |
+|---|---|
+| im Spielraum (Schach, Vier gewinnt …) | 1 s |
+| gerade kam etwas an | 2 s, danach jede ruhige Runde ×1,5 |
+| lange nichts passiert | höchstens 15 s |
+| Tab verdeckt | 60 s, beim Zurückholen sofort |
+
+Ein Zug im Brettspiel ist damit nach etwa einer Sekunde beim anderen, eine
+Chatnachricht nach wenigen Sekunden, in einer ruhigen Phase nach höchstens 15.
+Die Arena fragt ihren Raum direkt und im Duell alle 0,6 Sekunden. GehstockMon
+meldet die eigene Position nur noch beim Laufen alle drei Sekunden, im Stehen
+alle fünf bis acht.
+
+Gemessen mit `tools/kontingent-messen.mjs` (20 Kinder, Hideout und GehstockMon
+offen, Chat läuft): **166 → 37** Datenbankbefehle und **63 → 1,3** Sekunden
+Funktionslaufzeit je Kind und Minute. Einen ganzen Monat Unterricht mit einer
+Klasse trägt das Gratiskontingent trotzdem nicht — Näheres in `AGENTS.md`.
 
 Ohne Netz bleiben für dieselben Spiele **Computergegner** und der **Modus zu
 zweit am selben iPad**.

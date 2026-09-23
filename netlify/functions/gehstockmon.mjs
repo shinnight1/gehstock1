@@ -5,6 +5,7 @@ import {adventureAction,finishEncounter,expireAdventure,deliverRewards,activeAre
 import {activeDungeon,settleDungeons,dungeonResult,dungeonAction} from './lib/gehstockmon-dungeons.mjs';
 import {stadtAction,arenaStand,championSold} from './lib/gehstockmon-stadt.mjs';
 import {schenken,schenkungen} from './lib/gehstockmon-schenken.mjs';
+import {lesen as anwesenheitLesen,schreiben as anwesenheitSchreiben} from './lib/gehstockmon-anwesenheit.mjs';
 
 const KEY = 'world-v2';
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -159,28 +160,84 @@ function publicResult(world, id, now, extra = {}) {
 }
 
 // Anwesenheit ist kurzlebig und unabhängig von Gold, Eiern und Kampfaktionen.
+/* Wie weit man zwischen zwei Meldungen laufen darf: 11 Schritte je Sekunde,
+   angespart fuer hoechstens fuenf Sekunden. Frueher waren es drei (33) - der
+   Browser musste beim Laufen deshalb alle zwei Sekunden melden, und wer
+   allein auf der Insel war und nur alle sechs meldete, wurde beim Laufen
+   immer wieder zurueckgesetzt. */
+const LAUF_TEMPO = 11, LAUF_VORRAT = 55;
+/* Mitspieler zeigt nur, wer sich in den letzten 15 Sekunden gemeldet hat.
+   Der eigene letzte Stand bleibt aber laenger liegen, als Ausgangspunkt
+   fuer die Wegpruefung. Frueher verfiel er nach denselben 15 Sekunden - wer
+   so lange nichts gemeldet hatte (Tab im Hintergrund, kurz ein anderes
+   Fenster), wurde beim naechsten Schritt an den Start zurueckgesetzt. */
+const SICHTBAR_MS = 15000, AUSGANG_MS = 10 * 60 * 1000;
 async function updatePresence(db, world, id, position, timestamp, clock, bypass = false) {
   const p = world.players[id];
   if (!p) throw new GameError('Betritt zuerst die Spielerwelt.',409);
   if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.z) || !Number.isFinite(position.heading)
       || !X.onLand(position) || Math.abs(position.heading)>Math.PI+0.01) throw new GameError('Ungültige Kartenposition.');
   for (let attempt=0;attempt<8;attempt++) {
-    const entry=await db.getWithMetadata('presence-v1',{type:'json',consistency:'strong'});
-    const players=Object.fromEntries(Object.entries(entry?.data.players||{}).filter(([pid,v])=>world.players[pid]&&timestamp-v.updatedAt<15000));
+    const stand=await anwesenheitLesen(db,timestamp,attempt?0:1000);
+    const players=Object.fromEntries(Object.entries(stand.eintraege).filter(([pid,v])=>world.players[pid]&&timestamp-v.updatedAt<AUSGANG_MS));
+    const weg=stand.gemerkt?[]:Object.keys(stand.eintraege).filter((pid)=>pid!==id&&!players[pid]);
+    const peers=()=>Object.values(players).filter(v=>v.id!==id&&timestamp-v.updatedAt<SICHTBAR_MS).map(({credit,spawnAt,...peer})=>peer);
     const layout=X.layout(world.territories),previous=players[id]?.spawnAt===p.lastJoinAt?players[id]:null;
     let from=previous||p.spawn||X.outside(X.SPAWN,layout);
     if(layout.some(g=>g.ownerId!==id&&X.inside(from,g)))from=X.outside(from,layout);
-    const credit=previous?Math.min(33,(previous.credit||0)+Math.max(0,timestamp-previous.updatedAt)/1000*11):33,distance=Math.hypot(position.x-from.x,position.z-from.z);
+    const credit=previous?Math.min(LAUF_VORRAT,(previous.credit||0)+Math.max(0,timestamp-previous.updatedAt)/1000*LAUF_TEMPO):LAUF_VORRAT,distance=Math.hypot(position.x-from.x,position.z-from.z);
     const route=distance<=credit+.05?X.route(layout,from,position,id,credit+.05):null;
-    if(!route)return json({serverTime:timestamp,access:accessFor(timestamp,bypass),position:{x:from.x,z:from.z,heading:from.heading||0},positionCorrected:true,peers:Object.values(players).filter(v=>v.id!==id).map(({credit,spawnAt,...peer})=>peer)});
+    if(!route)return json({serverTime:timestamp,access:accessFor(timestamp,bypass),position:{x:from.x,z:from.z,heading:from.heading||0},positionCorrected:true,peers:peers()});
     let traveled=0,cursor=from;for(const point of route){traveled+=Math.hypot(point.x-cursor.x,point.z-cursor.z);cursor=point;}
-    if (!players[id] || players[id].updatedAt<=timestamp) players[id] = { id, name:p.name, x:Math.round(position.x*100)/100, z:Math.round(position.z*100)/100,
-      heading:position.heading, activity:activeArena(p)||activeDuel(p)||activeDungeon(world,p)?'arena':'map', updatedAt:timestamp,spawnAt:p.lastJoinAt,credit:Math.max(0,credit-traveled),skin:p.skin,weapon:p.weapon,squad:p.truppe.slice(),protected:X.protected(p,timestamp),eier:p.eggs.length,champion:world.champion?.id===id };
+    const eintrag=!players[id]||players[id].updatedAt<=timestamp?{ id, name:p.name, x:Math.round(position.x*100)/100, z:Math.round(position.z*100)/100,
+      heading:position.heading, activity:activeArena(p)||activeDuel(p)||activeDungeon(world,p)?'arena':'map', updatedAt:timestamp,spawnAt:p.lastJoinAt,credit:Math.max(0,credit-traveled),skin:p.skin,weapon:p.weapon,squad:p.truppe.slice(),protected:X.protected(p,timestamp),eier:p.eggs.length,champion:world.champion?.id===id }:null;
     requireOpen(clock(), bypass);
-    const result=await db.setJSON('presence-v1',{players},entry?{onlyIfMatch:entry.etag}:{onlyIfNew:true});
-    if(result.modified)return json({serverTime:timestamp,access:accessFor(timestamp,bypass),peers:Object.values(players).filter(v=>v.id!==id).map(({credit,spawnAt,...peer})=>peer)});
+    if(await anwesenheitSchreiben(db,stand,id,eintrag,weg))return json({serverTime:timestamp,access:accessFor(timestamp,bypass),peers:peers()});
+    await pause(attempt);
   }
   throw new GameError('Die Mitspieler werden gerade aktualisiert.',409);
+}
+/* Nach einem verlorenen Wettlauf ums Schreiben nicht sofort wieder los:
+   dieselben zwei trafen sich sonst gleich noch einmal. Zufaellig gestreut,
+   und mit jedem Versuch etwas laenger. */
+const pause = (attempt) => new Promise((ok) => setTimeout(ok, 10 + Math.random() * 30 * (attempt + 1)));
+/* ------------------------------------------------------------------
+   Eine blosse Abfrage schreibt nicht
+
+   Jedes Kind fragt alle 30 Sekunden die Welt ab ('world'), im Dungeon alle
+   zweieinhalb. Bisher wurde danach jedes Mal das ganze Weltdokument
+   zurueckgeschrieben - obwohl sich dabei fast nie etwas aendert, ausser
+   Uhrzeiten: bis wann das Gold eines Aussenpostens verbucht ist, der
+   angebrochene Goldrest, der Zeitstempel "zuletzt gesehen". Das kostete
+   einen Datenbankbefehl und das ganze Dokument an Datenmenge, und die
+   Schreibvorgaenge kamen den echten Spielzuegen in die Quere.
+
+   Diese Felder ergeben sich beim naechsten Mal genauso aus dem
+   gespeicherten Stand (E.settle rechnet vom letzten Buchungszeitpunkt bis
+   jetzt, egal wie oft dazwischen gerechnet wurde). Hat sich nur so etwas
+   geaendert, bleibt das Schreiben aus. Alles andere - ein fertiges Ei, ein
+   Wochenwechsel, ein abgelaufener Kampf, ein neuer Name - wird wie bisher
+   geschrieben. "Zuletzt gesehen" wird spaetestens alle drei Minuten
+   gespeichert; der Abwesenheitsschutz rechnet in Stunden.
+   ------------------------------------------------------------------ */
+const ZULETZT_GESEHEN_MS = 3 * 60 * 1000;
+const NUR_UHR = [/^version$/, /^champion\.soldAt$/, /^territories\.\d+\.incomeAt$/,
+  /^players\.[^.]+\.(gold|goldRemainder|clockAt)$/, /^players\.[^.]+\.outposts\.\d+\.incomeAt$/];
+function unterschiede(a, b, pfad, aus) {
+  if (a === b) return true;
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object' || Array.isArray(a) !== Array.isArray(b)
+      || (Array.isArray(a) && a.length !== b.length)) { aus.push(pfad); return aus.length < 40; }
+  for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    if (!unterschiede(a[k], b[k], pfad ? pfad + '.' + k : k, aus)) return false;
+  }
+  return true;
+}
+function nurUhrGestellt(vorher, welt, id, jetzt) {
+  const alt = vorher.players && vorher.players[id];
+  if (!alt || !(jetzt - (alt.lastSeen || 0) < ZULETZT_GESEHEN_MS)) return false;
+  const pfade = [];
+  if (!unterschiede(vorher, welt, '', pfade)) return false;
+  return pfade.every((pfad) => pfad === 'players.' + id + '.lastSeen' || NUR_UHR.some((muster) => muster.test(pfad)));
 }
 function settleBattle(world, p, id, now, requestId) {
   if(finishEncounter(world,p,id,now))return;
@@ -285,6 +342,7 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
           if (!bericht.mons.length && !bericht.gebiete.length && !bericht.gold && !bericht.eier) return json({ serverTime: timestamp, bericht, schenkungen: schenkungen(world) });
           const geschrieben = await db.setJSON(KEY, world, entry ? { onlyIfMatch: entry.etag } : { onlyIfNew: true });
           if (geschrieben.modified) return json({ serverTime: timestamp, bericht, schenkungen: schenkungen(world) });
+          await pause(attempt);
           continue;
         }
         if (!world.players[id]) {
@@ -425,10 +483,12 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
           if (weekendEggs) extra.weekendDelivery = weekendEggs;
         } catch (err) { if (err instanceof GameError) throw err; throw new GameError(err.message); }
         if (mutations.includes(body.op)) p.actionReceipts = receipts.concat({ id: body.requestId, op: body.op, extra }).slice(-40);
+        if (body.op === 'world' && entry && nurUhrGestellt(entry.data, world, id, timestamp)) return json(publicResult(world, id, timestamp, { ...extra, adminOverride: bypass }));
         world.version++;
         requireOpen(now(), bypass);
         const write = await db.setJSON(KEY, world, entry ? { onlyIfMatch: entry.etag } : { onlyIfNew: true });
         if (write.modified) return json(publicResult(world, id, timestamp, { ...extra, adminOverride: bypass }));
+        await pause(attempt);
       }
       throw new GameError('Die Welt wird gerade verändert. Bitte versuche es erneut.', 409);
     } catch (err) {

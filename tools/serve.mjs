@@ -109,7 +109,7 @@ function kanalVon(name) {
 function putzen() {
   const jetzt = Date.now();
   for (const g of Object.keys(welt.praesenz)) {
-    if (jetzt - (welt.praesenz[g].t || 0) > 90000) delete welt.praesenz[g];
+    if (jetzt - (welt.praesenz[g].t || 0) > 150000) delete welt.praesenz[g];
   }
   welt.befehle = welt.befehle.filter((b) => jetzt - b.t < 5 * 60 * 1000);
   welt.spiegelAn = welt.spiegelAn.filter((c) => (welt.spiegelBis[c] || 0) > jetzt);
@@ -236,11 +236,18 @@ function sync(res, msg) {
     const anders = !alt || alt.wo !== neu.wo || alt.code !== neu.code
       || alt.name !== neu.name || alt.rolle !== neu.rolle;
     if (anders) { welt.praesenz[geraet] = neu; bump(true); }
-    else if (Date.now() - alt.t > 45000) { welt.praesenz[geraet] = neu; putzen(); }
+    else if (Date.now() - alt.t > 60000) { welt.praesenz[geraet] = neu; putzen(); }
   }
 
   const sofort = pruefen(msg);
   if (sofort) return send(res, 200, sofort);
+
+  /* Wie das echte Relais: kurz heisst nachsehen und gleich antworten -
+     die Pause bis zur naechsten Frage macht der Browser. */
+  if (msg.kurz) {
+    const beobachtet = !!(ich && welt.spiegelAn.indexOf(String(ich.code)) >= 0);
+    return send(res, 200, { version: welt.version, pv: welt.pv, spiegelMich: beobachtet, leer: true });
+  }
 
   warten({ res, msg, timer: null, bis: Date.now() + POLL_MS });
 

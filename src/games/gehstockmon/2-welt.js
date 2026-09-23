@@ -547,7 +547,12 @@
           var initialTrail=[];for(var step=145;step>=0;step--)initialTrail.push(new T.Vector3(info.x-Math.sin(info.heading||0)*step*.4,.15,info.z-Math.cos(info.heading||0)*step*.4));
           p=peers[info.id]={group:g,texture:texture,skin:skin,from:g.position.clone(),to:g.position.clone(),elapsed:0,duration:1,updatedAt:0,followers:[],trail:initialTrail};
         }
-        if(p.updatedAt!==info.updatedAt){p.from.copy(p.group.position);p.to.set(info.x,.15,info.z);p.duration=T.MathUtils.clamp((info.updatedAt-p.updatedAt)/1000,.15,3);p.elapsed=0;if(p.from.distanceTo(p.to)>45){p.group.position.copy(p.to);p.from.copy(p.to);}}
+        /* Gleiten statt Springen: Wer selbst steht, holt die anderen nur alle
+           fuenf Sekunden ab (siehe presenceInterval), ein Laeufer meldet alle
+           drei. Zwischen zwei Staenden koennen darum gut sechs Sekunden und
+           rund sechzig Schritte liegen - frueher glitt eine Figur hoechstens
+           drei Sekunden und sprang ab 45 Schritten. */
+        if(p.updatedAt!==info.updatedAt){p.from.copy(p.group.position);p.to.set(info.x,.15,info.z);p.duration=T.MathUtils.clamp((info.updatedAt-p.updatedAt)/1000,.15,6);p.elapsed=0;if(p.from.distanceTo(p.to)>75){p.group.position.copy(p.to);p.from.copy(p.to);}}
         if(p.skin!==skin){p.skin=skin;p.group.userData.ring.material=mat(X.skin(skin).color);anziehen(p.group,skin);}
         /* Der Champion traegt einen goldenen Ring - daran erkennt man ihn quer ueber die Insel. */
         var gold=!!info.champion;if(p.champion!==gold){p.champion=gold;p.group.userData.ring.material=gold?mat('#f0b429','#f0b429'):mat(X.skin(skin).color);}

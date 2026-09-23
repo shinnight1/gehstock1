@@ -15,7 +15,8 @@
                          bild:*        hochgeladene Bilder
 
    Kurzlebiges bleibt draussen: room:* (20 Minuten), schirm:*,
-   presence-v1 (15 Sekunden).
+   presence-v1 und anwesenheit-v2 (wer gerade wo auf der Insel steht).
+   anwesenheit-v2 ist ein Hash, kein Text - ein GET darauf schluege fehl.
 
    Das Ergebnis hat dasselbe Format wie welt-sichern.mjs und laesst
    sich mit tools/welt-einspielen.mjs zurueckspielen - auch in eine
@@ -33,7 +34,7 @@ import path from 'node:path';
 import { Redis } from '@upstash/redis';
 
 const STORES = ['hgh-gehstockmon', 'hgh-rooms', 'hgh-gehstockmon-presence'];
-const FLUECHTIG = [/^room:/, /^schirm:/, /^presence-v1$/, /:v$/];
+const FLUECHTIG = [/^room:/, /^schirm:/, /^presence-v1$/, /^anwesenheit-v2$/, /:v$/];
 
 const url = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
 const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;

@@ -443,8 +443,8 @@
       var gids = Object.keys(geraete);
 
       ziel.appendChild(UI.el('p.small.muted', {
-        text: 'Gesperrte Zugänge und Geräte. Ein Bann wirkt auf allen Geräten und '
-          + 'sofort — wer gerade spielt, landet innerhalb einer Sekunde auf dem '
+        text: 'Gesperrte Zugänge und Geräte. Ein Bann wirkt auf allen Geräten — '
+          + 'wer gerade spielt, landet spätestens nach etwa 15 Sekunden auf dem '
           + 'Sperrbildschirm.',
       }));
 

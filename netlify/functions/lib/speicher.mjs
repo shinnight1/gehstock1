@@ -20,6 +20,15 @@
      setJSON(key, wert, { onlyIfMatch })    -> { modified }
      setJSON(key, wert, { onlyIfNew })      -> { modified }
      delete(key)
+
+   Nur Redis kann zusaetzlich Felder (ein Hash je Schluessel). Gebraucht
+   wird das fuer die Anwesenheit in GehstockMon, siehe
+   lib/gehstockmon-anwesenheit.mjs - wer es nutzt, prueft vorher, ob
+   felder() da ist, und faellt sonst auf ein Dokument zurueck:
+
+     felder(key)                   -> { feld: wert } (leer: {})
+     feldSetzen(key, feld, wert)
+     felderWeg(key, [feld, ...])
    ------------------------------------------------------------------ */
 
 import { createHash } from 'node:crypto';
@@ -156,6 +165,33 @@ function redisStore(name, verbindung = redis) {
     async delete(key) {
       const r = await verbindung();
       await nochmal(() => r.del(d(key), d(key) + ':v'));
+    },
+
+    /* Ohne automaticDeserialization kommt HGETALL als flache Liste
+       [feld, wert, feld, wert, ...] zurueck; aeltere Clients liefern ein
+       Objekt. Beides wird verstanden. */
+    async felder(key) {
+      const r = await verbindung();
+      const roh = await nochmal(() => r.hgetall(d(key)));
+      const paare = Array.isArray(roh)
+        ? Array.from({ length: Math.floor(roh.length / 2) }, (_, i) => [roh[2 * i], roh[2 * i + 1]])
+        : Object.entries(roh || {});
+      const aus = {};
+      for (const [feld, wert] of paare) {
+        try { aus[feld] = typeof wert === 'string' ? JSON.parse(wert) : wert; } catch { /* kaputtes Feld auslassen */ }
+      }
+      return aus;
+    },
+
+    async feldSetzen(key, feld, wert) {
+      const r = await verbindung();
+      await nochmal(() => r.hset(d(key), { [feld]: JSON.stringify(wert) }));
+    },
+
+    async felderWeg(key, felder) {
+      if (!felder || !felder.length) return;
+      const r = await verbindung();
+      await nochmal(() => r.hdel(d(key), ...felder));
     },
   };
 }

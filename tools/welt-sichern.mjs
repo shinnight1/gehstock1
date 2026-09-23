@@ -11,7 +11,8 @@
                          welt          Versionszaehler der obigen
 
    Kurzlebig und bewusst nicht gesichert: room:* (20 Minuten),
-   schirm:* (Bildschirmuebertragung), presence-v1 (15 Sekunden).
+   schirm:* (Bildschirmuebertragung), presence-v1 und anwesenheit-v2
+   (wer gerade wo auf der Insel steht).
 
    Das Skript liest nur. Es veraendert nichts auf dem Server.
    ------------------------------------------------------------------ */
@@ -21,7 +22,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const STORES = ['hgh-gehstockmon', 'hgh-rooms', 'hgh-gehstockmon-presence'];
-const FLUECHTIG = [/^room:/, /^schirm:/, /^presence-v1$/];
+const FLUECHTIG = [/^room:/, /^schirm:/, /^presence-v1$/, /^anwesenheit-v2$/];
 
 function cli(args) {
   return new Promise((ok, fehler) => {

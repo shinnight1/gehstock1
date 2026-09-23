@@ -18,7 +18,7 @@
     var st=D.neuerStand(null), online=null, connected=false, world, dead=false, busy=false, animating=false, drawerView=null;
     var sammlungFilter='alle';
     var selected=6, battle=null, visual=null, lastNear=null, lastPoll=0, timeOffset=0, tickCount=0, animationToken=0, requestEpoch=0, polling=false;
-    var peerList=[],peerLabels={},presenceBusy=false,lastPresence=0,lastPresenceReply=0;
+    var peerList=[],peerLabels={},presenceBusy=false,lastPresence=0,lastPresenceReply=0,lastPresencePos=null,presenceFailed=false;
     var access=null,closeTimer=null,adminHits=0,adminResetTimer=null,adminNotice=null;
     R.adminOverride=adminSaved();if(R.online.resetTest)R.online.resetTest();
     var root=el('div',undefined,'gm-shell');host.root.classList.add('gm-game');host.stage.appendChild(root);
@@ -342,7 +342,16 @@
     function requestOnline(op,data){if(dead||busy)return Promise.reject(new Error('Bitte warte auf die aktuelle Aktion.'));requestEpoch++;busy=true;joyEnd();syncInput();if(battle)renderArena(false);else closeDrawer();return R.online.request(op,data).finally(function(){busy=false;if(!dead){syncInput();if(battle&&!animating)renderArena(false);drawTarget();}});}
     function applyOnline(res){if(dead)return;var wasConnected=connected;if(!res.territories||res.territories.length!==D.FELDER.length)throw new Error('Die Karte wurde aktualisiert. Bitte lade die Website neu.');setAccess(res.access);online=res;connected=true;lastPoll=Date.now();timeOffset=res.serverTime-Date.now();st=D.neuerStand(res.profile,res.serverTime);worldButton.textContent=lastPresenceReply?'Spielerwelt · '+(peerList.length+1)+' online':'Spielerwelt';connectionBox.hidden=true;root.classList.remove('gm-disconnected');adventures.apply(res);stadt.apply(res);if(world)world.pause(!!battle||dueling());update();if(world&&!wasConnected&&res.spawn&&world.setPosition)world.setPosition(res.spawn);if(dueling())adventures.showDuel();if(res.dailyDelivery&&!res.duplicate)notify(res.dailyDelivery+' tägliches Gebietsgold wurde gutgeschrieben.');if(res.weekendDelivery&&!res.duplicate)notify(res.weekendDelivery+' Wochenend-Eier sind in deiner Bruttasche angekommen.');}
     function applyPeers(peers,serverTime){if(dead)return;peerList=peers;var keep={};peers.forEach(function(p){keep[p.id]=true;var label=peerLabels[p.id];if(!label){label=button('',function(){var peer=peerList.find(function(v){return v.id===p.id;});if(peer)adventures.rival(peer);},'gm-peer-label');peerLayer.appendChild(label);peerLabels[p.id]=label;}label.textContent=(p.champion?'♛ ':'')+p.name+(p.activity==='arena'?' · ⚔':'');label.hidden=true;label.title=p.champion?'Gehstock-Champion':p.activity==='arena'?'Kämpft gerade in einer Arena':'Auf der Insel unterwegs';});Object.keys(peerLabels).forEach(function(id){if(!keep[id]){peerLabels[id].remove();delete peerLabels[id];}});if(world&&world.setPeers)world.setPeers(peers,serverTime);worldButton.textContent='Spielerwelt · '+(peers.length+1)+' online';}
-    function syncPresence(){if(dead||!connected||presenceBusy||busy||document.hidden||!world||!world.position)return;presenceBusy=true;lastPresence=Date.now();R.online.request('presence',{position:world.position()}).then(function(res){if(dead||!connected)return;setAccess(res.access);if(res.positionCorrected&&world.setPosition)world.setPosition(res.position);lastPresenceReply=Date.now();applyPeers(res.peers||[],res.serverTime);}).catch(function(err){if(err.status===423){onlineError(err);return;}if(!dead&&Date.now()-lastPresenceReply>15000){applyPeers([],now());worldButton.textContent='Spielerwelt · Verbindung prüfen';}}).finally(function(){presenceBusy=false;});}
+    function syncPresence(){if(dead||!connected||presenceBusy||busy||document.hidden||!world||!world.position)return;presenceBusy=true;lastPresence=Date.now();var position=world.position();R.online.request('presence',{position:position}).then(function(res){if(dead||!connected)return;presenceFailed=false;lastPresencePos=res.positionCorrected&&res.position?res.position:position;setAccess(res.access);if(res.positionCorrected&&world.setPosition)world.setPosition(res.position);lastPresenceReply=Date.now();applyPeers(res.peers||[],res.serverTime);}).catch(function(err){presenceFailed=true;if(err.status===423){onlineError(err);return;}if(!dead&&Date.now()-lastPresenceReply>15000){applyPeers([],now());worldButton.textContent='Spielerwelt · Verbindung prüfen';}}).finally(function(){presenceBusy=false;});}
+    /* Wie oft die eigene Position zum Server geht. Frueher stur alle zwei
+       Sekunden (allein alle sechs) - auch wer nur in einem Menue stand. Das
+       war der teuerste Takt im ganzen Hideout. Jetzt:
+         beim Laufen          alle 3 s  (der Server laesst 5 s Weg anstehen)
+         stehend, andere da   alle 5 s  (ihre Bewegungen kommen trotzdem an)
+         stehend und allein   alle 8 s  (unter den 15 s, nach denen man als
+                                         weg gilt und keine Aktion mehr geht)
+         nach einem Fehler    nach 2 s noch einmal */
+    function presenceInterval(){if(presenceFailed)return 2000;var p=world&&world.position?world.position():null;if(!p||!lastPresencePos||Math.hypot(p.x-lastPresencePos.x,p.z-lastPresencePos.z)>0.3)return 3000;return peerList.length?5000:8000;}
     function setAccess(next){
       if(!next)return;
       if(access&&!access.open&&next.open&&next.serverTime<access.serverTime){var err=new Error('GehstockMon ist gerade geschlossen.');err.status=423;err.access=access;throw err;}
@@ -415,13 +424,7 @@
     function tick(){if(dead)return;tickCount++;updateResources();
       if(access&&access.open&&now()>=access.closesAt)showClosed(H.access(now()));
       if(access&&!access.open&&!busy&&!document.hidden&&now()>=access.nextOpenAt){access=null;connectWorld();}
-      /* Anwesenheit kostet eine Serveranfrage alle zwei Sekunden - das ist
-         der mit Abstand teuerste Takt im ganzen Hideout und der Grund,
-         warum ein kostenloses Kontingent in Tagen aufgebraucht ist. Ist
-         gerade niemand sonst auf der Insel, sieht die schnelle Folge auch
-         niemand: dann reichen sechs Sekunden. Sobald ein Mitspieler da ist,
-         laeuft es wieder fluessig. */
-      if(connected&&Date.now()-lastPresence>=(peerList.length?2000:6000))syncPresence();
+      if(connected&&Date.now()-lastPresence>=presenceInterval())syncPresence();
       if(connected&&adventures.dungeonActive()&&!busy&&!polling&&!document.hidden&&Date.now()-lastPoll>2500){lastPoll=Date.now();polling=true;var dungeonEpoch=requestEpoch;R.online.request('world').then(function(res){if(dead||!connected||dungeonEpoch!==requestEpoch||busy)return;applyOnline(res);}).catch(function(err){if(dungeonEpoch===requestEpoch)onlineError(err);}).finally(function(){polling=false;});}
       if(peerList.length&&Date.now()-lastPresenceReply>15000)applyPeers([],now());
       root.querySelectorAll('[data-until]').forEach(function(node){var until=Number(node.getAttribute('data-until'));node.textContent=until<=now()?node.getAttribute('data-ready'):duration(until-now());});

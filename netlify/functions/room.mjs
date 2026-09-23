@@ -27,7 +27,20 @@
       Lief parallel ein Zug, ueberschrieb der Poll ihn - der Zug war
       weg und der Client wartete auf eine Version, die nie kam. Genau
       das waren die langen Haenger. Anwesenheit liegt jetzt getrennt
-      in 'welt' und wird hoechstens alle 20 Sekunden geschrieben.
+      in 'welt' und wird hoechstens einmal je Minute geschrieben.
+
+   4. Fragen statt Warten (seit September 2026).
+      Frueher hielt jede Anfrage bis zu 7,5 Sekunden offen und sah
+      dabei immer wieder in 'welt' nach. Fuer eine Schulklasse war das
+      zweifach zu teuer: Netlify rechnet die Zeit ab, in der eine
+      Funktion laeuft - ein offenes Fenster belegte eine Funktion also
+      rund um die Uhr -, und die Datenbank zaehlte je Fenster rund 80
+      Befehle in der Minute. Beide Gratiskontingente waren an einem
+      Schultag nach wenigen Stunden aufgebraucht.
+      Jetzt schickt das Hideout 'kurz': einmal nachsehen, sofort
+      antworten. Wie lange bis zur naechsten Frage vergeht, entscheidet
+      der Browser (siehe src/core/relais.js) - schnell, solange etwas
+      passiert, langsam, wenn nicht.
 
    Was der Server weiterhin NICHT tut: Spielregeln kennen. Er speichert
    die Liste der Zuege, jeder Client rechnet sie selbst nach.
@@ -56,8 +69,17 @@ const CHAT_MAX = 250;                                  // Nachrichten je Brett
 const CHAT_TEXT_MAX = 1000;
 const PROTO_MAX = 400;                                 // Protokolleintraege
 const BEFEHL_MAX = 40;
-const PRAESENZ_TTL = 90 * 1000;
-const PRAESENZ_SCHREIB_MS = 45 * 1000;
+/* Ein Lebenszeichen je Minute genuegt. Das Hideout fragt in ruhigen
+   Phasen alle 15 Sekunden, ein verdeckter Tab einmal in der Minute -
+   beide bleiben damit sicher unter der Frist. Wer das Fenster schliesst,
+   verschwindet nach spaetestens zweieinhalb Minuten aus der Liste. */
+const PRAESENZ_TTL = 150 * 1000;
+const PRAESENZ_SCHREIB_MS = 60 * 1000;
+const streuung = (geraet) => {
+  let h = 0;
+  for (let i = 0; i < geraet.length; i++) h = (h * 31 + geraet.charCodeAt(i)) >>> 0;
+  return h % 15000;
+};
 const BILD_MAX = 700 * 1024;                           // Base64-Laenge
 const SCHIRM_MAX = 260 * 1024;
 
@@ -203,37 +225,50 @@ const schlaf = (ms) => new Promise((r) => setTimeout(r, ms));
 /* ------------------------------------------------------------------
    Schreiben ohne verlorene Aenderungen
 
-   Der Blob-Speicher kennt kein "erhoehe um eins". Zwei Schreibvorgaenge
-   kurz hintereinander koennen sich deshalb gegenseitig ueberholen -
-   genau daran gingen frueher Zuege verloren. Deshalb: lesen, aendern,
-   schreiben, wieder lesen. Steht die eigene Marke nicht drin, hat
-   jemand anderes gewonnen und es geht von vorn los.
+   Zwei Schreibvorgaenge kurz hintereinander koennen sich ueberholen -
+   genau daran gingen frueher Zuege verloren. Deshalb schreibt der
+   Speicher nur, wenn der Stand noch derselbe ist wie beim Lesen
+   (onlyIfMatch). Hat inzwischen jemand anderes geschrieben, geht es mit
+   dessen Stand von vorn los.
+
+   Vorher hiess es: lesen, schreiben, noch einmal lesen und an einer
+   Marke pruefen, wer gewonnen hat. Das waren drei Befehle statt zwei,
+   und wer genau zwischen Lesen und Schreiben eines anderen kam, hat
+   dessen Aenderung trotzdem ueberschrieben.
+
+   Zurueck kommt der geschriebene Stand. Wer ihn braucht, muss ihn nicht
+   noch einmal lesen.
    ------------------------------------------------------------------ */
 
-async function mutiere(st, key, fn, versuche = 6) {
-  let letzte = null;
+async function mutiere(st, key, fn, versuche = 8, vorab = undefined) {
+  let unlesbar = false;
   for (let i = 0; i < versuche; i++) {
-    const roh = await st.get(key, { type: 'json' });
-    const kopie = roh ? JSON.parse(JSON.stringify(roh)) : null;
-    const neu = fn(kopie);
+    /* Wer den Stand gerade erst gelesen hat, reicht ihn samt Stempel mit
+       herein (vorab) - dann spart der erste Versuch das Lesen. */
+    const eintrag = i === 0 && vorab !== undefined ? vorab : await st.getWithMetadata(key, { type: 'json' });
+    const roh = eintrag ? eintrag.data : null;
+    const neu = fn(roh ? JSON.parse(JSON.stringify(roh)) : null);
     if (!neu) return roh;                       // Aenderung abgesagt
-    const marke = 'm' + Date.now().toString(36) + newId(6);
-    neu._m = marke;
-    await st.setJSON(key, neu);
-    const nach = await st.get(key, { type: 'json' });
-    if (nach && nach._m === marke) return nach;
-    letzte = nach;
-    await schlaf(15 + Math.random() * 55);
+    delete neu._m;                              // Marke des alten Verfahrens
+    /* Liefert das Lesen zweimal nichts, obwohl "nur wenn neu" scheitert,
+       steht unter dem Schluessel etwas Unlesbares. Das wird ersetzt -
+       vorher geschah das ohnehin bei jedem Schreiben. */
+    const bedingung = eintrag ? { onlyIfMatch: eintrag.etag } : (unlesbar ? undefined : { onlyIfNew: true });
+    const ergebnis = await st.setJSON(key, neu, bedingung);
+    if (!bedingung || (ergebnis && ergebnis.modified)) return neu;
+    unlesbar = !eintrag;
+    /* Gestreut, sonst treffen sich dieselben zwei gleich wieder. */
+    await schlaf(10 + Math.random() * 30 * (i + 1));
   }
-  return letzte;
+  throw new Error('belegt');
 }
 
 /* ------------------------------------------------------------------
    welt - das Inhaltsverzeichnis
 
-   Klein halten! Dieses Dokument wird in der Warteschleife alle 200 ms
-   gelesen. Alles Grosse (Nachrichten, Bilder, Zuege) liegt woanders,
-   hier steht nur, ob sich dort etwas getan hat.
+   Klein halten! Dieses Dokument liest jede Anfrage jedes Geraets.
+   Alles Grosse (Nachrichten, Bilder, Zuege) liegt woanders, hier steht
+   nur, ob sich dort etwas getan hat.
    ------------------------------------------------------------------ */
 
 function leereWelt() {
@@ -287,30 +322,33 @@ async function weltBump(st, aend) {
   });
 }
 
-async function weltBumpP(st, aend) {
+async function weltBumpP(st, aend, vorab) {
   return mutiere(st, 'welt', (roh) => {
     const w = roh ? Object.assign(leereWelt(), roh) : leereWelt();
     aend(w);
     w.pv = (w.pv || 0) + 1;
     return weltPutzen(w);
-  });
+  }, 8, vorab);
 }
 
 /* Aendern, ohne jemanden zu wecken. Fuer das blosse Auffrischen eines
    Zeitstempels: dass jemand noch da ist, muss niemand sofort erfahren. */
-async function weltStill(st, aend) {
+async function weltStill(st, aend, vorab) {
   return mutiere(st, 'welt', (roh) => {
     const w = roh ? Object.assign(leereWelt(), roh) : leereWelt();
     aend(w);
     return weltPutzen(w);
-  });
+  }, 8, vorab);
 }
 
 /* ------------------------------------------------------------------ Kanaele */
 
-async function leseKanal(st, name) {
-  const roh = await st.get('kanal:' + name, { type: 'json' });
+function kanalStand(roh) {
   return roh && Array.isArray(roh.nachrichten) ? roh : { version: 0, nachrichten: [] };
+}
+
+async function leseKanal(st, name) {
+  return kanalStand(await st.get('kanal:' + name, { type: 'json' }));
 }
 
 function kanalName(roh) {
@@ -413,8 +451,11 @@ export default async (req) => {
        schirme: { '0141': 7 },
        praesenz: true }
 
-   Zurueck kommt nur, was sich geaendert hat. Wenn nichts anliegt,
-   bleibt die Anfrage einige Sekunden offen.
+   Zurueck kommt nur, was sich geaendert hat. Mit kurz: true (so fragt
+   das Hideout seit September 2026) kommt die Antwort sofort, auch wenn
+   nichts anliegt. Ohne kurz bleibt die Anfrage wie frueher einige
+   Sekunden offen - fuer Seiten, die noch im Zwischenspeicher eines
+   Browsers stecken.
    ================================================================== */
 
 async function sync(st, msg) {
@@ -427,12 +468,27 @@ async function sync(st, msg) {
   const rSince = Number(msg.raum && msg.raum.since) || 0;
   const wSchirm = (msg.schirme && typeof msg.schirme === 'object') ? msg.schirme : {};
   const willPraesenz = !!msg.praesenz;
+  const kurz = !!msg.kurz;
+
+  /* Nur ein Raum und sonst nichts - so fragt die Arena. Dafuer braucht es
+     das Inhaltsverzeichnis nicht, der Raum sagt selbst, ob er neuer ist.
+     Ein Befehl statt zwei, und die Arena muss 'welt' beim Ziehen gar
+     nicht mehr anfassen (siehe imVerzeichnis). */
+  if (wRaum && !geraet && !ich && !willPraesenz && !Object.keys(wKan).length
+      && !Object.keys(wSchirm).length && msg.verw === undefined && msg.pix === undefined) {
+    const room = await readRoom(st, wRaum);
+    if (!room) return json({ raum: { closed: true, reason: 'room_gone' } });
+    if (room.version > rSince) return json({ raum: publicRoom(room) });
+    return json({ leer: true });
+  }
 
   /* Anwesenheit eintragen - aber nur, wenn der Eintrag alt ist oder
      sich der Aufenthaltsort geaendert hat. Sonst schreibt jede
      Verbindung alle paar Sekunden und weckt alle anderen mit. */
+  let w0 = null;
   if (geraet && ich && codeGueltig(ich.code)) {
-    const w0 = await leseWelt(st);
+    const erst = await st.getWithMetadata('welt', { type: 'json' });
+    w0 = Object.assign(leereWelt(), erst && erst.data && typeof erst.data === 'object' ? erst.data : {});
     const alt = w0.praesenz[geraet];
     const neu = {
       code: String(ich.code).slice(0, 4),
@@ -450,9 +506,18 @@ async function sync(st, msg) {
        Minutentakt die ganze Runde auf. */
     const anders = !alt || alt.wo !== neu.wo || alt.code !== neu.code
       || alt.name !== neu.name || alt.rolle !== neu.rolle;
-    const alt2 = alt && (Date.now() - (alt.t || 0) > PRAESENZ_SCHREIB_MS);
-    if (anders) await weltBumpP(st, (w) => { w.praesenz[geraet] = neu; });
-    else if (alt2) await weltStill(st, (w) => { w.praesenz[geraet] = neu; });
+    /* Jedes Geraet frischt zu einem etwas anderen Zeitpunkt auf. Eine
+       Klasse, die gemeinsam anfaengt, schriebe sonst im Gleichtakt - und
+       jeder zweite Schreiber muesste es noch einmal versuchen. */
+    const alt2 = alt && (Date.now() - (alt.t || 0) > PRAESENZ_SCHREIB_MS + streuung(geraet));
+    /* Was geschrieben wurde, ist zugleich der neueste Stand - die erste
+       Runde unten braucht ihn nicht noch einmal zu lesen. Scheitert das
+       Schreiben, ist das kein Grund, die ganze Antwort zu verweigern:
+       die naechste Anfrage versucht es wieder. */
+    try {
+      if (anders) w0 = Object.assign(leereWelt(), await weltBumpP(st, (w) => { w.praesenz[geraet] = neu; }, erst));
+      else if (alt2) w0 = Object.assign(leereWelt(), await weltStill(st, (w) => { w.praesenz[geraet] = neu; }, erst));
+    } catch { /* Anwesenheit ist Nebensache */ }
   }
 
   const deadline = Date.now() + POLL_MS;
@@ -460,7 +525,7 @@ async function sync(st, msg) {
   let takt = POLL_TICK;
 
   for (;;) {
-    const w = await leseWelt(st);
+    const w = (ersteRunde && w0) ? w0 : await leseWelt(st);
     const antwort = { version: w.version, pv: w.pv };
     let etwas = false;
 
@@ -533,7 +598,7 @@ async function sync(st, msg) {
     if (etwas || w.version > since) return json(antwort);
     ersteRunde = false;
 
-    if (Date.now() >= deadline) {
+    if (kurz || Date.now() >= deadline) {
       return json({ version: w.version, pv: w.pv, spiegelMich: beobachtet, leer: true });
     }
     await schlaf(takt);
@@ -560,7 +625,7 @@ async function chatPost(st, msg) {
   const grenze = brett === 'protokoll' ? PROTO_MAX : CHAT_MAX;
   let neue = null;
 
-  await mutiere(st, 'kanal:' + brett, (roh) => {
+  const stand = await mutiere(st, 'kanal:' + brett, (roh) => {
     const k = roh && Array.isArray(roh.nachrichten) ? roh : { version: 0, nachrichten: [] };
     k.version++;
     neue = {
@@ -595,7 +660,7 @@ async function chatPost(st, msg) {
   });
 
   await weltBump(st, (w) => { w.kanaele[brett] = (w.kanaele[brett] || 0) + 1; });
-  const k = await leseKanal(st, brett);
+  const k = kanalStand(stand);
   return json({ version: k.version, nachrichten: k.nachrichten, neu: neue });
 }
 
@@ -605,7 +670,9 @@ async function chatVote(st, msg) {
   const code = String(msg.code || '');
   if (!codeGueltig(code)) return fail('kein_code', 403);
 
-  await mutiere(st, 'kanal:' + brett, (roh) => {
+  let geaendert = false;
+  const stand = await mutiere(st, 'kanal:' + brett, (roh) => {
+    geaendert = false;
     const k = roh && Array.isArray(roh.nachrichten) ? roh : null;
     if (!k) return null;
     const n = k.nachrichten.find((x) => x.id === id);
@@ -615,11 +682,12 @@ async function chatVote(st, msg) {
     if (!gueltig.length) delete n.umfrage.stimmen[code];
     else n.umfrage.stimmen[code] = n.umfrage.mehrfach ? gueltig : [gueltig[0]];
     k.version++;
+    geaendert = true;
     return k;
   });
 
-  await weltBump(st, (w) => { w.kanaele[brett] = (w.kanaele[brett] || 0) + 1; });
-  const k = await leseKanal(st, brett);
+  if (geaendert) await weltBump(st, (w) => { w.kanaele[brett] = (w.kanaele[brett] || 0) + 1; });
+  const k = kanalStand(stand);
   return json({ version: k.version, nachrichten: k.nachrichten });
 }
 
@@ -631,7 +699,8 @@ async function chatDel(st, msg) {
   const id = Number(msg.id) || 0;
   let entfernt = null;
 
-  await mutiere(st, 'kanal:' + brett, (roh) => {
+  const stand = await mutiere(st, 'kanal:' + brett, (roh) => {
+    entfernt = null;
     const k = roh && Array.isArray(roh.nachrichten) ? roh : null;
     if (!k) return null;
     const n = k.nachrichten.find((x) => x.id === id);
@@ -647,7 +716,7 @@ async function chatDel(st, msg) {
 
   if (!entfernt) return json({ ok: false });
   await weltBump(st, (w) => { w.kanaele[brett] = (w.kanaele[brett] || 0) + 1; });
-  const k = await leseKanal(st, brett);
+  const k = kanalStand(stand);
   return json({ version: k.version, nachrichten: k.nachrichten, entfernt: entfernt });
 }
 
@@ -661,7 +730,9 @@ async function chatPatch(st, msg) {
   const id = Number(msg.id) || 0;
   const feld = msg.feld && typeof msg.feld === 'object' ? msg.feld : {};
 
-  await mutiere(st, 'kanal:' + brett, (roh) => {
+  let geaendert = false;
+  const stand = await mutiere(st, 'kanal:' + brett, (roh) => {
+    geaendert = false;
     const k = roh && Array.isArray(roh.nachrichten) ? roh : null;
     if (!k) return null;
     const n = k.nachrichten.find((x) => x.id === id);
@@ -672,11 +743,12 @@ async function chatPatch(st, msg) {
       else n[f] = feld[f];
     }
     k.version++;
+    geaendert = true;
     return k;
   });
 
-  await weltBump(st, (w) => { w.kanaele[brett] = (w.kanaele[brett] || 0) + 1; });
-  const k = await leseKanal(st, brett);
+  if (geaendert) await weltBump(st, (w) => { w.kanaele[brett] = (w.kanaele[brett] || 0) + 1; });
+  const k = kanalStand(stand);
   return json({ version: k.version, nachrichten: k.nachrichten });
 }
 
@@ -959,6 +1031,16 @@ function pixAntwort(doc, since) {
    wartete auf eine Version, die nie kam. Das waren die Haenger.
    ================================================================== */
 
+/* Arena-Raeume stehen nicht im Inhaltsverzeichnis 'welt'. Die Arena
+   fragt ihren Raum direkt ab (siehe sync) und zieht zweimal je Sekunde.
+   Jeder dieser Zuege hat frueher 'welt' neu geschrieben und damit die
+   Version hochgezaehlt - und jede offene Langabfrage im ganzen Hideout
+   antwortete darauf sofort und fragte gleich wieder. Ein einziges
+   Arena-Duell hielt so alle Fenster der Schule im Halbsekundentakt wach. */
+function imVerzeichnis(room) {
+  return !room || room.game !== 'arena';
+}
+
 async function raum(st, op, msg) {
   if (op === 'create') {
     const seats = Math.max(2, Math.min(8, Number(msg.seats) || 2));
@@ -993,7 +1075,7 @@ async function raum(st, op, msg) {
       updated: Date.now(),
     };
     await st.setJSON('room:' + code, room);
-    await weltBump(st, (w) => { w.kanaele['raum:' + code] = 1; });
+    if (imVerzeichnis(room)) await weltBump(st, (w) => { w.kanaele['raum:' + code] = 1; });
     return json({
       ...publicRoom(room),
       playerId: player.id,
@@ -1004,6 +1086,33 @@ async function raum(st, op, msg) {
   }
 
   const code = String(msg.code || '').toUpperCase();
+
+  /* Ein Zug ist die haeufigste Anfrage ueberhaupt (die Arena schickt
+     jede Sekunde einen). Ausweis und Ablauf werden deshalb im selben
+     Lesen geprueft, mit dem der Zug eingetragen wird - ein eigenes
+     Vorablesen des Raums waere ein Befehl mehr je Zug. */
+  if (op === 'act') {
+    if (!/^[A-Z0-9]{4,8}$/.test(code)) return fail('room_not_found', 404);
+    let fehler = null;
+    const room = await mutiere(st, 'room:' + code, (r) => {
+      fehler = null;
+      if (!r || Date.now() - r.updated > ROOM_TTL_MS) { fehler = 'room_not_found'; return null; }
+      const mich = r.players.find((p) => p.id === msg.playerId && p.token === msg.token);
+      if (!mich) { fehler = 'bad_token'; return null; }
+      if (r.log.length >= MAX_LOG) { fehler = 'log_full'; return null; }
+      r.log.push({ seat: mich.seat, a: msg.action, t: Date.now() });
+      r.version++;
+      r.updated = Date.now();
+      mich.seen = Date.now();
+      return r;
+    });
+    if (fehler === 'room_not_found' || !room) return fail('room_not_found', 404);
+    if (fehler === 'bad_token') return fail('bad_token', 403);
+    if (fehler === 'log_full') return fail('log_full', 409);
+    if (imVerzeichnis(room)) await weltBump(st, (w) => { w.kanaele['raum:' + code] = room.version; });
+    return json(publicRoom(room));
+  }
+
   const vorhanden = await readRoom(st, code);
   if (!vorhanden) return fail('room_not_found', 404);
 
@@ -1027,7 +1136,7 @@ async function raum(st, op, msg) {
       return r;
     });
     if (fehler || !player || !room) return fail(fehler || 'room_full', 409);
-    await weltBump(st, (w) => { w.kanaele['raum:' + code] = room.version; });
+    if (imVerzeichnis(room)) await weltBump(st, (w) => { w.kanaele['raum:' + code] = room.version; });
     return json({
       ...publicRoom(room),
       playerId: player.id,
@@ -1056,25 +1165,7 @@ async function raum(st, op, msg) {
       return r;
     });
     if (!room) return fail('room_not_found', 404);
-    await weltBump(st, (w) => { w.kanaele['raum:' + code] = room.version; });
-    return json(publicRoom(room));
-  }
-
-  if (op === 'act') {
-    let voll = false;
-    const room = await mutiere(st, 'room:' + code, (r) => {
-      if (!r) return null;
-      if (r.log.length >= MAX_LOG) { voll = true; return null; }
-      r.log.push({ seat: me.seat, a: msg.action, t: Date.now() });
-      r.version++;
-      r.updated = Date.now();
-      const mich = r.players.find((p) => p.id === me.id);
-      if (mich) mich.seen = Date.now();
-      return r;
-    });
-    if (voll) return fail('log_full', 409);
-    if (!room) return fail('room_not_found', 404);
-    await weltBump(st, (w) => { w.kanaele['raum:' + code] = room.version; });
+    if (imVerzeichnis(room)) await weltBump(st, (w) => { w.kanaele['raum:' + code] = room.version; });
     return json(publicRoom(room));
   }
 
@@ -1104,10 +1195,12 @@ async function raum(st, op, msg) {
       return r;
     });
     if (leer) await st.delete('room:' + code).catch(() => {});
-    await weltBump(st, (w) => {
-      if (leer) delete w.kanaele['raum:' + code];
-      else w.kanaele['raum:' + code] = (room && room.version) || 0;
-    });
+    if (imVerzeichnis(vorhanden)) {
+      await weltBump(st, (w) => {
+        if (leer) delete w.kanaele['raum:' + code];
+        else w.kanaele['raum:' + code] = (room && room.version) || 0;
+      });
+    }
     return json({ ok: true });
   }
 

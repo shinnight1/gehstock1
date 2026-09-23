@@ -1,5 +1,6 @@
 import {data as D, arena as A, adventure as X} from './gehstockmon-rules.mjs';
 import {wochenschritt, fehdeSchritt} from './gehstockmon-adventure.mjs';
+import {anwesende} from './gehstockmon-anwesenheit.mjs';
 
 const fail = message => { throw new Error(message); };
 export const activeDungeon = (world, p) => {
@@ -155,7 +156,7 @@ export async function dungeonAction({world, p, id, body, now, presence}) {
   }
   let room = world.dungeons?.[p.dungeonId];
   async function nearby(dungeon) {
-    const entry = await presence.getWithMetadata('presence-v1', {type:'json',consistency:'strong'}), at = entry?.data?.players?.[id];
+    const at = (await anwesende(presence))[id];
     if (!at || now - at.updatedAt >= 15000 || at.spawnAt !== p.lastJoinAt) fail('Warte auf eine aktuelle Kartenposition.');
     if (Math.hypot(at.x - dungeon.x, at.z - dungeon.z) > 8) fail('Laufe zuerst zum Dungeon-Eingang.');
   }

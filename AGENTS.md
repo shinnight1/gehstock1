@@ -161,11 +161,45 @@ Vor jedem Umzug eine Sicherung ziehen — sie lässt sich mit
 node --env-file=.env.local tools/redis-sichern.mjs
 ```
 
-**Warum kostenlose Kontingente hier schnell leerlaufen:** Die Anwesenheit auf der
-Insel kostet je Spieler eine Serveranfrage alle zwei Sekunden, und das Relais
-hält für Chat und Verwaltung eine Verbindung dauerhaft offen. Das sind pro
-Spielstunde rund 2000 Aufrufe. Ein Anbieterwechsel setzt nur die Uhr zurück;
-wer das Limit dauerhaft unterschreiten will, muss diese beiden Takte senken.
+### Warum kostenlose Kontingente leerlaufen — und was dagegen gebaut ist
+
+Bis zum 23.09.2026 hielt jedes offene Fenster eine Serverfunktion ununterbrochen
+am Laufen (das Relais wartete bis zu 7,5 s auf Neuigkeiten, der Browser fragte
+ohne Pause nach), und GehstockMon meldete die Position stur alle zwei Sekunden.
+Eine Klasse mit 30 Kindern verbrauchte so rund 300 000 Upstash-Befehle und über
+300 Netlify-Credits **pro Stunde**. Beide Gratiskontingente waren nach ein bis
+zwei Stunden Unterricht leer — ein Anbieterwechsel hat jeweils nur die Uhr
+zurückgesetzt.
+
+Seitdem gilt:
+
+- Das Hideout fragt kurz (`kurz: true`) und wartet im Browser: 2 s nach Neuem,
+  wachsend bis 15 s, im Spielraum 1 s, verdeckter Tab 60 s
+  (`src/core/relais.js`, geprüft von `tools/relais-tests.mjs`).
+- Die Arena fragt ihren Raum direkt und rührt `welt` nicht mehr an; im Duell
+  fragt sie alle 0,6 s. Vorher weckte jeder Arena-Zug alle offenen Fenster.
+- GehstockMon meldet die Position nach Bewegung: laufend alle 3 s, stehend alle
+  5 s (andere da) oder 8 s (allein). Jeder Spieler hat in Redis ein eigenes
+  Feld (`anwesenheit-v2`, ein Hash) — Schreibkonflikte gibt es dort nicht mehr.
+- Eine bloße Weltabfrage schreibt die Welt nicht zurück, wenn sich nur Uhrzeiten
+  geändert haben (Goldbuchung, „zuletzt gesehen“).
+
+Gemessen mit `tools/kontingent-messen.mjs` (echter Servercode, 20 Kinder mit
+Hideout und GehstockMon, Chat läuft): **166 → 37** Datenbankbefehle und
+**63 → 1,3** Sekunden Funktionslaufzeit je Kind und Minute. Hochgerechnet auf 30
+Kinder reicht das Gratiskontingent von Upstash damit für etwa 7–8 Stunden
+Unterricht im Monat (vorher 1,7), das von Netlify für rund 18 (vorher unter
+einer). Einen ganzen Monat trägt es also weiterhin nicht. Dafür gibt es bei
+Upstash „Pay as you go“ (0,20 $ je 100 000 Befehle, mit einstellbarer
+Budgetgrenze) — oder eine eigene Datenbank je Anlass.
+
+Regeln für Änderungen:
+
+- Keine Anfrage, die auf Neuigkeiten wartet. Netlify rechnet die Laufzeit ab.
+- Wer einen Takt ändert oder einen neuen einführt, misst vorher und nachher
+  mit `node tools/kontingent-messen.mjs beides 20 120`.
+- Jeder Produktions-Deploy kostet bei Netlify 15 der 300 Credits im Monat.
+  Änderungen sammeln, statt jede einzeln zu veröffentlichen.
 
 ## Berichten
 

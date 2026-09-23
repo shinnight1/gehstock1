@@ -10,6 +10,7 @@
    Haus: die Tafel ist damit nie leer, und der Titel ist vom ersten Tag an
    etwas, das man jemandem abnehmen kann. */
 import {data as D,economy as E,arena as A,hours as H,adventure as X} from './gehstockmon-rules.mjs';
+import {anwesende} from './gehstockmon-anwesenheit.mjs';
 const activeArena=(p)=>p.arena&&p.arena.phase!=='finished';
 const fail=(message)=>{throw new Error(message);};
 
@@ -149,8 +150,7 @@ export async function stadtAction({world,p,id,body,now,presence}){
   const op=body.op,extra={};
   if(!X.STADT_OPS.includes(op))return extra;
   async function amTor(){
-    const data=await presence.getWithMetadata('presence-v1',{type:'json',consistency:'strong'});
-    const v=data?.data?.players?.[id];
+    const v=(await anwesende(presence))[id];
     if(!v||now-v.updatedAt>=15000||v.spawnAt!==p.lastJoinAt)fail('Die Kartenposition ist nicht aktuell. Warte kurz auf die Verbindung.');
     if(!X.inStadt(v))fail('Dafuer musst du in Stockhafen stehen. Lauf zuerst in die Stadt.');
     return v;
