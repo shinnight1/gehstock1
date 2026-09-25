@@ -127,7 +127,7 @@ export function stadtSettle(world,p,id,now){
        zaehlt der Sieg als Ranglistensieg und nicht als Titelgewinn. */
     if(c.seit!==b.championSeit){
       p.arenaRuhm=X.ruhm(p)+X.RUHM_SIEG;p.gold+=X.ARENA_LOHN;
-      b.message='Gewonnen - aber der Titel hat waehrend des Kampfes den Besitzer gewechselt. Der Sieg zaehlt als Ranglistensieg.';
+      b.message='Gewonnen - aber der Titel hat während des Kampfes den Besitzer gewechselt. Der Sieg zählt als Ranglistensieg.';
       return true;
     }
     chronik(world).push({name:c.name,haus:!c.id,von:c.seit,bis:now,verteidigt:c.verteidigt||0});
@@ -136,7 +136,7 @@ export function stadtSettle(world,p,id,now){
     p.arenaRuhm=X.ruhm(p)+X.RUHM_TITEL;p.arenaSiege=0;p.championSeit=now;
     p.championTitel=(p.championTitel||0)+1;
     b.message='Du bist Gehstock-Champion! Deine Aufstellung verteidigt ab jetzt den Titel, und du bekommst '
-      +X.CHAMPION_SOLD+' Gold Sold je Tag, solange du ihn haeltst.';
+      +X.CHAMPION_SOLD+' Gold Sold je Tag, solange du ihn hältst.';
     log(world,p.name+' ist der neue Gehstock-Champion.',id,now);
   }else{
     p.arenaRuhm=Math.max(100,X.ruhm(p)-X.RUHM_NIEDERLAGE);p.arenaSiege=0;p.gold+=X.ARENA_TROST;
@@ -152,18 +152,18 @@ export async function stadtAction({world,p,id,body,now,presence}){
   async function amTor(){
     const v=(await anwesende(presence))[id];
     if(!v||now-v.updatedAt>=15000||v.spawnAt!==p.lastJoinAt)fail('Die Kartenposition ist nicht aktuell. Warte kurz auf die Verbindung.');
-    if(!X.inStadt(v))fail('Dafuer musst du in Stockhafen stehen. Lauf zuerst in die Stadt.');
+    if(!X.inStadt(v))fail('Dafür musst du in Stockhafen stehen. Lauf zuerst in die Stadt.');
     return v;
   }
   function ohneGebiet(){
-    if(world.territories.some(t=>t.ownerId===id))fail('Das ist die Hilfe fuer alle ohne Gebiet. Du haeltst einen Aussenposten.');
+    if(world.territories.some(t=>t.ownerId===id))fail('Das ist die Hilfe für alle ohne Gebiet. Du hältst einen Außenposten.');
   }
   if(op==='brutplatz_kaufen'){
     const gekauft=X.gekaufteBrutplaetze(p),preis=X.BRUTPLATZ_PREISE[gekauft];
-    if(!preis)fail('Mehr Brutplaetze gibt es nicht.');
-    if(p.gold<preis)fail('Dafuer brauchst du '+preis+' Gold.');
+    if(!preis)fail('Mehr Brutplätze gibt es nicht.');
+    if(p.gold<preis)fail('Dafür brauchst du '+preis+' Gold.');
     p.gold-=preis;p.brutplaetze=gekauft+1;
-    extra.message='Brutplatz gekauft: '+X.brutplaetze(world.leuchtturm,p)+' Plaetze. Du kannst jetzt so viele Eier gleichzeitig ausbrueten.';
+    extra.message='Brutplatz gekauft: '+X.brutplaetze(world.leuchtturm,p)+' Plätze. Du kannst jetzt so viele Eier gleichzeitig ausbrüten.';
     return extra;
   }
   if(op==='tagwerk'){
@@ -184,20 +184,20 @@ export async function stadtAction({world,p,id,body,now,presence}){
   }
   if(op==='tausch_anbieten'){
     const liste=tauschliste(world,now);
-    if(liste.filter(v=>v.vonId===id).length>=3)fail('Du hast schon drei Angebote am Brett. Nimm erst eins zurueck.');
-    if(liste.length>=X.TAUSCH_MAX)fail('Das Tauschbrett ist voll. Versuch es spaeter noch einmal.');
+    if(liste.filter(v=>v.vonId===id).length>=3)fail('Du hast schon drei Angebote am Brett. Nimm erst eins zurück.');
+    if(liste.length>=X.TAUSCH_MAX)fail('Das Tauschbrett ist voll. Versuch es später noch einmal.');
     const fehler=X.tauschErlaubt(p,body.gebe,body.suche);
     if(fehler)fail(fehler);
     if(p.besitz.includes(body.suche))fail('Dieses Mon hast du bereits.');
     liste.push({id:body.requestId,vonId:id,gebe:body.gebe,suche:body.suche,seit:now});
-    extra.message=D.mon(body.gebe).name+' haengt am Brett. Wer dir '+D.mon(body.suche).name+' bringt, bekommt ihn.';
+    extra.message=D.mon(body.gebe).name+' hängt am Brett. Wer dir '+D.mon(body.suche).name+' bringt, bekommt ihn.';
     return extra;
   }
   if(op==='tausch_zuruecknehmen'){
     const liste=tauschliste(world,now),at=liste.findIndex(v=>v.id===body.tauschId&&v.vonId===id);
     if(at<0)fail('Dieses Angebot gibt es nicht mehr.');
     liste.splice(at,1);
-    extra.message='Angebot zurueckgenommen.';
+    extra.message='Angebot zurückgenommen.';
     return extra;
   }
   if(op==='tausch_annehmen'){
@@ -213,8 +213,8 @@ export async function stadtAction({world,p,id,body,now,presence}){
     if(p.besitz.includes(angebot.gebe))fail('Dieses Mon hast du bereits.');
     if(andere.besitz.includes(angebot.suche))fail('Der andere hat dieses Mon inzwischen selbst.');
     const seinOrt=X.einsatzOrt(andere,angebot.gebe);
-    if(!andere.besitz.includes(angebot.gebe)||(seinOrt!==null&&seinOrt!==undefined))fail('Der andere kann sein Angebot gerade nicht einloesen.');
-    if(activeArena(andere))fail('Der andere kaempft gerade. Versuch es gleich noch einmal.');
+    if(!andere.besitz.includes(angebot.gebe)||(seinOrt!==null&&seinOrt!==undefined))fail('Der andere kann sein Angebot gerade nicht einlösen.');
+    if(activeArena(andere))fail('Der andere kämpft gerade. Versuch es gleich noch einmal.');
     function umziehen(von,nach,monId){
       von.besitz=von.besitz.filter(v=>v!==monId);
       delete von.monUpgrades[monId];delete von.wesen[monId];delete von.plaene[monId];
@@ -225,7 +225,7 @@ export async function stadtAction({world,p,id,body,now,presence}){
     liste.splice(liste.indexOf(angebot),1);
     log(world,p.name+' tauscht mit '+andere.name+': '+D.mon(angebot.suche).name+' gegen '+D.mon(angebot.gebe).name+'.',id,now);
     extra.monId=angebot.gebe;
-    extra.message='Getauscht! '+D.mon(angebot.gebe).name+' gehoert jetzt dir - '+D.mon(angebot.suche).name+' ist weg, samt Runenstufe und Wesen.';
+    extra.message='Getauscht! '+D.mon(angebot.gebe).name+' gehört jetzt dir - '+D.mon(angebot.suche).name+' ist weg, samt Runenstufe und Wesen.';
     return extra;
   }
   /* Beide Kaempfe laufen ueber dieselbe Maschine wie ein Gebietsangriff. Der
@@ -237,22 +237,22 @@ export async function stadtAction({world,p,id,body,now,presence}){
     const titel=op==='champion_fordern';
     if(titel){
       const c=champion(world,now);
-      if(c.id===id)fail('Du haeltst den Titel bereits. Verteidige ihn, indem du hier stehen bleibst.');
-      if((p.titelCooldown||0)>now)fail('Der naechste Titelkampf ist in '+Math.ceil(((p.titelCooldown||0)-now)/60000)+' Minuten moeglich.');
-      if(X.arenaSiege(p)<X.TITEL_SIEGE)fail('Fuer einen Titelkampf brauchst du '+X.TITEL_SIEGE+' Ranglistensiege. Du hast '+X.arenaSiege(p)+'.');
+      if(c.id===id)fail('Du hältst den Titel bereits. Verteidige ihn, indem du hier stehen bleibst.');
+      if((p.titelCooldown||0)>now)fail('Der nächste Titelkampf ist in '+Math.ceil(((p.titelCooldown||0)-now)/60000)+' Minuten möglich.');
+      if(X.arenaSiege(p)<X.TITEL_SIEGE)fail('Für einen Titelkampf brauchst du '+X.TITEL_SIEGE+' Ranglistensiege. Du hast '+X.arenaSiege(p)+'.');
       p.titelCooldown=now+X.TITEL_PAUSE;
       p.arena=A.create(p.truppe.map(mid=>X.mon(p,mid)),truppe(c.squad),{id:body.requestId,territoryId:1,now,bonus:.1});
       Object.assign(p.arena,{kind:'champion',title:'TITELKAMPF · '+c.name,gegnerName:c.name,championSeit:c.seit});
-      extra.message='Titelkampf gegen '+c.name+'. Der Champion kaempft mit einem Zehntel Heimvorteil.';
+      extra.message='Titelkampf gegen '+c.name+'. Der Champion kämpft mit einem Zehntel Heimvorteil.';
       return extra;
     }
-    if((p.arenaCooldown||0)>now)fail('Der naechste Ranglistenkampf ist in '+Math.ceil(((p.arenaCooldown||0)-now)/60000)+' Minuten moeglich.');
+    if((p.arenaCooldown||0)>now)fail('Der nächste Ranglistenkampf ist in '+Math.ceil(((p.arenaCooldown||0)-now)/60000)+' Minuten möglich.');
     const gegner=gegnerliste(world,id,now).find(v=>v.id===body.targetId);
     if(!gegner)fail('Dieser Gegner steht nicht mehr auf der Liste. Aktualisiere die Arena.');
     p.arenaCooldown=now+X.ARENA_PAUSE;
     p.arena=A.create(p.truppe.map(mid=>X.mon(p,mid)),truppe(gegner.squad),{id:body.requestId,territoryId:1,now});
     Object.assign(p.arena,{kind:'rang',title:'GROSSE ARENA · '+gegner.name,gegnerName:gegner.name});
-    extra.message='Ranglistenkampf gegen '+gegner.name+'. Er muss dafuer nicht anwesend sein.';
+    extra.message='Ranglistenkampf gegen '+gegner.name+'. Er muss dafür nicht anwesend sein.';
   }
   return extra;
 }

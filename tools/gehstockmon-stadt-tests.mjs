@@ -191,7 +191,7 @@ await test('Bought incubator slots are paid for once and actually free a slot',a
   /* Der Preis steigt mit jedem Platz, und irgendwann ist Schluss. */
   for(let i=1;i<X.BRUTPLATZ_PREISE.length;i++){const kauf=await call(ca,'brutplatz_kaufen');assert.equal(kauf.status,200,kauf.error);}
   const ende=await call(ca,'brutplatz_kaufen');
-  assert.equal(ende.status,400);assert.match(ende.error,/Mehr Brutplaetze/);
+  assert.equal(ende.status,400);assert.match(ende.error,/Mehr Brutplätze/);
 });
 await test('A twin from an egg raises the rune level and reaches the saved defence',async()=>{
   let time=mon;const db=store(),presence=store(),handler=createHandler({store:db,presenceStore:presence,now:()=>time,random:()=>0});let serial=0;

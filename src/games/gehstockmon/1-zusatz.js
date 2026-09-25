@@ -149,7 +149,7 @@
   X.WOCHENZIELE=[
     {id:'runen',  name:'Runensuche',    was:'Verlorene Runen einsammeln', ziel:30, lohn:200},
     {id:'trainer',name:'Trainingslager',was:'Wandertrainer besiegen',     ziel:15, lohn:250},
-    {id:'eier',   name:'Brutzeit',      was:'Eier ausbrueten',            ziel:20, lohn:200},
+    {id:'eier',   name:'Brutzeit',      was:'Eier ausbrüten',            ziel:20, lohn:200},
     {id:'tiefe',  name:'Tiefenzug',     was:'Dungeonbosse bezwingen',     ziel:8,  lohn:300}
   ];
   X.wochenziel=function(now){return X.WOCHENZIELE[X.zerhackerWoche(now)%X.WOCHENZIELE.length];};
@@ -286,8 +286,8 @@
   /* Der Trainerrang waechst an allem, was man ohnehin tut, und gibt kleine
      Zuschlaege auf den eigenen Schaden. Er laesst sich nicht kaufen und nicht
      verlieren - das ist der ruhige Fortschritt neben Gold und Runen. */
-  X.RAENGE=[{name:'Wanderer',ab:0},{name:'Spaeher',ab:60},{name:'Faehrtenleser',ab:150},
-            {name:'Hueter',ab:300},{name:'Meister',ab:550},{name:'Legende',ab:900}];
+  X.RAENGE=[{name:'Wanderer',ab:0},{name:'Späher',ab:60},{name:'Fährtenleser',ab:150},
+            {name:'Hüter',ab:300},{name:'Meister',ab:550},{name:'Legende',ab:900}];
   X.erfahrung=function(p){
     /* Die erkundeten Biome stehen in p.visited und nicht in p.progress - dort
        hat die Summe frueher danach gegriffen und dabei immer null gefunden.
@@ -415,7 +415,7 @@
      einzige Zahl ist, die nicht mitskaliert. */
   X.WESEN=[
     {id:'ruhig',    name:'ruhig',     hp: .06, ang:    0, tempo: 0},
-    {id:'stuermisch',name:'stuermisch',hp:-.04, ang:    0, tempo: 1},
+    {id:'stuermisch',name:'stürmisch',hp:-.04, ang:    0, tempo: 1},
     {id:'stur',     name:'stur',      hp: .09, ang: -.03, tempo: 0},
     {id:'wild',     name:'wild',      hp:-.05, ang:  .07, tempo: 0},
     {id:'flink',    name:'flink',     hp:    0, ang: -.03, tempo: 2},

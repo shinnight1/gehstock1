@@ -12,9 +12,9 @@
     var el=c.el,button=c.button,drawer=c.drawer,stand=null;
     function state(){return c.state();}
     function dauer(ms){var m=Math.max(0,Math.ceil(ms/60000));return m>=60?Math.floor(m/60)+' Std. '+m%60+' Min.':m+' Min.';}
-    function wartetext(ms){return ms>90*60000?'wenn die Insel wieder oeffnet':'in '+dauer(ms);}
+    function wartetext(ms){return ms>90*60000?'wenn die Insel wieder öffnet':'in '+dauer(ms);}
     function nah(){var w=c.world(),p=w&&w.position&&w.position();return !!p&&X.inStadt(p);}
-    function hingehen(){c.closeDrawer();var w=c.world();if(w&&w.walkToPoint)w.walkToPoint(X.STADT_TOR);c.notify('Deine Figur laeuft nach '+X.STADT.name+'.');}
+    function hingehen(){c.closeDrawer();var w=c.world();if(w&&w.walkToPoint)w.walkToPoint(X.STADT_TOR);c.notify('Deine Figur läuft nach '+X.STADT.name+'.');}
     function run(op,data){
       c.request(op,data).then(function(res){
         c.apply(res);
@@ -41,15 +41,15 @@
     function championTeil(t){
       var ch=t.champion;
       drawer.appendChild(el('h3','Der Gehstock-Champion'));
-      drawer.appendChild(el('p',ch.selbst?'Du haeltst den Titel seit '+dauer(c.now()-ch.seit)+'. '+ch.verteidigt+' Herausforderung(en) abgewehrt. Solange er dir gehoert, bekommst du '+X.CHAMPION_SOLD+' Gold Sold je Tag.'
-        :ch.name+(ch.haus?' haelt den Titel fuer das Haus, bis ihn jemand holt.':' traegt den Titel seit '+dauer(c.now()-ch.seit)+' und hat '+ch.verteidigt+' Herausforderung(en) abgewehrt.'),ch.selbst?'gm-selbst':undefined));
+      drawer.appendChild(el('p',ch.selbst?'Du hältst den Titel seit '+dauer(c.now()-ch.seit)+'. '+ch.verteidigt+' Herausforderung(en) abgewehrt. Solange er dir gehört, bekommst du '+X.CHAMPION_SOLD+' Gold Sold je Tag.'
+        :ch.name+(ch.haus?' hält den Titel für das Haus, bis ihn jemand holt.':' trägt den Titel seit '+dauer(c.now()-ch.seit)+' und hat '+ch.verteidigt+' Herausforderung(en) abgewehrt.'),ch.selbst?'gm-selbst':undefined));
       drawer.appendChild(el('p','Er verteidigt mit der Aufstellung, die beim Titelgewinn eingefroren wurde - und mit einem Zehntel Heimvorteil.'));
       drawer.appendChild(truppenreihe(ch.squad));
       if(ch.selbst){drawer.appendChild(el('p','Du kannst dich nicht selbst herausfordern. Halte den Titel, indem andere an dir scheitern.'));return;}
       var reif=t.siege>=t.noetig,pause=t.titelPause>0;
       drawer.appendChild(el('p','Titelkampf: '+Math.min(t.siege,t.noetig)+'/'+t.noetig+' Ranglistensiege'
-        +(pause?' · naechster Versuch '+wartetext(t.titelPause):reif?' · du darfst antreten':' · sammle noch '+(t.noetig-t.siege))));
-      var b=button(nah()?'Um den Titel kaempfen':'Nach '+X.STADT.name+' laufen',function(){
+        +(pause?' · nächster Versuch '+wartetext(t.titelPause):reif?' · du darfst antreten':' · sammle noch '+(t.noetig-t.siege))));
+      var b=button(nah()?'Um den Titel kämpfen':'Nach '+X.STADT.name+' laufen',function(){
         if(!nah()){hingehen();return;}run('champion_fordern',{});
       },'gm-button gm-primary');
       b.disabled=c.busy()||(nah()&&(!reif||pause));
@@ -58,7 +58,7 @@
     function rangTeil(t){
       drawer.appendChild(el('h3','Ranglistenkaempfe'));
       drawer.appendChild(el('p','Dein Ruhm: '+t.ruhm+' · Sieg +'+X.RUHM_SIEG+' Ruhm und '+X.ARENA_LOHN+' Gold, Niederlage -'+X.RUHM_NIEDERLAGE+' Ruhm und '+X.ARENA_TROST+' Gold Trost. Niemand verliert dabei Mons, Eier oder Gebiete.'));
-      if(t.pause>0)drawer.appendChild(el('p','Der naechste Kampf ist '+wartetext(t.pause)+' moeglich.'));
+      if(t.pause>0)drawer.appendChild(el('p','Der nächste Kampf ist '+wartetext(t.pause)+' möglich.'));
       if(!nah()){drawer.appendChild(button('Nach '+X.STADT.name+' laufen',hingehen,'gm-button gm-primary'));return;}
       (t.gegner||[]).forEach(function(g){
         var karte=el('article',undefined,'gm-quest-card');
@@ -73,13 +73,13 @@
     function hafenTeil(s){
       drawer.appendChild(el('h3','Der Hafen'));
       if(!s.ohneGebiet){
-        drawer.appendChild(el('p','Tagwerk und Findelhaus sind fuer alle da, die gerade keinen Aussenposten halten. Du haeltst einen - deine Eier kommen von dort.'));
+        drawer.appendChild(el('p','Tagwerk und Findelhaus sind für alle da, die gerade keinen Außenposten halten. Du hältst einen - deine Eier kommen von dort.'));
         return;
       }
-      drawer.appendChild(el('p','Du haeltst gerade kein Gebiet. Im Hafen gibt es trotzdem Arbeit und Nachwuchs: du bleibst im Spiel, auch ohne einen Fussbreit Land.'));
+      drawer.appendChild(el('p','Du hältst gerade kein Gebiet. Im Hafen gibt es trotzdem Arbeit und Nachwuchs: du bleibst im Spiel, auch ohne einen Fußbreit Land.'));
       var arbeit=el('article',undefined,'gm-quest-card');
       arbeit.appendChild(el('h3','Tagwerk · '+s.tagwerkLohn+' Gold'));
-      arbeit.appendChild(el('p',s.tagwerk+'/'+s.tagwerkMax+' Auftraege liegen bereit'+(s.tagwerk<s.tagwerkMax?' · der naechste '+wartetext(s.tagwerkIn):' · Vorrat voll')));
+      arbeit.appendChild(el('p',s.tagwerk+'/'+s.tagwerkMax+' Aufträge liegen bereit'+(s.tagwerk<s.tagwerkMax?' · der nächste '+wartetext(s.tagwerkIn):' · Vorrat voll')));
       var ab=button(nah()?'Tagwerk annehmen ('+s.tagwerk+')':'Nach '+X.STADT.name+' laufen',function(){
         if(!nah()){hingehen();return;}run('tagwerk',{});
       },'gm-button gm-primary');
@@ -98,7 +98,7 @@
     }
     function brutTeil(s){
       drawer.appendChild(el('h3','Brutplaetze'));
-      drawer.appendChild(el('p','Du hast '+s.brutplaetze+' Plaetze'+(s.gekauft?' ('+s.gekauft+' gekauft)':'')+'. Jeder weitere laesst dich ein Ei mehr gleichzeitig ausbrueten.'));
+      drawer.appendChild(el('p','Du hast '+s.brutplaetze+' Plätze'+(s.gekauft?' ('+s.gekauft+' gekauft)':'')+'. Jeder weitere lässt dich ein Ei mehr gleichzeitig ausbrüten.'));
       if(!s.preis){drawer.appendChild(el('p','Mehr gibt es nicht zu kaufen.'));return;}
       var b=button('Brutplatz kaufen · '+s.preis+' Gold',function(){run('brutplatz_kaufen',{});},'gm-button gm-primary');
       b.disabled=c.busy()||state().gold<s.preis;
@@ -176,8 +176,8 @@
     }
     function zeigeStadt(){
       if(!stand||!c.open(X.STADT.name,'stadt'))return;
-      drawer.appendChild(el('p','Eine freie Stadt: sie gehoert niemandem und kann nicht erobert werden. In ihrer Mitte steht die Grosse Arena - massives Gemaeuer, man geht aussen herum.','gm-beginner-tip'));
-      if(!nah())drawer.appendChild(el('p','Du stehst noch ausserhalb. Fuer alles hier musst du in der Stadt sein.'));
+      drawer.appendChild(el('p','Eine freie Stadt: sie gehört niemandem und kann nicht erobert werden. In ihrer Mitte steht die Große Arena - massives Gemäuer, man geht außen herum.','gm-beginner-tip'));
+      if(!nah())drawer.appendChild(el('p','Du stehst noch außerhalb. Für alles hier musst du in der Stadt sein.'));
       championTeil(stand.turnier);
       rangTeil(stand.turnier);
       hafenTeil(stand.stadt);

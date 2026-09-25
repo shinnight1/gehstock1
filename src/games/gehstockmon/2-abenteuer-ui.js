@@ -60,7 +60,7 @@
       if (!ort || !w.position) return null;
       var mir = w.position(), dx = ort.x - mir.x, dz = ort.z - mir.z;
       var weit = Math.round(Math.hypot(dx, dz));
-      var richtungen = ['Norden', 'Nordosten', 'Osten', 'Suedosten', 'Sueden', 'Suedwesten', 'Westen', 'Nordwesten'];
+      var richtungen = ['Norden', 'Nordosten', 'Osten', 'Südosten', 'Süden', 'Südwesten', 'Westen', 'Nordwesten'];
       var achtel = Math.round(Math.atan2(dx, dz) / (Math.PI / 4));
       return { text: richtungen[((achtel % 8) + 8) % 8], weit: weit };
     }
@@ -70,7 +70,7 @@
     function wartetext(ms) {
       var min = Math.ceil((ms || 0) / 60000);
       if (min <= 90) return 'in ' + min + ' Minuten';
-      return 'wenn die Insel wieder oeffnet';
+      return 'wenn die Insel wieder öffnet';
     }
 
     /* Er zieht weiter, waehrend man unterwegs zu ihm ist. Wer den Ort anpeilt,
@@ -92,24 +92,24 @@
     function zeigeZerhacker() {
       var z = projekte && projekte.zerhacker; if (!z || !c.open('Gehstockhassender Zerhacker', 'zerhacker')) return;
       if (z.hp <= 0) {
-        drawer.appendChild(el('p', 'Er ist erlegt. Am Montag steht der naechste vor der Insel.'));
+        drawer.appendChild(el('p', 'Er ist erlegt. Am Montag steht der nächste vor der Insel.'));
         drawer.appendChild(el('h3', 'Wer zugeschlagen hat'));
         drawer.appendChild(tafel(z.tafel, 'Schaden'));
         return;
       }
-      drawer.appendChild(el('p', 'Ein Wesen, das jeden Gehstock hasst, zieht diese Woche seine Bahn ueber die Insel. Es faellt nur, wenn viele gemeinsam zuschlagen - jeder Treffer zaehlt auf dasselbe Ziel.'));
+      drawer.appendChild(el('p', 'Ein Wesen, das jeden Gehstock hasst, zieht diese Woche seine Bahn über die Insel. Es fällt nur, wenn viele gemeinsam zuschlagen - jeder Treffer zählt auf dasselbe Ziel.'));
       drawer.appendChild(el('p', 'Lebenskraft: ' + z.hp.toLocaleString('de-DE') + ' von ' + z.maxHp.toLocaleString('de-DE')
         + (z.eigen ? ' · dein Anteil: ' + z.eigen.toLocaleString('de-DE') : '')));
       var l = projekte && projekte.leuchtturm, ziel = peilung();
       if (l && l.fertig && ziel) drawer.appendChild(el('p', 'Der Leuchtturm meldet: ' + ziel.text
         + ', etwa ' + ziel.weit + ' Schritte entfernt.'));
-      else if (ziel) drawer.appendChild(el('p', 'Wo er gerade steckt, weiss niemand genau - dafuer muesste erst der Leuchtturm stehen.'));
-      drawer.appendChild(el('p', 'Deine Schlaege: ' + z.vorrat + ' von ' + z.vorratMax
-        + (z.vorrat < z.vorratMax ? ' · der naechste ' + wartetext(z.naechsterIn) : ' · Beutel voll')));
+      else if (ziel) drawer.appendChild(el('p', 'Wo er gerade steckt, weiß niemand genau - dafür müsste erst der Leuchtturm stehen.'));
+      drawer.appendChild(el('p', 'Deine Schläge: ' + z.vorrat + ' von ' + z.vorratMax
+        + (z.vorrat < z.vorratMax ? ' · der nächste ' + wartetext(z.naechsterIn) : ' · Beutel voll')));
       var wartet = !z.vorrat;
       var w = c.world(), ort = w && w.zerhackerOrt && w.zerhackerOrt();
       var nah = ort && w.position && Math.hypot(w.position().x - ort.x, w.position().z - ort.z) < X.ZERHACKER.reichweite;
-      var knopf = button(wartet ? 'Kein Schlag uebrig' : nah ? 'Zuschlagen (' + z.vorrat + ')' : 'Hingehen', function () {
+      var knopf = button(wartet ? 'Kein Schlag übrig' : nah ? 'Zuschlagen (' + z.vorrat + ')' : 'Hingehen', function () {
         if (wartet) return;
         if (!nah) { c.closeDrawer(); if (w && w.walkToPoint) w.walkToPoint(treffpunkt(w.position())); c.notify('Du machst dich auf den Weg zum Zerhacker.'); return; }
         run('zerhacker_schlagen', {}, 'zerhacker');
@@ -142,7 +142,7 @@
       }
       var offen = (f.offeneAn || []).filter(function (v) { return v.name === peer.name; })[0];
       if (offen) {
-        drawer.appendChild(el('p', peer.name + ' hat dich zur Fehde gefordert - eine Woche lang zaehlt alles, was ihr beide tut.'));
+        drawer.appendChild(el('p', peer.name + ' hat dich zur Fehde gefordert - eine Woche lang zählt alles, was ihr beide tut.'));
         drawer.appendChild(button('Fehde annehmen', function () { run('fehde_annehmen', { targetId: offen.id }, 'rival'); }, 'gm-button gm-primary'));
         return;
       }
@@ -155,10 +155,10 @@
 
     function zeigeWoche() {
       var a = projekte && projekte.wochenaufgabe; if (!a || !c.open(a.name, 'woche')) return;
-      drawer.appendChild(el('p', a.was + ' - diese Woche zaehlt jeder Beitrag von euch allen auf dasselbe Ziel. '
-        + 'Es gibt nichts zu warten und keinen Weg zu laufen: was du ohnehin tust, zaehlt mit.'));
+      drawer.appendChild(el('p', a.was + ' - diese Woche zählt jeder Beitrag von euch allen auf dasselbe Ziel. '
+        + 'Es gibt nichts zu warten und keinen Weg zu laufen: was du ohnehin tust, zählt mit.'));
       drawer.appendChild(el('p', a.stand + ' von ' + a.ziel + (a.eigen ? ' · dein Anteil: ' + a.eigen : '')));
-      if (a.erfuellt) drawer.appendChild(el('p', 'Geschafft. Am Montag wartet die naechste Aufgabe.'));
+      if (a.erfuellt) drawer.appendChild(el('p', 'Geschafft. Am Montag wartet die nächste Aufgabe.'));
       drawer.appendChild(el('h3', 'Wer mitgeholfen hat'));
       drawer.appendChild(tafel(a.tafel, 'Stueck'));
     }
@@ -170,7 +170,7 @@
         var ziel = peilung();
         if (ziel) drawer.appendChild(el('p', 'Gerade im ' + ziel.text + ', etwa ' + ziel.weit + ' Schritte entfernt.'));
       } else {
-        drawer.appendChild(el('p', 'Mitten auf der Insel steht ein Geruest. Wer Gold hineinsteckt, baut mit - und steht danach fuer immer auf der Tafel. Ist der Turm fertig, peilt sein Licht den Zerhacker an, und jeder sieht Richtung und Entfernung, statt die halbe Insel abzusuchen.'));
+        drawer.appendChild(el('p', 'Mitten auf der Insel steht ein Gerüst. Wer Gold hineinsteckt, baut mit - und steht danach für immer auf der Tafel. Ist der Turm fertig, peilt sein Licht den Zerhacker an, und jeder sieht Richtung und Entfernung, statt die halbe Insel abzusuchen.'));
         drawer.appendChild(el('p', l.gold.toLocaleString('de-DE') + ' von ' + l.ziel.toLocaleString('de-DE') + ' Gold verbaut'
           + (l.eigen ? ' · dein Anteil: ' + l.eigen.toLocaleString('de-DE') : '')));
         var s = state();
@@ -188,7 +188,7 @@
     /* Ruestung und Schliff: beides haengt an den Runen aus den Dungeons. */
     function ruestungTeil(s) {
       drawer.appendChild(el('h3', 'Ruestung'));
-      drawer.appendChild(el('p', 'Fundstuecke aus den Dungeons. Sie daempfen, was ein Gehstock im Waffenduell anrichtet - gegen Mons helfen sie nicht.'));
+      drawer.appendChild(el('p', 'Fundstücke aus den Dungeons. Sie dämpfen, was ein Gehstock im Waffenduell anrichtet - gegen Mons helfen sie nicht.'));
       var besitz = s.ruestungen || [];
       if (!besitz.length) drawer.appendChild(el('p', 'Noch keins. Wer einen Dungeonboss zum ersten Mal legt, nimmt seins mit.'));
       var raster = el('div', undefined, 'gm-shop-grid');
@@ -221,14 +221,14 @@
     function shop(){if(!c.open('Skins & Waffen','shop'))return;var s=state();drawer.appendChild(el('p',s.gold+' Gold · Skins verändern deine Figur. Waffen bestimmen den Schaden im Waffenduell.'));
       var rang = X.rang(s);
       drawer.appendChild(el('p', 'Trainerrang: ' + rang.name + (rang.naechster
-        ? ' · noch ' + (rang.bis - rang.erfahrung) + ' bis ' + rang.naechster : ' · hoechster Rang')
+        ? ' · noch ' + (rang.bis - rang.erfahrung) + ' bis ' + rang.naechster : ' · höchster Rang')
         + ' · +' + Math.round((X.rangBonus(s) - 1) * 100) + ' % Schlagkraft'));
       var erst = projekte && projekte.erstschlag, kopf = projekte && projekte.kopfgeld;
       if (erst) drawer.appendChild(el('p', 'Erstschlag der Woche: ' + erst.name
         + (erst.selbst ? ' - das bist du, ein Zehntel mehr Schaden am Zerhacker.' : '.')));
       if (kopf) drawer.appendChild(el('p', kopf.selbst
-        ? 'Auf dich liegt ein Kopfgeld von ' + kopf.gold + ' Gold - du haeltst die meisten Gebiete.'
-        : 'Kopfgeld auf ' + kopf.name + ': ' + kopf.gold + ' Gold fuer den, der ihn im Ueberfall schlaegt.'));
+        ? 'Auf dich liegt ein Kopfgeld von ' + kopf.gold + ' Gold - du hältst die meisten Gebiete.'
+        : 'Kopfgeld auf ' + kopf.name + ': ' + kopf.gold + ' Gold für den, der ihn im Überfall schlägt.'));
       ruestungTeil(s);
       [['skin','Skins',X.SKINS],['weapon','Waffen',X.WEAPONS]].forEach(function(section){drawer.appendChild(el('h3',section[1]));var grid=el('div',undefined,'gm-shop-grid');section[2].forEach(function(item){var kind=section[0],own=s[kind==='skin'?'skins':'weapons'].indexOf(item.id)>=0,equipped=s[kind]===item.id,card=el('article',undefined,'gm-shop-card');card.appendChild(player(kind==='skin'?item.id:s.skin,kind==='weapon'?item.id:s.weapon));card.appendChild(el('h3',item.name));card.appendChild(el('p',kind==='weapon'?item.attack+' Waffenschaden':item.quest?'Quest: '+X.QUESTS.find(function(q){return q.id===item.quest;}).name:'Für Gold freischalten'));var b=button(equipped?'Ausgerüstet':own?'Ausrüsten':item.quest?'Durch Quest erhältlich':item.price+' Gold',function(){run(own?'equip':'shop_buy',{kind:kind,itemId:item.id},'shop');},'gm-button gm-primary');b.disabled=equipped||!own&&(!!item.quest||s.gold<item.price);card.appendChild(b);
         if(kind==='weapon'&&own){var stufe=X.schliff(s,item.id),kosten=X.schliffKosten(stufe),voll=stufe>=X.SCHLIFF_LIMIT;

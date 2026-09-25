@@ -208,13 +208,13 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
     p.gold-=gibt;bau.gold+=gibt;bau.spender[id]=(bau.spender[id]||0)+gibt;
     if(X.leuchtturmFertig(bau)&&!bau.fertigAm){
       bau.fertigAm=now;
-      log(world,p,id,null,'vollendet den Leuchtturm. Er wacht jetzt ueber die ganze Insel.',now);
+      log(world,p,id,null,'vollendet den Leuchtturm. Er wacht jetzt über die ganze Insel.',now);
       extra.message='Der Leuchtturm steht! Von nun an siehst du, wo der Zerhacker umherzieht.';
     }else extra.message=gibt+' Gold verbaut. Noch '+(X.LEUCHTTURM.ziel-bau.gold)+' Gold bis zur Spitze.';
   }
   if(op==='zerhacker_schlagen'){
     const z=zerhacker(world,now);
-    if(z.hp<=0)fail('Der Zerhacker ist fuer diese Woche erledigt.');
+    if(z.hp<=0)fail('Der Zerhacker ist für diese Woche erledigt.');
     if(X.zerhackerVorrat(p,now)<1)fail('Deine Truppe sammelt sich noch. In wenigen Minuten hast du wieder einen Schlag.');
     if(!p.truppe||!p.truppe.length)fail('Stelle zuerst eine Truppe auf.');
     /* Er zieht weiter, waehrend die Standortmeldung unterwegs ist. Beide
@@ -258,7 +258,7 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
       extra.message='Die Fehde mit '+gegner.name+' steht. Gezählt wird bis Freitag, abgerechnet beim Wochenwechsel.';
     } else {
       f.offen[id]=body.targetId;
-      extra.message=gegner.name+' wurde herausgefordert. Erst wenn er annimmt, zaehlt die Woche.';
+      extra.message=gegner.name+' wurde herausgefordert. Erst wenn er annimmt, zählt die Woche.';
     }
   }
   if(op==='fehde_annehmen'){
@@ -275,16 +275,16 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
     const stufe=X.schliff(p,waffe.id);
     if(stufe>=X.SCHLIFF_LIMIT)fail('Diese Waffe ist so scharf, wie sie werden kann.');
     const kosten=X.schliffKosten(stufe),vorrat=p.runes[0]||0;
-    if(vorrat<kosten)fail('Dafuer brauchst du '+kosten+' einfache Runen.');
+    if(vorrat<kosten)fail('Dafür brauchst du '+kosten+' einfache Runen.');
     p.runes[0]=vorrat-kosten;p.waffenSchliff=p.waffenSchliff||{};p.waffenSchliff[waffe.id]=stufe+1;
     extra.message=waffe.name+' geschliffen: Stufe '+(stufe+1)+', jetzt '+X.waffenWert(p,waffe.id)+' Schaden.';
   }
   if(op==='panzer_anlegen'){
-    if(body.itemId===null||body.itemId===''){p.panzer=null;extra.message='Ruestung abgelegt.';}
+    if(body.itemId===null||body.itemId===''){p.panzer=null;extra.message='Rüstung abgelegt.';}
     else{
       const teil=X.ruestung(body.itemId);
-      if(!teil||!(p.ruestungen||[]).includes(teil.id))fail('Dieses Ruestungsteil hast du nicht.');
-      p.panzer=teil.id;extra.message=teil.name+' angelegt: '+teil.schutz+' % weniger Schaden durch Gehstoecke.';
+      if(!teil||!(p.ruestungen||[]).includes(teil.id))fail('Dieses Rüstungsteil hast du nicht.');
+      p.panzer=teil.id;extra.message=teil.name+' angelegt: '+teil.schutz+' % weniger Schaden durch Gehstöcke.';
     }
   }
   if(op==='quest_claim'){const quest=X.QUESTS.find(q=>q.id===body.questId);if(!quest||p.claimedQuests.includes(quest.id)||X.progress(p,quest)<quest.goal)fail('Diese Questbelohnung ist noch nicht verfügbar.');p.claimedQuests.push(quest.id);if(quest.gold)p.gold+=quest.gold;if(quest.skin&&!p.skins.includes(quest.skin))p.skins.push(quest.skin);extra.message=quest.skin?X.skin(quest.skin).name+' freigeschaltet!':'Quest geschafft! +'+quest.gold+' Gold.';}

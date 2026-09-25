@@ -341,7 +341,7 @@
       eintrag = vorlagen[skin] = { wartend: [fertig], aus: false };
       var haut = modellTextur(quelle.textur);
       fetch(quelle.modell).then(function (antwort) {
-        if (!antwort.ok) throw new Error(antwort.status + ' fuer ' + quelle.modell);
+        if (!antwort.ok) throw new Error(antwort.status + ' für ' + quelle.modell);
         return antwort.arrayBuffer();
       }).then(function (speicher) {
         if (dead) return;
@@ -367,7 +367,7 @@
       }).catch(misslungen);
       function misslungen(fehler) {
         eintrag.aus = true; eintrag.wartend.length = 0;
-        console.warn('GehstockMon: das Modell fuer "' + skin + '" liess sich nicht laden, das Bild bleibt stehen.', fehler);
+        console.warn('GehstockMon: das Modell für "' + skin + '" ließ sich nicht laden, das Bild bleibt stehen.', fehler);
       }
     }
 
