@@ -72,9 +72,10 @@ await test('Presence shares positions, expires departures and cannot change prog
   let r=await call(h,ca,'presence',{position:{...a.spawn,heading:1}});assert.equal(r.peers.length,1);assert.equal(r.peers[0].id,b.playerId);assert.deepEqual(r.peers[0].squad,b.profile.truppe,'presence includes only the authoritative squad');assert.equal(r.peers[0].x,b.spawn.x);assert.ok(!('code' in r.peers[0])&&!('profile' in r.peers[0]));assert.equal(JSON.stringify(store.data),snapshot);
   assert.equal((await call(h,ca,'presence',{position:{x:9999,z:1,heading:0}})).status,400);assert.equal((await call(h,ca,'presence',{position:{x:'0',z:1,heading:0}})).status,400);
   time+=15001;r=await call(h,ca,'presence',{position:{...a.spawn,heading:1}});assert.equal(r.peers.length,0);
-  /* Unsichtbar ist B sofort, gespeichert bleibt sein letzter Stand noch zehn Minuten - als Ausgangspunkt, falls er zurueckkommt. */
+  /* Unsichtbar ist B sofort, gespeichert bleibt sein letzter Stand aber - dort macht er weiter, wenn er zurueckkommt. Aufgeraeumt wird erst nach einem Monat Stille. */
   assert.equal(Object.keys(presence.data.players).length,2);
-  time+=10*60*1000;r=await call(h,ca,'presence',{position:{...a.spawn,heading:1}});assert.equal(r.peers.length,0);assert.equal(Object.keys(presence.data.players).length,1);
+  time+=10*60*1000;r=await call(h,ca,'presence',{position:{...a.spawn,heading:1}});assert.equal(r.peers.length,0);assert.equal(Object.keys(presence.data.players).length,2);
+  time+=35*24*60*60*1000;r=await call(h,ca,'presence',{position:{...a.spawn,heading:1}});assert.equal(r.status,200);assert.equal(Object.keys(presence.data.players).length,1);
 });
 await test('Presence in per-player fields: nobody blocks anybody, and the list is read at most once a second',async()=>{
   /* So liegt die Anwesenheit in Redis: ein Feld je Spieler (siehe lib/gehstockmon-anwesenheit.mjs). */
@@ -99,7 +100,7 @@ await test('Presence in per-player fields: nobody blocks anybody, and the list i
   assert.equal(felder.get('anwesenheit-v2').size,8,'but their last positions stay as starting points');
   time+=10*60*1000;const back=await call(h,codes[0],'presence',{position:{...joined[0].spawn,heading:0}});
   assert.equal(back.status,200);
-  assert.deepEqual([...felder.get('anwesenheit-v2').keys()],[joined[0].playerId],'after ten minutes the others are cleaned up, the reporting player stays');
+  assert.equal(felder.get('anwesenheit-v2').size,8,'ten minutes later the others still keep their last positions - they continue there when they come back');
   /* Aktionen lesen dieselben Felder: ohne frische Position keine Arbeit im Hafen, mit einer am Stadttor schon. */
   const p=store.data.players[joined[2].playerId];
   const ohne=await call(h,codes[2],'tagwerk');assert.match(ohne.error||'',/Kartenposition/);
@@ -134,6 +135,38 @@ await test('A short absence keeps the walked position instead of resetting to th
   time+=20000;assert.equal((await call(h,ca,'presence',{position:{...punkt(w,50),heading:w}})).positionCorrected,undefined);
   /* Laufen darf man trotzdem nur so weit, wie die Zeit hergibt: fuenf Sekunden Vorrat, nicht zwanzig. */
   time+=20000;const weit=await call(h,ca,'presence',{position:{...punkt(w,-20),heading:w}});assert.equal(weit.positionCorrected,true);
+});
+await test('Reloading, a reconnect, a long dungeon and the next morning all continue where you stood',async()=>{
+  let time=stamp;const store=memoryStore(),presence=memoryStore(),h=createHandler({store,presenceStore:presence,now:()=>time});
+  const a=await call(h,ca,'join'),layout=X.layout(store.data.territories),id=a.playerId,start=a.spawn;
+  const punkt=(w,d)=>({x:Math.round((start.x+Math.sin(w)*d)*100)/100,z:Math.round((start.z+Math.cos(w)*d)*100)/100});
+  let w=0;for(;w<Math.PI*2;w+=Math.PI/36){const p1=punkt(w,25),p2=punkt(w,50);if(X.onLand(p1)&&X.onLand(p2)&&X.route(layout,start,p1,id,25.1)&&X.route(layout,p1,p2,id,25.1))break;}
+  assert.ok(w<Math.PI*2,'a straight walkable line leaves the spawn');
+  const schritt=async(p)=>(await call(h,ca,'presence',{position:{...p,heading:w}})).positionCorrected;
+  await schritt(start);time+=3000;await schritt(punkt(w,25));time+=3000;assert.equal(await schritt(punkt(w,50)),undefined);
+  /* Neu laden (oder nach einem Aussetzer neu verbinden): dort weiter, wo man zuletzt gemeldet war. Frueher ging es zurueck an den Start. */
+  time+=5000;const neu=await call(h,ca,'join');
+  assert.deepEqual(neu.spawn,punkt(w,50),'a reload starts at the last reported position');
+  time+=3000;assert.equal(await schritt(punkt(w,45)),undefined,'and walking on from there is accepted');
+  /* Das Tablet war waehrend eines Gruppen-Dungeons elf Minuten gesperrt. Frueher war der Stand dann verfallen, und der naechste Schritt zaehlte vom Start aus. */
+  time+=11*60*1000;assert.equal(await schritt(punkt(w,40)),undefined,'eleven minutes without a report keep the position');
+  /* Am naechsten Morgen: dieselbe Stelle. */
+  time=H.access(H.access(time).closesAt).nextOpenAt+60000;const morgen=await call(h,ca,'join');
+  assert.deepEqual(morgen.spawn,punkt(w,40),'the next morning starts where the day ended');
+  /* Wer noch nie gemeldet war, beginnt am Start. */
+  const b=await call(h,cb,'join');assert.deepEqual(b.spawn,X.outside(X.SPAWN,X.layout(store.data.territories)));
+});
+await test('A last position behind walls that changed hands starts in front of their gate',async()=>{
+  let time=stamp;const store=memoryStore(),presence=memoryStore(),h=createHandler({store,presenceStore:presence,now:()=>time});
+  const a=await call(h,ca,'join'),b=await call(h,cb,'join'),feld=3,innen={x:D.BIOME[feld-1].x,z:D.BIOME[feld-1].z};
+  /* A stand zuletzt mitten in seinem Aussenposten. Waehrend er weg war, hat B ihn erobert. */
+  await presence.setJSON('presence-v1',{players:{[a.playerId]:{id:a.playerId,name:'Test A',...innen,heading:0,activity:'map',updatedAt:time,spawnAt:0,credit:55}}},{onlyIfNew:true});
+  Object.assign(store.data.territories[feld-1],{ownerId:b.playerId,ownerName:'Test B'});
+  time+=60000;const zurueck=await call(h,ca,'join');
+  const mauer=X.layout(store.data.territories).find(g=>g.fields.includes(feld));
+  assert.ok(!X.inside(zurueck.spawn,mauer),'never inside walls that belong to someone else');
+  assert.ok(Math.hypot(zurueck.spawn.x-mauer.gate.x,zurueck.spawn.z-mauer.gate.z)<10,'but right in front of their gate, not back at the start');
+  time+=3000;assert.equal((await call(h,ca,'presence',{position:{...zurueck.spawn,heading:0}})).positionCorrected,undefined,'and the path check agrees');
 });
 await test('Berlin opening boundaries include Friday, block weekends and follow daylight saving',()=>{
   for(const [day,close] of [[14,13],[15,13],[16,14],[17,15],[18,13]]) {

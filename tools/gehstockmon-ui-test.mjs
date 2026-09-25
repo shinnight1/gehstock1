@@ -66,8 +66,11 @@ export async function checkUi(D,E,A,handler,code,clock,otherCode){
   click('◉ Eier');await jump(clock.value+45000);assert.ok(root.all().some(e=>e.visible&&e.tagName==='h2'&&e.textContent==='Brutstation'),'passive update keeps drawer open');
   const chancen=root.querySelectorAll('.gm-chance');assert.ok(chancen.length>=3,'Brutstation nennt die Schlupfchancen je Seltenheit');
   assert.ok(chancen.every(z=>/%$/.test(z.textContent)),'jede Zeile endet auf einen Prozentwert');
+  /* Ein paar Schritte, die der Server noch nicht kennt - dann faellt das WLAN aus. */
+  position={x:position.x+3,z:position.z};const vorDemAussetzer={...position};
   const storedGold=game.state.gold;unreachable=true;listeners.offline();assert.ok(blocked);await jump(clock.value+3*E.HOUR);assert.equal(game.state.gold,storedGold,'offline clock cannot advance progression');
   unreachable=false;listeners.online();await flush();assert.equal(root.querySelector('.gm-connection').hidden,true);assert.ok(game.state.gold>storedGold,'server settles income on reconnect');
+  assert.deepEqual(position,vorDemAussetzer,'a reconnect keeps the figure where it stood instead of jumping back');
   assert.deepEqual(values.get('stand'),legacy,'old local save left intact and unused');assert.deepEqual(values.get('arena-v1'),{invalid:'legacy fight'});assert.deepEqual(values.get('online-squad'),['moosling']);
   // Close an active fight exactly at the deadline, including a response lost
   // before closing. The pending receipt remains recoverable on the next day.

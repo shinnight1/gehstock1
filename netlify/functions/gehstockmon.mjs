@@ -167,11 +167,35 @@ function publicResult(world, id, now, extra = {}) {
    immer wieder zurueckgesetzt. */
 const LAUF_TEMPO = 11, LAUF_VORRAT = 55;
 /* Mitspieler zeigt nur, wer sich in den letzten 15 Sekunden gemeldet hat.
-   Der eigene letzte Stand bleibt aber laenger liegen, als Ausgangspunkt
-   fuer die Wegpruefung. Frueher verfiel er nach denselben 15 Sekunden - wer
-   so lange nichts gemeldet hatte (Tab im Hintergrund, kurz ein anderes
-   Fenster), wurde beim naechsten Schritt an den Start zurueckgesetzt. */
-const SICHTBAR_MS = 15000, AUSGANG_MS = 10 * 60 * 1000;
+   Der eigene letzte Stand dagegen verfaellt nicht: er ist der Ort, an dem
+   man weiterspielt - nach dem Neuladen, nach einem langen Dungeon, einem
+   gesperrten Tablet oder der Nacht. Frueher galt er zehn Minuten, und
+   'join' setzte jeden an den Start zurueck: wer neu lud, die Verbindung
+   kurz verlor oder das Tablet waehrend eines Gruppen-Dungeons sperrte,
+   stand danach wieder in der Inselmitte. Aufgeraeumt wird ein Eintrag erst
+   nach einem Monat ohne Meldung. */
+const SICHTBAR_MS = 15000, ORT_BEHALTEN_MS = 30 * 24 * 60 * 60 * 1000;
+/* Der zuletzt gemeldete Ort, wenn man dort noch stehen darf. Nach einer
+   Kartenaenderung kann er im Wasser oder im Arenarund liegen - dann zaehlt
+   er nicht, sonst saesse die Figur dort fest. */
+function letzterStand(eintrag, timestamp) {
+  return eintrag && Number.isFinite(eintrag.x) && Number.isFinite(eintrag.z)
+    && timestamp - eintrag.updatedAt < ORT_BEHALTEN_MS && X.walkable(eintrag) ? eintrag : null;
+}
+/* Wo man beim Betreten der Welt steht: am zuletzt gemeldeten Ort. Liegt er
+   inzwischen hinter fremden Mauern, geht es vor deren Tor - genau wie die
+   Wegpruefung es auch taete. Wer noch nie gemeldet war, beginnt am Start. */
+function startpunkt(eintrag, world, id, timestamp) {
+  const layout = X.layout(world.territories), ort = letzterStand(eintrag, timestamp);
+  if (!ort) return X.outside(X.SPAWN, layout);
+  const punkt = { x: ort.x, z: ort.z };
+  return layout.some((g) => g.ownerId !== id && X.inside(punkt, g)) ? X.outside(punkt, layout) : punkt;
+}
+/* Nur fuer 'join': der eigene Eintrag aus der Anwesenheit. Faellt sie aus,
+   beginnt man eben am Start - betreten laesst sich die Welt trotzdem. */
+async function eigenerEintrag(db, id) {
+  try { return (await anwesenheitLesen(db)).eintraege[id] || null; } catch (err) { return null; }
+}
 async function updatePresence(db, world, id, position, timestamp, clock, bypass = false) {
   const p = world.players[id];
   if (!p) throw new GameError('Betritt zuerst die Spielerwelt.',409);
@@ -179,10 +203,12 @@ async function updatePresence(db, world, id, position, timestamp, clock, bypass 
       || !X.onLand(position) || Math.abs(position.heading)>Math.PI+0.01) throw new GameError('Ungültige Kartenposition.');
   for (let attempt=0;attempt<8;attempt++) {
     const stand=await anwesenheitLesen(db,timestamp,attempt?0:1000);
-    const players=Object.fromEntries(Object.entries(stand.eintraege).filter(([pid,v])=>world.players[pid]&&timestamp-v.updatedAt<AUSGANG_MS));
+    const players=Object.fromEntries(Object.entries(stand.eintraege).filter(([pid,v])=>world.players[pid]&&timestamp-v.updatedAt<ORT_BEHALTEN_MS));
     const weg=stand.gemerkt?[]:Object.keys(stand.eintraege).filter((pid)=>pid!==id&&!players[pid]);
     const peers=()=>Object.values(players).filter(v=>v.id!==id&&timestamp-v.updatedAt<SICHTBAR_MS).map(({credit,spawnAt,...peer})=>peer);
-    const layout=X.layout(world.territories),previous=players[id]?.spawnAt===p.lastJoinAt?players[id]:null;
+    /* Weiter geht es immer vom zuletzt gemeldeten Ort - auch nach 'join',
+       denn der setzt den Startpunkt auf genau diesen Ort. */
+    const layout=X.layout(world.territories),previous=letzterStand(players[id],timestamp);
     let from=previous||p.spawn||X.outside(X.SPAWN,layout);
     if(layout.some(g=>g.ownerId!==id&&X.inside(from,g)))from=X.outside(from,layout);
     const credit=previous?Math.min(LAUF_VORRAT,(previous.credit||0)+Math.max(0,timestamp-previous.updatedAt)/1000*LAUF_TEMPO):LAUF_VORRAT,distance=Math.hypot(position.x-from.x,position.z-from.z);
@@ -325,6 +351,7 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
         const welt=await presenzWelt(db,id,timestamp);
         return await updatePresence(presenceStore||speicher('hgh-gehstockmon-presence'),welt,id,body.position,timestamp,now,bypass);
       }
+      const zuletzt = body.op === 'join' ? await eigenerEintrag(presenceStore || speicher('hgh-gehstockmon-presence'), id) : null;
       for (let attempt = 0; attempt < 8; attempt++) {
         const entry = await db.getWithMetadata(KEY, { type: 'json', consistency: 'strong' });
         const world = entry ? clone(entry.data) : initialWorld(timestamp);
@@ -374,7 +401,7 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
            wurde jedes Mal neu gesetzt und nie abgelegt, der Beutel blieb auf
            null, und der Wochenboss war schlicht unerreichbar. */
         X.zerhackerUhrStellen(p, timestamp);
-        if(body.op==='join'){p.dailyDelivery=E.deliverDaily(p);p.lastJoinAt=timestamp;p.spawn=X.outside(X.SPAWN,X.layout(world.territories));}
+        if(body.op==='join'){p.dailyDelivery=E.deliverDaily(p);p.lastJoinAt=timestamp;p.spawn=startpunkt(zuletzt,world,id,timestamp);}
         const receipts = p.actionReceipts || [], receipt = receipts.find((r) => r.id === body.requestId && r.op === body.op);
         if (receipt) return json(publicResult(world, id, timestamp, { ...receipt.extra, duplicate: true, adminOverride: bypass }));
         let extra = {joining:body.op==='join'};
