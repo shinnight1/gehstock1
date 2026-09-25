@@ -16,7 +16,11 @@
         if (!previous) return Promise.reject(new Error('Es ist keine Aktion offen.'));
         op = previous.op;
       }
-      var mutation = ['arena_start','arena_turn','arena_flee','collect','incubate','hatch','upgrade','defend'].concat(SG.gehstockmon.abenteuer?SG.gehstockmon.abenteuer.OPS:[]).indexOf(op) >= 0;
+      /* Dieselbe Liste wie auf dem Server (X.SPIELZUEGE). Eine eigene Liste
+         hier hatte Kampfplan und Besatzungen vergessen - deren Speichern
+         scheiterte jedes Mal mit "Aktionskennung fehlt". */
+      var spielzuege = SG.gehstockmon.abenteuer && SG.gehstockmon.abenteuer.SPIELZUEGE || [];
+      var mutation = spielzuege.indexOf(op) >= 0;
       if (mutation && previous && previous.op !== op) return Promise.reject(new Error('Prüfe zuerst die offene Aktion unter Spielerwelt.'));
       data = JSON.parse(JSON.stringify(mutation && previous ? previous.data : data || {}));
       if (mutation) {

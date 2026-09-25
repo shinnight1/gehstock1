@@ -344,7 +344,14 @@ const SG = { rules: {} };
       if (!egg || typeof egg.id !== 'string' || seen[egg.id] || !D.FELDER.some(function (f) { return f.id === egg.territoryId; })) return;
       seen[egg.id] = true;
       var start = number(egg.startedAt, null);
-      st.eggs.push({ id: egg.id, territoryId: egg.territoryId, producedAt: number(egg.producedAt, now), startedAt: start, readyAt: start === null ? null : start + E.HATCH_TIME });
+      var sauber = { id: egg.id, territoryId: egg.territoryId, producedAt: number(egg.producedAt, now), startedAt: start, readyAt: start === null ? null : start + E.HATCH_TIME };
+      /* Ein Ei kann eine Mindest-Seltenheit tragen (etwa aus der Serien-Truhe)
+         und sagen, woher es kommt. Beides ginge sonst beim naechsten Laden
+         verloren. */
+      var mindestens = Math.floor(Number(egg.mindestens) || 0);
+      if (mindestens > 0) sauber.mindestens = Math.min(D.SELTENHEITEN.length - 1, mindestens);
+      if (typeof egg.art === 'string' && /^[a-z]{1,16}$/.test(egg.art)) sauber.art = egg.art;
+      st.eggs.push(sauber);
     });
     st.outposts = {};
     st.geschafft.forEach(function (id) { st.outposts[id] = E.outpost(old.outposts && old.outposts[id], now); });
@@ -398,55 +405,77 @@ const SG = { rules: {} };
     if (st.eggs.filter(function (e) { return e.startedAt !== null; }).length >= frei) throw new Error('Alle ' + frei + ' Brutplätze sind belegt.');
     egg.startedAt = Math.max(now, st.clockAt); egg.readyAt = egg.startedAt + E.HATCH_TIME; return egg;
   };
-  /* Was aus einem Ei kommt, entscheidet die Seltenheit - und das, was in der
-     Sammlung noch fehlt. Ein Mon, das man schon hat, kann wiederkommen, zieht
-     dabei aber nur noch einen Bruchteil des Gewichts auf sich: am Anfang ist
-     fast jedes Ei ein neues Gesicht, gegen Ende sind es lauter Zwillinge.
-     Deshalb rechnet die Anzeige mit demselben Vorrat wie das Schluepfen
-     selbst, statt feste Prozente hinzuschreiben, die nach dem dritten Ei
-     nicht mehr stimmen. */
-  E.SCHLUPF_GEWICHTE = [8, 5, 3.8, 3, 1, .25, .05];
-  E.DOPPEL_GEWICHT = .35;
-  E.schlupfVorrat = function (st) {
-    return D.KATALOG.map(function (k) {
-      var doppelt = st.besitz.indexOf(k.id) >= 0;
-      return { mon: k, doppelt: doppelt, gewicht: E.SCHLUPF_GEWICHTE[k.seltenheit] * (doppelt ? E.DOPPEL_GEWICHT : 1) };
+  /* Was aus einem Ei kommt, entscheidet allein die Seltenheit - mit festen
+     Quoten fuer alle, egal was man schon hat. Innerhalb einer Seltenheit ist
+     jedes Mon gleich wahrscheinlich. Frueher zog ein Mon, das man schon
+     hatte, nur ein Drittel des Gewichts auf sich: die Quoten verschoben sich
+     mit jeder Sammlung, und niemand wusste, was ein Ei eigentlich wert ist. */
+  E.SCHLUPF_QUOTEN = [40, 25, 17, 11, 5, 1.6, 0.4];
+  /* Der Garantie-Zaehler: spaetestens das zehnte Ei ohne Episches bringt ein
+     Episches, spaetestens das vierzigste ohne Legendaeres ein Legendaeres.
+     Damit ist auch ein schlechtes Ei ein Schritt nach vorn. */
+  E.GARANTIEN = [{ ab: 3, nach: 10 }, { ab: 4, nach: 40 }];
+  /* Eins von vierundsechzig Mons schluepft schimmernd - eine seltene
+     Farbvariante, rein zum Ansehen. */
+  E.SCHIMMER_CHANCE = 1 / 64;
+  E.garantieStand = function (st) {
+    var g = Array.isArray(st && st.garantie) ? st.garantie : [];
+    return E.GARANTIEN.map(function (v, i) {
+      var seit = Math.max(0, Math.min(v.nach - 1, Math.floor(Number(g[i]) || 0)));
+      return { ab: v.ab, nach: v.nach, seit: seit, noch: v.nach - seit };
     });
   };
   E.schlupfChancen = function (st) {
-    var vorrat = E.schlupfVorrat(st);
-    var summe = vorrat.reduce(function (s, v) { return s + v.gewicht; }, 0);
+    var summe = E.SCHLUPF_QUOTEN.reduce(function (s, v) { return s + v; }, 0);
     return D.SELTENHEITEN.map(function (r, i) {
-      var teil = vorrat.filter(function (v) { return v.mon.seltenheit === i; });
-      var gewicht = teil.reduce(function (s, v) { return s + v.gewicht; }, 0);
-      var neu = teil.filter(function (v) { return !v.doppelt; });
-      return { name: r.name, farbe: r.farbe, offen: neu.length,
-        anteil: summe ? gewicht / summe : 0,
-        neuAnteil: summe ? neu.reduce(function (s, v) { return s + v.gewicht; }, 0) / summe : 0 };
-    }).filter(function (v) { return v.anteil > 0; });
+      var alle = D.KATALOG.filter(function (k) { return k.seltenheit === i; });
+      var offen = st && st.besitz ? alle.filter(function (k) { return st.besitz.indexOf(k.id) < 0; }).length : alle.length;
+      return { name: r.name, farbe: r.farbe, offen: offen, anzahl: alle.length, anteil: (E.SCHLUPF_QUOTEN[i] || 0) / summe };
+    }).filter(function (v) { return v.anteil > 0 && v.anzahl > 0; });
+  };
+  /* Mehrere unabhaengige Zufallszahlen aus einem Aufruf. Wer eine feste Zahl
+     uebergibt (die Tests), bekommt sie als erste Ziehung und danach eine
+     feste Folge - so bleibt jedes Ergebnis wiederholbar. */
+  E.zufallsfolge = function (random) {
+    if (typeof random === 'function') return function () { return Math.max(0, Math.min(0.9999999, Number(random()) || 0)); };
+    var erste = Number.isFinite(random) ? Math.max(0, Math.min(0.9999999, random)) : Math.random();
+    var saat = Math.floor(erste * 4294967296) >>> 0, zug = 0;
+    return function () {
+      if (zug++ === 0) return erste;
+      saat = (Math.imul(saat ^ 0x9e3779b9, 1664525) + 1013904223) >>> 0;
+      return saat / 4294967296;
+    };
   };
   /* Ein Zwilling geht nicht verloren: Er steckt seine Kraft in das Mon, das
      schon da ist, und hebt es eine Runenstufe. Steht es schon auf der
      hoechsten, zerfaellt er zu Runen seiner eigenen Seltenheit - und die
      sind umso wertvoller, je seltener er war. */
   E.hatch = function (st, id, now, random) {
-    var X = SG.gehstockmon.abenteuer;
+    var X = SG.gehstockmon.abenteuer, zufall = E.zufallsfolge(random);
     var egg = st.eggs.find(function (e) { return e.id === id; });
     if (!egg || egg.readyAt === null || now < egg.readyAt) throw new Error('Das Ei ist noch nicht fertig ausgebrütet.');
-    var vorrat = E.schlupfVorrat(st), chosen = vorrat[vorrat.length - 1];
-    var total = vorrat.reduce(function (sum, v) { return sum + v.gewicht; }, 0);
-    var pick = Math.max(0, Math.min(0.9999999, Number.isFinite(random) ? random : Math.random())) * total;
-    for (var i = 0; i < vorrat.length; i++) { pick -= vorrat[i].gewicht; if (pick < 0) { chosen = vorrat[i]; break; } }
+    var summe = E.SCHLUPF_QUOTEN.reduce(function (s, v) { return s + v; }, 0), wurf = zufall() * summe, rang = E.SCHLUPF_QUOTEN.length - 1;
+    for (var i = 0; i < E.SCHLUPF_QUOTEN.length; i++) { wurf -= E.SCHLUPF_QUOTEN[i]; if (wurf < 0) { rang = i; break; } }
+    var gewuerfelt = rang, stand = E.garantieStand(st), boden = Math.max(0, Math.floor(Number(egg.mindestens) || 0));
+    E.GARANTIEN.forEach(function (g, i) { if (stand[i].seit >= g.nach - 1) boden = Math.max(boden, g.ab); });
+    rang = Math.max(rang, Math.min(boden, D.SELTENHEITEN.length - 1));
+    st.garantie = E.GARANTIEN.map(function (g, i) { return rang >= g.ab ? 0 : stand[i].seit + 1; });
+    var pool = [];
+    for (var r = rang; r >= 0 && !pool.length; r--) pool = D.KATALOG.filter(function (k) { return k.seltenheit === r; });
+    var mon = pool[Math.min(pool.length - 1, Math.floor(zufall() * pool.length))];
+    var ergebnis = { mon: mon, neu: st.besitz.indexOf(mon.id) < 0, stufe: 0, runen: 0, rang: mon.seltenheit,
+      garantiert: mon.seltenheit > gewuerfelt, schimmernd: zufall() < E.SCHIMMER_CHANCE, schimmerNeu: false };
     st.eggs = st.eggs.filter(function (e) { return e.id !== id; });
-    var mon = chosen.mon;
-    if (!chosen.doppelt) { st.besitz.push(mon.id); st.beschwoerungen++; return { mon: mon, neu: true, stufe: 0, runen: 0 }; }
+    st.schimmernd = st.schimmernd || {};
+    if (ergebnis.schimmernd && !st.schimmernd[mon.id]) { st.schimmernd[mon.id] = true; ergebnis.schimmerNeu = true; }
+    if (ergebnis.neu) { st.besitz.push(mon.id); st.beschwoerungen++; return ergebnis; }
     st.monUpgrades = st.monUpgrades || {};
     var stufe = X.upgradeLevel(st.monUpgrades[mon.id]);
-    if (stufe < X.UPGRADE_LIMIT) { st.monUpgrades[mon.id] = stufe + 1; return { mon: mon, neu: false, stufe: stufe + 1, runen: 0 }; }
+    if (stufe < X.UPGRADE_LIMIT) { st.monUpgrades[mon.id] = stufe + 1; ergebnis.stufe = stufe + 1; return ergebnis; }
     st.runes = st.runes || D.SELTENHEITEN.map(function () { return 0; });
-    var runen = X.UPGRADE_LIMIT;
-    st.runes[mon.seltenheit] = Math.min(9999, (st.runes[mon.seltenheit] || 0) + runen);
-    return { mon: mon, neu: false, stufe: stufe, runen: runen };
+    ergebnis.stufe = stufe; ergebnis.runen = X.UPGRADE_LIMIT;
+    st.runes[mon.seltenheit] = Math.min(9999, (st.runes[mon.seltenheit] || 0) + ergebnis.runen);
+    return ergebnis;
   };
   E.upgrade = function (st, post, now) {
     E.settle(st, post, now); var price = E.LEVELS[post.level].cost;
@@ -507,17 +536,14 @@ const SG = { rules: {} };
 (function(SG){
   var D=SG.gehstockmon.daten,E=SG.gehstockmon.wirtschaft,H=SG.gehstockmon.zeiten,X=SG.gehstockmon.abenteuer={};
   X.DUNGEON_OPS=['dungeon_create','dungeon_join','dungeon_ready','dungeon_start','dungeon_turn','dungeon_leave'];
-  /* Wo ein Mon im Dienst steht. Bisher hielt eine einzige Truppe her: dieselben
-     vier griffen an und verteidigten jeden Aussenposten gleichzeitig. Wer 57
-     Mons sammelte, benutzte vier davon.
+  /* Wo ein Mon im Dienst steht. Jeder Aussenposten kann seine eigene
+     Besatzung haben, und dasselbe Mon darf dabei an mehreren Stellen zugleich
+     stehen - im Kampfteam und auf beliebig vielen Posten. Die fruehere Regel
+     "jedes Mon nur an einer Stelle" ist gefallen: sie zwang dazu, schwache
+     Mons auf Posten zu stellen, nur weil die starken schon woanders standen.
 
-     Jetzt hat jeder Aussenposten seine eigene Besatzung, und kein Mon steht an
-     zwei Stellen zugleich - weder auf zwei Gebieten noch zusaetzlich im
-     Kampfteam. Mit neun Gebieten sind das vierzig Mons im Dienst statt vier.
-
-     Ein Gebiet ohne eigene Besatzung wird vom Kampfteam gehalten. Das ist der
-     bisherige Zustand und damit der sanfte Einstieg: niemand verliert Land,
-     nur weil er noch keine Besatzung gesetzt hat. */
+     Ein Gebiet ohne eigene Besatzung wird vom Kampfteam gehalten - der sanfte
+     Einstieg: niemand verliert Land, nur weil er keine Besatzung gesetzt hat. */
   X.TRUPPE=4;
   X.posten=function(p,id){
     var t=p&&p.posten&&p.posten[id];
@@ -538,20 +564,29 @@ const SG = { rules: {} };
     });
     return gefunden;
   };
+  /* Alle Stellen, an denen ein Mon gerade steht - es koennen mehrere sein. */
+  X.einsatzOrte=function(p,monId){
+    if(!p)return [];
+    var orte=(p.truppe||[]).indexOf(monId)>=0?['kampfteam']:[];
+    Object.keys(p.posten||{}).forEach(function(id){if((p.posten[id]||[]).indexOf(monId)>=0)orte.push(Number(id));});
+    return orte;
+  };
   X.einsatzText=function(ort){
     if(ort==='kampfteam')return 'im Kampfteam';
     return Number.isFinite(ort)?'auf '+(D.FELDER[ort-1]?D.FELDER[ort-1].name:'Gebiet '+ort):'';
   };
-  /* Prueft eine Aufstellung: vier verschiedene eigene Mons, und keines davon
-     steht schon woanders im Dienst. */
-  X.truppePruefen=function(p,squad,ziel){
+  X.einsatzListe=function(orte){
+    var namen=(orte||[]).map(function(o){return o==='kampfteam'?'Kampfteam':(D.FELDER[o-1]?D.FELDER[o-1].name:'Gebiet '+o);});
+    return namen.length>1?namen.slice(0,-1).join(', ')+' und '+namen[namen.length-1]:namen.join('');
+  };
+  /* Prueft eine Aufstellung: vier verschiedene Mons aus der eigenen Sammlung.
+     Wo sie sonst noch stehen, spielt keine Rolle mehr. */
+  X.truppePruefen=function(p,squad){
     if(!Array.isArray(squad)||squad.length!==X.TRUPPE||new Set(squad).size!==X.TRUPPE)
       return 'Wähle vier verschiedene Mons.';
     for(var i=0;i<squad.length;i++){
       var id=squad[i];
       if(typeof id!=='string'||!D.mon(id)||(p.besitz||[]).indexOf(id)<0)return 'Wähle vier Mons aus deiner Sammlung.';
-      var ort=X.einsatzOrt(p,id,ziel);
-      if(ort!==null&&ort!==undefined)return D.mon(id).name+' steht schon '+X.einsatzText(ort)+'. Jedes Mon kann nur an einer Stelle Dienst tun.';
     }
     return null;
   };
@@ -563,46 +598,41 @@ const SG = { rules: {} };
     var st=A.stats(m);
     return st.hp+st.ang*4;
   };
-  /* Besatzungen von selbst verteilen. Neun Gebiete mit je vier Plaetzen von
-     Hand zu besetzen sind sechsunddreissig Auswahlen - das macht niemand
-     zweimal. Diese Verteilung nimmt die freien Mons, legt die staerksten auf
-     die wertvollsten Posten und achtet darauf, dass auf jedem Posten moeglichst
-     jede Rolle einmal steht: ein Wall haelt, ein Pfleger heilt, eine Schneide
-     trifft, ein Stoerer bricht die Deckung.
-
-     Angeruehrt wird nur, was frei ist. Wer schon eine Besatzung gesetzt hat,
-     behaelt sie - sonst raeumte ein Knopf die eigene Planung ab. */
-  X.autoBesetzen=function(p,gebiete){
-    var frei=(p.besitz||[]).filter(function(id){
-      var ort=X.einsatzOrt(p,id);
-      return ort===null||ort===undefined;
-    }).sort(function(a,b){return X.kampfwert(p,b)-X.kampfwert(p,a);});
-    /* Wertvollste Posten zuerst: hoehere Ausbaustufe, dann schwierigeres Feld. */
-    var offen=(gebiete||[]).filter(function(g){return !X.posten(p,g.id);})
-      .sort(function(a,b){return (b.level||1)-(a.level||1)||b.id-a.id;});
-    var ergebnis=[];
-    offen.forEach(function(g){
-      if(frei.length<X.TRUPPE)return;
-      var gewaehlt=[],rollen={};
-      /* Erst je Rolle den staerksten, dann auffuellen. */
-      frei.forEach(function(id){
-        if(gewaehlt.length>=X.TRUPPE)return;
-        var typ=D.mon(id).typ;
-        if(rollen[typ])return;
-        rollen[typ]=true;gewaehlt.push(id);
-      });
-      frei.forEach(function(id){
-        if(gewaehlt.length>=X.TRUPPE||gewaehlt.indexOf(id)>=0)return;
-        gewaehlt.push(id);
-      });
-      if(gewaehlt.length<X.TRUPPE)return;
-      gewaehlt.forEach(function(id){frei.splice(frei.indexOf(id),1);});
-      ergebnis.push({id:g.id,squad:gewaehlt});
+  /* Die staerkste Vierertruppe aus der ganzen Sammlung: erst je Rolle die
+     staerkste - ein Wall haelt, ein Pfleger heilt, eine Schneide trifft, ein
+     Stoerer bricht die Deckung -, dann mit den naechststaerksten auffuellen. */
+  X.staerksteTruppe=function(p){
+    var alle=(p.besitz||[]).filter(function(id){return !!D.mon(id);})
+      .sort(function(a,b){return X.kampfwert(p,b)-X.kampfwert(p,a);});
+    var gewaehlt=[],rollen={};
+    alle.forEach(function(id){
+      if(gewaehlt.length>=X.TRUPPE)return;
+      var typ=D.mon(id).typ;
+      if(rollen[typ])return;
+      rollen[typ]=true;gewaehlt.push(id);
     });
-    return ergebnis;
+    alle.forEach(function(id){if(gewaehlt.length<X.TRUPPE&&gewaehlt.indexOf(id)<0)gewaehlt.push(id);});
+    return gewaehlt.length===X.TRUPPE?gewaehlt:null;
+  };
+  /* Besatzungen von selbst setzen: jeder Posten ohne eigene Besatzung bekommt
+     die staerkste Truppe. Seit ein Mon an mehreren Stellen stehen darf, gibt
+     es nichts mehr zu verteilen - alle offenen Posten bekommen dieselben vier.
+     Wer schon eine Besatzung gesetzt hat, behaelt sie. */
+  X.autoBesetzen=function(p,gebiete){
+    var truppe=X.staerksteTruppe(p);if(!truppe)return [];
+    return (gebiete||[]).filter(function(g){return !X.posten(p,g.id);})
+      .sort(function(a,b){return (b.level||1)-(a.level||1)||b.id-a.id;})
+      .map(function(g){return {id:g.id,squad:truppe.slice()};});
   };
   X.STADT_OPS=['arena_rang','champion_fordern','tagwerk','findelei','brutplatz_kaufen','tausch_anbieten','tausch_annehmen','tausch_zuruecknehmen'];
   X.OPS=['survey','gather','trainer_start','quest_claim','shop_buy','equip','raid_start','raid_turn','raid_arena','raid_cancel','mon_upgrade','leuchtturm_spenden','zerhacker_schlagen','waffe_schleifen','panzer_anlegen','fehde_fordern','fehde_annehmen'].concat(X.STADT_OPS).concat(X.DUNGEON_OPS);
+  /* Jeder Spielzug, der den Spielstand aendert - eine Liste fuer Browser und
+     Server. Der Browser haengt nur an diese Zuege eine Kennung, und der
+     Server verlangt sie genau dafuer. Frueher fuehrte jede Seite ihre eigene
+     Liste, und Kampfplan und Besatzungen fehlten auf der Browser-Seite: jedes
+     Speichern scheiterte mit "Aktionskennung fehlt". Spaetere Dateien haengen
+     ihre Zuege hier an. */
+  X.SPIELZUEGE=['arena_start','arena_turn','arena_flee','collect','incubate','hatch','upgrade','defend','plan','besatzung','besatzung_auto'].concat(X.OPS);
   X.SPAWN={x:0,z:30};X.SPAWN_TIME=60*60000;
   X.UPGRADE_LIMIT=5;
   /* Der Leuchtturm ist das gemeinsame Bauwerk: alle zahlen darauf ein, und
@@ -731,7 +761,7 @@ const SG = { rules: {} };
   X.mon=function(p,id){var m=D.mon(id);if(!m)return m;
     var w=X.wesenVon&&X.wesenVon(p,id);
     return Object.assign({},m,{upgrade:X.upgradeLevel(p&&p.monUpgrades&&p.monUpgrades[id])},
-      w?{wesenId:w.id,wesen:w.name}:{});};
+      w?{wesenId:w.id,wesen:w.name}:{},p&&p.schimmernd&&p.schimmernd[id]?{schimmernd:true}:{});};
   X.DUNGEONS=[['Wurzelhöhle','Einfach','moosling',0,40],['Versunkene Grotte','Leicht','sumpfschnapper',35,105],['Kristallstollen','Mittel','donnerwidder',110,85],['Schattengewölbe','Schwer','runengolem',-80,-25],['Königsgrab','Sehr schwer','grabesritter',-110,-150],['Zeitenriss','Extrem','chronoschreiter',100,-95],['Abgrundtor','Apokalyptisch','endrichter',20,-130]].map(function(v,i){return{id:'dungeon-'+i,name:v[0],difficulty:v[1],bossId:v[2],x:v[3],z:v[4],rarity:i,reward:2+i%2};});
   X.SKINS=[{id:'wanderer',name:'Wanderer',color:'#ffffff',price:0},{id:'waldlaeufer',name:'Waldläufer',color:'#8ee6ad',price:150},{id:'frostwanderer',name:'Frostwanderer',color:'#83cfff',price:300},{id:'aschenritter',name:'Ascheritter',color:'#ff9576',price:500},{id:'trainermeister',name:'Trainermeister',color:'#ffe07b',quest:'trainer3'},{id:'runensucher',name:'Runensucher',color:'#bd90ff',quest:'gather6'},{id:'weltenwanderer',name:'Weltenwanderer',color:'#71ffe3',quest:'visit9'}];
   X.SKINS.push({id:'knochenkoenig',name:'Knochenkönig',color:'#f0dfb5',price:2400},{id:'leerenreaper',name:'Leerenschnitter',color:'#ad79ff',price:5000},{id:'drachenritter',name:'Drachenritter',color:'#ff6254',price:8000});
@@ -847,7 +877,12 @@ const SG = { rules: {} };
      reift nur waehrend der Oeffnungszeiten, genau wie die Eier auf einem
      Aussenposten - nachts und am Wochenende passiert nichts. */
   X.TAGWERK_ZEIT=2*3600000;X.TAGWERK_LOHN=80;X.TAGWERK_VORRAT=3;
-  X.FINDELEI_ZEIT=4*3600000;X.FINDELEI_FELD=6;
+  /* Das Findelhaus gab frueher alle vier geoeffneten Stunden ein Ei - wer
+     sein letztes Gebiet am Vormittag verlor, bekam das erste frueh am
+     naechsten Tag, und in der Testzone nie. Jetzt ist es eins je geoeffneter
+     Stunde, bis zu zwei liegen bereit, und wer neu dazukommt, findet sofort
+     eins vor. */
+  X.FINDELEI_ZEIT=3600000;X.FINDELEI_VORRAT=2;X.FINDELEI_FELD=6;
   function reif(stand,now,dauer,hoechstens){
     if(!Number.isFinite(stand))return {fertig:0,stand:now};
     var offen=H.openTime(now)-H.openTime(stand),n=Math.max(0,Math.floor(offen/dauer));
@@ -864,13 +899,22 @@ const SG = { rules: {} };
     var voll=H.openTime(now)-X.TAGWERK_VORRAT*X.TAGWERK_ZEIT;
     p.tagwerkAt=H.productionAt(Math.max(H.openTime(p.tagwerkAt),voll)+X.TAGWERK_ZEIT);
   };
-  X.findeleiFertig=function(p,now){
-    return Number.isFinite(p&&p.findeleiAt)&&H.openTime(now)-H.openTime(p.findeleiAt)>=X.FINDELEI_ZEIT;
-  };
+  X.findeleiStand=function(p,now){return reif(p&&p.findeleiAt,now,X.FINDELEI_ZEIT,X.FINDELEI_VORRAT);};
+  X.findeleiFertig=function(p,now){return X.findeleiStand(p,now).fertig>0;};
   X.findeleiWartezeit=function(p,now){
-    if(!Number.isFinite(p&&p.findeleiAt))return 0;
-    return Math.max(0,H.productionAt(H.openTime(p.findeleiAt)+X.FINDELEI_ZEIT)-now);
+    var stand=p&&p.findeleiAt;if(!Number.isFinite(stand))return 0;
+    if(X.findeleiStand(p,now).fertig>=X.FINDELEI_VORRAT)return 0;
+    var offen=H.openTime(now)-H.openTime(stand),bis=(Math.floor(Math.max(0,offen)/X.FINDELEI_ZEIT)+1)*X.FINDELEI_ZEIT;
+    return Math.max(0,H.productionAt(H.openTime(stand)+bis)-now);
   };
+  /* Nimmt genau ein Ei heraus und laesst angefangene Zeit stehen. */
+  X.findeleiVerbrauchen=function(p,now){
+    var voll=H.openTime(now)-X.FINDELEI_VORRAT*X.FINDELEI_ZEIT;
+    p.findeleiAt=H.productionAt(Math.max(H.openTime(p.findeleiAt),voll)+X.FINDELEI_ZEIT);
+  };
+  /* Ein Stand, bei dem schon so viele fertig sind: fuer neue Spieler und die
+     Testzone. */
+  X.schonReif=function(now,dauer,anzahl){return H.productionAt(Math.max(0,H.openTime(now)-dauer*anzahl));};
 
   /* Der Tauschposten in Stockhafen. Es gibt Zwillinge, es gibt Wesen, es gibt
      57 Mons - aber bisher keinen Weg, ein misslungenes Wesen loszuwerden oder
@@ -890,8 +934,8 @@ const SG = { rules: {} };
     /* Auch eine Gebietsbesatzung ist Dienst. Vorher sperrte nur das Kampfteam,
        und wer ein Mon von einem Aussenposten weggab, liess dort eine
        Verteidigung stehen, die ihm nicht mehr gehoerte. */
-    var ort=X.einsatzOrt(p,gebe.id);
-    if(ort!==null&&ort!==undefined)return gebe.name+' steht '+X.einsatzText(ort)+'. Zieh es erst ab.';
+    var orte=X.einsatzOrte(p,gebe.id);
+    if(orte.length)return gebe.name+' steht im Dienst ('+X.einsatzListe(orte)+'). Zieh es erst ab.';
     return null;
   };
 
@@ -985,16 +1029,14 @@ const SG = { rules: {} };
       var alt=old.plaene&&old.plaene[id];
       if(A.planGueltig(alt))p.plaene[id]=alt.map(function(z){return z.slice(0,2);});
     });
-    /* Besatzungen ueberleben nur, solange sie vollstaendig sind, dem Spieler
-       gehoeren und sich nirgends ueberschneiden. Ein getauschtes oder
-       verschenktes Mon raeumt seinen Posten damit von selbst. */
-    p.posten={};var belegt={};
-    (p.truppe||[]).forEach(function(id){belegt[id]=true;});
+    /* Besatzungen ueberleben nur, solange sie vollstaendig sind und dem
+       Spieler gehoeren. Ein getauschtes oder verschenktes Mon raeumt seinen
+       Posten damit von selbst. Ueberschneiden duerfen sie sich. */
+    p.posten={};
     D.FELDER.forEach(function(f){
       var t=old.posten&&old.posten[f.id];
       if(!Array.isArray(t)||t.length!==X.TRUPPE||new Set(t).size!==X.TRUPPE)return;
-      if(t.some(function(id){return typeof id!=='string'||!D.mon(id)||p.besitz.indexOf(id)<0||belegt[id];}))return;
-      t.forEach(function(id){belegt[id]=true;});
+      if(t.some(function(id){return typeof id!=='string'||!D.mon(id)||p.besitz.indexOf(id)<0;}))return;
       p.posten[f.id]=t.slice();
     });
     p.brutplaetze=X.gekaufteBrutplaetze(old);
@@ -1003,7 +1045,7 @@ const SG = { rules: {} };
     /* Wer zum ersten Mal in die Stadt kommt, faengt sofort an zu verdienen:
        beide Uhren starten jetzt, nicht bei null. */
     p.tagwerkAt=Number.isFinite(old.tagwerkAt)?old.tagwerkAt:now;
-    p.findeleiAt=Number.isFinite(old.findeleiAt)?old.findeleiAt:now;
+    p.findeleiAt=Number.isFinite(old.findeleiAt)?old.findeleiAt:X.schonReif(now,X.FINDELEI_ZEIT,1);
     p.championSeit=Number.isFinite(old.championSeit)?old.championSeit:null;
     p.championTitel=Math.max(0,Math.floor(Number(old.championTitel)||0));return p;
   };
@@ -1149,7 +1191,7 @@ const SG = { rules: {} };
   };
   function unit(mon, side, i, bonus) {
     var s = A.stats(mon), hp = Math.round(s.hp * (1 + bonus)), laden = A.ladungen(mon), pause = A.powerPause(mon);
-    return { uid: side + i, monId: mon.id, name: mon.name, role: mon.typ, skill: D.faehigkeitVon(mon), wesen: mon.wesen || null, maxHp: hp, hp: hp, ang: Math.round(s.ang * (1 + bonus / 2)), speed: s.tempo, powerReady: 1, charges: laden, maxCharges: laden, powerPause: pause, shield: 0, weakened: false, dornen: false, geschaerft: false, plan: mon.plan || null };
+    return { uid: side + i, monId: mon.id, name: mon.name, role: mon.typ, skill: D.faehigkeitVon(mon), wesen: mon.wesen || null, maxHp: hp, hp: hp, ang: Math.round(s.ang * (1 + bonus / 2)), speed: s.tempo, powerReady: 1, charges: laden, maxCharges: laden, powerPause: pause, shield: 0, weakened: false, dornen: false, geschaerft: false, plan: mon.plan || null, schimmernd: !!mon.schimmernd };
   }
   /* Ein gespeicherter Verteidiger, wie ihn die Welt haelt. Runenstufe, Wesen
      und Plan gehoeren dazu, und zwar ueberall gleich: die Grosse Arena hat
@@ -1160,7 +1202,7 @@ const SG = { rules: {} };
     var X = SG.gehstockmon.abenteuer, w = X.wesen(e && e.wesen);
     return Object.assign({}, D.mon(e && (e.id || e.monId)) || D.KATALOG[0],
       { upgrade: X.upgradeLevel(e && e.upgrade), wesenId: w ? w.id : null, wesen: w ? w.name : null,
-        plan: A.planGueltig(e && e.plan) ? e.plan : null });
+        plan: A.planGueltig(e && e.plan) ? e.plan : null, schimmernd: !!(e && e.schimmernd) });
   };
   A.defenders = function (fieldId, saved) {
     if (saved && saved.length) return saved.map(function (e) { return A.ausSpeicher(e); });
@@ -1203,12 +1245,19 @@ const SG = { rules: {} };
     [['feind_schwach','special'],['kraft_bereit','power'], ['immer','strike']],
     [['kraft_bereit','power'],  ['ladung_da','special'],  ['immer','strike']]
   ];
+  /* Der Zuschlag der schweren Computergebiete auf KP (und halb auf Angriff).
+     Beim Weltenschlund stand hier +65 %: in 80 000 simulierten Kaempfen mit
+     dem staerksten moeglichen Team (drei Apokalyptische und ein Mythischer,
+     alle auf Runenstufe 5) gab es keinen einzigen Sieg - das Endgebiet war
+     nicht zu erobern. Mit +20 % schafft es nur genau dieses Team, und auch
+     das nicht immer; der Donnergrat verlangt mit +30 % noch Mythische. */
+  A.ENDGEBIET_BONUS = { 7: .22, 8: .3, 9: .2 };
   A.create = function (roster, enemies, options) {
     var o = options || {};
     return { id: o.id || 'local', territoryId: o.territoryId || 1, territoryVersion: o.version || 1,
       level: o.level || 1, revision: 0, round: 1, phase: 'choose', winner: null, settled: false,
       aussenseiter: o.aussenseiter || 0,
-      teams: [roster.map(function (k,i) { return unit(k,'wir',i,o.aussenseiter || 0); }), enemies.map(function (k,i) { return unit(k,'sie',i,SG.gehstockmon.wirtschaft.LEVELS[o.level || 1].bonus+(o.npcTerritory?(o.territoryId===9?.65:o.territoryId===8?.4:o.territoryId===7?.22:0):0)+(o.bonus||0)); })],
+      teams: [roster.map(function (k,i) { return unit(k,'wir',i,o.aussenseiter || 0); }), enemies.map(function (k,i) { return unit(k,'sie',i,SG.gehstockmon.wirtschaft.LEVELS[o.level || 1].bonus+(o.npcTerritory?(o.territoryId===9?A.ENDGEBIET_BONUS[9]:o.territoryId===8?A.ENDGEBIET_BONUS[8]:o.territoryId===7?A.ENDGEBIET_BONUS[7]:0):0)+(o.bonus||0)); })],
       active: [0,0], events: [], startedAt: o.now || Date.now(), lastActionAt: o.now || Date.now() };
   };
   function active(s, side) { return s.teams[side][s.active[side]]; }
@@ -1633,6 +1682,33 @@ const SG = { rules: {} };
     }
 
     return { schritte: schritte, sieger: sieger, einheiten: alle };
+  };
+})(SG);
+
+/* ------------------------------------------------------------------
+   GehstockMon - der Alltag auf der Insel.
+
+   Was jeden Schultag wiederkommt: Garantie-Zaehler und schimmernde Mons,
+   die Tagesaufgaben mit ihrer Serie, die Revanche und der Insel-Ticker.
+   Laeuft im Browser und auf dem Server (build.mjs haengt die Datei an die
+   gemeinsamen Regeln), darum ohne DOM.
+
+   Die Datei laedt im Browser vor 2-arena.js - sie darf die Arena erst in
+   Funktionen ansprechen, nicht beim Laden.
+   ------------------------------------------------------------------ */
+(function (SG) {
+  var R = SG.gehstockmon, D = R.daten, E = R.wirtschaft, H = R.zeiten, X = R.abenteuer;
+
+  /* Neue Felder im Spielstand. D.neuerStand baut den Stand bei jedem Laden
+     neu auf und laesst weg, was es nicht kennt - ohne diese Zeilen kaeme im
+     Browser weder der Garantie-Zaehler noch der Schimmer an. */
+  var vorher = D.neuerStand;
+  D.neuerStand = function (save, now) {
+    var p = vorher(save, now), old = save || {};
+    p.garantie = E.garantieStand(old).map(function (g) { return g.seit; });
+    p.schimmernd = {};
+    p.besitz.forEach(function (id) { if (old.schimmernd && old.schimmernd[id] === true) p.schimmernd[id] = true; });
+    return p;
   };
 })(SG);
 

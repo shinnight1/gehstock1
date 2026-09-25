@@ -126,7 +126,8 @@
         ? 'Du hältst mit ' + kopf.gebiete + ' Außenposten die meisten auf der Insel. Wer dich im Überfall schlägt, bekommt dafür ' + kopf.gold.toLocaleString('de-DE') + ' Gold obendrauf.'
         : kopf.name + ' hält mit ' + kopf.gebiete + ' Außenposten die meisten auf der Insel. Wer ihn im Überfall schlägt, bekommt ' + kopf.gold.toLocaleString('de-DE') + ' Gold obendrauf.'));
       drawer.appendChild(el('p', 'Das Kopfgeld wächst mit jedem Außenposten: ' + X.KOPFGELD_JE_GEBIET
-        + ' Gold je Gebiet, ab ' + X.KOPFGELD_AB + ' Gebieten Vorsprung. Es zahlt sich einmal aus und richtet sich danach neu.'));
+        + ' Gold je Gebiet. Es liegt auf dem, der allein die meisten hält, sobald es mindestens ' + X.KOPFGELD_AB
+        + ' sind. Jeder erfolgreiche Überfall auf ihn zahlt es aus - danach hat er zwei Stunden Schutz.'));
       drawer.appendChild(el('p', kopf.selbst
         ? 'Solange du vorn liegst, bist du das Ziel. Wer ein Ei bei sich trägt, verliert es im Überfall.'
         : 'Du musst ihn dafür auf der Insel finden und im Überfall schlagen - Waffenduell, dann Mon-Kampf.'));

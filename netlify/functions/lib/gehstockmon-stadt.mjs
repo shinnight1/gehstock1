@@ -55,7 +55,7 @@ function truppe(squad){
 export function aufstellung(p){
   return (p.truppe||[]).map(mid=>{
     const m=X.mon(p,mid);
-    return {id:mid,upgrade:m.upgrade,wesen:m.wesenId||null,plan:A.planOder(p.plaene&&p.plaene[mid])};
+    return {id:mid,upgrade:m.upgrade,wesen:m.wesenId||null,plan:A.planOder(p.plaene&&p.plaene[mid]),...(m.schimmernd?{schimmernd:true}:{})};
   });
 }
 function gegnerliste(world,id,now){
@@ -94,7 +94,7 @@ export function arenaStand(world,id,now){
       ohneGebiet:!world.territories.some(t=>t.ownerId===id),
       tagwerk:X.tagwerkStand(p,now).fertig,tagwerkMax:X.TAGWERK_VORRAT,
       tagwerkIn:X.tagwerkWartezeit(p,now),tagwerkLohn:X.TAGWERK_LOHN,
-      findelei:X.findeleiFertig(p,now),findeleiIn:X.findeleiWartezeit(p,now),
+      findelei:X.findeleiStand(p,now).fertig,findeleiMax:X.FINDELEI_VORRAT,findeleiIn:X.findeleiWartezeit(p,now),
       brutplaetze:X.brutplaetze(world.leuchtturm,p),gekauft:X.gekaufteBrutplaetze(p),
       preis:X.BRUTPLATZ_PREISE[X.gekaufteBrutplaetze(p)]||null},
     tausch:tauschliste(world,now).map(v=>({id:v.id,name:world.players[v.vonId]?.name||'Unbekannt',
@@ -177,9 +177,9 @@ export async function stadtAction({world,p,id,body,now,presence}){
     ohneGebiet();await amTor();
     if(!X.findeleiFertig(p,now))fail('Im Findelhaus liegt gerade kein Ei bereit.');
     if(p.eggs.length>=E.BAG_LIMIT)fail('Deine Bruttasche ist voll.');
-    p.findeleiAt=now;
-    p.eggs.push({id:'findel-'+now+'-'+(++p.eggSerial),territoryId:X.FINDELEI_FELD,producedAt:now,startedAt:null,readyAt:null});
-    extra.message='Das Findelhaus gibt dir ein Ei. Auch ohne Gebiet waechst deine Sammlung weiter.';
+    X.findeleiVerbrauchen(p,now);
+    p.eggs.push({id:'findel-'+now+'-'+(++p.eggSerial),territoryId:X.FINDELEI_FELD,producedAt:now,startedAt:null,readyAt:null,art:'findel'});
+    extra.message='Das Findelhaus gibt dir ein Ei. Auch ohne Gebiet wächst deine Sammlung weiter.';
     return extra;
   }
   if(op==='tausch_anbieten'){

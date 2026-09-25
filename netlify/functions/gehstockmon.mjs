@@ -21,7 +21,9 @@ function volatileStore() {
     },
   };
 }
-const mutations = ['arena_start', 'arena_turn', 'arena_flee', 'collect', 'incubate', 'hatch', 'upgrade', 'defend', 'plan', 'besatzung', 'besatzung_auto',...X.OPS];
+/* Dieselbe Liste, nach der der Browser seine Kennung anhaengt - sonst
+   scheitert jeder Zug, den nur eine Seite kennt. */
+const mutations = X.SPIELZUEGE;
 /* Verschenken und Nachlesen sind Verwaltung, kein Spielzug: sie brauchen
    keinen eigenen Spielstand und richten sich nicht nach den Oeffnungszeiten. */
 const ADMIN_OPS = ['admin_grant', 'admin_log'];
@@ -130,13 +132,22 @@ function verteidigungenPruefen(world) {
 function verteidigung(p, territoryId) {
   return X.besatzung(p, territoryId).map((mid) => {
     const m = X.mon(p, mid);
-    return { id: mid, upgrade: m.upgrade, wesen: m.wesenId || null, plan: A.planOder(p.plaene && p.plaene[mid]) };
+    return { id: mid, upgrade: m.upgrade, wesen: m.wesenId || null, plan: A.planOder(p.plaene && p.plaene[mid]), ...(m.schimmernd ? { schimmernd: true } : {}) };
   });
 }
 /* Nach jeder Aenderung an Truppe, Besatzung oder Planen: alle eigenen Gebiete
    auf den neuen Stand bringen. */
 function verteidigungenAuffrischen(world, p, id) {
-  for (const t of world.territories) if (t.ownerId === id) { t.defense = verteidigung(p, t.id); t.ownerName = p.name; t.version++; }
+  for (const t of world.territories) if (t.ownerId === id) {
+    const neu = verteidigung(p, t.id);
+    t.ownerName = p.name;
+    /* Die Version steigt nur, wenn sich die Verteidigung wirklich aendert.
+       Frueher stieg sie bei jedem Speichern: wer sein unveraendertes
+       Kampfteam noch einmal bestaetigte, machte damit jeden laufenden Angriff
+       auf seine Gebiete ungueltig - und das liess sich gezielt ausnutzen,
+       weil jeder sieht, wer gerade kaempft. */
+    if (JSON.stringify(neu) !== JSON.stringify(t.defense)) { t.defense = neu; t.version++; }
+  }
 }
 function validateSquad(p, squad) {
   if (!Array.isArray(squad) || squad.length !== 4 || new Set(squad).size !== 4 || squad.some((id) => typeof id !== 'string' || !p.besitz.includes(id) || !D.mon(id))) throw new GameError('Wähle vier verschiedene Mons aus deiner Sammlung.');
@@ -154,7 +165,11 @@ function publicResult(world, id, now, extra = {}) {
   const p = world.players[id];
   return { playerId: id, serverTime: now, access: accessFor(now, extra.adminOverride === true), mapVersion: world.mapVersion, dailyDelivery:extra.joining?p.dailyDelivery||0:0,profile: D.neuerStand(p, now), arena: p.arena || null,duel:p.duel||null,spawn:p.spawn,encounters:X.encounters(now,world.territories).filter(e=>!p.encounterClaims.includes(e.id)),
     ...dungeonResult(world,p), ...weltprojekte(world,id,now), ...arenaStand(world,id,now), territories: world.territories.map((t) => ({ id: t.id, ownerId: t.ownerId, ownerName: world.players[t.ownerId]?.name || t.ownerName, version: t.version, level: t.level,
-      defense: A.defenders(t.id, t.ownerId ? t.defense : null).map((k) => ({ id: k.id, name: k.name, upgrade:k.upgrade||0 })),
+      /* Plan und Wesen gehoeren dazu: Aufklaeren soll zeigen, wie die Truppe
+         kaempft. Frueher fehlten beide, und bei jedem Spielergebiet stand
+         "kein eigener Plan", obwohl dort sehr wohl einer galt. */
+      defense: A.defenders(t.id, t.ownerId ? t.defense : null).map((k) => ({ id: k.id, name: k.name, upgrade:k.upgrade||0,
+        wesen: k.wesenId || null, plan: k.plan || null, ...(k.schimmernd ? { schimmernd: true } : {}) })),
       eggStock: t.ownerId === id ? t.eggStock : 0, eggAt: t.ownerId === id ? t.eggAt : null })),
     reports: world.reports.filter((r) => r.attackerId === id || r.defenderId === id).slice(-20), ...extra };
 }
@@ -386,6 +401,12 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
             const luecken=D.SELTENHEITEN.map((_,rang)=>D.KATALOG.filter(k=>k.seltenheit===rang).pop()).filter(Boolean).map(k=>k.id);
             world.players[id].besitz=D.KATALOG.map(k=>k.id).filter(mid=>!luecken.includes(mid));
             world.players[id].gold=50000;
+            /* Tagwerk und Findelhaus sind sofort voll. Ausserhalb der
+               Oeffnungszeiten reift dort nichts nach, und die Testzone
+               vergisst sich nach fuenf Minuten - ohne volle Vorraete liessen
+               sich beide in der Testzone nie ausprobieren. */
+            world.players[id].tagwerkAt=X.schonReif(timestamp,X.TAGWERK_ZEIT,X.TAGWERK_VORRAT);
+            world.players[id].findeleiAt=X.schonReif(timestamp,X.FINDELEI_ZEIT,X.FINDELEI_VORRAT);
             /* Zwei davon sind schon durch. Die Testzone vergisst sich nach
                fuenf Minuten Ruhe - eine Stunde Brutzeit abzuwarten geht darin
                gar nicht, und ohne fertiges Ei liesse sich das Schluepfen nie
@@ -429,8 +450,9 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
                und laesst alles stehen, was schon gesetzt ist. */
             const meine = world.territories.filter((t) => t.ownerId === id);
             if (!meine.length) throw new GameError('Du hältst noch keinen Außenposten.');
+            if (meine.every((t) => X.posten(p, t.id))) throw new GameError('Alle deine Außenposten haben schon eine eigene Besatzung.');
             const plan = X.autoBesetzen(p, meine.map((t) => ({ id: t.id, level: t.level })));
-            if (!plan.length) throw new GameError('Dafür sind nicht genug freie Mons da. Jeder Posten braucht vier, die nirgends sonst Dienst tun.');
+            if (!plan.length) throw new GameError('Für eine Besatzung brauchst du vier Mons.');
             for (const eintrag of plan) p.posten[eintrag.id] = eintrag.squad.slice();
             verteidigungenAuffrischen(world, p, id);
             extra.message = plan.length === 1
@@ -490,20 +512,25 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
           }
           if (body.op === 'incubate') { E.incubate(p,body.eggId,timestamp,X.brutplaetze(world.leuchtturm,p)); extra.message = 'Die Brutzeit hat begonnen: 1 Stunde.'; }
           if (body.op === 'hatch') {
-            const schlupf = E.hatch(p,body.eggId,timestamp,draw), mon = schlupf.mon;
+            /* Seltenheit, Mon, Schimmer und Wesen sind vier eigene Ziehungen.
+               Frueher bestimmte eine einzige Zahl Mon und Wesen zugleich, und
+               dasselbe Mon kam damit fast immer mit demselben Wesen. */
+            const schlupf = E.hatch(p,body.eggId,timestamp,random), mon = schlupf.mon;
             p.progress.hatched++; wochenschritt(world, p, id, 'eier', timestamp); fehdeSchritt(world, id, 'ei', timestamp);
-            X.wesenZuweisen(p, mon.id, draw); extra.monId = mon.id; extra.schlupf = schlupf;
+            X.wesenZuweisen(p, mon.id, random()); extra.monId = mon.id;
+            extra.schlupf = { monId: mon.id, neu: schlupf.neu, stufe: schlupf.stufe, runen: schlupf.runen, rang: schlupf.rang,
+              garantiert: schlupf.garantiert, schimmernd: schlupf.schimmernd, schimmerNeu: schlupf.schimmerNeu };
             /* Ein Zwilling ist kein Trostpreis: entweder hebt er die Runenstufe
                des Mons, das schon da ist, oder er zerfaellt zu Runen. */
-            extra.message = schlupf.neu
+            extra.message = (schlupf.schimmerNeu ? '✨ Schimmernd! ' : '') + (schlupf.neu
               ? mon.name + ' ist geschlüpft' + (X.wesenVon(p, mon.id) ? ' - ein ' + X.wesenVon(p, mon.id).name + 'es Wesen!' : '!')
               : schlupf.runen
                 ? 'Ein zweiter ' + mon.name + '! Er steht schon auf Runenstufe 5 - sein Zwilling zerfällt zu ' + schlupf.runen + ' ' + D.SELTENHEITEN[mon.seltenheit].name + '-Runen.'
-                : 'Ein zweiter ' + mon.name + '! Beide werden eins: Runenstufe ' + schlupf.stufe + '/' + X.UPGRADE_LIMIT + ', jetzt +' + Math.round(schlupf.stufe * A.UPGRADE_BONUS * 100) + ' % KP und Angriff.';
+                : 'Ein zweiter ' + mon.name + '! Beide werden eins: Runenstufe ' + schlupf.stufe + '/' + X.UPGRADE_LIMIT + ', jetzt +' + Math.round(schlupf.stufe * A.UPGRADE_BONUS * 100) + ' % KP und Angriff.');
             /* Steht das Mon in einer Verteidigung, kaempft es dort sofort mit
                der neuen Stufe - sonst haette der Zwilling auf dem eigenen Land
                keine Wirkung. */
-            if (!schlupf.neu && schlupf.stufe) verteidigungenAuffrischen(world, p, id);
+            if (!schlupf.neu && (schlupf.stufe || schlupf.schimmerNeu)) verteidigungenAuffrischen(world, p, id);
           }
           deliverRewards(p,timestamp);
           const weekendEggs = activeArena(p)||activeDuel(p)?0:E.deliverWeekend(p, timestamp);

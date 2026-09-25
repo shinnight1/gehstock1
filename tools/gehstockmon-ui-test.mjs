@@ -120,7 +120,7 @@ export async function checkUi(D,E,A,handler,code,clock,otherCode){
   assert.equal(root.querySelectorAll('.gm-collect-card').length,alle,'and back to everything');
   /* Die Aussenpostenliste zeigt die Besatzung und den Verteilknopf. */
   click('⚑ Außenposten');await flush();
-  assert.ok(root.textContent.includes('ohne Dienst'),'the outpost list counts free Mons');
+  assert.ok(root.textContent.includes('ohne eigene Besatzung'),'the outpost list counts the posts without a garrison');
   /* Das Tauschbrett in Stockhafen baut sich auf. */
   click('♛ Stockhafen');await flush();
   assert.ok(root.textContent.includes('Tauschbrett'),'the trading board renders');

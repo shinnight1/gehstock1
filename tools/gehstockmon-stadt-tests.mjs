@@ -207,7 +207,7 @@ await test('A twin from an egg raises the rune level and reaches the saved defen
   const r=await call(ca,'hatch',{eggId:'zwilling'});
   assert.equal(r.status,200,r.error);
   assert.equal(r.schlupf.neu,false);
-  assert.equal(r.schlupf.mon.id,ziel.id);
+  assert.equal(r.schlupf.monId,ziel.id);
   assert.equal(r.schlupf.stufe,1);
   assert.match(r.message,/Ein zweiter/);
   assert.equal(r.profile.monUpgrades[ziel.id],1);

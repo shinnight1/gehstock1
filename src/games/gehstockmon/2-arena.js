@@ -72,7 +72,7 @@
   };
   function unit(mon, side, i, bonus) {
     var s = A.stats(mon), hp = Math.round(s.hp * (1 + bonus)), laden = A.ladungen(mon), pause = A.powerPause(mon);
-    return { uid: side + i, monId: mon.id, name: mon.name, role: mon.typ, skill: D.faehigkeitVon(mon), wesen: mon.wesen || null, maxHp: hp, hp: hp, ang: Math.round(s.ang * (1 + bonus / 2)), speed: s.tempo, powerReady: 1, charges: laden, maxCharges: laden, powerPause: pause, shield: 0, weakened: false, dornen: false, geschaerft: false, plan: mon.plan || null };
+    return { uid: side + i, monId: mon.id, name: mon.name, role: mon.typ, skill: D.faehigkeitVon(mon), wesen: mon.wesen || null, maxHp: hp, hp: hp, ang: Math.round(s.ang * (1 + bonus / 2)), speed: s.tempo, powerReady: 1, charges: laden, maxCharges: laden, powerPause: pause, shield: 0, weakened: false, dornen: false, geschaerft: false, plan: mon.plan || null, schimmernd: !!mon.schimmernd };
   }
   /* Ein gespeicherter Verteidiger, wie ihn die Welt haelt. Runenstufe, Wesen
      und Plan gehoeren dazu, und zwar ueberall gleich: die Grosse Arena hat
@@ -83,7 +83,7 @@
     var X = SG.gehstockmon.abenteuer, w = X.wesen(e && e.wesen);
     return Object.assign({}, D.mon(e && (e.id || e.monId)) || D.KATALOG[0],
       { upgrade: X.upgradeLevel(e && e.upgrade), wesenId: w ? w.id : null, wesen: w ? w.name : null,
-        plan: A.planGueltig(e && e.plan) ? e.plan : null });
+        plan: A.planGueltig(e && e.plan) ? e.plan : null, schimmernd: !!(e && e.schimmernd) });
   };
   A.defenders = function (fieldId, saved) {
     if (saved && saved.length) return saved.map(function (e) { return A.ausSpeicher(e); });
@@ -126,12 +126,19 @@
     [['feind_schwach','special'],['kraft_bereit','power'], ['immer','strike']],
     [['kraft_bereit','power'],  ['ladung_da','special'],  ['immer','strike']]
   ];
+  /* Der Zuschlag der schweren Computergebiete auf KP (und halb auf Angriff).
+     Beim Weltenschlund stand hier +65 %: in 80 000 simulierten Kaempfen mit
+     dem staerksten moeglichen Team (drei Apokalyptische und ein Mythischer,
+     alle auf Runenstufe 5) gab es keinen einzigen Sieg - das Endgebiet war
+     nicht zu erobern. Mit +20 % schafft es nur genau dieses Team, und auch
+     das nicht immer; der Donnergrat verlangt mit +30 % noch Mythische. */
+  A.ENDGEBIET_BONUS = { 7: .22, 8: .3, 9: .2 };
   A.create = function (roster, enemies, options) {
     var o = options || {};
     return { id: o.id || 'local', territoryId: o.territoryId || 1, territoryVersion: o.version || 1,
       level: o.level || 1, revision: 0, round: 1, phase: 'choose', winner: null, settled: false,
       aussenseiter: o.aussenseiter || 0,
-      teams: [roster.map(function (k,i) { return unit(k,'wir',i,o.aussenseiter || 0); }), enemies.map(function (k,i) { return unit(k,'sie',i,SG.gehstockmon.wirtschaft.LEVELS[o.level || 1].bonus+(o.npcTerritory?(o.territoryId===9?.65:o.territoryId===8?.4:o.territoryId===7?.22:0):0)+(o.bonus||0)); })],
+      teams: [roster.map(function (k,i) { return unit(k,'wir',i,o.aussenseiter || 0); }), enemies.map(function (k,i) { return unit(k,'sie',i,SG.gehstockmon.wirtschaft.LEVELS[o.level || 1].bonus+(o.npcTerritory?(o.territoryId===9?A.ENDGEBIET_BONUS[9]:o.territoryId===8?A.ENDGEBIET_BONUS[8]:o.territoryId===7?A.ENDGEBIET_BONUS[7]:0):0)+(o.bonus||0)); })],
       active: [0,0], events: [], startedAt: o.now || Date.now(), lastActionAt: o.now || Date.now() };
   };
   function active(s, side) { return s.teams[side][s.active[side]]; }

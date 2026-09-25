@@ -32,7 +32,14 @@
       if (!egg || typeof egg.id !== 'string' || seen[egg.id] || !D.FELDER.some(function (f) { return f.id === egg.territoryId; })) return;
       seen[egg.id] = true;
       var start = number(egg.startedAt, null);
-      st.eggs.push({ id: egg.id, territoryId: egg.territoryId, producedAt: number(egg.producedAt, now), startedAt: start, readyAt: start === null ? null : start + E.HATCH_TIME });
+      var sauber = { id: egg.id, territoryId: egg.territoryId, producedAt: number(egg.producedAt, now), startedAt: start, readyAt: start === null ? null : start + E.HATCH_TIME };
+      /* Ein Ei kann eine Mindest-Seltenheit tragen (etwa aus der Serien-Truhe)
+         und sagen, woher es kommt. Beides ginge sonst beim naechsten Laden
+         verloren. */
+      var mindestens = Math.floor(Number(egg.mindestens) || 0);
+      if (mindestens > 0) sauber.mindestens = Math.min(D.SELTENHEITEN.length - 1, mindestens);
+      if (typeof egg.art === 'string' && /^[a-z]{1,16}$/.test(egg.art)) sauber.art = egg.art;
+      st.eggs.push(sauber);
     });
     st.outposts = {};
     st.geschafft.forEach(function (id) { st.outposts[id] = E.outpost(old.outposts && old.outposts[id], now); });
@@ -86,55 +93,77 @@
     if (st.eggs.filter(function (e) { return e.startedAt !== null; }).length >= frei) throw new Error('Alle ' + frei + ' Brutplätze sind belegt.');
     egg.startedAt = Math.max(now, st.clockAt); egg.readyAt = egg.startedAt + E.HATCH_TIME; return egg;
   };
-  /* Was aus einem Ei kommt, entscheidet die Seltenheit - und das, was in der
-     Sammlung noch fehlt. Ein Mon, das man schon hat, kann wiederkommen, zieht
-     dabei aber nur noch einen Bruchteil des Gewichts auf sich: am Anfang ist
-     fast jedes Ei ein neues Gesicht, gegen Ende sind es lauter Zwillinge.
-     Deshalb rechnet die Anzeige mit demselben Vorrat wie das Schluepfen
-     selbst, statt feste Prozente hinzuschreiben, die nach dem dritten Ei
-     nicht mehr stimmen. */
-  E.SCHLUPF_GEWICHTE = [8, 5, 3.8, 3, 1, .25, .05];
-  E.DOPPEL_GEWICHT = .35;
-  E.schlupfVorrat = function (st) {
-    return D.KATALOG.map(function (k) {
-      var doppelt = st.besitz.indexOf(k.id) >= 0;
-      return { mon: k, doppelt: doppelt, gewicht: E.SCHLUPF_GEWICHTE[k.seltenheit] * (doppelt ? E.DOPPEL_GEWICHT : 1) };
+  /* Was aus einem Ei kommt, entscheidet allein die Seltenheit - mit festen
+     Quoten fuer alle, egal was man schon hat. Innerhalb einer Seltenheit ist
+     jedes Mon gleich wahrscheinlich. Frueher zog ein Mon, das man schon
+     hatte, nur ein Drittel des Gewichts auf sich: die Quoten verschoben sich
+     mit jeder Sammlung, und niemand wusste, was ein Ei eigentlich wert ist. */
+  E.SCHLUPF_QUOTEN = [40, 25, 17, 11, 5, 1.6, 0.4];
+  /* Der Garantie-Zaehler: spaetestens das zehnte Ei ohne Episches bringt ein
+     Episches, spaetestens das vierzigste ohne Legendaeres ein Legendaeres.
+     Damit ist auch ein schlechtes Ei ein Schritt nach vorn. */
+  E.GARANTIEN = [{ ab: 3, nach: 10 }, { ab: 4, nach: 40 }];
+  /* Eins von vierundsechzig Mons schluepft schimmernd - eine seltene
+     Farbvariante, rein zum Ansehen. */
+  E.SCHIMMER_CHANCE = 1 / 64;
+  E.garantieStand = function (st) {
+    var g = Array.isArray(st && st.garantie) ? st.garantie : [];
+    return E.GARANTIEN.map(function (v, i) {
+      var seit = Math.max(0, Math.min(v.nach - 1, Math.floor(Number(g[i]) || 0)));
+      return { ab: v.ab, nach: v.nach, seit: seit, noch: v.nach - seit };
     });
   };
   E.schlupfChancen = function (st) {
-    var vorrat = E.schlupfVorrat(st);
-    var summe = vorrat.reduce(function (s, v) { return s + v.gewicht; }, 0);
+    var summe = E.SCHLUPF_QUOTEN.reduce(function (s, v) { return s + v; }, 0);
     return D.SELTENHEITEN.map(function (r, i) {
-      var teil = vorrat.filter(function (v) { return v.mon.seltenheit === i; });
-      var gewicht = teil.reduce(function (s, v) { return s + v.gewicht; }, 0);
-      var neu = teil.filter(function (v) { return !v.doppelt; });
-      return { name: r.name, farbe: r.farbe, offen: neu.length,
-        anteil: summe ? gewicht / summe : 0,
-        neuAnteil: summe ? neu.reduce(function (s, v) { return s + v.gewicht; }, 0) / summe : 0 };
-    }).filter(function (v) { return v.anteil > 0; });
+      var alle = D.KATALOG.filter(function (k) { return k.seltenheit === i; });
+      var offen = st && st.besitz ? alle.filter(function (k) { return st.besitz.indexOf(k.id) < 0; }).length : alle.length;
+      return { name: r.name, farbe: r.farbe, offen: offen, anzahl: alle.length, anteil: (E.SCHLUPF_QUOTEN[i] || 0) / summe };
+    }).filter(function (v) { return v.anteil > 0 && v.anzahl > 0; });
+  };
+  /* Mehrere unabhaengige Zufallszahlen aus einem Aufruf. Wer eine feste Zahl
+     uebergibt (die Tests), bekommt sie als erste Ziehung und danach eine
+     feste Folge - so bleibt jedes Ergebnis wiederholbar. */
+  E.zufallsfolge = function (random) {
+    if (typeof random === 'function') return function () { return Math.max(0, Math.min(0.9999999, Number(random()) || 0)); };
+    var erste = Number.isFinite(random) ? Math.max(0, Math.min(0.9999999, random)) : Math.random();
+    var saat = Math.floor(erste * 4294967296) >>> 0, zug = 0;
+    return function () {
+      if (zug++ === 0) return erste;
+      saat = (Math.imul(saat ^ 0x9e3779b9, 1664525) + 1013904223) >>> 0;
+      return saat / 4294967296;
+    };
   };
   /* Ein Zwilling geht nicht verloren: Er steckt seine Kraft in das Mon, das
      schon da ist, und hebt es eine Runenstufe. Steht es schon auf der
      hoechsten, zerfaellt er zu Runen seiner eigenen Seltenheit - und die
      sind umso wertvoller, je seltener er war. */
   E.hatch = function (st, id, now, random) {
-    var X = SG.gehstockmon.abenteuer;
+    var X = SG.gehstockmon.abenteuer, zufall = E.zufallsfolge(random);
     var egg = st.eggs.find(function (e) { return e.id === id; });
     if (!egg || egg.readyAt === null || now < egg.readyAt) throw new Error('Das Ei ist noch nicht fertig ausgebrütet.');
-    var vorrat = E.schlupfVorrat(st), chosen = vorrat[vorrat.length - 1];
-    var total = vorrat.reduce(function (sum, v) { return sum + v.gewicht; }, 0);
-    var pick = Math.max(0, Math.min(0.9999999, Number.isFinite(random) ? random : Math.random())) * total;
-    for (var i = 0; i < vorrat.length; i++) { pick -= vorrat[i].gewicht; if (pick < 0) { chosen = vorrat[i]; break; } }
+    var summe = E.SCHLUPF_QUOTEN.reduce(function (s, v) { return s + v; }, 0), wurf = zufall() * summe, rang = E.SCHLUPF_QUOTEN.length - 1;
+    for (var i = 0; i < E.SCHLUPF_QUOTEN.length; i++) { wurf -= E.SCHLUPF_QUOTEN[i]; if (wurf < 0) { rang = i; break; } }
+    var gewuerfelt = rang, stand = E.garantieStand(st), boden = Math.max(0, Math.floor(Number(egg.mindestens) || 0));
+    E.GARANTIEN.forEach(function (g, i) { if (stand[i].seit >= g.nach - 1) boden = Math.max(boden, g.ab); });
+    rang = Math.max(rang, Math.min(boden, D.SELTENHEITEN.length - 1));
+    st.garantie = E.GARANTIEN.map(function (g, i) { return rang >= g.ab ? 0 : stand[i].seit + 1; });
+    var pool = [];
+    for (var r = rang; r >= 0 && !pool.length; r--) pool = D.KATALOG.filter(function (k) { return k.seltenheit === r; });
+    var mon = pool[Math.min(pool.length - 1, Math.floor(zufall() * pool.length))];
+    var ergebnis = { mon: mon, neu: st.besitz.indexOf(mon.id) < 0, stufe: 0, runen: 0, rang: mon.seltenheit,
+      garantiert: mon.seltenheit > gewuerfelt, schimmernd: zufall() < E.SCHIMMER_CHANCE, schimmerNeu: false };
     st.eggs = st.eggs.filter(function (e) { return e.id !== id; });
-    var mon = chosen.mon;
-    if (!chosen.doppelt) { st.besitz.push(mon.id); st.beschwoerungen++; return { mon: mon, neu: true, stufe: 0, runen: 0 }; }
+    st.schimmernd = st.schimmernd || {};
+    if (ergebnis.schimmernd && !st.schimmernd[mon.id]) { st.schimmernd[mon.id] = true; ergebnis.schimmerNeu = true; }
+    if (ergebnis.neu) { st.besitz.push(mon.id); st.beschwoerungen++; return ergebnis; }
     st.monUpgrades = st.monUpgrades || {};
     var stufe = X.upgradeLevel(st.monUpgrades[mon.id]);
-    if (stufe < X.UPGRADE_LIMIT) { st.monUpgrades[mon.id] = stufe + 1; return { mon: mon, neu: false, stufe: stufe + 1, runen: 0 }; }
+    if (stufe < X.UPGRADE_LIMIT) { st.monUpgrades[mon.id] = stufe + 1; ergebnis.stufe = stufe + 1; return ergebnis; }
     st.runes = st.runes || D.SELTENHEITEN.map(function () { return 0; });
-    var runen = X.UPGRADE_LIMIT;
-    st.runes[mon.seltenheit] = Math.min(9999, (st.runes[mon.seltenheit] || 0) + runen);
-    return { mon: mon, neu: false, stufe: stufe, runen: runen };
+    ergebnis.stufe = stufe; ergebnis.runen = X.UPGRADE_LIMIT;
+    st.runes[mon.seltenheit] = Math.min(9999, (st.runes[mon.seltenheit] || 0) + ergebnis.runen);
+    return ergebnis;
   };
   E.upgrade = function (st, post, now) {
     E.settle(st, post, now); var price = E.LEVELS[post.level].cost;

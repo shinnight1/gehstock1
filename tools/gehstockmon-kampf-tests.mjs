@@ -259,7 +259,7 @@ await test('A nature now changes the numbers it promises, in percent of the scal
   assert.ok(wild.teams[0][0].ang>roh.teams[0][0].ang,'a wild blade hits harder in an actual fight');
   assert.ok(wild.teams[0][0].maxHp<roh.teams[0][0].maxHp,'and pays for it in KP');
 });
-await test('Every outpost holds its own garrison, and no Mon serves twice',async()=>{
+await test('Every outpost holds its own garrison, and the same Mon may serve in several places',async()=>{
   let time=mon;const db=store(),handler=createHandler({store:db,presenceStore:store(),now:()=>time});let serial=0;
   async function call(code,op,extra={}){const r=await handler(new Request('http://localhost/api/gehstockmon',{method:'POST',body:JSON.stringify({code,op,name:code,requestId:'posten-test-'+(++serial),...extra})}));return{status:r.status,...await r.json()};}
   const a=await call(ca,'join');
@@ -277,17 +277,19 @@ await test('Every outpost holds its own garrison, and no Mon serves twice',async
   assert.equal(r.status,200,r.error);
   assert.deepEqual(r.territories[0].defense.map(m=>m.id),wache,'the garrison takes over');
   assert.deepEqual(r.territories[1].defense.map(m=>m.id),p.besitz.slice(0,4),'the other outpost is untouched');
-  /* Dasselbe Mon darf nicht zweimal Dienst tun - weder auf zwei Posten ... */
+  /* Dasselbe Mon darf mehrfach Dienst tun - auf zwei Posten ... */
   r=await call(ca,'besatzung',{territoryId:2,squad:wache});
-  assert.equal(r.status,400);assert.match(r.error,/steht schon/);
-  /* ... noch zusaetzlich im Kampfteam. */
+  assert.equal(r.status,200,r.error);
+  assert.deepEqual(r.territories[1].defense.map(m=>m.id),wache,'the same four hold a second outpost');
+  /* ... und zusaetzlich im Kampfteam. */
   r=await call(ca,'defend',{squad:[wache[0]].concat(p.besitz.slice(8,11))});
-  assert.equal(r.status,400);assert.match(r.error,/steht schon/);
-  /* Abziehen gibt die vier wieder frei. */
+  assert.equal(r.status,200,r.error);
+  assert.deepEqual(r.profile.truppe,[wache[0]].concat(p.besitz.slice(8,11)));
+  assert.deepEqual(r.profile.posten[1],wache,'the garrisons keep their Mons');
+  /* Abziehen laesst den Posten wieder vom Kampfteam halten. */
   r=await call(ca,'besatzung',{territoryId:1,squad:null});
   assert.equal(r.status,200,r.error);
-  r=await call(ca,'besatzung',{territoryId:2,squad:wache});
-  assert.equal(r.status,200,r.error,'freed Mons can serve elsewhere');
+  assert.deepEqual(r.territories[0].defense.map(m=>m.id),r.profile.truppe,'without a garrison the squad stands in again');
   /* Wer sein Gebiet verliert, bekommt seine Besatzung zurueck. */
   const b=await call(cb,'join');
   const gegner=db.data.players[b.playerId];
@@ -334,38 +336,31 @@ await test('Computer territories fight by a plan of their own',()=>{
   /* Der Grenzstein hat gar keinen Pfleger - dort heilt nie jemand. */
   assert.equal(A.defenders(1).some(m=>m.typ===2),false,'the Grenzstein has no healer at all');
 });
-await test('Auto-assignment fills free Mons into the most valuable posts, one of each role',async()=>{
+await test('Auto-assignment puts the strongest role-balanced squad on every open post',async()=>{
   let time=mon;const db=store(),handler=createHandler({store:db,presenceStore:store(),now:()=>time});let serial=0;
   async function call(code,op,extra={}){const r=await handler(new Request('http://localhost/api/gehstockmon',{method:'POST',body:JSON.stringify({code,op,name:code,requestId:'auto-test-'+(++serial),...extra})}));return{status:r.status,...await r.json()};}
   const a=await call(ca,'join');
   const p=db.data.players[a.playerId];
-  /* Ohne Gebiet gibt es nichts zu verteilen. */
+  /* Ohne Gebiet gibt es nichts zu besetzen. */
   let r=await call(ca,'besatzung_auto');
   assert.equal(r.status,400);assert.match(r.error,/keinen Außenposten/);
   Object.assign(db.data.territories[0],{ownerId:a.playerId,level:1,...E.outpost(null,time)});
   Object.assign(db.data.territories[4],{ownerId:a.playerId,...E.outpost(null,time),level:3});
-  /* Mit nur vier Mons - dem Kampfteam - ist keiner frei. */
-  r=await call(ca,'besatzung_auto');
-  assert.equal(r.status,400);assert.match(r.error,/nicht genug freie/);
   p.besitz=D.KATALOG.slice(0,14).map(k=>k.id);
   r=await call(ca,'besatzung_auto');
   assert.equal(r.status,200,r.error);
   assert.equal(Object.keys(r.profile.posten).length,2,'both posts get a garrison');
-  /* Der wertvollere Posten bekommt die staerkeren Mons. */
-  const wert=(squad)=>squad.reduce((s,id)=>s+X.kampfwert(p,id),0);
-  assert.ok(wert(r.profile.posten[5])>=wert(r.profile.posten[1]),'the upgraded post gets the stronger crew');
-  /* Jede Besatzung deckt moeglichst alle vier Rollen ab. */
-  for(const id of [1,5]){
-    const rollen=new Set(r.profile.posten[id].map(mid=>D.mon(mid).typ));
-    assert.equal(rollen.size,4,'post '+id+' covers all four roles');
-  }
-  /* Und niemand steht doppelt - auch nicht im Kampfteam. */
-  const alle=r.profile.truppe.concat(r.profile.posten[1],r.profile.posten[5]);
-  assert.equal(new Set(alle).size,alle.length,'nobody serves twice');
+  /* Seit ein Mon an mehreren Stellen stehen darf, bekommen alle offenen Posten die staerkste Truppe. */
+  const beste=X.staerksteTruppe(db.data.players[a.playerId]);
+  assert.deepEqual(r.profile.posten[1],beste);assert.deepEqual(r.profile.posten[5],beste);
+  assert.equal(new Set(beste.map(mid=>D.mon(mid).typ)).size,4,'the squad covers all four roles');
+  const wert=(squad)=>squad.reduce((sum,id)=>sum+X.kampfwert(p,id),0);
+  const schwaecher=p.besitz.filter(id=>!beste.includes(id)).slice(0,4);
+  assert.ok(wert(beste)>=wert(schwaecher),'it really is the strongest four');
   /* Ein zweiter Lauf raeumt nichts ab, was schon steht. */
   const vorher=JSON.stringify(r.profile.posten);
   const nochmal=await call(ca,'besatzung_auto');
-  assert.equal(nochmal.status,400,'nothing left to fill');
+  assert.equal(nochmal.status,400);assert.match(nochmal.error,/schon eine eigene Besatzung/);
   assert.equal(JSON.stringify((await call(ca,'world')).profile.posten),vorher,'existing garrisons are untouched');
 });
 /* Ein Mon auf einem Aussenposten ist im Dienst. Vorher sperrte das Tauschbrett

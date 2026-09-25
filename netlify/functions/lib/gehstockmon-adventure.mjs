@@ -52,6 +52,13 @@ export function leuchtturm(world){
   if(!world.leuchtturm)world.leuchtturm={gold:0,spender:{},fertigAm:null};
   return world.leuchtturm;
 }
+/* Wie viele diese Woche wirklich spielen: wer in den letzten sieben Tagen da
+   war. Frueher zaehlte jedes Konto, das je beigetreten ist - eine Klasse mit
+   acht Aktiven und zwanzig alten Konten bekam einen Zerhacker fuer zwanzig. */
+export function aktiveSpieler(world,now){
+  const n=Object.values(world.players||{}).filter(p=>now-(p.lastSeen||0)<7*86400000).length;
+  return Math.max(1,n);
+}
 /* Der Zerhacker wird jede Woche neu gesetzt. Seine Lebenskraft waechst mit der
    Zahl der Leute in der Welt, damit er weder in einer Stunde faellt noch
    ewig steht. */
@@ -66,13 +73,13 @@ export function zerhacker(world,now){
       for(const [pid,wert] of Object.entries(alt))if(!bester||wert>bester.wert)bester={pid,wert};
       world.erstschlag=bester?{woche,id:bester.pid,name:world.players[bester.pid]?.name||'Unbekannt',wert:bester.wert}:null;
     }
-    const kraft=X.zerhackerKraft(Object.keys(world.players||{}).length);
+    const kraft=X.zerhackerKraft(aktiveSpieler(world,now));
     world.zerhacker={woche,hp:kraft,maxHp:kraft,beitraege:{},besiegtAm:null,verteilt:false};
   }
   /* Wird seine Lebenskraft neu festgelegt, gilt das sofort und nicht erst am
      Montag. Was diese Woche schon an Schaden liegt, bleibt angerechnet - der
      Rest schrumpft auf das neue Mass. */
-  const kraft=X.zerhackerKraft(Object.keys(world.players||{}).length);
+  const kraft=X.zerhackerKraft(aktiveSpieler(world,now));
   if(world.zerhacker.maxHp!==kraft&&!world.zerhacker.besiegtAm){
     const geschlagen=world.zerhacker.maxHp-world.zerhacker.hp;
     world.zerhacker.maxHp=kraft;world.zerhacker.hp=Math.max(0,kraft-geschlagen);
@@ -248,7 +255,7 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
     if(f.offen[body.targetId]===id){
       delete f.offen[body.targetId];
       f.paare.push({a:body.targetId,b:id,zaehlerA:{},zaehlerB:{},seit:now});
-      extra.message='Die Fehde mit '+gegner.name+' steht. Freitag um 13 Uhr wird abgerechnet.';
+      extra.message='Die Fehde mit '+gegner.name+' steht. Gezählt wird bis Freitag, abgerechnet beim Wochenwechsel.';
     } else {
       f.offen[id]=body.targetId;
       extra.message=gegner.name+' wurde herausgefordert. Erst wenn er annimmt, zaehlt die Woche.';
@@ -260,7 +267,7 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
     if(fehdeVon(world,id,now)||fehdeVon(world,von,now))fail('Eine der beiden Seiten steht schon in einer Fehde.');
     delete f.offen[von];
     f.paare.push({a:von,b:id,zaehlerA:{},zaehlerB:{},seit:now});
-    extra.message='Die Fehde mit '+(world.players[von]?.name||'ihm')+' steht. Freitag um 13 Uhr wird abgerechnet.';
+    extra.message='Die Fehde mit '+(world.players[von]?.name||'ihm')+' steht. Gezählt wird bis Freitag, abgerechnet beim Wochenwechsel.';
   }
   if(op==='waffe_schleifen'){
     const waffe=X.WEAPONS.find(v=>v.id===body.itemId);

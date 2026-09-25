@@ -2,17 +2,14 @@
 (function(SG){
   var D=SG.gehstockmon.daten,E=SG.gehstockmon.wirtschaft,H=SG.gehstockmon.zeiten,X=SG.gehstockmon.abenteuer={};
   X.DUNGEON_OPS=['dungeon_create','dungeon_join','dungeon_ready','dungeon_start','dungeon_turn','dungeon_leave'];
-  /* Wo ein Mon im Dienst steht. Bisher hielt eine einzige Truppe her: dieselben
-     vier griffen an und verteidigten jeden Aussenposten gleichzeitig. Wer 57
-     Mons sammelte, benutzte vier davon.
+  /* Wo ein Mon im Dienst steht. Jeder Aussenposten kann seine eigene
+     Besatzung haben, und dasselbe Mon darf dabei an mehreren Stellen zugleich
+     stehen - im Kampfteam und auf beliebig vielen Posten. Die fruehere Regel
+     "jedes Mon nur an einer Stelle" ist gefallen: sie zwang dazu, schwache
+     Mons auf Posten zu stellen, nur weil die starken schon woanders standen.
 
-     Jetzt hat jeder Aussenposten seine eigene Besatzung, und kein Mon steht an
-     zwei Stellen zugleich - weder auf zwei Gebieten noch zusaetzlich im
-     Kampfteam. Mit neun Gebieten sind das vierzig Mons im Dienst statt vier.
-
-     Ein Gebiet ohne eigene Besatzung wird vom Kampfteam gehalten. Das ist der
-     bisherige Zustand und damit der sanfte Einstieg: niemand verliert Land,
-     nur weil er noch keine Besatzung gesetzt hat. */
+     Ein Gebiet ohne eigene Besatzung wird vom Kampfteam gehalten - der sanfte
+     Einstieg: niemand verliert Land, nur weil er keine Besatzung gesetzt hat. */
   X.TRUPPE=4;
   X.posten=function(p,id){
     var t=p&&p.posten&&p.posten[id];
@@ -33,20 +30,29 @@
     });
     return gefunden;
   };
+  /* Alle Stellen, an denen ein Mon gerade steht - es koennen mehrere sein. */
+  X.einsatzOrte=function(p,monId){
+    if(!p)return [];
+    var orte=(p.truppe||[]).indexOf(monId)>=0?['kampfteam']:[];
+    Object.keys(p.posten||{}).forEach(function(id){if((p.posten[id]||[]).indexOf(monId)>=0)orte.push(Number(id));});
+    return orte;
+  };
   X.einsatzText=function(ort){
     if(ort==='kampfteam')return 'im Kampfteam';
     return Number.isFinite(ort)?'auf '+(D.FELDER[ort-1]?D.FELDER[ort-1].name:'Gebiet '+ort):'';
   };
-  /* Prueft eine Aufstellung: vier verschiedene eigene Mons, und keines davon
-     steht schon woanders im Dienst. */
-  X.truppePruefen=function(p,squad,ziel){
+  X.einsatzListe=function(orte){
+    var namen=(orte||[]).map(function(o){return o==='kampfteam'?'Kampfteam':(D.FELDER[o-1]?D.FELDER[o-1].name:'Gebiet '+o);});
+    return namen.length>1?namen.slice(0,-1).join(', ')+' und '+namen[namen.length-1]:namen.join('');
+  };
+  /* Prueft eine Aufstellung: vier verschiedene Mons aus der eigenen Sammlung.
+     Wo sie sonst noch stehen, spielt keine Rolle mehr. */
+  X.truppePruefen=function(p,squad){
     if(!Array.isArray(squad)||squad.length!==X.TRUPPE||new Set(squad).size!==X.TRUPPE)
       return 'Wähle vier verschiedene Mons.';
     for(var i=0;i<squad.length;i++){
       var id=squad[i];
       if(typeof id!=='string'||!D.mon(id)||(p.besitz||[]).indexOf(id)<0)return 'Wähle vier Mons aus deiner Sammlung.';
-      var ort=X.einsatzOrt(p,id,ziel);
-      if(ort!==null&&ort!==undefined)return D.mon(id).name+' steht schon '+X.einsatzText(ort)+'. Jedes Mon kann nur an einer Stelle Dienst tun.';
     }
     return null;
   };
@@ -58,46 +64,41 @@
     var st=A.stats(m);
     return st.hp+st.ang*4;
   };
-  /* Besatzungen von selbst verteilen. Neun Gebiete mit je vier Plaetzen von
-     Hand zu besetzen sind sechsunddreissig Auswahlen - das macht niemand
-     zweimal. Diese Verteilung nimmt die freien Mons, legt die staerksten auf
-     die wertvollsten Posten und achtet darauf, dass auf jedem Posten moeglichst
-     jede Rolle einmal steht: ein Wall haelt, ein Pfleger heilt, eine Schneide
-     trifft, ein Stoerer bricht die Deckung.
-
-     Angeruehrt wird nur, was frei ist. Wer schon eine Besatzung gesetzt hat,
-     behaelt sie - sonst raeumte ein Knopf die eigene Planung ab. */
-  X.autoBesetzen=function(p,gebiete){
-    var frei=(p.besitz||[]).filter(function(id){
-      var ort=X.einsatzOrt(p,id);
-      return ort===null||ort===undefined;
-    }).sort(function(a,b){return X.kampfwert(p,b)-X.kampfwert(p,a);});
-    /* Wertvollste Posten zuerst: hoehere Ausbaustufe, dann schwierigeres Feld. */
-    var offen=(gebiete||[]).filter(function(g){return !X.posten(p,g.id);})
-      .sort(function(a,b){return (b.level||1)-(a.level||1)||b.id-a.id;});
-    var ergebnis=[];
-    offen.forEach(function(g){
-      if(frei.length<X.TRUPPE)return;
-      var gewaehlt=[],rollen={};
-      /* Erst je Rolle den staerksten, dann auffuellen. */
-      frei.forEach(function(id){
-        if(gewaehlt.length>=X.TRUPPE)return;
-        var typ=D.mon(id).typ;
-        if(rollen[typ])return;
-        rollen[typ]=true;gewaehlt.push(id);
-      });
-      frei.forEach(function(id){
-        if(gewaehlt.length>=X.TRUPPE||gewaehlt.indexOf(id)>=0)return;
-        gewaehlt.push(id);
-      });
-      if(gewaehlt.length<X.TRUPPE)return;
-      gewaehlt.forEach(function(id){frei.splice(frei.indexOf(id),1);});
-      ergebnis.push({id:g.id,squad:gewaehlt});
+  /* Die staerkste Vierertruppe aus der ganzen Sammlung: erst je Rolle die
+     staerkste - ein Wall haelt, ein Pfleger heilt, eine Schneide trifft, ein
+     Stoerer bricht die Deckung -, dann mit den naechststaerksten auffuellen. */
+  X.staerksteTruppe=function(p){
+    var alle=(p.besitz||[]).filter(function(id){return !!D.mon(id);})
+      .sort(function(a,b){return X.kampfwert(p,b)-X.kampfwert(p,a);});
+    var gewaehlt=[],rollen={};
+    alle.forEach(function(id){
+      if(gewaehlt.length>=X.TRUPPE)return;
+      var typ=D.mon(id).typ;
+      if(rollen[typ])return;
+      rollen[typ]=true;gewaehlt.push(id);
     });
-    return ergebnis;
+    alle.forEach(function(id){if(gewaehlt.length<X.TRUPPE&&gewaehlt.indexOf(id)<0)gewaehlt.push(id);});
+    return gewaehlt.length===X.TRUPPE?gewaehlt:null;
+  };
+  /* Besatzungen von selbst setzen: jeder Posten ohne eigene Besatzung bekommt
+     die staerkste Truppe. Seit ein Mon an mehreren Stellen stehen darf, gibt
+     es nichts mehr zu verteilen - alle offenen Posten bekommen dieselben vier.
+     Wer schon eine Besatzung gesetzt hat, behaelt sie. */
+  X.autoBesetzen=function(p,gebiete){
+    var truppe=X.staerksteTruppe(p);if(!truppe)return [];
+    return (gebiete||[]).filter(function(g){return !X.posten(p,g.id);})
+      .sort(function(a,b){return (b.level||1)-(a.level||1)||b.id-a.id;})
+      .map(function(g){return {id:g.id,squad:truppe.slice()};});
   };
   X.STADT_OPS=['arena_rang','champion_fordern','tagwerk','findelei','brutplatz_kaufen','tausch_anbieten','tausch_annehmen','tausch_zuruecknehmen'];
   X.OPS=['survey','gather','trainer_start','quest_claim','shop_buy','equip','raid_start','raid_turn','raid_arena','raid_cancel','mon_upgrade','leuchtturm_spenden','zerhacker_schlagen','waffe_schleifen','panzer_anlegen','fehde_fordern','fehde_annehmen'].concat(X.STADT_OPS).concat(X.DUNGEON_OPS);
+  /* Jeder Spielzug, der den Spielstand aendert - eine Liste fuer Browser und
+     Server. Der Browser haengt nur an diese Zuege eine Kennung, und der
+     Server verlangt sie genau dafuer. Frueher fuehrte jede Seite ihre eigene
+     Liste, und Kampfplan und Besatzungen fehlten auf der Browser-Seite: jedes
+     Speichern scheiterte mit "Aktionskennung fehlt". Spaetere Dateien haengen
+     ihre Zuege hier an. */
+  X.SPIELZUEGE=['arena_start','arena_turn','arena_flee','collect','incubate','hatch','upgrade','defend','plan','besatzung','besatzung_auto'].concat(X.OPS);
   X.SPAWN={x:0,z:30};X.SPAWN_TIME=60*60000;
   X.UPGRADE_LIMIT=5;
   /* Der Leuchtturm ist das gemeinsame Bauwerk: alle zahlen darauf ein, und
@@ -226,7 +227,7 @@
   X.mon=function(p,id){var m=D.mon(id);if(!m)return m;
     var w=X.wesenVon&&X.wesenVon(p,id);
     return Object.assign({},m,{upgrade:X.upgradeLevel(p&&p.monUpgrades&&p.monUpgrades[id])},
-      w?{wesenId:w.id,wesen:w.name}:{});};
+      w?{wesenId:w.id,wesen:w.name}:{},p&&p.schimmernd&&p.schimmernd[id]?{schimmernd:true}:{});};
   X.DUNGEONS=[['Wurzelhöhle','Einfach','moosling',0,40],['Versunkene Grotte','Leicht','sumpfschnapper',35,105],['Kristallstollen','Mittel','donnerwidder',110,85],['Schattengewölbe','Schwer','runengolem',-80,-25],['Königsgrab','Sehr schwer','grabesritter',-110,-150],['Zeitenriss','Extrem','chronoschreiter',100,-95],['Abgrundtor','Apokalyptisch','endrichter',20,-130]].map(function(v,i){return{id:'dungeon-'+i,name:v[0],difficulty:v[1],bossId:v[2],x:v[3],z:v[4],rarity:i,reward:2+i%2};});
   X.SKINS=[{id:'wanderer',name:'Wanderer',color:'#ffffff',price:0},{id:'waldlaeufer',name:'Waldläufer',color:'#8ee6ad',price:150},{id:'frostwanderer',name:'Frostwanderer',color:'#83cfff',price:300},{id:'aschenritter',name:'Ascheritter',color:'#ff9576',price:500},{id:'trainermeister',name:'Trainermeister',color:'#ffe07b',quest:'trainer3'},{id:'runensucher',name:'Runensucher',color:'#bd90ff',quest:'gather6'},{id:'weltenwanderer',name:'Weltenwanderer',color:'#71ffe3',quest:'visit9'}];
   X.SKINS.push({id:'knochenkoenig',name:'Knochenkönig',color:'#f0dfb5',price:2400},{id:'leerenreaper',name:'Leerenschnitter',color:'#ad79ff',price:5000},{id:'drachenritter',name:'Drachenritter',color:'#ff6254',price:8000});
@@ -342,7 +343,12 @@
      reift nur waehrend der Oeffnungszeiten, genau wie die Eier auf einem
      Aussenposten - nachts und am Wochenende passiert nichts. */
   X.TAGWERK_ZEIT=2*3600000;X.TAGWERK_LOHN=80;X.TAGWERK_VORRAT=3;
-  X.FINDELEI_ZEIT=4*3600000;X.FINDELEI_FELD=6;
+  /* Das Findelhaus gab frueher alle vier geoeffneten Stunden ein Ei - wer
+     sein letztes Gebiet am Vormittag verlor, bekam das erste frueh am
+     naechsten Tag, und in der Testzone nie. Jetzt ist es eins je geoeffneter
+     Stunde, bis zu zwei liegen bereit, und wer neu dazukommt, findet sofort
+     eins vor. */
+  X.FINDELEI_ZEIT=3600000;X.FINDELEI_VORRAT=2;X.FINDELEI_FELD=6;
   function reif(stand,now,dauer,hoechstens){
     if(!Number.isFinite(stand))return {fertig:0,stand:now};
     var offen=H.openTime(now)-H.openTime(stand),n=Math.max(0,Math.floor(offen/dauer));
@@ -359,13 +365,22 @@
     var voll=H.openTime(now)-X.TAGWERK_VORRAT*X.TAGWERK_ZEIT;
     p.tagwerkAt=H.productionAt(Math.max(H.openTime(p.tagwerkAt),voll)+X.TAGWERK_ZEIT);
   };
-  X.findeleiFertig=function(p,now){
-    return Number.isFinite(p&&p.findeleiAt)&&H.openTime(now)-H.openTime(p.findeleiAt)>=X.FINDELEI_ZEIT;
-  };
+  X.findeleiStand=function(p,now){return reif(p&&p.findeleiAt,now,X.FINDELEI_ZEIT,X.FINDELEI_VORRAT);};
+  X.findeleiFertig=function(p,now){return X.findeleiStand(p,now).fertig>0;};
   X.findeleiWartezeit=function(p,now){
-    if(!Number.isFinite(p&&p.findeleiAt))return 0;
-    return Math.max(0,H.productionAt(H.openTime(p.findeleiAt)+X.FINDELEI_ZEIT)-now);
+    var stand=p&&p.findeleiAt;if(!Number.isFinite(stand))return 0;
+    if(X.findeleiStand(p,now).fertig>=X.FINDELEI_VORRAT)return 0;
+    var offen=H.openTime(now)-H.openTime(stand),bis=(Math.floor(Math.max(0,offen)/X.FINDELEI_ZEIT)+1)*X.FINDELEI_ZEIT;
+    return Math.max(0,H.productionAt(H.openTime(stand)+bis)-now);
   };
+  /* Nimmt genau ein Ei heraus und laesst angefangene Zeit stehen. */
+  X.findeleiVerbrauchen=function(p,now){
+    var voll=H.openTime(now)-X.FINDELEI_VORRAT*X.FINDELEI_ZEIT;
+    p.findeleiAt=H.productionAt(Math.max(H.openTime(p.findeleiAt),voll)+X.FINDELEI_ZEIT);
+  };
+  /* Ein Stand, bei dem schon so viele fertig sind: fuer neue Spieler und die
+     Testzone. */
+  X.schonReif=function(now,dauer,anzahl){return H.productionAt(Math.max(0,H.openTime(now)-dauer*anzahl));};
 
   /* Der Tauschposten in Stockhafen. Es gibt Zwillinge, es gibt Wesen, es gibt
      57 Mons - aber bisher keinen Weg, ein misslungenes Wesen loszuwerden oder
@@ -385,8 +400,8 @@
     /* Auch eine Gebietsbesatzung ist Dienst. Vorher sperrte nur das Kampfteam,
        und wer ein Mon von einem Aussenposten weggab, liess dort eine
        Verteidigung stehen, die ihm nicht mehr gehoerte. */
-    var ort=X.einsatzOrt(p,gebe.id);
-    if(ort!==null&&ort!==undefined)return gebe.name+' steht '+X.einsatzText(ort)+'. Zieh es erst ab.';
+    var orte=X.einsatzOrte(p,gebe.id);
+    if(orte.length)return gebe.name+' steht im Dienst ('+X.einsatzListe(orte)+'). Zieh es erst ab.';
     return null;
   };
 
@@ -480,16 +495,14 @@
       var alt=old.plaene&&old.plaene[id];
       if(A.planGueltig(alt))p.plaene[id]=alt.map(function(z){return z.slice(0,2);});
     });
-    /* Besatzungen ueberleben nur, solange sie vollstaendig sind, dem Spieler
-       gehoeren und sich nirgends ueberschneiden. Ein getauschtes oder
-       verschenktes Mon raeumt seinen Posten damit von selbst. */
-    p.posten={};var belegt={};
-    (p.truppe||[]).forEach(function(id){belegt[id]=true;});
+    /* Besatzungen ueberleben nur, solange sie vollstaendig sind und dem
+       Spieler gehoeren. Ein getauschtes oder verschenktes Mon raeumt seinen
+       Posten damit von selbst. Ueberschneiden duerfen sie sich. */
+    p.posten={};
     D.FELDER.forEach(function(f){
       var t=old.posten&&old.posten[f.id];
       if(!Array.isArray(t)||t.length!==X.TRUPPE||new Set(t).size!==X.TRUPPE)return;
-      if(t.some(function(id){return typeof id!=='string'||!D.mon(id)||p.besitz.indexOf(id)<0||belegt[id];}))return;
-      t.forEach(function(id){belegt[id]=true;});
+      if(t.some(function(id){return typeof id!=='string'||!D.mon(id)||p.besitz.indexOf(id)<0;}))return;
       p.posten[f.id]=t.slice();
     });
     p.brutplaetze=X.gekaufteBrutplaetze(old);
@@ -498,7 +511,7 @@
     /* Wer zum ersten Mal in die Stadt kommt, faengt sofort an zu verdienen:
        beide Uhren starten jetzt, nicht bei null. */
     p.tagwerkAt=Number.isFinite(old.tagwerkAt)?old.tagwerkAt:now;
-    p.findeleiAt=Number.isFinite(old.findeleiAt)?old.findeleiAt:now;
+    p.findeleiAt=Number.isFinite(old.findeleiAt)?old.findeleiAt:X.schonReif(now,X.FINDELEI_ZEIT,1);
     p.championSeit=Number.isFinite(old.championSeit)?old.championSeit:null;
     p.championTitel=Math.max(0,Math.floor(Number(old.championTitel)||0));return p;
   };

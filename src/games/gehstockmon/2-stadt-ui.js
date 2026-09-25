@@ -87,8 +87,10 @@
       arbeit.appendChild(ab);drawer.appendChild(arbeit);
       var findel=el('article',undefined,'gm-quest-card');
       findel.appendChild(el('h3','Das Findelhaus'));
-      findel.appendChild(el('p',s.findelei?'Ein Ei liegt bereit.':'Das naechste Ei '+wartetext(s.findeleiIn)+'.'));
-      var fb=button(nah()?'Ei abholen':'Nach '+X.STADT.name+' laufen',function(){
+      /* Jede geoeffnete Stunde ein Ei, bis zu zwei liegen bereit. */
+      var bereit=Number(s.findelei)||0,max=s.findeleiMax||1;
+      findel.appendChild(el('p',bereit+'/'+max+(bereit===1?' Ei liegt':' Eier liegen')+' bereit'+(bereit<max?' · das nächste '+wartetext(s.findeleiIn):' · Vorrat voll')+'. Jede geöffnete Stunde kommt eins dazu.'));
+      var fb=button(nah()?'Ei abholen ('+bereit+')':'Nach '+X.STADT.name+' laufen',function(){
         if(!nah()){hingehen();return;}run('findelei',{});
       },'gm-button gm-primary');
       fb.disabled=c.busy()||(nah()&&!s.findelei);
