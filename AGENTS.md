@@ -43,6 +43,16 @@ Der Schutz vor Konflikten ist allein der Ablauf oben.
 
 ## Veröffentlichen
 
+**Stand 26.09.2026: Die Seite läuft nur noch auf dem Handy** unter
+`https://gehstock.duckdns.org`, die Spielerwelt liegt im Redis auf dem Handy statt
+bei Upstash (Einrichtung, Update und Sicherungen: `docs/HANDY-SERVER.md`). Vercel
+und `gehstock-mon.netlify.app` sind reine Weiterleitungen dorthin, Deno ist aus.
+**Kein `vercel --prod`, `netlify deploy --prod` oder `deno deploy --prod` aus dem
+Projekt** - das holte die alte Seite zurück, und die schriebe in Upstash, also in
+eine veraltete Welt neben der echten. Eine Änderung erreicht die Seite so: pushen,
+dann auf dem Handy `git pull`, `node tools/deploy-bauen.mjs` und den Server neu
+starten. Die Abschnitte unten beschreiben den Zustand davor.
+
 Die Seite liegt auf Vercel unter `gehstock1.vercel.app`. Veröffentlicht wird von
 Hand aus dem Projektordner:
 
