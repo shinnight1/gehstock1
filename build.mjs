@@ -15,7 +15,7 @@ import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { buildNoJs, NOJS_ANZAHL } from './tools/nojs.mjs';
 import { abziehen, pruefen } from './tools/kleiner.mjs';
-import { buildSync } from 'esbuild';
+import { buildSync, transformSync } from 'esbuild';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const SRC = path.join(ROOT, 'src');
@@ -133,8 +133,14 @@ function collectJs() {
   return files;
 }
 
-/* Bilder aus src/assets/ als Daten-URI einbetten.
-   Damit bleibt auch die Offline-Einzeldatei ohne externe Verweise. */
+/* Bilder aus src/assets/ zweimal verpacken:
+   - fuer die Offline-Einzeldatei als Daten-URI, damit sie ohne externe
+     Verweise auskommt,
+   - fuer die Online-Seite als eigene, gehashte Dateien neben dem Skript.
+     Eingebettet machten sie rund 12 der 14 MB des Skripts aus - bei jedem
+     neuen Stand wurden sie komplett neu geladen, obwohl sich kein Bild
+     geaendert hatte, und der Browser konnte erst loslegen, wenn alles da war.
+   Das Spiel sieht in beiden Faellen nur SG.assets[name] als Bildquelle. */
 const BILD_TYP = {
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
   '.webp': 'image/webp', '.gif': 'image/gif',
@@ -149,22 +155,26 @@ const MODELL_PRAEFIX = 'gm-modell-';
 
 function bundleAssets() {
   const dir = path.join(SRC, 'assets');
-  const out = {};
+  const eingebettet = {}, verlinkt = {};
   let bytes = 0;
   if (exists(dir)) {
     for (const f of fs.readdirSync(dir).sort()) {
       if (f.startsWith(MODELL_PRAEFIX)) continue;
-      const typ = BILD_TYP[path.extname(f).toLowerCase()];
+      const endung = path.extname(f).toLowerCase();
+      const typ = BILD_TYP[endung];
       if (!typ) continue;
       const buf = fs.readFileSync(path.join(dir, f));
       bytes += buf.length;
-      out[path.basename(f, path.extname(f)).toLowerCase()] =
-        'data:' + typ + ';base64,' + buf.toString('base64');
+      const name = path.basename(f, endung).toLowerCase();
+      eingebettet[name] = 'data:' + typ + ';base64,' + buf.toString('base64');
+      const datei = name + '.' + hash(buf.toString('latin1')) + endung;
+      fs.writeFileSync(path.join(DIST, 'assets', datei), buf);
+      verlinkt[name] = 'assets/' + datei;
     }
   }
-  const code = '\n/* ==== assets ==== */\n'
-    + '(function (SG) { SG.assets = ' + JSON.stringify(out) + '; })(SG);\n';
-  return { code, count: Object.keys(out).length, bytes };
+  const code = (tabelle) => '\n/* ==== assets ==== */\n'
+    + '(function (SG) { SG.assets = ' + JSON.stringify(tabelle) + '; })(SG);\n';
+  return { online: code(verlinkt), offline: code(eingebettet), count: Object.keys(verlinkt).length, bytes };
 }
 
 /* Legt Modell und Grundfarbe gehasht nach dist/assets/ und gibt dem
@@ -201,7 +211,7 @@ function bundleSkins() {
   return { code, dateien, count: Object.keys(tabelle).length, bytes };
 }
 
-function bundleJs(files, assets) {
+function bundleJs(files, assets, assetCode) {
   const parts = [
     '/* ' + APP_NAME + ' */',
     '"use strict";',
@@ -218,7 +228,7 @@ function bundleJs(files, assets) {
     // Direkt hinter den Namensraum: SG.assets muss stehen, bevor das
     // erste Modul darauf zugreift.
     if (rel === 'core/namespace.js' && assets) {
-      parts.push(assets.code);
+      parts.push(assetCode);
       if (assets.skins) parts.push(assets.skins.code);
     }
   }
@@ -418,9 +428,14 @@ function build() {
   const assets = bundleAssets();
   const skins = bundleSkins();
   assets.skins = skins;
-  const jsPaket = bundleJs(jsFiles, assets);
+  const jsPaket = bundleJs(jsFiles, assets, assets.online);
   const three = buildSync({ entryPoints: [path.join(SRC, 'vendor/three-entry.js')], bundle: true, minify: true, format: 'iife', target: 'safari15', write: false, legalComments: 'inline' }).outputFiles[0].text;
-  const js = three + '\n' + jsPaket.code;
+  /* Online zusaetzlich verdichtet: Leerraum und ueberfluessige Syntax raus,
+     Namen bleiben - Fehlermeldungen und #/dev lesen sich wie vorher. Das spart
+     gut ein Zehntel beim Laden und Parsen auf dem iPad. Die Offline-Datei
+     bleibt beim bewaehrten Kommentar-Abzug. */
+  const js = transformSync(three + '\n' + jsPaket.code, { minifyWhitespace: true, minifySyntax: true, target: 'safari15', legalComments: 'inline' }).code;
+  const jsOffline = three + '\n' + bundleJs(jsFiles, assets, assets.offline).code;
   const gespart = jsPaket.gespart + cssPaket.gespart;
   const tmpl = read(path.join(SRC, 'index.html'));
   const version = hash(js + css);
@@ -441,6 +456,7 @@ function build() {
      natuerlich window. */
   try {
     new Function(js);
+    new Function(jsOffline);
   } catch (fehler) {
     console.error('\nSyntaxfehler im Bundle:\n' + ((fehler && fehler.message) || fehler));
     process.exit(1);
@@ -475,7 +491,7 @@ function build() {
     .replace('<!--STYLES-->', '<style>\n' + css + '\n</style>')
     .replace('<!--SCRIPTS-->',
       '<script>window.SG_BUILD={offline:true,nojs:' + NOJS_ANZAHL + ',version:"' + version + '",offlineFile:null};</script>\n' +
-      '<script>\n' + js + '\n</script>');
+      '<script>\n' + jsOffline + '\n</script>');
   const problems = checkOffline(offline);
   if (problems.length) {
     console.error('\nOffline-Datei enthaelt externe Abhaengigkeiten:\n - ' + problems.join('\n - '));
@@ -628,7 +644,7 @@ function build() {
   log('  Kommentare raus    : ' + kb(gespart) + ' gespart');
   log('  Offline-Einzeldatei: ' + kb(offSize) + '  (Budget 2048.0 kB)');
   if (externCount) log('  Eigene Seiten      : ' + externCount + ' (nicht in der Offline-Datei)');
-  if (assets.count) log('  Eingebettete Bilder: ' + assets.count + ' (' + kb(assets.bytes) + ')');
+  if (assets.count) log('  Bilder (online eigene Dateien, offline eingebettet): ' + assets.count + ' (' + kb(assets.bytes) + ')');
   if (skins.count) log('  Modelle daneben     : ' + skins.count + ' (' + kb(skins.bytes) + ')');
   log('');
   const adm = ersterAdminCode();
