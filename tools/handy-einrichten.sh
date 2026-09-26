@@ -52,6 +52,7 @@ echo "Sicherung liegt in: $sicherung"
 {
   printf '#!/data/data/com.termux/files/usr/bin/bash\nset -e\numask 077\n'
   printf 'command -v termux-wake-lock >/dev/null && termux-wake-lock || true\n'
+  printf 'bash %q\n' "$repo/tools/handy-dienste.sh"
   printf 'cd -- %q\n' "$repo"
   printf 'exec node tools/handy-server.mjs %q\n' "$config"
 } > "$HOME/start-gehstock1"

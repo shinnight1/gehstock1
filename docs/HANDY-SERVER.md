@@ -46,6 +46,32 @@ spaetere Auslieferung kann Caddy an `127.0.0.1:8080` weiterleiten. Android kann
 Termux trotz Wake-Lock beenden; Akku-Einstellungen und Termux:Boot werden
 gesondert eingerichtet. Upstash bleibt der Speicheranbieter mit seinen Limits.
 
+## Oeffentlich und im Dauerbetrieb
+
+Seit 26.09.2026 laeuft das A25 oeffentlich unter `https://gehstock.duckdns.org`.
+Der Router (Speedport Smart 4 Plus) leitet TCP 80 auf 8081 und 443 auf 8443 um,
+weil Termux keine Ports unter 1024 oeffnen darf. Dort nimmt Caddy an, holt das
+Zertifikat selbst und reicht an Node auf `127.0.0.1:8080` weiter. Bei DuckDNS
+bleibt der IPv6-Eintrag leer: ohne NAT gibt es keine Umleitung, und 443 kaeme nie
+bei Caddy an.
+
+Einmalig nach der Einrichtung:
+
+```sh
+bash tools/handy-dauerbetrieb.sh gehstock
+```
+
+Das fragt den DuckDNS-Token verdeckt ab und speichert ihn mit Modus 600 unter
+`~/.config/gehstock1/duckdns.env`. `~/start-gehstock1` startet danach vor Node
+ueber `tools/handy-dienste.sh` auch Caddy und die DuckDNS-Aktualisierung im
+Hintergrund (alle fuenf Minuten, nur im Heim-WLAN). Fuer den Neustart des Handys
+legt es `~/.termux/boot/gehstock1` an; dafuer muss die App Termux:Boot aus
+derselben Quelle wie Termux installiert und einmal geoeffnet sein. Nach einem
+Neustart laeuft Node im Hintergrund und schreibt nach
+`~/.config/gehstock1/server.log` - dann nicht zusaetzlich von Hand starten, der
+Port waere belegt. Termux und Termux:Boot brauchen in Android die Akku-Einstellung
+"Nicht eingeschraenkt".
+
 Pruefung ohne echte Zugangsdaten oder Schreibzugriff auf die Spielerwelt:
 
 ```sh
