@@ -190,7 +190,7 @@ if (process.argv[2] === '--server') {
     }
     alle.sort((x, y) => x - y);
     console.log('\nAnfragen pro Sekunde   ' + (alle.length / (dauer / 1000)).toFixed(1));
-    console.log('Rechenlast Server      ' + Math.round(last.cpu * 100) + ' % eines Kerns (das Handy hat ' + os.cpus().length + ')');
+    console.log('Rechenlast Server      ' + Math.round(last.cpu * 100) + ' % eines Kerns (das Handy hat ' + os.availableParallelism() + ')');
     console.log('Arbeitsspeicher        ' + Math.round(last.rss / 1024 / 1024) + ' MB');
     console.log('Stau im Server         99 % unter ' + Math.round(last.lag99) + ' ms, schlimmster ' + Math.round(last.lagMax) + ' ms');
     console.log('Fehler                 ' + (Object.keys(fehler).length ? JSON.stringify(fehler) : 'keine'));
