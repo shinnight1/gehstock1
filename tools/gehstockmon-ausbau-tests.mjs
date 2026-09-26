@@ -308,4 +308,79 @@ await test('A revenge runs out after thirty hours, and a short absence brings no
   assert.ok(r.morgenbericht.zeilen.some(z=>/Serie: 3 Tage/.test(z.text)),'and about their streak');
 });
 
+/* Ein Live-Duell zwischen Anna (stark) und Ben (Starter), beide gerade auf der Insel. */
+async function duellWelt(){
+  const w=welt({random:()=>.5}),a=await w.call(ca,'join'),b=await w.call(cb,'join');
+  const stark=['endrichter','nullwyrm','risskaiser','aetherdrache'];
+  w.db.data.players[a.playerId].besitz.push(...stark);w.db.data.players[a.playerId].truppe=stark.slice();
+  await w.call(ca,'presence',{position:{...a.spawn,heading:0}});await w.call(cb,'presence',{position:{...b.spawn,heading:0}});
+  return {w,a,b,stark};
+}
+async function zug(w,code,d,aktion){const s=d.kampf;return w.call(code,'duell_zug',{duellId:d.id,revision:s.revision,aktion:aktion||(s.warten[0]==='replace'?{kind:'switch',slot:s.teams[0].findIndex(u=>u.hp>0)}:{kind:'move',move:'strike'})});}
+
+await test('A live duel needs the other player on the island, reaches them within a presence tick, and can be declined',async()=>{
+  const {w,a,b}=await duellWelt();
+  w.uhr.t+=20000;/* Ben hat sich seit zwanzig Sekunden nicht gemeldet */
+  let r=await w.call(ca,'duell_fordern',{targetId:b.playerId});assert.equal(r.status,400);assert.match(r.error,/nicht auf der Insel/);
+  await w.call(cb,'presence',{position:{...b.spawn,heading:0}});
+  r=await w.call(ca,'duell_fordern',{targetId:b.playerId});assert.equal(r.status,200,r.error);
+  assert.equal(r.duell.wartetAufAntwort,true);
+  w.uhr.t+=6000;const tick=await w.call(cb,'presence',{position:{...b.spawn,heading:0}});
+  assert.equal(tick.duellEinladung.von,'Anna','the invitation rides on the presence reply');
+  const sicht=await w.call(cb,'world');assert.equal(sicht.duell.eingeladen,true);
+  r=await w.call(cb,'duell_antwort',{duellId:sicht.duell.id,annehmen:false});assert.equal(r.status,200,r.error);
+  assert.equal((await w.call(ca,'world')).duell.grund,'abgelehnt');
+});
+
+await test('Both players choose in secret, the round resolves when both have chosen, and the winner is paid',async()=>{
+  const {w,a,b}=await duellWelt();
+  let r=await w.call(ca,'duell_fordern',{targetId:b.playerId});const id=r.duell.id;
+  r=await w.call(cb,'duell_antwort',{duellId:id,annehmen:true});assert.equal(r.status,200,r.error);assert.equal(r.duell.phase,'kampf');
+  assert.equal(r.duell.kampf.teams[0][0].monId,w.db.data.players[b.playerId].truppe[0],'each side sees its own team first');
+  const goldA=w.db.data.players[a.playerId].gold,goldB=w.db.data.players[b.playerId].gold,ruhmA=X.ruhm(w.db.data.players[a.playerId]);
+  let da=(await w.call(ca,'world')).duell;
+  r=await zug(w,ca,da,{kind:'move',move:'power'});assert.equal(r.status,200,r.error);
+  const warten=(await w.call(cb,'world')).duell;
+  assert.deepEqual(warten.kampf.gewaehlt,[false,true],'Ben sees that Anna has chosen - but not what');
+  assert.equal('aktionen' in warten.kampf,false);assert.equal(JSON.stringify(warten).includes('"move"'),false,'the choice itself stays hidden');
+  assert.equal(r.duell.kampf.revision,da.kampf.revision,'no round without both');
+  r=await zug(w,cb,warten);assert.equal(r.status,200,r.error);assert.equal(r.duell.kampf.revision,da.kampf.revision+1,'both chose - the round is played');
+  assert.ok(r.duell.kampf.events.length>0,'with events to animate');
+  for(let i=0;i<120;i++){da=(await w.call(ca,'world')).duell;if(da.phase!=='kampf')break;
+    const db=(await w.call(cb,'world')).duell;
+    if(da.kampf.warten[0]&&!da.kampf.gewaehlt[0])await zug(w,ca,da);
+    if(db.kampf.warten[0]&&!db.kampf.gewaehlt[0])await zug(w,cb,db);}
+  da=(await w.call(ca,'world')).duell;assert.equal(da.phase,'ende');assert.equal(da.ergebnis,'sieg');
+  assert.equal((await w.call(cb,'world')).duell.ergebnis,'niederlage');
+  const pa=w.db.data.players[a.playerId],pb=w.db.data.players[b.playerId];
+  assert.equal(pa.gold,goldA+X.DUELL.lohn.sieg);assert.equal(pb.gold,goldB+X.DUELL.lohn.trost);assert.equal(X.ruhm(pa),ruhmA+X.DUELL.ruhm);
+  assert.ok((await w.call(cb,'world')).ticker.some(e=>/Live-Duell: Anna besiegt Ben/.test(e.text)));
+});
+
+await test('Missing three rounds loses on time, giving up hands the win over, and a running duel blocks other fights',async()=>{
+  const {w,a,b}=await duellWelt();
+  let r=await w.call(ca,'duell_fordern',{targetId:b.playerId});const id=r.duell.id;
+  await w.call(cb,'duell_antwort',{duellId:id,annehmen:true});
+  r=await w.call(ca,'arena_start',{territoryId:1,version:(await w.call(ca,'world')).territories[0].version,squad:w.db.data.players[a.playerId].truppe});
+  assert.equal(r.status,409);assert.match(r.error,/Live-Duell/);
+  /* Ben tut nichts: drei Runden laufen ab, Anna waehlt jedes Mal. */
+  for(let i=0;i<3;i++){const da=(await w.call(ca,'world')).duell;if(da.phase!=='kampf')break;if(!da.kampf.gewaehlt[0])await zug(w,ca,da,{kind:'move',move:'guard'});w.uhr.t+=X.DUELL.runde+1000;}
+  let da=(await w.call(ca,'world')).duell;assert.equal(da.phase,'ende');assert.equal(da.grund,'zeit');assert.equal(da.ergebnis,'sieg');
+  /* Ein zweites Duell - diesmal gibt Anna auf. */
+  w.uhr.t+=1000;await w.call(cb,'presence',{position:{...b.spawn,heading:0}});
+  r=await w.call(ca,'duell_fordern',{targetId:b.playerId});assert.equal(r.status,200,r.error);
+  await w.call(cb,'duell_antwort',{duellId:r.duell.id,annehmen:true});
+  r=await w.call(ca,'duell_aufgeben',{duellId:r.duell.id});assert.equal(r.status,200,r.error);
+  assert.equal((await w.call(cb,'world')).duell.ergebnis,'sieg');
+});
+
+await test('Others can watch a running duel from the island',async()=>{
+  const {w,a,b}=await duellWelt();const cc=ALLE[2].code;await w.call(cc,'join');
+  let r=await w.call(ca,'duell_fordern',{targetId:b.playerId});await w.call(cb,'duell_antwort',{duellId:r.duell.id,annehmen:true});
+  const zuschauer=await w.call(cc,'world');assert.equal(zuschauer.duelleLaufend.length,1);
+  const id=zuschauer.duelleLaufend[0].id;
+  r=await w.call(cc,'world',{zuschauen:id});assert.equal(r.zuschauDuell.zuschauer,true);assert.deepEqual(r.zuschauDuell.namen,['Anna','Ben']);
+  assert.equal(r.duell,null,'watching is not taking part');
+});
+
 console.log('\n'+checks+' Ausbau-Pruefungen bestanden.');

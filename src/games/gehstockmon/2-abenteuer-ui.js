@@ -245,7 +245,9 @@
           sb.disabled=voll||(s.runes&&s.runes[0]||0)<kosten;card.appendChild(sb);}grid.appendChild(card);});drawer.appendChild(grid);});
     }
     function rival(peer){if(!c.open(peer.name,'rival'))return;var s=state(),at=c.world().position(),near=Math.hypot(at.x-peer.x,at.z-peer.z)<8;drawer.appendChild(player(peer.skin,peer.weapon));
-      fehdeTeil(peer);drawer.appendChild(el('p',X.skin(peer.skin).name+' · '+X.weapon(peer.weapon).name));drawer.appendChild(el('p','Überfall in zwei Stufen: Besiege die gespeicherte Waffenverteidigung, danach die Mon-Truppe. Bei Erfolg bekommst du genau ein getragenes oder brütendes Ei. Der Besitzer muss dabei keine Züge eingeben.'));
+      fehdeTeil(peer);drawer.appendChild(el('p',X.skin(peer.skin).name+' · '+X.weapon(peer.weapon).name));
+      /* Das Live-Duell: Kampfteam gegen Kampfteam, Zug um Zug - verlieren kann man dabei nichts. */
+      if(c.duell){var fordern=button('⚔ Zum Live-Duell fordern',function(){c.closeDrawer();c.duell(peer);},'gm-button gm-primary');fordern.disabled=c.busy()||peer.activity==='arena';drawer.appendChild(fordern);drawer.appendChild(el('p','Beide Kampfteams gegeneinander, beide wählen gleichzeitig. Sieg: +'+X.DUELL.lohn.sieg+' Gold und +'+X.DUELL.ruhm+' Ruhm. Niemand verliert Mons oder Eier.','gm-plan-hinweis'));}drawer.appendChild(el('p','Überfall in zwei Stufen: Besiege die gespeicherte Waffenverteidigung, danach die Mon-Truppe. Bei Erfolg bekommst du genau ein getragenes oder brütendes Ei. Der Besitzer muss dabei keine Züge eingeben.'));
       var protection=!!peer.protected,ohneEi=peer.eier===0,pause=s.raidCooldown>c.now();
       drawer.appendChild(el('p',protection?'Dieser Spieler steht nach einem Diebstahl zwei Stunden unter Schutz.'
         :ohneEi?'Dieser Spieler trägt gerade kein Ei. Ohne Ei gibt es nichts zu holen.'

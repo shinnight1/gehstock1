@@ -303,4 +303,7 @@
     s.revision++;return s;
   };
   A.flee = function(original) { var s=JSON.parse(JSON.stringify(original));s.phase='finished';s.winner='fled';s.revision++;s.events=[{text:'Du hast dich zurückgezogen. Das Gebiet bleibt beim Verteidiger.',kind:'flee'}];return s; };
+  /* Fuer das Live-Duell (2-duell.js): dieselben Treffer, Heilungen und
+     Faehigkeiten wie hier, nur mit zwei Spielern statt einem Plan. */
+  A.intern = { attack: attack, record: record, active: active };
 })(SG);
