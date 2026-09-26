@@ -7,8 +7,11 @@ import { parseEnv } from 'node:util';
 export function zugangPruefen(url, token) {
   let parsed;
   try { parsed = new URL(String(url || '').trim()); } catch { throw new Error('Die Datenbankadresse fehlt oder ist ungueltig.'); }
-  if (parsed.protocol !== 'https:' || !/^[a-z0-9-]+\.upstash\.io$/.test(parsed.hostname)
-      || parsed.username || parsed.password || parsed.port || parsed.search || parsed.hash || parsed.pathname !== '/') {
+  // Erlaubt sind Upstash selbst oder der Redis-Uebersetzer auf dem Handy (tools/handy-redis.mjs).
+  const upstash = parsed.protocol === 'https:' && /^[a-z0-9-]+\.upstash\.io$/.test(parsed.hostname) && !parsed.port;
+  const lokal = parsed.protocol === 'http:' && parsed.hostname === '127.0.0.1' && /^\d{4,5}$/.test(parsed.port);
+  if (!(upstash || lokal)
+      || parsed.username || parsed.password || parsed.search || parsed.hash || parsed.pathname !== '/') {
     throw new Error('Bitte die HTTPS-REST-Adresse deiner Upstash-Datenbank verwenden.');
   }
   token = String(token || '').trim();

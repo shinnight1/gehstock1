@@ -72,9 +72,36 @@ Neustart laeuft Node im Hintergrund und schreibt nach
 Port waere belegt. Termux und Termux:Boot brauchen in Android die Akku-Einstellung
 "Nicht eingeschraenkt".
 
+## Redis auf dem Handy statt Upstash
+
+Upstash zaehlt jeden Befehl (500 000 im Monat gratis). Ohne Limit laeuft es mit
+einem eigenen `redis-server` in Termux. Der Projektcode bleibt dabei unveraendert:
+`tools/handy-redis.mjs` nimmt auf `127.0.0.1:8079` Anfragen im Upstash-Format an
+und reicht sie an Redis auf `127.0.0.1:6379` weiter (Passwort, nur erlaubte
+Befehle). In `server.env` steht danach nur eine andere Adresse.
+
+```sh
+bash tools/handy-redis-einrichten.sh   # Redis einrichten, Probeumzug, Server bleibt auf Upstash
+bash tools/handy-redis-umschalten.sh   # endgueltig: frisch kopieren, server.env umstellen
+```
+
+`redis-umziehen.mjs` liest Upstash nur, leert das lokale Redis und vergleicht
+danach jeden Schluessel per SHA1. Nach dem Umschalten markiert
+`~/.config/gehstock1/redis-live`, dass das Handy die Wahrheit ist; ein weiterer
+Umzug bricht dann ab. **Vor dem Umschalten muessen Vercel, Netlify und Deno
+abgeschaltet oder umgeleitet sein** - sie schreiben weiter in Upstash, und was
+dort nach dem Umschalten passiert, landet nie auf dem Handy.
+
+Sicherung: Redis schreibt jede Sekunde auf den Speicher (AOF). Zusaetzlich sichert
+`tools/handy-sicherung.sh` einmal am Tag nach
+`~/.config/gehstock1/sicherungen/taeglich/` (14 Tage) und legt mit
+`tools/handy-auslagern.mjs` eine gepackte Kopie bei Upstash ab
+(`sicherung:handy:0` bis `:6`, ein Befehl pro Tag). Zurueckholen:
+`node tools/handy-auslagern.mjs --holen`, dann `welt-einspielen.mjs`.
+
 Pruefung ohne echte Zugangsdaten oder Schreibzugriff auf die Spielerwelt:
 
 ```sh
-node --test tools/handy-tests.mjs
+node --test tools/handy-tests.mjs tools/handy-redis-tests.mjs
 bash -n tools/handy-einrichten.sh
 ```
