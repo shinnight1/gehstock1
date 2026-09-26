@@ -19,7 +19,8 @@ import { buildSync, transformSync } from 'esbuild';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const SRC = path.join(ROOT, 'src');
-const DIST = path.join(ROOT, 'dist');
+// HIDEOUT_DIST: anderer Ausgabeordner - das Handy baut daneben und tauscht dann in einem Schritt.
+const DIST = process.env.HIDEOUT_DIST ? path.resolve(process.env.HIDEOUT_DIST) : path.join(ROOT, 'dist');
 
 const APP_NAME = 'Herr Gehstocks Hideout';
 const OFFLINE_FILE = 'Herr-Gehstocks-Hideout-Offline.html';

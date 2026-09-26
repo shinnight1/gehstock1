@@ -39,6 +39,14 @@ if [[ -f "$config_dir/redis.conf" ]]; then
   fi
 fi
 
+# Neue Staende von GitHub selbst einspielen (tools/handy-autoupdate.sh).
+pid="$(cat "$config_dir/autoupdate.pid" 2>/dev/null || true)"
+if [[ -z "$pid" ]] || ! kill -0 "$pid" 2>/dev/null; then
+  nohup bash "$repo/tools/handy-autoupdate.sh" > /dev/null 2>&1 &
+  echo $! > "$config_dir/autoupdate.pid"
+  echo 'Automatische Updates aktiv.'
+fi
+
 if [[ -f "$config_dir/Caddyfile" ]]; then
   # Caddys Verwaltungsschnittstelle antwortet nur, wenn Caddy schon laeuft.
   if ! curl -s -o /dev/null --max-time 2 http://localhost:2019/config/; then

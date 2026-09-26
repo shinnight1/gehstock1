@@ -57,14 +57,15 @@ Vercel, Netlify und Deno gibt es nicht mehr. `gehstock1.vercel.app`,
 Weiterleitungen aufs Handy. Nichts davon wieder veröffentlichen: eine alte
 Auslieferung schriebe in Upstash, also in eine veraltete Welt neben der echten.
 
-Eine Änderung erreicht die Seite so: testen, pushen, dann auf dem Handy
-
-```sh
-bash ~/gehstock1/tools/handy-aktualisieren.sh
-```
-
-Das holt den Stand, baut und startet den Server neu. Vorher `node tools/test.mjs`
-und `npm run test:handy` laufen lassen.
+**Ein Push auf `main` geht von selbst live**, spätestens nach etwa drei Minuten:
+Das Handy schaut alle zwei Minuten auf GitHub nach (`tools/handy-autoupdate.sh`)
+und spielt den neuen Stand über `tools/handy-aktualisieren.sh` ein. Live geht er
+nur, wenn `node tools/test.mjs` und die Handy-Tests bestehen, der Build klappt und
+der Server damit startet - sonst bleibt der bisherige Stand stehen, und der
+Grund steht auf dem Handy in `~/.config/gehstock1/update.log`. Darum gilt mehr
+denn je: nur pushen, was fertig ist, und vorher selbst `node tools/test.mjs` und
+`npm run test:handy` laufen lassen. Während eines Updates ist die Seite ein paar
+Sekunden weg; gebaut wird daneben (`dist.neu`), getauscht erst am Ende.
 
 Lokal entwickeln: `npm run build`, dann `npm run dev` (http://localhost:8787, eine
 leere Testwelt nur im Arbeitsspeicher - nie die echte).

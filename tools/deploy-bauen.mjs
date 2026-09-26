@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const DIST = path.join(ROOT, 'dist');
+const DIST = process.env.HIDEOUT_DIST ? path.resolve(process.env.HIDEOUT_DIST) : path.join(ROOT, 'dist');
 const ARENA = path.join(ROOT, 'arena');
 const ARENA_DIST = path.join(ARENA, 'packages', 'client', 'dist');
 const ARENA_ZIEL = path.join(DIST, 'games', 'arena');

@@ -12,7 +12,8 @@ Redis auf demselben Handy. Wie das eingerichtet ist und wie man es auf einem
 anderen Gerät neu aufsetzt: [docs/HANDY-SERVER.md](docs/HANDY-SERVER.md).
 Zugangsdaten und Spielstände sind nicht Bestandteil der ZIP.
 
-Eine Änderung kommt auf die Seite: pushen, dann auf dem Handy
+Eine Änderung kommt von selbst auf die Seite: pushen genügt, das Handy prüft und
+spielt sie innerhalb weniger Minuten ein. Von Hand geht es mit
 
 ```sh
 bash ~/gehstock1/tools/handy-aktualisieren.sh

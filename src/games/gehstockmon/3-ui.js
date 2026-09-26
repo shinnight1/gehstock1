@@ -467,5 +467,15 @@
     return {get state(){return st;},selftest:function(){var ohneBild=D.KATALOG.filter(function(k){return !SG.assets[k.bild];});if(ohneBild.length)throw new Error('Mon ohne Bild: '+ohneBild.map(function(k){return k.id;}).join(', '));},destroy:function(){dead=true;requestEpoch++;animationToken++;if(closeTimer)host.cancel(closeTimer);window.removeEventListener('blur',joyEnd);window.removeEventListener('offline',connectionLost);window.removeEventListener('online',connectionRestored);document.removeEventListener('visibilitychange',joyEnd);if(world)world.destroy();}};
   }
   SG.register({id:'gehstockmon',name:'GehstockMon',category:'tycoon',onlineOnly:true,heavy:true,credit:{icon:'🐉',text:'Handgemacht von Louis entwickelt.'},desc:'Gemeinsame Online-Welt: 57 Mons, 9 Biome, Quests, Duelle und Überfälle',tags:['3d','monster','arena','eier','revier','spielerwelt'],
-    preview:function(c,w,h){c.fillStyle='#18343a';c.fillRect(0,0,w,h);if(!R.previewArt&&SG.assets['gm-spaeher']){R.previewArt=new Image();R.previewArt.src=SG.assets['gm-spaeher'];}if(R.previewArt&&R.previewArt.complete&&R.previewArt.naturalWidth)c.drawImage(R.previewArt,w*.22,-h*.18,h*1.2,h*1.2);c.fillStyle='rgba(8,22,25,.7)';c.fillRect(0,h*.71,w,h*.29);SG.gfx.text(c,'GEHSTOCKMON',w*.5,h*.86,{font:SG.gfx.font(Math.round(h*.11),700),fill:'#ffdc97',align:'center',baseline:'middle'});},mount:mount});
+    preview:function(c,w,h){
+      /* Kachel im Hub: das Thumbnail, randlos zugeschnitten. Es kommt als eigene
+         Datei und ist beim ersten Malen oft noch nicht da - dann steht solange der
+         Schriftzug, und die Kachel malt sich nach, sobald das Bild geladen ist.
+         Hat der Hub die Flaeche inzwischen neu vermessen, gilt dessen Malen. */
+      var breite=c.canvas&&c.canvas.width;
+      function malen(){if(c.canvas&&c.canvas.width!==breite)return;c.fillStyle='#18343a';c.fillRect(0,0,w,h);var b=R.previewArt;
+        if(b&&b.complete&&b.naturalWidth){var s=Math.max(w/b.naturalWidth,h/b.naturalHeight),bw=b.naturalWidth*s,bh=b.naturalHeight*s;c.drawImage(b,(w-bw)/2,(h-bh)/2,bw,bh);return;}
+        SG.gfx.text(c,'GEHSTOCKMON',w*.5,h*.5,{font:SG.gfx.font(Math.round(h*.11),700),fill:'#ffdc97',align:'center',baseline:'middle'});}
+      if(!R.previewArt&&SG.assets['gm-thumbnail']){R.previewArt=new Image();R.previewWartend=[];R.previewArt.onload=function(){R.previewWartend.splice(0).forEach(function(f){f();});};R.previewArt.src=SG.assets['gm-thumbnail'];}
+      malen();if(R.previewArt&&!R.previewArt.complete)R.previewWartend.push(malen);},mount:mount});
 })(SG);

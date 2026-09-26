@@ -34,7 +34,9 @@ Danach auf dem Handy `http://localhost:8080` oeffnen. Bereits die Nutzung dieses
 Servers greift auf die echte Spielerwelt zu. Die Dateien werden nur aus `dist/`
 ausgeliefert. Zugangdatei, Sicherungen und Quellcode sind nicht Webinhalte.
 
-Beenden mit CTRL+C. Neuen Stand holen, bauen und neu starten:
+Neue Staende von GitHub spielt `tools/handy-autoupdate.sh` alle zwei Minuten selbst
+ein (gestartet von `handy-dienste.sh`, Protokoll in `~/.config/gehstock1/update.log`).
+Live geht nur, was Tests, Build und Start besteht. Beenden mit CTRL+C. Von Hand:
 
 ```sh
 bash tools/handy-aktualisieren.sh

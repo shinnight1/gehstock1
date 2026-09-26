@@ -34,7 +34,8 @@ Redis auf demselben Handy, jede Nacht gesichert. Die alten Adressen bei Vercel
 und Netlify leiten dorthin weiter. Aufbau, Einrichtung und Sicherungen:
 [docs/HANDY-SERVER.md](docs/HANDY-SERVER.md).
 
-Eine Änderung kommt so auf die Seite: pushen, dann auf dem Handy
+Eine Änderung kommt von selbst auf die Seite: pushen genügt, das Handy spielt
+neue Stände nach Tests und Build innerhalb weniger Minuten ein. Von Hand geht es mit
 
 ```bash
 bash ~/gehstock1/tools/handy-aktualisieren.sh
