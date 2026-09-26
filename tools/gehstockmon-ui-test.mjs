@@ -48,7 +48,7 @@ export async function checkUi(D,E,A,handler,code,clock,otherCode){
   await handler(new Request('http://localhost/api/gehstockmon',{method:'POST',body:JSON.stringify({code:otherCode,op:'presence',position:{x:0,z:30,heading:0}})}));
   advance(2200);await flush();assert.equal(visiblePeers.length,1);assert.equal(visiblePeers[0].name,'Mitspieler');
   worldFrame(()=>({x:200,y:200,near:true,visible:true}),false,null,visiblePeers.map(info=>({id:info.id,position:info,info})));assert.equal(root.querySelector('.gm-peer-label').hidden,false);assert.equal(root.querySelector('.gm-peer-label').textContent,'Mitspieler');
-  find(e=>e.attrs['aria-label']===D.FELDER[0].name+' auswählen').fire('click');click('⚔ Arena betreten');await flush();assert.ok(blocked);assert.equal(pauses.at(-1),true);
+  find(e=>e.attrs['aria-label']===D.FELDER[0].name+' auswählen').fire('click');click('⚔ Angreifen');await flush();assert.ok(blocked);assert.equal(pauses.at(-1),true);
   let b=latest.arena;for(let turn=0;b.phase!=='finished'&&turn<90;turn++){chooseMove(b);await flush();advance(5000);await flush();b=latest.arena;}
   assert.equal(b.winner,'wir');assert.equal(latest.territories[0].ownerId,latest.playerId);click('Zurück zur Karte');assert.equal(blocked,false);assert.equal(pauses.at(-1),false);
   click('⌖ Weltkarte');assert.ok(root.all().some(e=>e.classList.contains('gm-pin-owner')&&e.textContent==='Besitzer: UI Test'),'map names the territory owner');find(e=>e.attrs['aria-label']===D.FELDER[0].name+' auswählen').fire('click');
@@ -60,7 +60,7 @@ export async function checkUi(D,E,A,handler,code,clock,otherCode){
   advance(3000);assert.ok(szene.classList.contains('gm-schlupf-da'),'the Mon is revealed');
   szene.fire('click');assert.equal(root.querySelector('.gm-schlupf'),null,'a tap closes the scene');click('×');
   click('▦ Mons');find(e=>e.classList.contains('gm-party-card')).fire('click');const old=game.state.truppe.slice();click('2. Platz: '+D.mon(old[1]).name);await flush();assert.equal(game.state.truppe[1],old[0]);assert.equal(latest.profile.truppe[1],old[0],'squad saved on server immediately');
-  click('×');find(e=>e.attrs['aria-label']===D.FELDER[1].name+' auswählen').fire('click');click('⚔ Arena betreten');await flush();
+  click('×');find(e=>e.attrs['aria-label']===D.FELDER[1].name+' auswählen').fire('click');click('⚔ Angreifen');await flush();
   game.destroy();timers.clear();while(stage.firstChild)stage.removeChild(stage.firstChild);game=mount();await flush();assert.equal(game.state.besitz.length,5);assert.equal(game.state.truppe[1],old[0]);assert.equal(root.querySelector('.gm-arena').hidden,false,'active server arena resumes on reload');
   const revision=latest.arena.revision,gold=game.state.gold;loseResponse=true;chooseMove(latest.arena);await flush();assert.ok(blocked);assert.equal(root.querySelector('.gm-connection').hidden,false);assert.ok(SG.gehstockmon.online.pending());
   assert.equal(latest.arena.revision,revision+1,'lost response action did run on server');assert.equal(game.state.gold,gold);
@@ -78,11 +78,11 @@ export async function checkUi(D,E,A,handler,code,clock,otherCode){
   assert.deepEqual(values.get('stand'),legacy,'old local save left intact and unused');assert.deepEqual(values.get('arena-v1'),{invalid:'legacy fight'});assert.deepEqual(values.get('online-squad'),['moosling']);
   // Close an active fight exactly at the deadline, including a response lost
   // before closing. The pending receipt remains recoverable on the next day.
-  click('⚔ Arena betreten');await flush();loseResponse=true;chooseMove(latest.arena);await flush();assert.ok(SG.gehstockmon.online.pending());
+  click('⚔ Angreifen');await flush();loseResponse=true;chooseMove(latest.arena);await flush();assert.ok(SG.gehstockmon.online.pending());
   const close=SG.gehstockmon.zeiten.access(clock.value).closesAt;await jump(close);assert.ok(blocked);assert.equal(root.querySelector('.gm-arena').hidden,true);assert.ok(root.querySelector('.gm-closed-card'));assert.ok(root.querySelector('.gm-connection').textContent.includes('Freitag · 7–13 Uhr'));
   await assert.rejects(SG.gehstockmon.online.request('resume'),e=>e.status===423);assert.ok(SG.gehstockmon.online.pending(),'closed requests retain uncertain receipts');
   const next=SG.gehstockmon.zeiten.access(clock.value).nextOpenAt;await jump(next);assert.equal(root.querySelector('.gm-connection').hidden,true,'reopens without reloading');assert.equal(SG.gehstockmon.online.pending(),null);
-  click('Zurück zur Karte');click('⚔ Arena betreten');await flush();delayReply=true;chooseMove(latest.arena);await flush();assert.ok(releaseReply);
+  click('Zurück zur Karte');click('⚔ Angreifen');await flush();delayReply=true;chooseMove(latest.arena);await flush();assert.ok(releaseReply);
   await jump(SG.gehstockmon.zeiten.access(clock.value).closesAt);releaseReply();await flush();assert.ok(root.querySelector('.gm-closed-card'));assert.equal(root.querySelector('.gm-arena').hidden,true,'late combat response cannot reopen the closed game');
   game.destroy();timers.clear();while(stage.firstChild)stage.removeChild(stage.firstChild);game=mount();await flush();assert.ok(root.querySelector('.gm-closed-card'),'loading while closed shows hours rather than a connection error');assert.ok(blocked);
   await jump(SG.gehstockmon.zeiten.access(clock.value).nextOpenAt);assert.equal(root.querySelector('.gm-connection').hidden,true);assert.ok(game.state.eggs.some(e=>e.id.startsWith('weekend-')),'weekend eggs arrive when reopening');
@@ -92,6 +92,16 @@ export async function checkUi(D,E,A,handler,code,clock,otherCode){
      erst im Browser auffaellt. */
   timers.clear();while(stage.firstChild)stage.removeChild(stage.firstChild);game=mount();await flush();
   await jump(SG.gehstockmon.zeiten.access(clock.value).nextOpenAt);await flush();
+  /* Die Gebietskarte folgt dem naechstgelegenen Gebiet. Ein von Hand
+     gewaehltes bleibt stehen, bis die Figur woanders hinlaeuft. */
+  const titel=()=>root.querySelector('.gm-target-kopf').children[0].textContent,sicht=()=>({x:0,y:0,near:true,visible:true});
+  const stehen=(x,z)=>{world.setPosition({x,z});worldFrame(sicht,false,{x,z},[]);};
+  click('×');stehen(D.BIOME[2].x,D.BIOME[2].z);assert.equal(titel(),D.FELDER[2].name,'the card shows the nearest territory');
+  stehen(D.BIOME[4].x+3,D.BIOME[4].z);assert.equal(titel(),D.FELDER[4].name,'and follows the figure');
+  find(e=>e.attrs['aria-label']===D.FELDER[0].name+' auswählen').fire('click');
+  stehen(D.BIOME[4].x+4,D.BIOME[4].z);assert.equal(titel(),D.FELDER[0].name,'a tapped territory stays while the figure stands still');
+  stehen(D.BIOME[4].x+16,D.BIOME[4].z);assert.equal(titel(),D.FELDER[4].name,'walking elsewhere hands the card back to the nearest');
+  stehen(0,30); // zurueck an den Start - das Duell weiter unten braucht die Figur dort
   const eigenes=game.state.truppe[0];
   click('▦ Mons');await flush();
   find(e=>e.tagName==='button'&&e.textContent.includes(D.mon(eigenes).name)).fire('click');await flush();

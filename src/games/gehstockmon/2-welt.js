@@ -792,6 +792,8 @@ p.updatedAt=info.updatedAt;p.age=Math.max(0,(serverTime-info.updatedAt)/1000);p.
       move: function (x, y) { if (inputBlocked || battle) return; stick.x = x; stick.y = y; },
       blockInput: function (yes) { inputBlocked = yes; if (yes) clearInput(); },
       walkTo: function (id) { walkToPoint(walls.entrance(id)); },
+      /* Wohin die Figur gerade laeuft: das Ende des Wegs, sonst ihr naechster Schritt. */
+      ziel: function () { var z = route.length ? route[route.length - 1] : destination; return { x: z.x, z: z.z }; },
       distanceTo: function (id) { var o = walls.entrance(id); return Math.hypot(explorer.group.position.x - o.x, explorer.group.position.z - o.z); },
       pause: function (yes) { if (yes) loop.pause(true); else loop.resume(true); },
       destroy: function () {

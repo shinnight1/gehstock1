@@ -108,3 +108,26 @@
 .gm-filter-knopf{flex:1;min-width:88px;padding:8px 10px;border:1px solid #3b6672;border-radius:999px;background:#102f38;color:#b9d3d8;font-size:13px;cursor:pointer}
 .gm-filter-knopf.aktiv{background:#1d4d5c;border-color:#d8b66f;color:#f0ca80;font-weight:600}
 .gm-post-besatzung{display:block;color:#93aeb5;font-size:12px;margin:4px 0}
+
+/* Kompakte Gebietskarte (27.09.2026): Name und Schwierigkeit in einer Zeile,
+   darunter eine Zeile zum Gebiet, dann die zwei Knoepfe nebeneinander. Die
+   Karte folgt dem naechstgelegenen Gebiet und war vorher fast doppelt so
+   hoch. Steht ganz hinten, damit sie die aelteren Regeln je Bildschirm
+   ueberstimmt - die Position (unten rechts) bleibt deren Sache. */
+.gm-target{width:236px;padding:10px 12px 11px;border-radius:14px;border-top-width:2px}
+.gm-target .gm-target-kopf{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.gm-target .gm-target-kopf h2{margin:0;font-size:20px;line-height:1.2;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gm-target .gm-target-stufe{flex:none;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;color:#1d2b2f;background:#dfb774}
+.gm-target.rival .gm-target-stufe{background:#f0a597}
+.gm-target.eigen .gm-target-stufe{background:#8fd3b5}
+.gm-target .gm-target-zeile{display:block;margin:3px 0 0;font-size:12.5px;line-height:1.35;color:#c9d8d2}
+.gm-target .gm-target-badges{margin:6px 0 0;gap:4px 8px;font-size:12px}
+.gm-target .gm-target-badges span:last-child{color:inherit}
+.gm-target .gm-target-actions{flex-wrap:nowrap;gap:6px;margin-top:9px}
+.gm-target .gm-target-actions .gm-button{flex:1 1 0;min-height:38px;padding:7px 8px;font-size:13px!important}
+@media (pointer:coarse){
+  .gm-target{width:min(236px,34vw)}
+  .gm-target .gm-target-actions .gm-button{min-height:40px}
+}
+@media(max-width:650px){.gm-target{width:calc(100% - 145px);max-width:236px}}
+@media(max-width:380px){.gm-target{width:auto;max-width:none}}
