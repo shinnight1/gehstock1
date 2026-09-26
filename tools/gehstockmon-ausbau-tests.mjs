@@ -266,4 +266,46 @@ await test('The island ticker reports rare hatches and conquests to everyone, ta
   assert.ok(r.ticker.length<=12,'the view stays short');
 });
 
+/* Ein Kampf mit einem festen Zug, bis er zu Ende ist - ueber den Server. */
+async function auskaempfen(w,code,r){let bt=r.arena;for(let i=0;bt&&bt.phase!=='finished'&&i<200;i++){const u=bt.teams[0][bt.active[0]];
+  r=await w.call(code,'arena_turn',{battleId:bt.id,revision:bt.revision,action:bt.phase==='replace'?{kind:'switch',slot:bt.teams[0].findIndex(x=>x.hp>0)}:{kind:'move',move:bt.round>=u.powerReady?'power':'strike'}});bt=r.arena;}return r;}
+
+await test('Losing a territory to a player opens a revenge with a bonus, the report says so, and taking it back is news',async()=>{
+  const w=welt({random:()=>.5}),a=await w.call(ca,'join'),b=await w.call(cb,'join');
+  const pa=()=>w.db.data.players[a.playerId],pb=()=>w.db.data.players[b.playerId];
+  Object.assign(w.db.data.territories[5],{ownerId:a.playerId,ownerName:'Anna',...E.outpost(null,mon)});
+  const stark=['endrichter','nullwyrm','risskaiser','aetherdrache'];pb().besitz.push(...stark);
+  w.uhr.t+=60000;/* Ben greift eine Minute nach Annas letztem Besuch an. */
+  let r=await w.call(cb,'arena_start',{territoryId:6,version:(await w.call(cb,'world')).territories[5].version,squad:stark});
+  r=await auskaempfen(w,cb,r);assert.equal(r.territories[5].ownerId,b.playerId,'Ben takes Tauwiese');
+  assert.equal(pa().revanche[6].gegner,b.playerId,'Anna may take revenge');
+  /* Anna kommt eine Stunde spaeter zurueck: der Bericht nennt den Verlust und die Revanche. */
+  w.uhr.t+=E.HOUR;r=await w.call(ca,'join');
+  assert.ok(r.morgenbericht,'a report after an hour away');
+  const zeile=r.morgenbericht.zeilen.find(z=>/Ben hat dir Tauwiese abgenommen/.test(z.text));
+  assert.ok(zeile&&zeile.revanche===6,'the report offers the revenge');
+  assert.ok(r.morgenbericht.neuigkeiten.some(t=>/Ben erobert Tauwiese von Anna/.test(t)),'and tells the news');
+  /* Die Revanche: dieselbe Truppe kaempft mit Zuschlag. */
+  pa().besitz.push(...stark);
+  r=await w.call(ca,'arena_start',{territoryId:6,version:r.territories[5].version,squad:stark});
+  assert.equal(r.status,200,r.error);assert.equal(r.arena.revanche,true);assert.match(r.message,/Revanche: \+15 %/);
+  const ohne=A.create(stark.map(id=>X.mon(pa(),id)),[D.mon('moosling')],{}).teams[0][0].maxHp;
+  assert.equal(r.arena.teams[0][0].maxHp,Math.round(ohne*(1+X.REVANCHE_BONUS+X.aussenseiterBonus(0,1))),'fifteen percent on top of the underdog help');
+  r=await auskaempfen(w,ca,r);assert.equal(r.territories[5].ownerId,a.playerId);
+  assert.match(r.ticker.at(-1).text,/Revanche! Anna holt sich Tauwiese von Ben zurück/);
+  assert.equal(pa().revanche[6],undefined,'the revenge is used up');assert.equal(pb().revanche[6].gegner,a.playerId,'and now Ben has one');
+});
+
+await test('A revenge runs out after thirty hours, and a short absence brings no report',async()=>{
+  const p=D.neuerStand({revanche:{6:{gegner:'x',name:'Ben',bis:mon+X.REVANCHE_DAUER}}},mon);
+  assert.ok(p.revanche[6]);assert.equal(D.neuerStand(p,mon+X.REVANCHE_DAUER+1).revanche[6],undefined);
+  const w=welt(),a=await w.call(ca,'join');
+  w.uhr.t+=10*60000;assert.equal((await w.call(ca,'join')).morgenbericht,undefined,'ten minutes away is no news');
+  /* Ohne Gebiet nennt der Bericht das Findelhaus, und eine laufende Serie mahnt die Truhe an. */
+  w.db.data.players[a.playerId].serie={zahl:3,tag:X.vorherigerSchultag(H.day(mon))};/* zuletzt am Freitag */
+  w.uhr.t+=2*E.HOUR;const r=await w.call(ca,'join');
+  assert.ok(r.morgenbericht.zeilen.some(z=>/Findelhaus/.test(z.text)),'the landless learn about the Findelhaus');
+  assert.ok(r.morgenbericht.zeilen.some(z=>/Serie: 3 Tage/.test(z.text)),'and about their streak');
+});
+
 console.log('\n'+checks+' Ausbau-Pruefungen bestanden.');

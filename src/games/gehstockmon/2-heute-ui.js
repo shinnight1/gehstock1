@@ -62,8 +62,31 @@
       if (toastTimer) c.cancel(toastTimer);
       toastTimer = c.after(function () { toast.hidden = true; }, 6500);
     }
+    /* Der Morgenbericht nach dem Betreten: was seit dem letzten Besuch
+       passiert ist, mit einem Knopf zur Revanche, wo eine offen ist. */
+    function bericht(b) {
+      if (!b || !c.open('Seit deinem letzten Besuch', 'bericht-heute')) return;
+      var liste = el('ul', undefined, 'gm-bericht-liste');
+      b.zeilen.forEach(function (z) {
+        var zeile = el('li', undefined, z.art);zeile.appendChild(el('span', z.text));
+        if (z.revanche && c.revanche) {
+          var los = button('Zur Revanche', function () { c.revanche(z.revanche); }, 'gm-button gm-secondary');
+          los.style.marginTop = '8px';zeile.appendChild(el('br'));zeile.appendChild(los);
+        }
+        liste.appendChild(zeile);
+      });
+      if (b.zeilen.length) drawer.appendChild(liste);
+      if (b.neuigkeiten && b.neuigkeiten.length) {
+        drawer.appendChild(el('h3', 'Auf der Insel'));
+        var neu = el('ul', undefined, 'gm-bericht-liste');
+        b.neuigkeiten.forEach(function (t) { neu.appendChild(el('li', t)); });
+        drawer.appendChild(neu);
+      }
+      if (stand && !stand.truhe) drawer.appendChild(button('Zu den Tagesaufgaben', zeigen, 'gm-button gm-primary'));
+      drawer.appendChild(button('Los geht’s', c.closeDrawer, 'gm-button gm-secondary'));
+    }
     return {
-      zeigen: zeigen,
+      zeigen: zeigen, bericht: bericht,
       apply: function (res) {
         if (!res) return;
         if (res.alltag) stand = res.alltag;

@@ -6,7 +6,7 @@ import {activeDungeon,settleDungeons,dungeonResult,dungeonAction} from './lib/ge
 import {stadtAction,arenaStand,championSold} from './lib/gehstockmon-stadt.mjs';
 import {schenken,schenkungen} from './lib/gehstockmon-schenken.mjs';
 import {lesen as anwesenheitLesen,schreiben as anwesenheitSchreiben} from './lib/gehstockmon-anwesenheit.mjs';
-import {tickern,tickerSicht,alltagSicht,alltagAction} from './lib/gehstockmon-alltag.mjs';
+import {tickern,tickerSicht,alltagSicht,alltagAction,morgenbericht} from './lib/gehstockmon-alltag.mjs';
 
 const KEY = 'world-v2';
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -298,7 +298,15 @@ function settleBattle(world, p, id, now, requestId) {
       if (defender && defender.posten) delete defender.posten[t.id];
       Object.assign(t, E.outpost(null, now), { level, ownerId: id, ownerName: p.name, defense: verteidigung(p, t.id), version: t.version + 1 });
       b.message = 'Gebiet erobert! +40 Gold. Dein Außenposten produziert jetzt Gold und alle 2 Stunden ein Ei.';
-      tickern(world, '⚔️ ' + p.name + ' erobert ' + D.FELDER[t.id - 1].name + (defender ? ' von ' + defender.name : ''), 'eroberung', now, id);
+      /* Wer verliert, bekommt seine Revanche - wer sie gerade genommen hat,
+         hat sie eingeloest. */
+      const warRache = !!b.revanche;
+      if (p.revanche) delete p.revanche[t.id];
+      if (defender) { defender.revanche = defender.revanche || {}; defender.revanche[t.id] = { gegner: id, name: p.name, bis: now + X.REVANCHE_DAUER }; }
+      if (warRache) b.message = 'Revanche geglückt! ' + b.message;
+      tickern(world, warRache
+        ? '🔥 Revanche! ' + p.name + ' holt sich ' + D.FELDER[t.id - 1].name + (defender ? ' von ' + defender.name : '') + ' zurück'
+        : '⚔️ ' + p.name + ' erobert ' + D.FELDER[t.id - 1].name + (defender ? ' von ' + defender.name : ''), warRache ? 'revanche' : 'eroberung', now, id);
     }
   } else b.message = b.winner === 'fled' ? 'Zurückgezogen. Das Gebiet bleibt beim Verteidiger.' : 'Deine Truppe ist zurück im Lager. Versuche andere Attacken oder eine andere Aufstellung.';
   world.reports.push({ id: requestId, time: now, attackerId: id, defenderId, territoryId: t.id, winner: b.winner,
@@ -419,7 +427,7 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
               startedAt:n<3?timestamp-E.HATCH_TIME:null,readyAt:n<3?timestamp:null}));
           }
         }
-        const p = world.players[id]; p.name = name || p.name; p.lastSeen = timestamp;
+        const p = world.players[id], zuletztDa = p.lastSeen || 0; p.name = name || p.name; p.lastSeen = timestamp;
         /* Beim ersten Kontakt der Woche beginnt die Zerhacker-Uhr. Sie stand
            frueher in weltprojekte und damit hinter dem Schreiben: der Stand
            wurde jedes Mal neu gesetzt und nie abgelegt, der Beutel blieb auf
@@ -487,9 +495,11 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
             /* Wer weniger Land haelt als sein Ziel, schlaegt haerter zu. */
             const meine = world.territories.filter((v) => v.ownerId === id).length;
             const seine = t.ownerId ? world.territories.filter((v) => v.ownerId === t.ownerId).length : 0;
-            const aussenseiter = X.aussenseiterBonus(meine, seine);
-            p.arena = A.create(p.truppe.map(mid=>X.mon(p,mid)), A.defenders(t.id, t.ownerId ? t.defense : null), { id: body.requestId, territoryId: t.id, version: t.version, level: t.level, npcTerritory: !t.ownerId, aussenseiter, now: timestamp });
+            const aussenseiter = X.aussenseiterBonus(meine, seine), rache = X.revancheBonus(p, t, timestamp);
+            p.arena = A.create(p.truppe.map(mid=>X.mon(p,mid)), A.defenders(t.id, t.ownerId ? t.defense : null), { id: body.requestId, territoryId: t.id, version: t.version, level: t.level, npcTerritory: !t.ownerId, aussenseiter: aussenseiter + rache, now: timestamp });
+            if (rache) { p.arena.revanche = true; extra.revanche = 'Revanche: +' + Math.round(rache * 100) + ' % KP und Angriff gegen ' + t.ownerName + '.'; }
             if (aussenseiter) extra.message = 'Außenseiterhilfe: +' + Math.round(aussenseiter * 100) + ' % KP und Angriff, weil ' + t.ownerName + ' mehr Gebiete hält als du.';
+            if (extra.revanche) extra.message = extra.revanche + (extra.message ? ' ' + extra.message : '');
           }
           if (body.op === 'arena_turn' || body.op === 'arena_flee') {
             const b = p.arena;
@@ -545,6 +555,12 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
           deliverRewards(p,timestamp); X.sonderEierLiefern(p);
           const weekendEggs = activeArena(p)||activeDuel(p)?0:E.deliverWeekend(p, timestamp);
           if (weekendEggs) extra.weekendDelivery = weekendEggs;
+          /* Wer nach mehr als zwanzig Minuten zurueckkommt, bekommt den
+             Morgenbericht: was seit dem letzten Besuch passiert ist. */
+          if (body.op === 'join' && zuletztDa && timestamp - zuletztDa > 20 * 60000) {
+            const bericht = morgenbericht(world, p, id, zuletztDa, timestamp, { tagesgold: p.dailyDelivery || 0, wochenende: weekendEggs || 0 });
+            if (bericht) extra.morgenbericht = bericht;
+          }
         } catch (err) { if (err instanceof GameError) throw err; throw new GameError(err.message); }
         if (mutations.includes(body.op)) p.actionReceipts = receipts.concat({ id: body.requestId, op: body.op, extra }).slice(-40);
         if (body.op === 'world' && entry && nurUhrGestellt(entry.data, world, id, timestamp)) return json(publicResult(world, id, timestamp, { ...extra, adminOverride: bypass }));

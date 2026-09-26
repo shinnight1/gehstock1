@@ -36,6 +36,42 @@ export function alltagSicht(p, now) {
   };
 }
 
+/* Der Morgenbericht: was seit dem letzten Besuch passiert ist. Wer drei
+   Stunden im Unterricht sass, will beim Oeffnen wissen, ob sein Land noch
+   steht - und wer es ihm genommen hat. */
+export function morgenbericht(world, p, id, seit, now, extra = {}) {
+  const zeilen = [];
+  const kaempfe = (world.reports || []).filter((r) => r.defenderId === id && r.time > seit && Array.isArray(r.verteidiger));
+  for (const r of kaempfe) {
+    const angreifer = world.players[r.attackerId], feld = D.FELDER[r.territoryId - 1];
+    if (!angreifer || !feld) continue;
+    if (r.winner === 'wir') {
+      const t = world.territories[r.territoryId - 1], rache = X.revanche(p, t, now);
+      zeilen.push({ art: 'schlecht', text: '⚔️ ' + angreifer.name + ' hat dir ' + feld.name + ' abgenommen.'
+        + (rache ? ' Revanche möglich: +' + Math.round(X.REVANCHE_BONUS * 100) + ' %, noch ' + Math.max(1, Math.round((rache.bis - now) / 3600000)) + ' Std.' : ''),
+        ...(rache ? { revanche: r.territoryId } : {}) });
+    } else if (r.winner !== 'stale') zeilen.push({ art: 'gut', text: '🛡️ Deine Verteidigung auf ' + feld.name + ' hielt gegen ' + angreifer.name + '.' });
+  }
+  const raub = (world.reports || []).filter((r) => r.defenderId === id && r.time > seit && /erbeutet ein Ei/.test(r.text || ''));
+  for (const r of raub) zeilen.push({ art: 'schlecht', text: '🥚 ' + (world.players[r.attackerId]?.name || 'Jemand') + ' hat dir ein Ei gestohlen.' });
+  if (extra.tagesgold) zeilen.push({ art: 'gut', text: '💰 +' + extra.tagesgold + ' Gold Tagesgeld für deine Gebiete.' });
+  if (extra.wochenende) zeilen.push({ art: 'gut', text: '🥚 ' + extra.wochenende + ' Wochenend-Eier sind in deiner Tasche.' });
+  const aussen = world.territories.filter((t) => t.ownerId === id).reduce((s, t) => s + (t.eggStock || 0), 0);
+  if (aussen) zeilen.push({ art: 'info', text: '🏕️ ' + aussen + (aussen === 1 ? ' Ei wartet' : ' Eier warten') + ' auf deinen Außenposten.' });
+  const fertig = p.eggs.filter((e) => e.readyAt !== null && e.readyAt <= now).length;
+  if (fertig) zeilen.push({ art: 'gut', text: '🐣 ' + fertig + (fertig === 1 ? ' Ei ist' : ' Eier sind') + ' fertig ausgebrütet.' });
+  if (!world.territories.some((t) => t.ownerId === id)) {
+    const n = X.findeleiStand(p, now).fertig;
+    if (n) zeilen.push({ art: 'info', text: '🏠 Du hältst kein Gebiet - im Findelhaus in Stockhafen ' + (n === 1 ? 'liegt ein Ei' : 'liegen ' + n + ' Eier') + ' für dich.' });
+  }
+  const serie = X.serieStand(p, now), a = X.alltagStand(p, now);
+  if (serie && !a.truhe) zeilen.push({ art: 'info', text: '🔥 Deine Serie: ' + serie + (serie === 1 ? ' Tag' : ' Tage') + '. Öffne heute die Tagestruhe, sonst reißt sie.' });
+  else if (!serie && p.serie && p.serie.zahl > 1 && !a.truhe) zeilen.push({ art: 'schlecht', text: 'Deine Serie von ' + p.serie.zahl + ' Tagen ist gerissen. Heute fängt eine neue an.' });
+  const neuigkeiten = (world.ticker || []).filter((e) => e.t > seit && e.wer !== id).slice(-6).map((e) => e.text);
+  if (!zeilen.length && !neuigkeiten.length) return null;
+  return { seit, zeilen, neuigkeiten };
+}
+
 /* Die Tagestruhe oeffnen. */
 export function alltagAction({ world, p, id, body, now }) {
   const extra = {};

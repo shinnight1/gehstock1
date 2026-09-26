@@ -1780,6 +1780,22 @@ const SG = { rules: {} };
     return null;
   };
 
+  /* ----------------------------------------------------------------
+     Revanche
+
+     Wer ein Gebiet an einen Mitspieler verliert, darf es 30 Stunden lang
+     mit einem Zuschlag zurueckfordern - solange es noch dem gehoert, der
+     es genommen hat. So wird aus jeder Niederlage eine Geschichte, die
+     weitergeht, statt eines Grundes aufzuhoeren.
+     ---------------------------------------------------------------- */
+  X.REVANCHE_BONUS = .15;
+  X.REVANCHE_DAUER = 30 * 3600000;
+  X.revanche = function (p, t, now) {
+    var r = p && p.revanche && t && p.revanche[t.id];
+    return r && t.ownerId && r.gegner === t.ownerId && now < r.bis ? r : null;
+  };
+  X.revancheBonus = function (p, t, now) { return X.revanche(p, t, now) ? X.REVANCHE_BONUS : 0; };
+
   /* Neue Felder im Spielstand. D.neuerStand baut den Stand bei jedem Laden
      neu auf und laesst weg, was es nicht kennt - ohne diese Zeilen kaeme im
      Browser weder der Garantie-Zaehler noch der Schimmer an. */
@@ -1798,6 +1814,14 @@ const SG = { rules: {} };
       p.alltag.erkundet = D.FELDER.map(function (f) { return f.id; }).filter(function (id) { return (a.erkundet || []).indexOf(id) >= 0; });
     } else p.alltag = null;
     p.serie = old.serie && Number.isFinite(old.serie.tag) ? { zahl: ganz(old.serie.zahl, 9999), tag: Math.floor(old.serie.tag) } : { zahl: 0, tag: null };
+    /* Offene Revanchen - abgelaufene fallen heraus. */
+    p.revanche = {};
+    var jetzt = Number.isFinite(now) ? now : Date.now();
+    D.FELDER.forEach(function (f) {
+      var r = old.revanche && old.revanche[f.id];
+      if (r && typeof r.gegner === 'string' && Number.isFinite(r.bis) && r.bis > jetzt)
+        p.revanche[f.id] = { gegner: r.gegner, name: String(r.name || '').slice(0, 30), bis: r.bis };
+    });
     /* Eier, die auf Platz in der Tasche warten (etwa aus der Truhe bei voller Tasche). */
     p.sonderEier = (Array.isArray(old.sonderEier) ? old.sonderEier : []).slice(0, 20).filter(function (e) {
       return e && typeof e.id === 'string' && D.FELDER.some(function (f) { return f.id === e.territoryId; });

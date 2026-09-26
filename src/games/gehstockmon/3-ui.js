@@ -53,7 +53,7 @@
       openCombat:function(){closeDrawer();battle=null;visual=null;root.classList.add('gm-arena-open');root.classList.remove('gm-overview');arenaBox.hidden=false;syncInput();if(world)world.pause(true);},
       closeCombat:function(){arenaBox.hidden=true;root.classList.remove('gm-arena-open');if(world){world.pause(false);world.follow();}update();}});
     var stadt=R.mountStadt({el:el,button:button,drawer:drawer,state:function(){return st;},world:function(){return world;},now:now,busy:function(){return busy;},open:openDrawer,closeDrawer:closeDrawer,request:requestOnline,apply:applyOnline,error:onlineError,notify:notify,arena:showArena});
-    var heute=R.mountHeute({el:el,button:button,drawer:drawer,root:root,open:openDrawer,closeDrawer:closeDrawer,request:requestOnline,apply:applyOnline,error:onlineError,notify:notify,busy:function(){return busy;},now:now,sfx:host.sfx,after:host.after,cancel:host.cancel,playerId:function(){return online&&online.playerId;}});
+    var heute=R.mountHeute({revanche:function(id){closeDrawer();selectField(id,true);if(world&&world.distanceTo(id)>=10)world.walkTo(id);},el:el,button:button,drawer:drawer,root:root,open:openDrawer,closeDrawer:closeDrawer,request:requestOnline,apply:applyOnline,error:onlineError,notify:notify,busy:function(){return busy;},now:now,sfx:host.sfx,after:host.after,cancel:host.cancel,playerId:function(){return online&&online.playerId;}});
     function dueling(){return adventures&&adventures.active();}
     function syncInput(){if(world)world.blockInput(!connected||busy||!!battle||dueling()||!drawer.hidden);root.setAttribute('aria-busy',String(busy));}
     function territories(){return online?online.territories:[];}
@@ -80,6 +80,9 @@
         var meine=territories().filter(own).length,seine=territories().filter(function(v){return v.ownerId===t.ownerId;}).length;
         var hilfe=X.aussenseiterBonus(meine,seine);
         if(hilfe)badges.appendChild(el('span','Außenseiterhilfe +'+Math.round(hilfe*100)+' %','gm-badge-hilfe'));
+        /* Die Revanche steht direkt am Gebiet, solange sie gilt. */
+        var rache=X.revanche&&X.revanche(st,t,now());
+        if(rache)badges.appendChild(el('span','🔥 Revanche +'+Math.round(X.REVANCHE_BONUS*100)+' % · noch '+Math.max(1,Math.round((rache.bis-now())/3600000))+' Std.','gm-badge-revanche'));
       }badges.appendChild(el('span',own(t)?'+'+level.income+' Gold/Std.':'Verteidigung +'+Math.round(level.bonus*100)+' % KP'));badges.appendChild(el('span',own(t)?'Dein Tor öffnet sich bei Annäherung':'Tor geschlossen · Sieg gewährt Zutritt'));target.appendChild(badges);
       if(own(t)){var production=el('p');production.appendChild(el('span',(t.eggStock||0)+'/3 Eier bereit · '));deadline(production,E.nextEggAt(t),'Ei bereit');target.appendChild(production);}
       var row=el('div',undefined,'gm-target-actions');row.appendChild(button(own(t)?'Verwalten':'Aufklären',own(t)?function(){showPost(selected);}:showScout,'gm-button gm-secondary'));
@@ -402,7 +405,7 @@
       connectionBox.appendChild(card);
     }
     function onlineError(err){if(dead)return;if((err.status===423||err.status===403)&&R.adminOverride){R.adminOverride=false;saveAdmin(false);adminNotice='Dieser Hideout-Zugang ist kein Admin-Zugang. Die Insel bleibt geschlossen.';}if(err.status===423&&err.access){showClosed(err.access);return;}if(!connected||!online||!err.status||err.status===401||err.status>=500||err.status===408||err.status===429){showConnection(err.message||'Der Server ist nicht erreichbar.');return;}notify(err.message);if(battle)renderArena(false);}
-    function connectWorld(){if(dead||busy)return;showConnection();requestOnline('join').then(function(res){if(dead)return;if(R.online.pending())return requestOnline('resume');return res;}).then(function(res){if(dead||!res)return;applyOnline(res);if(res.arena&&(res.arena.phase!=='finished'||battle||res.action&&res.action.op==='arena_turn'||res.action&&res.action.op==='arena_flee'))showArena(res.arena,false);else if(battle){battle=null;visual=null;arenaBox.hidden=true;root.classList.remove('gm-arena-open');if(world)world.pause(false);update();}}).catch(onlineError);}
+    function connectWorld(){if(dead||busy)return;showConnection();requestOnline('join').then(function(res){if(dead)return;if(R.online.pending())return requestOnline('resume');return res;}).then(function(res){if(dead||!res)return;applyOnline(res);if(res.arena&&(res.arena.phase!=='finished'||battle||res.action&&res.action.op==='arena_turn'||res.action&&res.action.op==='arena_flee'))showArena(res.arena,false);else if(battle){battle=null;visual=null;arenaBox.hidden=true;root.classList.remove('gm-arena-open');if(world)world.pause(false);update();}if(res.morgenbericht&&!battle&&!dueling())heute.bericht(res.morgenbericht);}).catch(onlineError);}
     function resumeOnline(){if(busy)return;requestOnline(R.online.pending()?'resume':'world').then(function(res){applyOnline(res);if(dueling())adventures.showDuel();else if(res.arena)showArena(res.arena,false);else{showOnline();notify(res.message||'Aktueller Stand geladen.');}}).catch(onlineError);}
     /* Ein Kampf Zeile fuer Zeile, so wie er abgelaufen ist. */
     function zeigeBericht(r){
