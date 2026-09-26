@@ -10,7 +10,7 @@ const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const output=path.join(root,'Hideout-Komplett-Online.zip');
 const tempRoot=path.resolve(os.tmpdir());
 const stage=fs.mkdtempSync(path.join(tempRoot,'hideout-online-paket-'));
-const roots=['src','art','docs','tools','netlify','arena','dist','build.mjs','package.json','package-lock.json','netlify.toml','README.md','ONLINE-START.md','.gitignore'];
+const roots=['src','art','docs','tools','netlify','arena','dist','build.mjs','package.json','package-lock.json','AGENTS.md','README.md','ONLINE-START.md','.gitignore'];
 const excluded=new Set(['node_modules','.git','.local','.netlify','.claude','.codex','dist-types','coverage','.DS_Store']);
 function include(source){const rel=path.relative(root,source),parts=rel.split(path.sep),name=path.basename(source);return !parts.some(p=>excluded.has(p)||p.startsWith('.env'))&&!/\.(zip|log|tsbuildinfo|pem|key)$/i.test(name)&&!(parts[0]==='arena'&&parts.includes('dist'));}
 try{

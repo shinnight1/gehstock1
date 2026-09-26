@@ -1,6 +1,5 @@
-/* Prueft den Redis-Uebersetzer ohne echtes Redis: Ein nachgebauter
-   redis-server spricht das echte Protokoll, davor laeuft der echte
-   @upstash/redis-Client und die echte Speicherschicht.
+/* Prueft den direkten Redis-Zugang, Umzug und Sicherung ohne echtes Redis:
+   Ein nachgebauter redis-server spricht das echte Protokoll.
    Aufruf: node --test tools/handy-redis-tests.mjs */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -11,8 +10,96 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { Redis } from '@upstash/redis';
-import { kodieren, lesen, verbindung, gatewayErstellen } from './handy-redis.mjs';
-import { zugangPruefen, weltPruefen } from './handy-zugang.mjs';
+import http from 'node:http';
+import { timingSafeEqual } from 'node:crypto';
+import { kodieren, lesen, verbindung, lokalerClient, speicherClient } from '../netlify/functions/lib/redis-lokal.mjs';
+import { zugangPruefen, weltPruefenMit } from './handy-zugang.mjs';
+
+/* ------------------------------------------------ nachgebautes Upstash
+   Upstash-REST vor einem (nachgebauten) redis-server - so, wie der
+   @upstash/redis-Client es erwartet. Dient als Quelle beim Umzug und als
+   Ablage fuer die Sicherung ausser Haus. */
+/* Nur was das Projekt braucht. Alles andere - FLUSHALL, CONFIG, KEYS,
+   SHUTDOWN - bleibt aussen vor, auch wenn jemand an den Token kommt. */
+const ERLAUBT = new Set(['GET', 'SET', 'DEL', 'MGET', 'EXISTS', 'TYPE', 'STRLEN', 'SCAN',
+  'HGET', 'HGETALL', 'HSET', 'HDEL', 'HLEN', 'EVAL', 'EVALSHA',
+  'TTL', 'PTTL', 'EXPIRE', 'PEXPIRE', 'PING', 'DBSIZE']);
+
+function ausgeben(wert, base64) {
+  if (wert === null || typeof wert === 'number') return wert;
+  if (Buffer.isBuffer(wert)) return base64 ? wert.toString('base64') : wert.toString('utf8');
+  if (Array.isArray(wert)) return wert.map((v) => ausgeben(v, base64));
+  if (typeof wert === 'string') return base64 && wert !== 'OK' ? Buffer.from(wert).toString('base64') : wert;
+  return wert;
+}
+
+function pruefen(befehl) {
+  if (!Array.isArray(befehl) || !befehl.length) return 'ERR Befehl fehlt';
+  const name = String(befehl[0]).toUpperCase();
+  if (!ERLAUBT.has(name)) return 'ERR Befehl nicht erlaubt: ' + name;
+  return null;
+}
+
+const antwort = (wert, base64) => (wert instanceof Error ? { error: wert.message } : { result: ausgeben(wert, base64) });
+const alsText = (befehl) => befehl.map((a) => (typeof a === 'string' ? a : JSON.stringify(a)));
+
+function gatewayErstellen({ token, redis, neueVerbindung, bodyLimit = 16 * 1024 * 1024 }) {
+  const soll = Buffer.from('Bearer ' + token);
+  const berechtigt = (kopf) => {
+    const ist = Buffer.from(String(kopf || ''));
+    return ist.length === soll.length && timingSafeEqual(ist, soll);
+  };
+
+  return http.createServer(async (req, res) => {
+    const senden = (status, daten) => {
+      res.writeHead(status, { 'Content-Type': 'application/json', 'upstash-sync-token': '' });
+      res.end(JSON.stringify(daten));
+    };
+    if (req.method !== 'POST') return senden(405, { error: 'Nur POST' });
+    if (!berechtigt(req.headers.authorization)) return senden(401, { error: 'Unauthorized' });
+    const base64 = String(req.headers['upstash-encoding'] || '').toLowerCase() === 'base64';
+
+    const teile = []; let bytes = 0;
+    for await (const t of req) {
+      bytes += t.length;
+      if (bytes > bodyLimit) return senden(413, { error: 'Anfrage zu gross' });
+      teile.push(t);
+    }
+    let body;
+    try { body = JSON.parse(Buffer.concat(teile).toString('utf8')); }
+    catch { return senden(400, { error: 'Kein JSON' }); }
+
+    const pfad = new URL(req.url, 'http://x').pathname.replace(/\/+$/, '') || '/';
+    if (pfad === '/') {
+      const f = pruefen(body);
+      if (f) return senden(400, { error: f });
+      const a = antwort(await redis.befehl(alsText(body)), base64);
+      return senden(a.error ? 400 : 200, a);
+    }
+    if (pfad === '/pipeline' || pfad === '/multi-exec') {
+      if (!Array.isArray(body)) return senden(400, { error: 'Liste erwartet' });
+      const fehler = body.map(pruefen).find(Boolean);
+      if (fehler) return senden(400, { error: fehler });
+      if (pfad === '/pipeline') {
+        const ergebnisse = await Promise.all(body.map((b) => redis.befehl(alsText(b))));
+        return senden(200, ergebnisse.map((e) => antwort(e, base64)));
+      }
+      /* MULTI/EXEC braucht eine eigene Leitung, sonst mischten sich
+         gleichzeitige Anfragen in die Transaktion. */
+      const v = neueVerbindung();
+      try {
+        await v.befehl(['MULTI']);
+        for (const b of body) await v.befehl(alsText(b));
+        const exec = await v.befehl(['EXEC']);
+        if (exec instanceof Error || !Array.isArray(exec)) return senden(400, { error: exec?.message || 'EXEC abgebrochen' });
+        return senden(200, exec.map((e) => antwort(e, base64)));
+      } finally { v.schliessen(); }
+    }
+    senden(404, { error: 'Unbekannter Pfad' });
+  });
+}
+
+
 import { _redisStore, _stempelVon } from '../netlify/functions/lib/speicher.mjs';
 
 /* ------------------------------------------------ nachgebauter redis-server */
@@ -94,7 +181,8 @@ async function aufbauen() {
   await new Promise((ok) => gw.listen(0, '127.0.0.1', ok));
   const url = 'http://127.0.0.1:' + gw.address().port;
   const client = new Redis({ url, token, automaticDeserialization: false });
-  return { daten, url, token, client, zu: () => { gw.close(); gw.closeAllConnections(); haupt.schliessen(); for (const s of socks) s.destroy(); rs.close(); } };
+  const direkt = lokalerClient('redis://:geheim@127.0.0.1:' + port);
+  return { daten, url, token, client, direkt, zu: () => { gw.close(); gw.closeAllConnections(); haupt.schliessen(); direkt.schliessen(); for (const s of socks) s.destroy(); rs.close(); } };
 }
 
 test('RESP: kodieren und stueckweise lesen', () => {
@@ -109,47 +197,55 @@ test('RESP: kodieren und stueckweise lesen', () => {
   assert.ok(lesen(Buffer.from('-ERR kaputt\r\n'))[0] instanceof Error);
 });
 
-test('Speicherschicht laeuft unveraendert ueber den Uebersetzer', async () => {
+async function speicherPruefen(client) {
+  const store = _redisStore('hgh-test', client);
+  const welt = { spieler: { a: { gold: 5, name: 'Größe ✓' } } };
+  assert.equal((await store.setJSON('welt', welt, { onlyIfNew: true })).modified, true);
+  assert.equal((await store.setJSON('welt', welt, { onlyIfNew: true })).modified, false);
+  const gelesen = await store.getWithMetadata('welt');
+  assert.deepEqual(gelesen.data, welt);
+  assert.equal(gelesen.etag, _stempelVon(JSON.stringify(welt)));
+  const neu = { ...welt, runde: 2 };
+  assert.equal((await store.setJSON('welt', neu, { onlyIfMatch: gelesen.etag })).modified, true);
+  assert.equal((await store.setJSON('welt', welt, { onlyIfMatch: gelesen.etag })).modified, false);
+  assert.deepEqual(await store.get('welt'), neu);
+  await store.feldSetzen('anwesenheit-v2', 'p1', { x: 1 });
+  await store.feldSetzen('anwesenheit-v2', 'p2', { x: 2 });
+  await store.felderWeg('anwesenheit-v2', ['p1']);
+  assert.deepEqual(await store.felder('anwesenheit-v2'), { p2: { x: 2 } });
+  assert.deepEqual((await store.list()).blobs.map((b) => b.key).sort(), ['anwesenheit-v2', 'welt']);
+  await store.delete('welt');
+  assert.equal(await store.get('welt'), null);
+}
+
+test('Speicherschicht direkt auf Redis: Stempel, Bedingung, Felder, Liste', async () => {
   const u = await aufbauen();
-  try {
-    const store = _redisStore('hgh-test', u.client);
-    const welt = { spieler: { a: { gold: 5, name: 'Größe ✓' } } };
-    assert.equal((await store.setJSON('welt', welt, { onlyIfNew: true })).modified, true);
-    assert.equal((await store.setJSON('welt', welt, { onlyIfNew: true })).modified, false);
-    const gelesen = await store.getWithMetadata('welt');
-    assert.deepEqual(gelesen.data, welt);
-    assert.equal(gelesen.etag, _stempelVon(JSON.stringify(welt)));
-    const neu = { ...welt, runde: 2 };
-    assert.equal((await store.setJSON('welt', neu, { onlyIfMatch: gelesen.etag })).modified, true);
-    assert.equal((await store.setJSON('welt', welt, { onlyIfMatch: gelesen.etag })).modified, false);
-    assert.deepEqual(await store.get('welt'), neu);
-    await store.feldSetzen('anwesenheit-v2', 'p1', { x: 1 });
-    await store.feldSetzen('anwesenheit-v2', 'p2', { x: 2 });
-    await store.felderWeg('anwesenheit-v2', ['p1']);
-    assert.deepEqual(await store.felder('anwesenheit-v2'), { p2: { x: 2 } });
-    assert.deepEqual((await store.list()).blobs.map((b) => b.key).sort(), ['anwesenheit-v2', 'welt']);
-    await store.delete('welt');
-    assert.equal(await store.get('welt'), null);
-  } finally { u.zu(); }
+  try { await speicherPruefen(u.direkt); } finally { u.zu(); }
 });
 
-test('Zugang: falscher Token, gesperrte Befehle, Pipeline ohne base64', async () => {
+test('Speicherschicht ueber Upstash verhaelt sich genauso (Rueckfallweg)', async () => {
+  const u = await aufbauen();
+  try { await speicherPruefen(u.client); } finally { u.zu(); }
+});
+
+test('Speicherschicht im Arbeitsspeicher verhaelt sich genauso (Entwicklung)', async () => {
+  await speicherPruefen(speicherClient());
+});
+
+test('Weltpruefung und Verbindungsabbruch', async () => {
   const u = await aufbauen();
   try {
-    const falsch = await fetch(u.url, { method: 'POST', headers: { Authorization: 'Bearer ' + 'y'.repeat(40) }, body: '["PING"]' });
-    assert.equal(falsch.status, 401);
-    const post = (pfad, body) => fetch(u.url + pfad, { method: 'POST', headers: { Authorization: 'Bearer ' + u.token }, body: JSON.stringify(body) });
-    assert.equal((await post('/', ['FLUSHALL'])).status, 400);
-    assert.equal((await post('/pipeline', [['GET', 'a'], ['CONFIG', 'GET', '*']])).status, 400);
     u.daten.set('hgh:hgh-rooms:verwaltung', JSON.stringify({ daten: { profile: [{}, {}] } }));
+    await assert.rejects(weltPruefenMit(u.direkt));
     u.daten.set('hgh:hgh-gehstockmon:world-v2', JSON.stringify({ players: { a: {}, b: {}, c: {} } }));
-    assert.deepEqual(await weltPruefen({ url: u.url, token: u.token }), { profile: 2, spieler: 3 });
-    const multi = await (await post('/multi-exec', [['SET', 'm', '1'], ['GET', 'm']])).json();
-    assert.deepEqual(multi, [{ result: 'OK' }, { result: '1' }]);
+    assert.deepEqual(await weltPruefenMit(u.direkt), { profile: 2, spieler: 3 });
+    await assert.rejects(u.direkt.befehl(['NICHTDA']), /unknown command/);
   } finally { u.zu(); }
+  const weg = lokalerClient('redis://:x@127.0.0.1:1');
+  await assert.rejects(weg.get('a'), /Verbindung/);
 });
 
-test('Zugangsdatei akzeptiert den lokalen Uebersetzer, sonst nichts Neues', () => {
+test('Zugangsdatei: nur Upstash oder 127.0.0.1 mit Port', () => {
   const token = 'test-only-token-1234567890';
   assert.deepEqual(zugangPruefen('http://127.0.0.1:8079', token), { url: 'http://127.0.0.1:8079', token });
   for (const url of ['http://127.0.0.1', 'http://localhost:8079', 'http://192.168.2.172:8079',

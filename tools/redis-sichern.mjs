@@ -1,11 +1,6 @@
 /* ------------------------------------------------------------------
    Sichert die Spielerwelt aus Redis in einen Ordner.
 
-   Das Gegenstueck zu tools/welt-sichern.mjs, das noch aus der
-   Netlify-Zeit stammt und ueber deren Kommandozeile geht. Seit dem
-   Umzug liegen die Daten in Redis (Upstash), und dorthin fuehrt die
-   alte Sicherung nicht mehr.
-
    Gesichert wird alles, was niemand nachbauen kann:
 
        hgh-gehstockmon   world-v2      Spieler, Gold, Mons, Gebiete
@@ -18,36 +13,28 @@
    presence-v1 und anwesenheit-v2 (wer gerade wo auf der Insel steht).
    anwesenheit-v2 ist ein Hash, kein Text - ein GET darauf schluege fehl.
 
-   Das Ergebnis hat dasselbe Format wie welt-sichern.mjs und laesst
-   sich mit tools/welt-einspielen.mjs zurueckspielen - auch in eine
-   andere Datenbank. Das ist der Weg, wenn der Anbieter wechselt.
+   Das Ergebnis laesst sich mit tools/welt-einspielen.mjs zurueckspielen -
+   auch in eine andere Datenbank.
 
-   Aufruf:
-     vercel env pull .env.local
-     node --env-file=.env.local tools/redis-sichern.mjs
+   Aufruf auf dem Handy (die naechtliche Sicherung macht das von selbst):
+     node --env-file=$HOME/.config/gehstock1/redis.env tools/redis-sichern.mjs
+   Mit einer Datei voller UPSTASH_-Werte sichert es stattdessen Upstash.
 
    Das Skript liest nur. Es veraendert nichts.
    ------------------------------------------------------------------ */
 
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { Redis } from '@upstash/redis';
+import { datenbank } from './datenbank.mjs';
 
 const STORES = ['hgh-gehstockmon', 'hgh-rooms', 'hgh-gehstockmon-presence'];
 const FLUECHTIG = [/^room:/, /^schirm:/, /^presence-v1$/, /^anwesenheit-v2$/, /:v$/];
 
-const url = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
-const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
-if (!url || !token) {
-  console.log('Die Redis-Zugangsdaten fehlen. Erst "vercel env pull .env.local",');
-  console.log('dann "node --env-file=.env.local tools/redis-sichern.mjs".');
+const r = await datenbank();
+if (!r) {
+  console.log('Die Zugangsdaten fehlen: --env-file=$HOME/.config/gehstock1/redis.env mitgeben.');
   process.exit(1);
 }
-
-/* automaticDeserialization aus: Der Text soll byteweise so herauskommen,
-   wie er drinsteht. Die Speicherschicht leitet ihren Stempel aus genau
-   diesem Text ab - ein umformatierter Wert waere ein anderer Stempel. */
-const r = new Redis({ url, token, automaticDeserialization: false });
 
 /* Eine Datenbank am Kontingentende lehnt einen Teil der Befehle ab
    ("max requests limit exceeded"). Genau dann braucht man die Sicherung
@@ -117,6 +104,7 @@ for (const store of STORES) {
 }
 
 console.log('\n' + geholt + ' Dateien gesichert, ' + uebersprungen + ' kurzlebige uebersprungen.');
+r.schliessen();
 console.log('Gesamt: ' + (bytes / 1024 / 1024).toFixed(2) + ' MB in ' + ziel);
 
 if (fehlend.length) {

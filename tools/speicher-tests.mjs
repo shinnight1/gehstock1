@@ -12,8 +12,9 @@
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 
-process.env.KV_REST_API_URL = 'https://test.invalid';
-process.env.KV_REST_API_TOKEN = 'test';
+process.env.UPSTASH_REDIS_REST_URL = 'https://test.invalid';
+process.env.UPSTASH_REDIS_REST_TOKEN = 'test';
+delete process.env.REDIS_URL; delete process.env.REDIS_PASS;
 
 const sha1 = (t) => createHash('sha1').update(t).digest('hex');
 
@@ -46,8 +47,8 @@ async function pruefe(name, fn) {
 
 console.log('\nSpeicherschicht\n');
 
-await pruefe('erkennt Redis an der Umgebung', () => {
-  assert.equal(speicherArt(), 'redis');
+await pruefe('erkennt Upstash an der Umgebung', () => {
+  assert.equal(speicherArt(), 'upstash');
 });
 
 await pruefe('schreiben und lesen laeuft rund', async () => {

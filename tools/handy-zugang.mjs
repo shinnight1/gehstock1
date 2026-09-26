@@ -7,7 +7,7 @@ import { parseEnv } from 'node:util';
 export function zugangPruefen(url, token) {
   let parsed;
   try { parsed = new URL(String(url || '').trim()); } catch { throw new Error('Die Datenbankadresse fehlt oder ist ungueltig.'); }
-  // Erlaubt sind Upstash selbst oder der Redis-Uebersetzer auf dem Handy (tools/handy-redis.mjs).
+  // Erlaubt sind Upstash selbst oder eine lokale Adresse mit Port (fruehere Zwischenstation auf dem Handy).
   const upstash = parsed.protocol === 'https:' && /^[a-z0-9-]+\.upstash\.io$/.test(parsed.hostname) && !parsed.port;
   const lokal = parsed.protocol === 'http:' && parsed.hostname === '127.0.0.1' && /^\d{4,5}$/.test(parsed.port);
   if (!(upstash || lokal)
@@ -52,6 +52,17 @@ export async function weltPruefen(zugang, abrufen = fetch) {
   const spieler = welt?.players && typeof welt.players === 'object' && !Array.isArray(welt.players)
     ? Object.keys(welt.players).length : 0;
   if (!profile || !spieler) throw new Error('Keine bestehenden Profile oder Spielstaende gefunden. Einrichtung gestoppt.');
+  return { profile, spieler };
+}
+
+/* Dasselbe fuer das Redis auf dem Handy, ueber einen Client mit get(). */
+export async function weltPruefenMit(client) {
+  const [verwaltung, welt] = (await Promise.all([
+    client.get('hgh:hgh-rooms:verwaltung'), client.get('hgh:hgh-gehstockmon:world-v2'),
+  ])).map((t) => (typeof t === 'string' ? JSON.parse(t) : null));
+  const profile = Array.isArray(verwaltung?.daten?.profile) ? verwaltung.daten.profile.length : 0;
+  const spieler = welt?.players && typeof welt.players === 'object' ? Object.keys(welt.players).length : 0;
+  if (!profile || !spieler) throw new Error('Keine bestehenden Profile oder Spielstaende gefunden.');
   return { profile, spieler };
 }
 

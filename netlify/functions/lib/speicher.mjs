@@ -1,18 +1,18 @@
 /* ------------------------------------------------------------------
-   Ein Speicher, zwei Anbieter.
+   Ein Speicher, drei Wege darunter.
 
-   Der Code kennt nur noch speicher(name). Was darunter liegt,
-   entscheidet die Umgebung:
+   Der Code kennt nur speicher(name). Was darunter liegt, entscheidet
+   die Umgebung:
 
-     KV_REST_API_URL gesetzt  ->  Redis (Vercel)
-     sonst                    ->  Netlify Blobs
+     REDIS_URL (oder REDIS_PASS)       ->  Redis auf dem Handy, direkt
+     UPSTASH_REDIS_REST_URL/_TOKEN     ->  Redis bei Upstash (Rueckfallweg)
+     GEHSTOCK_SPEICHER=arbeitsspeicher ->  nur im Arbeitsspeicher (Entwicklung)
 
-   Damit laeuft derselbe Stand auf beiden Plattformen. Waehrend des
-   Umzugs ist das der Rueckfallweg: Netlify bleibt lauffaehig, ohne
-   dass eine Zeile zurueckgedreht werden muss.
+   Ist nichts davon gesetzt, bricht der Zugriff ab. Frueher lief es dann
+   still auf Netlify Blobs - also auf einer leeren Welt.
 
-   Nachgebaut wird genau der Teil der Netlify-Schnittstelle, den das
-   Projekt benutzt - nicht mehr:
+   Die Schnittstelle stammt aus der Netlify-Zeit und bleibt, weil der
+   ganze Spielcode sie benutzt:
 
      get(key, { type: 'json' })             -> Wert oder null
      getWithMetadata(key, { type: 'json' }) -> { data, etag } oder null
@@ -33,9 +33,16 @@
 
 import { createHash } from 'node:crypto';
 
-const redisUrl = () => process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
-const redisToken = () => process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
-const redisAn = () => !!(redisUrl() && redisToken());
+import { lokalerClient, lokaleAdresse, speicherClient } from './redis-lokal.mjs';
+
+const upstashUrl = () => process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
+const upstashToken = () => process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
+export function speicherArt() {
+  if (lokaleAdresse()) return 'redis-lokal';
+  if (upstashUrl() && upstashToken()) return 'upstash';
+  if (process.env.GEHSTOCK_SPEICHER === 'arbeitsspeicher') return 'arbeitsspeicher';
+  return null;
+}
 
 /* ------------------------------------------------------------------
    Der Stempel ist der Inhalt selbst
@@ -70,15 +77,18 @@ return 1
 let redisClient = null;
 async function redis() {
   if (!redisClient) {
-    const { Redis } = await import('@upstash/redis');
-    /* Ohne automaticDeserialization kaeme der Text anders zurueck, als er
-       hineingegeben wurde - dann stimmt kein Hash mehr. Alles bleibt
-       deshalb von Hand ein String. */
-    redisClient = new Redis({
-      url: redisUrl(),
-      token: redisToken(),
-      automaticDeserialization: false,
-    });
+    const art = speicherArt();
+    if (art === 'redis-lokal') redisClient = lokalerClient(lokaleAdresse());
+    else if (art === 'arbeitsspeicher') redisClient = speicherClient();
+    else if (art === 'upstash') {
+      const { Redis } = await import('@upstash/redis');
+      /* Ohne automaticDeserialization kaeme der Text anders zurueck, als er
+         hineingegeben wurde - dann stimmt kein Hash mehr. Alles bleibt
+         deshalb von Hand ein String. */
+      redisClient = new Redis({ url: upstashUrl(), token: upstashToken(), automaticDeserialization: false });
+    } else {
+      throw new Error('Kein Speicher eingerichtet (REDIS_URL, UPSTASH_REDIS_REST_URL oder GEHSTOCK_SPEICHER).');
+    }
   }
   return redisClient;
 }
@@ -196,34 +206,12 @@ function redisStore(name, verbindung = redis) {
   };
 }
 
-/* Netlify bringt alles Gebrauchte selbst mit und wird nur durchgereicht.
-   Der Import liegt absichtlich in der Funktion: auf Vercel ist das Paket
-   nicht installiert und darf beim Laden nicht gezogen werden. */
-async function netlifyStore(name) {
-  const { getStore } = await import('@netlify/blobs');
-  return getStore({ name, consistency: 'strong' });
-}
-
 const offen = new Map();
 
 export function speicher(name) {
-  if (offen.has(name)) return offen.get(name);
-  const store = redisAn() ? redisStore(name) : (() => {
-    let echt = null;
-    const hol = async () => (echt || (echt = await netlifyStore(name)));
-    return {
-      get: async (k, o) => (await hol()).get(k, o),
-      getWithMetadata: async (k, o) => (await hol()).getWithMetadata(k, o),
-      setJSON: async (k, v, o) => (await hol()).setJSON(k, v, o),
-      list: async (o) => (await hol()).list(o),
-      delete: async (k) => (await hol()).delete(k),
-    };
-  })();
-  offen.set(name, store);
-  return store;
+  if (!offen.has(name)) offen.set(name, redisStore(name));
+  return offen.get(name);
 }
-
-export const speicherArt = () => (redisAn() ? 'redis' : 'netlify-blobs');
 
 /* Nur fuer tools/speicher-tests.mjs: erlaubt einen nachgebauten Client,
    damit das Zusammenspiel von Stempel und Bedingung ohne echtes Redis

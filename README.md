@@ -4,7 +4,8 @@
 
 Eine Spielesammlung für das iPad: 25 Spiele, drei ausgebaute Tycoons und
 ein mitgeliefertes Fremdspiel.
-Läuft als Webseite über Vercel. Viele Spiele funktionieren auch ohne Internet
+Läuft als Webseite auf einem Android-Handy unter
+[gehstock.duckdns.org](https://gehstock.duckdns.org). Viele Spiele funktionieren auch ohne Internet
 auf dem **Home-Bildschirm** oder in der mitgelieferten HTML-Einzeldatei.
 GehstockMon und Online-Mehrspieler benötigen den gemeinsamen Spielserver.
 
@@ -25,59 +26,19 @@ GehstockMon und Online-Mehrspieler benötigen den gemeinsamen Spielserver.
 
 ---
 
-## Veröffentlichen mit Vercel
+## Wo die Seite läuft
 
-Die Seite liegt unter [gehstock1.vercel.app](https://gehstock1.vercel.app).
-Veröffentlicht wird aus dem Projektordner heraus:
+Auf einem Galaxy A25 mit Termux, öffentlich unter
+[gehstock.duckdns.org](https://gehstock.duckdns.org). Die Spielerwelt liegt im
+Redis auf demselben Handy, jede Nacht gesichert. Die alten Adressen bei Vercel
+und Netlify leiten dorthin weiter. Aufbau, Einrichtung und Sicherungen:
+[docs/HANDY-SERVER.md](docs/HANDY-SERVER.md).
+
+Eine Änderung kommt so auf die Seite: pushen, dann auf dem Handy
 
 ```bash
-git pull
-vercel --prod
+bash ~/gehstock1/tools/handy-aktualisieren.sh
 ```
-
-Wird sie in einem Netz gesperrt, führt [gehstock-hideout.vercel.app](https://gehstock-hideout.vercel.app)
-zur selben Seite mit derselben Spielerwelt.
-
-Und unter [hideout.gehstock.deno.net](https://hideout.gehstock.deno.net) liegt
-dieselbe Seite noch einmal bei Deno Deploy, veröffentlicht mit `deno deploy --prod`.
-
-Mehr ist es nicht. Vercel baut selbst und liest dafür `vercel.json`:
-
-| Einstellung | Wert |
-|---|---|
-| Build command | `npm ci --prefix arena && node tools/deploy-bauen.mjs` |
-| Output directory | `dist` |
-| Serverfunktionen | `api/room.mjs`, `api/gehstockmon.mjs` |
-| Laufzeit je Aufruf | 30 Sekunden erlaubt — gebraucht werden Bruchteile einer Sekunde |
-
-Der Ordner `api/` enthält nur Verweise. Die Logik liegt weiterhin unter
-`netlify/functions/`, damit die Tests und der lokale Server unverändert
-laufen.
-
-Geht etwas schief, holt `vercel rollback` die vorherige Veröffentlichung
-sofort zurück — ohne neuen Build.
-
-> **Ein Push allein veröffentlicht nichts.** Wer das möchte, verbindet das
-> Repository einmalig mit `vercel git connect`; danach baut jeder Push auf
-> `main` die Seite neu.
-
-### Wo die Spielstände liegen
-
-Spielerwelt, Verwaltung, Pixelkarte und die Online-Räume liegen in einer
-Redis-Datenbank (Upstash, Frankfurt), die im Vercel-Projekt unter **Storage**
-hängt. Welcher Speicher gilt, entscheidet `netlify/functions/lib/speicher.mjs`
-anhand der Umgebung: Liegen die Redis-Zugangsdaten vor, ist es Redis, sonst
-sind es die Netlify-Blobs. Derselbe Code läuft damit auf beiden Plattformen,
-und der Rückweg bleibt offen.
-
-Ein dritter Weg führt über [gehstock-mon.netlify.app](https://gehstock-mon.netlify.app)
-— dieselbe Seite, dieselbe Spielerwelt, nur ein anderer Anbieter. Sie ist der
-Ausweichweg für Netze, die `vercel.app` sperren.
-
-Tot sind `gehstock.netlify.app`, `gehstock-hideout.netlify.app` und seit dem
-23.09.2026 auch `gehstockmon.netlify.app`: Die Konten dahinter haben ihr
-Kontingent aufgebraucht. Sie laufen nicht wieder an. Wer eine davon noch im
-Verlauf hat, braucht die neue Adresse.
 
 ---
 
@@ -85,11 +46,10 @@ Verlauf hat, braucht die neue Adresse.
 
 ```
 build.mjs              Bündelt alles: dist/ für die Website + Offline-Einzeldatei
-vercel.json            Build-Einstellungen und Kopfzeilen
-api/                   die zwei Endpunkte — verweisen nur weiter
 netlify/functions/     room.mjs — das Relais: Räume, Chat, Verwaltung, alles
-                       lib/speicher.mjs — Redis oder Blobs, je nach Umgebung
-netlify.toml           der Rückweg: Einstellungen der alten Adresse
+                       gehstockmon.mjs — der Spielserver für GehstockMon
+                       lib/speicher.mjs — Redis auf dem Handy, Upstash oder Arbeitsspeicher
+                       (der Ordnername stammt aus der Netlify-Zeit)
 src/
   index.html           Gerüst (eine einzige Seite)
   styles/              Aussehen
@@ -117,7 +77,8 @@ src/
   tycoon/biz/          Wirtschafts-Tycoon
   extern/              fertige Fremdspiele, werden als eigene Seite kopiert
 tools/
-  serve.mjs            Entwicklungsserver mit nachgebautem Online-Relais
+  handy-server.mjs     der Server der Seite; mit --dev zum Entwickeln
+  handy-*.sh           Einrichtung, Update und Dienste auf dem Handy
   test.mjs             Regel-Engines ohne Browser prüfen
   nojs.mjs             erzeugt den Dateien-Modus (Spiele ohne JavaScript)
 dist/                  Ergebnis des Builds (nicht ins Git nötig)
@@ -134,10 +95,11 @@ Baut alles neu. Prüft dabei die Syntax des gesamten Bundles und bricht ab,
 wenn in der Offline-Datei irgendein externer Verweis auftaucht.
 
 ```bash
-node tools/serve.mjs
+npm run dev
 ```
-Startet [http://localhost:8787](http://localhost:8787) mit einem nachgebauten
-Online-Relais — so lässt sich der Mehrspieler auch ohne Veröffentlichung testen.
+Startet [http://localhost:8787](http://localhost:8787) mit dem echten Servercode
+und einer leeren Testwelt im Arbeitsspeicher — so lässt sich der Mehrspieler
+auch ohne Veröffentlichung testen. Vorher einmal `node build.mjs`.
 
 ```bash
 node tools/test.mjs
@@ -162,15 +124,15 @@ Selbsttest prüft das in acht Etappen je Spiel, nicht nur am Ende — ein Fehler
 der sich zwei Züge später von selbst wieder auflöst, fiele sonst nicht auf.
 
 ```bash
-node --env-file=.env.local tools/redis-sichern.mjs
+node --env-file=$HOME/.config/gehstock1/redis.env tools/redis-sichern.mjs
 ```
 Zieht alles aus der Redis-Datenbank in einen Ordner unter `backup/`: Spielerwelt,
 Verwaltung, Chatbretter, Pixelkarte und Bilder. Kurzlebiges (Räume, Bildschirme,
 Anwesenheit) bleibt draußen. Zurück geht es mit `tools/welt-einspielen.mjs` —
-auch in eine andere Datenbank, und genau das ist der Weg bei einem Anbieterwechsel.
+auch in eine andere Datenbank. Auf dem Handy läuft das jede Nacht von selbst.
 
 ```bash
-node --env-file=.env.local tools/spieler-ausstatten.mjs 5572 \
+node --env-file=$HOME/.config/gehstock1/redis.env tools/spieler-ausstatten.mjs 5572 \
   --mons sturmhorn,seelenqualle --gebiete 2,4 --gold 500 --eier 3
 ```
 Schenkt einem GehstockMon-Konto Mons, Außenposten, Gold und Eier — dasselbe, was im
@@ -178,8 +140,7 @@ Admin-Menü der Reiter *🎁 Geben* tut, nur ohne Browser. Welches Konto gemeint
 ist, sagt allein der vierstellige Zugangscode; aus ihm leitet auch der
 Spielserver die Spielerkennung ab. `--probe` schreibt nichts und zeigt nur, was
 passieren würde, `--wegnehmen` übergibt auch ein Gebiet, das schon einem anderen
-Spieler gehört. Die Zugangsdaten zur Spielerwelt holt vorher
-`vercel env pull .env.local`.
+Spieler gehört. Läuft auf dem Handy, dort liegen die Zugangsdaten.
 
 ---
 
@@ -356,20 +317,18 @@ Die Arena fragt ihren Raum direkt und im Duell alle 0,6 Sekunden. GehstockMon
 meldet die eigene Position nur noch beim Laufen alle drei Sekunden, im Stehen
 alle fünf bis acht.
 
-Gemessen mit `tools/kontingent-messen.mjs` (20 Kinder, Hideout und GehstockMon
-offen, Chat läuft): **166 → 37** Datenbankbefehle und **63 → 1,3** Sekunden
-Funktionslaufzeit je Kind und Minute. Einen ganzen Monat Unterricht mit einer
-Klasse trägt das Gratiskontingent trotzdem nicht — Näheres in `AGENTS.md`.
+Damals gemessen (20 Kinder, Hideout und GehstockMon offen, Chat läuft): **166 → 37**
+Datenbankbefehle und **63 → 1,3** Sekunden Funktionslaufzeit je Kind und Minute.
+Seit dem Umzug aufs Handy zählt kein Anbieter mehr mit; `tools/handy-lasttest.mjs`
+misst dort, wie viele Spieler das Handy trägt.
 
 Ohne Netz bleiben für dieselben Spiele **Computergegner** und der **Modus zu
 zweit am selben iPad**.
 
 **Wenn das Erstellen eines Raum-Codes fehlschlägt:** Dann antwortet `/api/room`
 mit einer HTML-Seite statt mit Daten — die Serverfunktion ist nicht
-erreichbar. Zwei Ursachen kommen praktisch immer in Frage: `dist/` wurde per
-Drag-and-drop hochgeladen (siehe oben), oder die Seite läuft lokal auf einem
-gewöhnlichen Statik-Server. Zum lokalen Testen deshalb `node tools/serve.mjs`
-benutzen — der bildet das Relais nach.
+erreichbar. Meist läuft die Seite dann lokal auf einem gewöhnlichen
+Statik-Server. Zum lokalen Testen deshalb `npm run dev` benutzen.
 
 ---
 

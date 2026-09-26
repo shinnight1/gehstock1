@@ -196,5 +196,5 @@ console.log('  dist/              ' + mb(groesse(DIST)));
 if (fs.existsSync(ARENA_ZIEL)) {
   console.log('  dist/games/arena/  ' + mb(groesse(ARENA_ZIEL)));
 }
-console.log('\nVeröffentlichen mit:  vercel --prod');
+console.log('\nAuf dem Handy übernimmt das tools/handy-aktualisieren.sh samt Neustart.');
 console.log('Die Arena liegt danach unter  /games/arena/\n');

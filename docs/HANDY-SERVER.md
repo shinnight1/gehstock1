@@ -3,7 +3,7 @@
 Termux mit Node.js 22 oder neuer, npm und Git wird benoetigt. Die komplette
 Website einschliesslich Arena wird auf dem Handy gebaut. Der Server verwendet
 dieselben Produktionsfunktionen wie Netlify und dieselbe Upstash-Spielerwelt.
-`tools/serve.mjs` bleibt eine separate lokale Entwicklungsvorschau.
+Zum Entwickeln am PC startet `npm run dev` denselben Server mit einer leeren Testwelt.
 
 Im geklonten Projekt:
 
@@ -34,7 +34,13 @@ Danach auf dem Handy `http://localhost:8080` oeffnen. Bereits die Nutzung dieses
 Servers greift auf die echte Spielerwelt zu. Die Dateien werden nur aus `dist/`
 ausgeliefert. Zugangdatei, Sicherungen und Quellcode sind nicht Webinhalte.
 
-Beenden mit CTRL+C. Erneut starten:
+Beenden mit CTRL+C. Neuen Stand holen, bauen und neu starten:
+
+```sh
+bash tools/handy-aktualisieren.sh
+```
+
+Erneut starten:
 
 ```sh
 bash ~/start-gehstock1
@@ -75,14 +81,15 @@ Port waere belegt. Termux und Termux:Boot brauchen in Android die Akku-Einstellu
 ## Redis auf dem Handy statt Upstash
 
 Upstash zaehlt jeden Befehl (500 000 im Monat gratis). Ohne Limit laeuft es mit
-einem eigenen `redis-server` in Termux. Der Projektcode bleibt dabei unveraendert:
-`tools/handy-redis.mjs` nimmt auf `127.0.0.1:8079` Anfragen im Upstash-Format an
-und reicht sie an Redis auf `127.0.0.1:6379` weiter (Passwort, nur erlaubte
-Befehle). In `server.env` steht danach nur eine andere Adresse.
+einem eigenen `redis-server` in Termux (`127.0.0.1:6379`, Passwort in
+`~/.config/gehstock1/redis.env`). Der Server spricht ihn direkt ueber
+`netlify/functions/lib/redis-lokal.mjs` an, sobald `~/.config/gehstock1/redis-live`
+existiert; `server.env` spielt dann keine Rolle mehr. Der fruehere
+HTTP-Uebersetzer auf Port 8079 ist entfallen.
 
 ```sh
 bash tools/handy-redis-einrichten.sh   # Redis einrichten, Probeumzug, Server bleibt auf Upstash
-bash tools/handy-redis-umschalten.sh   # endgueltig: frisch kopieren, server.env umstellen
+bash tools/handy-redis-umschalten.sh   # endgueltig: frisch kopieren, redis-live setzen
 ```
 
 `redis-umziehen.mjs` liest Upstash nur, leert das lokale Redis und vergleicht
@@ -102,6 +109,6 @@ Sicherung: Redis schreibt jede Sekunde auf den Speicher (AOF). Zusaetzlich siche
 Pruefung ohne echte Zugangsdaten oder Schreibzugriff auf die Spielerwelt:
 
 ```sh
-node --test tools/handy-tests.mjs tools/handy-redis-tests.mjs
+npm run test:handy
 bash -n tools/handy-einrichten.sh
 ```

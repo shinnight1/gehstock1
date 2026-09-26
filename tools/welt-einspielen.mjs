@@ -6,14 +6,9 @@
 
    --probe schreibt nichts, sondern zeigt nur, was geschrieben wuerde.
 
-   Erwartet die beiden Zugaenge in der Umgebung:
-       UPSTASH_REDIS_REST_URL   oder  KV_REST_API_URL
-       UPSTASH_REDIS_REST_TOKEN oder  KV_REST_API_TOKEN
-
-   Beide Namenspaare gelten, genau wie in netlify/functions/lib/speicher.mjs:
-   Vercel legt die Werte unter KV_ ab, Upstash selbst unter UPSTASH_. Wer
-   eine Sicherung in eine frisch angelegte Datenbank spielt, hat meistens
-   nur die UPSTASH_-Namen zur Hand.
+   Ziel ist das Redis auf dem Handy:
+     node --env-file=$HOME/.config/gehstock1/redis.env tools/welt-einspielen.mjs <ordner>
+   Mit den UPSTASH_-Werten in der Umgebung stattdessen Upstash.
 
    Vorhandene Eintraege werden ueberschrieben. Das ist gewollt: die
    Sicherung ist die Wahrheit, der Zielspeicher wird angeglichen.
@@ -21,7 +16,7 @@
 
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
-import { Redis } from '@upstash/redis';
+import { datenbank } from './datenbank.mjs';
 
 const ordner = process.argv[2];
 const probe = process.argv.includes('--probe');
@@ -30,25 +25,11 @@ if (!ordner) {
   console.log('Welcher Ordner? Beispiel:\n  node tools/welt-einspielen.mjs backup/2026-09-12-15-30');
   process.exit(1);
 }
-const url = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
-const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
-
-if (!probe && !(url && token)) {
-  console.log('Die Redis-Zugangsdaten fehlen in der Umgebung.');
-  console.log('Erwartet werden UPSTASH_REDIS_REST_URL und UPSTASH_REDIS_REST_TOKEN');
-  console.log('(oder KV_REST_API_URL und KV_REST_API_TOKEN).');
+const r = probe ? null : await datenbank();
+if (!probe && !r) {
+  console.log('Die Zugangsdaten fehlen: --env-file=$HOME/.config/gehstock1/redis.env mitgeben.');
   process.exit(1);
 }
-
-/* automaticDeserialization aus, damit der Text byteweise so liegt, wie
-   die Sicherung ihn enthaelt. Die Speicherschicht leitet ihren Stempel
-   aus genau diesem Text ab - ein umformatierter Wert waere ein anderer
-   Stempel und das erste Schreiben danach wuerde abgelehnt. */
-const r = probe ? null : new Redis({
-  url: url,
-  token: token,
-  automaticDeserialization: false,
-});
 
 let stores;
 try { stores = (await readdir(ordner, { withFileTypes: true })).filter((d) => d.isDirectory()).map((d) => d.name); }
@@ -83,4 +64,5 @@ for (const store of stores) {
 }
 
 console.log('\n' + geschrieben + (probe ? ' Eintraege waeren geschrieben' : ' Eintraege geschrieben') + ', ' + fehler + ' Fehler.');
+r?.schliessen();
 if (fehler) process.exit(1);

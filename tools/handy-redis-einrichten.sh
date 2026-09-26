@@ -30,8 +30,7 @@ fi
 
 if [[ ! -f "$config_dir/redis.env" ]]; then
   geheim() { node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("hex"))'; }
-  printf 'REDIS_PASS=%s\nGATEWAY_TOKEN=%s\nREDIS_PORT=6379\nGATEWAY_PORT=8079\n' "$(geheim)" "$(geheim)" \
-    > "$config_dir/redis.env"
+  printf 'REDIS_PASS=%s\nREDIS_PORT=6379\n' "$(geheim)" > "$config_dir/redis.env"
   chmod 600 "$config_dir/redis.env"
 fi
 # shellcheck source=/dev/null

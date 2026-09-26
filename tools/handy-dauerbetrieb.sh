@@ -44,7 +44,7 @@ echo "DuckDNS angenommen: $domain.duckdns.org"
 # Termux darf keine Ports unter 1024 oeffnen. Der Router leitet deshalb
 # 80 auf 8081 und 443 auf 8443 um; Caddy reicht an Node auf 8080 weiter.
 if [[ ! -f "$config_dir/Caddyfile" ]]; then
-  printf '{\n\thttp_port 8081\n\thttps_port 8443\n}\n\n%s.duckdns.org {\n\treverse_proxy 127.0.0.1:8080\n}\n' \
+  printf '{\n\thttp_port 8081\n\thttps_port 8443\n}\n\n%s.duckdns.org {\n\tencode zstd gzip\n\treverse_proxy 127.0.0.1:8080\n}\n' \
     "$domain" > "$config_dir/Caddyfile"
 fi
 caddy validate --config "$config_dir/Caddyfile" --adapter caddyfile >/dev/null

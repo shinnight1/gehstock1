@@ -18,10 +18,11 @@
 
 import os from 'node:os';
 import path from 'node:path';
-import { access } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { Redis } from '@upstash/redis';
-import { verbindung, redisEnvLesen } from './handy-redis.mjs';
+import { parseEnv } from 'node:util';
+import { verbindung, adresseLesen, lokaleAdresse } from '../netlify/functions/lib/redis-lokal.mjs';
 import { zugangLesen } from './handy-zugang.mjs';
 
 const dir = path.join(os.homedir(), '.config', 'gehstock1');
@@ -49,9 +50,10 @@ try {
     process.exit(1);
   }
   const quelle = await zugangLesen(path.join(dir, 'upstash.env'));
-  const cfg = await redisEnvLesen(path.join(dir, 'redis.env'));
+  const ziel = lokaleAdresse(parseEnv(await readFile(path.join(dir, 'redis.env'), 'utf8')));
+  if (!ziel) throw new Error('redis.env unvollstaendig');
   const up = new Redis({ url: quelle.url, token: quelle.token, automaticDeserialization: false });
-  const v = verbindung({ port: cfg.redisPort, passwort: cfg.passwort });
+  const v = verbindung(adresseLesen(ziel));
 
   console.log('Lese Schluesselliste aus Upstash ...');
   let cursor = '0'; const keys = [];

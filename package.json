@@ -5,15 +5,15 @@
   "description": "Herr Gehstocks Hideout - Offline-faehige Spielesammlung fuer iPad",
   "scripts": {
     "build": "node build.mjs",
-    "dev": "node tools/serve.mjs",
+    "dev": "node tools/handy-server.mjs --dev",
     "test": "node tools/test.mjs",
     "paket": "node tools/github-paket.mjs",
     "test:speicher": "node tools/speicher-tests.mjs",
-    "sichern": "node tools/welt-sichern.mjs",
-    "einspielen": "node tools/welt-einspielen.mjs"
+    "sichern": "node tools/redis-sichern.mjs",
+    "einspielen": "node tools/welt-einspielen.mjs",
+    "test:handy": "node --test tools/handy-tests.mjs tools/handy-redis-tests.mjs"
   },
   "dependencies": {
-    "@netlify/blobs": "^11.0.3",
     "@upstash/redis": "^1.38.4"
   },
   "devDependencies": {
@@ -21,6 +21,6 @@
     "three": "^0.180.0"
   },
   "engines": {
-    "node": "22.x"
+    "node": ">=22"
   }
 }

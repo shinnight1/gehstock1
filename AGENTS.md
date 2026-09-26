@@ -41,181 +41,76 @@ KI-Assistenten.
 Es gibt bewusst keine Aufteilung nach Dateien. Beide arbeiten am gesamten Projekt.
 Der Schutz vor Konflikten ist allein der Ablauf oben.
 
-## Veröffentlichen
+## Wo die Seite läuft
 
-**Stand 26.09.2026: Die Seite läuft nur noch auf dem Handy** unter
-`https://gehstock.duckdns.org`, die Spielerwelt liegt im Redis auf dem Handy statt
-bei Upstash (Einrichtung, Update und Sicherungen: `docs/HANDY-SERVER.md`). Vercel
-und `gehstock-mon.netlify.app` sind reine Weiterleitungen dorthin, Deno ist aus.
-**Kein `vercel --prod`, `netlify deploy --prod` oder `deno deploy --prod` aus dem
-Projekt** - das holte die alte Seite zurück, und die schriebe in Upstash, also in
-eine veraltete Welt neben der echten. Eine Änderung erreicht die Seite so: pushen,
-dann auf dem Handy `git pull`, `node tools/deploy-bauen.mjs` und den Server neu
-starten. Die Abschnitte unten beschreiben den Zustand davor.
+Seit dem 26.09.2026 läuft die Seite **nur noch auf einem Android-Handy** (Galaxy A25,
+Termux) unter `https://gehstock.duckdns.org`. Die Spielerwelt liegt im Redis auf
+demselben Handy. Aufbau, Einrichtung, Sicherungen und Grenzen: `docs/HANDY-SERVER.md`.
 
-Die Seite liegt auf Vercel unter `gehstock1.vercel.app`. Veröffentlicht wird von
-Hand aus dem Projektordner:
+```
+Internet → Router (80→8081, 443→8443) → Caddy (HTTPS) → tools/handy-server.mjs (127.0.0.1:8080)
+                                                           → Redis (127.0.0.1:6379)
+```
+
+Vercel, Netlify und Deno gibt es nicht mehr. `gehstock1.vercel.app`,
+`gehstock-hideout.vercel.app` und `gehstock-mon.netlify.app` sind reine
+Weiterleitungen aufs Handy. Nichts davon wieder veröffentlichen: eine alte
+Auslieferung schriebe in Upstash, also in eine veraltete Welt neben der echten.
+
+Eine Änderung erreicht die Seite so: testen, pushen, dann auf dem Handy
 
 ```sh
-vercel --prod
+bash ~/gehstock1/tools/handy-aktualisieren.sh
 ```
 
-Ein Push allein ändert an der Website nichts mehr. Wer will, dass er es wieder
-tut, verbindet das Repository einmalig mit `vercel git connect`.
+Das holt den Stand, baut und startet den Server neu. Vorher `node tools/test.mjs`
+und `npm run test:handy` laufen lassen.
 
-Vercel baut selbst; `vercel.json` trägt Build, Ausgabeordner und Kopfzeilen. Vor
-einem Deploy, der die Seite verändert, `node tools/test.mjs` laufen lassen. Die
-übrigen Build- und Testbefehle stehen in `ONLINE-START.md`.
+Lokal entwickeln: `npm run build`, dann `npm run dev` (http://localhost:8787, eine
+leere Testwelt nur im Arbeitsspeicher - nie die echte).
 
-Dieselbe Seite hört zusätzlich auf `gehstock-hideout.vercel.app`. Die Adresse hängt
-am selben Vercel-Projekt, zeigt denselben Stand und dieselbe Spielerwelt und wird von
-jedem `vercel --prod` mitgezogen. Sie ist der Ausweichweg für Netze, die den ersten
-Namen sperren - etwa das Schul-WLAN. Beide Adressen bleiben gültig; keine ersetzt die
-andere.
+## Wo die Daten liegen
 
-### Der Spiegel bei Deno Deploy
+`netlify/functions/lib/speicher.mjs` entscheidet anhand der Umgebung (der Ordnername
+stammt aus der Netlify-Zeit und bleibt, damit niemandes Änderungen kollidieren):
 
-`deno/server.js` liefert dieselbe Seite ein zweites Mal aus - bei Deno Deploy und
-damit unter einer Adresse, die nicht auf `vercel.app` endet. Für Netze, die diese
-Endung sperren, ist das der Weg hinein.
+| Umgebung | Speicher |
+|---|---|
+| `REDIS_URL` oder `REDIS_PASS` | Redis auf dem Handy, direkt (`lib/redis-lokal.mjs`) |
+| `UPSTASH_REDIS_REST_URL` + `_TOKEN` | Upstash - nur noch Rückfallweg und Ablage der Sicherungen |
+| `GEHSTOCK_SPEICHER=arbeitsspeicher` | Entwicklung und Tests |
+| nichts | Abbruch statt einer stillen, leeren Welt |
 
-Eigene Logik steckt nicht darin: die Serverfunktionen sind dieselben Dateien
-wie bei Vercel, und über `UPSTASH_REDIS_REST_URL` hängt der Spiegel an
-derselben Spielerwelt. Wer über ihn spielt, spielt mit allen anderen zusammen.
-
-Die beiden Endpunkte aus `api/` sind in `deno/server.js` noch einmal aufgeführt.
-Kommt dort einer dazu, muss er hier mit - sonst fehlt er stillschweigend nur auf
-dem Spiegel. Die Anmeldung läuft wieder im Browser und benötigt keinen `/api/auth`-Endpunkt.
-
-Die Kopfzeilen stehen dort ein zweites Mal, weil Deno Deploy `vercel.json` nicht
-lesen kann. Wer eine ändert, ändert sie an beiden Stellen. Eine `deno.json`
-braucht es nicht: Deno nimmt die npm-Pakete aus `package.json` und dem
-`node_modules` des Builds. Eine liegt bewusst auch nicht da - sie brächte die
-Deno-Kommandozeile dazu, ihre eigenen Pakete im `node_modules` des Projekts zu
-suchen, und dann läuft `deno deploy` nicht mehr.
-
-Veröffentlicht wird von Hand, wie bei Vercel auch:
+Ob die laufende Seite an der echten Welt hängt:
 
 ```sh
-deno deploy --prod
+curl -sS -X POST https://gehstock.duckdns.org/api/room -H 'Content-Type: application/json' -d '{"op":"status"}'
 ```
 
-Vorher lokal anschauen geht auch:
+`"speicher":"redis-lokal"` und die gewohnte Profilzahl heißt: alles richtig.
+
+Das Handy sichert jede Nacht selbst (14 Tage auf dem Handy, dazu eine gepackte
+Kopie bei Upstash). Vor jedem Eingriff in die Daten trotzdem von Hand sichern:
 
 ```sh
-deno run --env-file=.env.local --allow-net --allow-read --allow-env --allow-sys deno/server.js
+node --env-file=$HOME/.config/gehstock1/redis.env tools/redis-sichern.mjs
 ```
 
-Achtung: mit `.env.local` hängt der Spiegel auch lokal an der **echten**
-Spielerwelt. Was man dort anfasst, fassen alle mit an.
+### Warum der Server kurz fragt statt wartet
 
-Der Spiegel liegt unter `hideout.gehstock.deno.net` - App `hideout` in der
-Organisation `gehstock`. Welche das ist, steht in `deno.jsonc`.
+Bis zum 23.09.2026 hielt jedes offene Fenster eine Serverfunktion am Laufen, und
+eine Schulklasse leerte die Gratiskontingente von Upstash und Netlify in ein bis
+zwei Stunden. Seitdem fragt das Hideout kurz (`kurz: true`) und wartet im Browser:
+2 s nach Neuem, wachsend bis 15 s, im Spielraum 1 s, verdeckter Tab 60 s
+(`src/core/relais.js`, geprüft von `tools/relais-tests.mjs`). GehstockMon meldet
+die Position laufend alle 3 s, stehend alle 5-8 s, jeder Spieler in einem eigenen
+Redis-Feld (`anwesenheit-v2`). Eine bloße Weltabfrage schreibt nicht zurück, wenn
+sich nur Uhrzeiten geändert haben.
 
-Eine Warnung aus der Entstehung: die erste Organisation bekam nie ihre
-Standard-Domain `<org>.deno.net`. Die Apps darin bauten und veröffentlichten
-klaglos, blieben aber ohne Adresse - DNS zeigte hin, ein Zertifikat gab es nie,
-und alle Revisionen standen auf `PROD  no`. Weder Kommandozeile noch Dashboard
-konnten das nachholen. Wer in einer Organisation ohne Domain landet, legt eine
-neue an, statt zu suchen.
-
-Beide Auslieferungen sind getrennt. Ein `vercel --prod` allein ändert am Spiegel
-nichts und umgekehrt - nach einer Änderung, die beide zeigen sollen, gehen beide
-Befehle.
-
-### Die Ausweichadresse bei Netlify
-
-`gehstock-mon.netlify.app` liefert dieselbe Seite ein drittes Mal aus - für Netze,
-die `vercel.app` sperren. Sie hängt über `UPSTASH_REDIS_REST_URL` und
-`UPSTASH_REDIS_REST_TOKEN` an **derselben** Spielerwelt wie Vercel; wer dort
-spielt, spielt mit allen zusammen.
-
-Veröffentlicht wird von Hand, die Seite ist nicht mit dem Repo verbunden:
-
-```sh
-netlify deploy --prod
-```
-
-Tote Adressen, jede von einem Konto, dessen Kontingent aufgebraucht ist:
-`gehstock.netlify.app`, `gehstock-hideout.netlify.app` und seit dem 23.09.2026
-auch `gehstockmon.netlify.app`. Dorthin führt nichts mehr zurück - wer eine davon
-im Verlauf hat, landet auf einer Fehlerseite und muss die neue Adresse bekommen.
-
-Jeder Umzug braucht **zwei** Schritte, sonst läuft die neue Seite auf einer
-eigenen, leeren Welt: `netlify env:set` für die beiden UPSTASH-Werte, und eine
-eingespielte Sicherung (`tools/redis-sichern.mjs`, dann `tools/welt-einspielen.mjs`).
-Ob es geklappt hat, sagt die Statusabfrage weiter unten in einem Aufruf.
-
-## Wo die Daten liegen — und was bei einem Umzug zählt
-
-Spielerwelt, Verwaltung, Chatbretter und Pixelkarte liegen in **einer**
-Redis-Datenbank (Upstash), die am Vercel-Projekt hängt. Die Hoster sind
-austauschbar, die Datenbank ist es nicht: Wer eine neue Adresse aufsetzt, muss
-ihr genau zwei Werte mitgeben, sonst läuft sie auf einer eigenen, leeren Welt —
-und das merkt niemand, bis jemand seinen Spielstand sucht.
-
-```
-UPSTASH_REDIS_REST_URL
-UPSTASH_REDIS_REST_TOKEN
-```
-
-Die Werte holt `vercel env pull .env.local --environment=production`. Ob eine
-Auslieferung wirklich an der gemeinsamen Datenbank hängt, sagt sie selbst:
-
-```sh
-curl -sS -X POST https://<adresse>/api/room -H 'Content-Type: application/json' -d '{"op":"status"}'
-```
-
-Antwortet sie `"speicher":"redis"` und dieselbe Profilzahl wie die anderen
-Adressen, ist es dieselbe Welt. Steht dort `netlify-blobs` oder null Profile,
-fehlen die beiden Werte.
-
-Vor jedem Umzug eine Sicherung ziehen — sie lässt sich mit
-`tools/welt-einspielen.mjs` auch in eine *andere* Datenbank zurückspielen:
-
-```sh
-node --env-file=.env.local tools/redis-sichern.mjs
-```
-
-### Warum kostenlose Kontingente leerlaufen — und was dagegen gebaut ist
-
-Bis zum 23.09.2026 hielt jedes offene Fenster eine Serverfunktion ununterbrochen
-am Laufen (das Relais wartete bis zu 7,5 s auf Neuigkeiten, der Browser fragte
-ohne Pause nach), und GehstockMon meldete die Position stur alle zwei Sekunden.
-Eine Klasse mit 30 Kindern verbrauchte so rund 300 000 Upstash-Befehle und über
-300 Netlify-Credits **pro Stunde**. Beide Gratiskontingente waren nach ein bis
-zwei Stunden Unterricht leer — ein Anbieterwechsel hat jeweils nur die Uhr
-zurückgesetzt.
-
-Seitdem gilt:
-
-- Das Hideout fragt kurz (`kurz: true`) und wartet im Browser: 2 s nach Neuem,
-  wachsend bis 15 s, im Spielraum 1 s, verdeckter Tab 60 s
-  (`src/core/relais.js`, geprüft von `tools/relais-tests.mjs`).
-- Die Arena fragt ihren Raum direkt und rührt `welt` nicht mehr an; im Duell
-  fragt sie alle 0,6 s. Vorher weckte jeder Arena-Zug alle offenen Fenster.
-- GehstockMon meldet die Position nach Bewegung: laufend alle 3 s, stehend alle
-  5 s (andere da) oder 8 s (allein). Jeder Spieler hat in Redis ein eigenes
-  Feld (`anwesenheit-v2`, ein Hash) — Schreibkonflikte gibt es dort nicht mehr.
-- Eine bloße Weltabfrage schreibt die Welt nicht zurück, wenn sich nur Uhrzeiten
-  geändert haben (Goldbuchung, „zuletzt gesehen“).
-
-Gemessen mit `tools/kontingent-messen.mjs` (echter Servercode, 20 Kinder mit
-Hideout und GehstockMon, Chat läuft): **166 → 37** Datenbankbefehle und
-**63 → 1,3** Sekunden Funktionslaufzeit je Kind und Minute. Hochgerechnet auf 30
-Kinder reicht das Gratiskontingent von Upstash damit für etwa 7–8 Stunden
-Unterricht im Monat (vorher 1,7), das von Netlify für rund 18 (vorher unter
-einer). Einen ganzen Monat trägt es also weiterhin nicht. Dafür gibt es bei
-Upstash „Pay as you go“ (0,20 $ je 100 000 Befehle, mit einstellbarer
-Budgetgrenze) — oder eine eigene Datenbank je Anlass.
-
-Regeln für Änderungen:
-
-- Keine Anfrage, die auf Neuigkeiten wartet. Netlify rechnet die Laufzeit ab.
-- Wer einen Takt ändert oder einen neuen einführt, misst vorher und nachher
-  mit `node tools/kontingent-messen.mjs beides 20 120`.
-- Jeder Produktions-Deploy kostet bei Netlify 15 der 300 Credits im Monat.
-  Änderungen sammeln, statt jede einzeln zu veröffentlichen.
+Kontingente gibt es auf dem Handy nicht mehr, die Takte bleiben trotzdem: sie
+schonen Akku, WLAN und Upload. Wer einen Takt ändert, misst vorher und nachher
+auf dem Handy mit `node tools/handy-lasttest.mjs 10 120` (Stand 26.09.2026 mit
+10 Spielern: 11 % eines Kerns, Position im Median 26 ms, Welt laden 156 ms).
 
 ## Berichten
 

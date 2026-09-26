@@ -15,8 +15,7 @@ sleep 600
 while :; do
   {
     date '+%F %T'
-    (cd "$ziel" && env -u UPSTASH_REDIS_REST_URL -u UPSTASH_REDIS_REST_TOKEN -u KV_REST_API_URL -u KV_REST_API_TOKEN \
-      node --env-file="$config_dir/server.env" "$repo/tools/redis-sichern.mjs" | tail -3) \
+    (cd "$ziel" && node --env-file="$config_dir/redis.env" "$repo/tools/redis-sichern.mjs" | tail -3) \
       && node "$repo/tools/handy-auslagern.mjs"
     ls -1d "$ziel"/backup/*/ 2>/dev/null | sort | head -n -14 | xargs -r rm -rf
   } > "$config_dir/sicherung.log" 2>&1

@@ -26,17 +26,9 @@ if [[ -f "$config_dir/redis.conf" ]]; then
     redis-server "$config_dir/redis.conf" >/dev/null 2>&1 && echo 'Redis gestartet.'
     for _ in 1 2 3 4 5 6 7 8 9 10; do laeuft && break; sleep 1; done
   fi
+  # Der fruehere HTTP-Uebersetzer ist ueberfluessig: der Server spricht Redis direkt.
   pid="$(cat "$config_dir/gateway.pid" 2>/dev/null || true)"
-  if [[ -z "$pid" ]] || ! kill -0 "$pid" 2>/dev/null; then
-    nohup node "$repo/tools/handy-redis.mjs" "$config_dir/redis.env" > "$config_dir/gateway.log" 2>&1 &
-    echo $! > "$config_dir/gateway.pid"
-    echo 'Redis-Uebersetzer gestartet.'
-  fi
-  # Der Server prueft beim Start sofort die Welt - der Uebersetzer muss dann antworten.
-  for _ in 1 2 3 4 5 6 7 8 9 10; do
-    curl -s -o /dev/null -X POST "http://127.0.0.1:$GATEWAY_PORT/" && break
-    sleep 1
-  done
+  [[ -n "$pid" ]] && kill "$pid" 2>/dev/null; rm -f "$config_dir/gateway.pid"
   if [[ -f "$config_dir/redis-live" ]]; then
     pid="$(cat "$config_dir/sicherung.pid" 2>/dev/null || true)"
     if [[ -z "$pid" ]] || ! kill -0 "$pid" 2>/dev/null; then

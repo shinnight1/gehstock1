@@ -5,7 +5,7 @@
       "name": "hideout",
       "runtimeExecutable": "node",
       "runtimeArgs": [
-        "tools/serve.mjs"
+        "tools/handy-server.mjs", "--dev"
       ],
       "port": 8787,
       "autoPort": true

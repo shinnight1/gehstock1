@@ -1,14 +1,19 @@
-/* Node-Auslieferung fuer Termux: dieselben Produktionsfunktionen wie Netlify.
-   Kein Entwicklungsserver, keine Ersatzwelt. Zunaechst nur auf localhost;
-   fuer HTTPS kann Caddy spaeter an diesen Server weiterleiten. */
+/* Der Server der Seite - auf dem Handy (Termux) hinter Caddy, nur auf localhost.
+   Welche Welt er nimmt, steht in ~/.config/gehstock1: mit redis-live das Redis
+   auf dem Handy, sonst Upstash aus server.env. Legt nie eine Ersatzwelt an.
+
+   Entwicklung am PC (leere Welt im Arbeitsspeicher, vorher npm run build):
+     node tools/handy-server.mjs --dev [port] */
 import http from 'node:http';
 import { createReadStream } from 'node:fs';
-import { realpath, stat, access } from 'node:fs/promises';
+import { realpath, stat, access, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { Readable } from 'node:stream';
-import { zugangLesen, zugangSetzen, weltPruefen } from './handy-zugang.mjs';
+import { parseEnv } from 'node:util';
+import { zugangLesen, zugangSetzen, weltPruefen, weltPruefenMit } from './handy-zugang.mjs';
+import { lokalerClient, lokaleAdresse } from '../netlify/functions/lib/redis-lokal.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -108,36 +113,56 @@ export async function serverErstellen({ dist, room, gehstockmon, bodyLimit = 8 *
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  const dev = process.argv[2] === '--dev';
   try {
-    const config = process.argv[2] || path.join(os.homedir(), '.config', 'gehstock1', 'server.env');
-    const zugang = await zugangLesen(config);
-    zugangSetzen(zugang);
-    const welt = await weltPruefen(zugang);
+    const dir = path.join(os.homedir(), '.config', 'gehstock1');
+    let welt = null;
+    if (dev) {
+      /* Entwicklung: eigene, leere Welt im Arbeitsspeicher, nie die echte. */
+      for (const k of ['REDIS_URL', 'REDIS_PASS', 'UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN', 'KV_REST_API_URL', 'KV_REST_API_TOKEN']) delete process.env[k];
+      process.env.GEHSTOCK_SPEICHER = 'arbeitsspeicher';
+    } else if (await access(path.join(dir, 'redis-live')).then(() => true, () => false)) {
+      /* Das Redis auf dem Handy ist die Spielerwelt - direkt, ohne Upstash. */
+      const env = parseEnv(await readFile(path.join(dir, 'redis.env'), 'utf8'));
+      for (const k of ['UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN', 'KV_REST_API_URL', 'KV_REST_API_TOKEN']) delete process.env[k];
+      process.env.REDIS_URL = lokaleAdresse(env);
+      const client = lokalerClient(process.env.REDIS_URL);
+      welt = await weltPruefenMit(client);
+      client.schliessen();
+    } else {
+      const zugang = await zugangLesen(process.argv[2] || path.join(dir, 'server.env'));
+      zugangSetzen(zugang);
+      welt = await weltPruefen(zugang);
+    }
     const dist = path.join(ROOT, 'dist');
     await access(path.join(dist, 'index.html'));
-    await access(path.join(dist, 'games', 'arena', 'index.html'));
+    if (!dev) await access(path.join(dist, 'games', 'arena', 'index.html'));
     const [{ default: room }, { default: gehstockmon }] = await Promise.all([
       import('../netlify/functions/room.mjs'), import('../netlify/functions/gehstockmon.mjs'),
     ]);
-    const port = Number(process.env.GEHSTOCK_PORT || 8080);
+    const port = Number((dev && process.argv[3]) || process.env.GEHSTOCK_PORT || process.env.PORT || (dev ? 8787 : 8080));
     if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('port');
     const server = await serverErstellen({ dist, room, gehstockmon });
     server.on('error', (e) => {
-      console.error(e.code === 'EADDRINUSE' ? 'Port belegt: den bisherigen Testserver mit CTRL+C beenden.' : 'Server konnte nicht starten.');
+      console.error(e.code === 'EADDRINUSE' ? 'Port ' + port + ' belegt: laeuft der Server schon?' : 'Server konnte nicht starten.');
       process.exitCode = 1;
     });
     server.listen(port, '127.0.0.1', () => {
-      console.log('Verbunden: ' + welt.profile + ' Profile, ' + welt.spieler + ' GehstockMon-Spieler.');
-      console.log('Hideout: http://localhost:' + port);
-      console.log('Echte Spielerwelt. Termux offen lassen. Beenden: CTRL+C.');
+      if (dev) console.log('Entwicklung: leere Testwelt im Arbeitsspeicher. http://localhost:' + port);
+      else {
+        console.log('Verbunden: ' + welt.profile + ' Profile, ' + welt.spieler + ' GehstockMon-Spieler.');
+        console.log('Hideout: http://localhost:' + port);
+        console.log('Echte Spielerwelt. Termux offen lassen. Beenden: CTRL+C.');
+      }
     });
     for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => {
       server.close();
       setTimeout(() => server.closeAllConnections(), 8000).unref();
     });
   } catch {
-    console.error('Start gestoppt: Zugang, bestehende Spielerwelt und vollstaendigen Build pruefen.');
-    console.error('Keine neue oder lokale Ersatzwelt gestartet. Einrichtung erneut ausfuehren.');
+    console.error(dev ? 'Start gestoppt: erst bauen (npm run build).'
+      : 'Start gestoppt: Zugang, bestehende Spielerwelt und vollstaendigen Build pruefen.');
+    if (!dev) console.error('Keine neue oder lokale Ersatzwelt gestartet.');
     process.exitCode = 1;
   }
 }

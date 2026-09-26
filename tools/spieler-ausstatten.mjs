@@ -3,7 +3,7 @@
    Besitzregal, Gebiete auf den Namen des Spielers, Gold und Eier obendrauf.
 
    Aufruf:
-     node --env-file=.env.local tools/spieler-ausstatten.mjs 5572 \
+     node --env-file=$HOME/.config/gehstock1/redis.env tools/spieler-ausstatten.mjs 5572 \
        --mons sturmhorn,seelenqualle,obsidianrabe,mondhexe --gebiete 2,4,5
 
      --gold <zahl>  Gold obendrauf
@@ -27,7 +27,7 @@
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getStore } from '../netlify/functions/lib/speicher.mjs';
+import { getStore, speicherArt } from '../netlify/functions/lib/speicher.mjs';
 import { data as D } from '../netlify/functions/lib/gehstockmon-rules.mjs';
 import { schenken } from '../netlify/functions/lib/gehstockmon-schenken.mjs';
 
@@ -67,11 +67,11 @@ function zeigen(bericht, probe) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const gelesen = argumente(process.argv.slice(2));
   if (!gelesen.code) {
-    console.log('Aufruf: node --env-file=.env.local tools/spieler-ausstatten.mjs <code> --mons <id,id> --gebiete <1,2>');
+    console.log('Aufruf: node --env-file=$HOME/.config/gehstock1/redis.env tools/spieler-ausstatten.mjs <code> --mons <id,id> --gebiete <1,2>');
     process.exit(1);
   }
-  if (!(process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL)) {
-    console.log('Die Redis-Zugangsdaten fehlen. Erst "vercel env pull .env.local".');
+  if (!['redis-lokal', 'upstash'].includes(speicherArt())) {
+    console.log('Die Zugangsdaten fehlen: --env-file=$HOME/.config/gehstock1/redis.env mitgeben.');
     process.exit(1);
   }
   const store = getStore({ name: 'hgh-gehstockmon' });

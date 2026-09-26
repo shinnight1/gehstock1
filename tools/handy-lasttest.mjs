@@ -3,9 +3,9 @@
 
    Laeuft auf dem Handy selbst und fasst die echte Spielerwelt nicht an:
    Ein zweiter redis-server ohne Speicherung (Port 6390) bekommt eine
-   Kopie der GehstockMon-Welt, davor laufen derselbe Uebersetzer und
-   derselbe Server wie im Betrieb - nur auf eigenen Ports. Die Spieler
-   verhalten sich wie tools/kontingent-messen.mjs (Hideout offen,
+   Kopie der GehstockMon-Welt, davor laeuft derselbe Server wie im
+   Betrieb - nur auf eigenen Ports. Die Spieler
+   verhalten sich wie echte Browser (Hideout offen,
    GehstockMon mit Laufen und Stehen, etwas Chat) und gehen echt ueber
    HTTP. Gemessen werden Antwortzeiten und die Rechenlast des Servers.
 
@@ -19,11 +19,12 @@
 import os from 'node:os';
 import path from 'node:path';
 import { fork, spawn } from 'node:child_process';
-import { access } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
+import { parseEnv } from 'node:util';
 import { randomBytes } from 'node:crypto';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
-import { verbindung, gatewayErstellen, redisEnvLesen } from './handy-redis.mjs';
+import { verbindung, adresseLesen, lokaleAdresse } from '../netlify/functions/lib/redis-lokal.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const schlaf = (ms) => new Promise((ok) => setTimeout(ok, ms));
@@ -33,13 +34,8 @@ const OFFEN = Date.parse('2026-09-23T10:00:00+02:00');
 /* ================================================ Serverseite (Kindprozess) */
 if (process.argv[2] === '--server') {
   const { redisPort, redisPass } = JSON.parse(process.argv[3]);
-  const token = randomBytes(24).toString('hex');
-  const neu = () => verbindung({ port: redisPort, passwort: redisPass });
-  const gw = gatewayErstellen({ token, redis: neu(), neueVerbindung: neu });
-  await new Promise((ok) => gw.listen(0, '127.0.0.1', ok));
-  process.env.UPSTASH_REDIS_REST_URL = 'http://127.0.0.1:' + gw.address().port;
-  process.env.UPSTASH_REDIS_REST_TOKEN = token;
-  delete process.env.KV_REST_API_URL; delete process.env.KV_REST_API_TOKEN;
+  for (const k of ['UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN', 'KV_REST_API_URL', 'KV_REST_API_TOKEN', 'REDIS_PASS']) delete process.env[k];
+  process.env.REDIS_URL = 'redis://:' + encodeURIComponent(redisPass) + '@127.0.0.1:' + redisPort;
 
   const { serverErstellen } = await import('./handy-server.mjs');
   const room = (await import('../netlify/functions/room.mjs')).default;
@@ -64,7 +60,7 @@ if (process.argv[2] === '--server') {
 } else {
   /* ============================================== Spielerseite (Hauptprozess) */
   const n = Number(process.argv[2] || 10), dauer = Number(process.argv[3] || 120) * 1000;
-  const cfg = await redisEnvLesen(path.join(os.homedir(), '.config', 'gehstock1', 'redis.env'));
+  const echteAdresse = lokaleAdresse(parseEnv(await readFile(path.join(os.homedir(), '.config', 'gehstock1', 'redis.env'), 'utf8')));
   /* LASTTEST_REDIS_PORT/_PASS: vorhandenen Test-Redis nutzen (fuer Pruefungen am PC). */
   const fremd = Number(process.env.LASTTEST_REDIS_PORT || 0);
   const testPort = fremd || 6390, testPass = fremd ? process.env.LASTTEST_REDIS_PASS : randomBytes(16).toString('hex');
@@ -84,7 +80,7 @@ if (process.argv[2] === '--server') {
 
     /* Nur die GehstockMon-Welt kopieren: Ihre Groesse bestimmt die Rechenarbeit.
        Die echte Welt wird dabei nur gelesen. */
-    const echt = verbindung({ port: cfg.redisPort, passwort: cfg.passwort });
+    const echt = verbindung(adresseLesen(echteAdresse));
     const welt = await echt.befehl(['GET', 'hgh:hgh-gehstockmon:world-v2']);
     echt.schliessen();
     if (welt instanceof Error) throw welt;
@@ -179,6 +175,7 @@ if (process.argv[2] === '--server') {
     messen = false;
     server.send('ende');
     const last = await nachricht();
+    await Promise.race([new Promise((ok) => server.once('exit', ok)), schlaf(3000)]);
 
     const q = (a, p) => a[Math.min(a.length - 1, Math.floor(a.length * p))];
     let alle = [];

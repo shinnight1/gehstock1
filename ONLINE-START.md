@@ -4,45 +4,19 @@ Diese vollständige Projektausgabe enthält die Website mit allen Spielen, die s
 
 GehstockMon lädt nach der Hideout-Anmeldung automatisch dieselbe Spielerwelt für alle Spieler dieser Website. Kämpfe, Mons, Eier, Gold und Außenposten werden auf dem Server gespeichert. Jeder Spieler verwendet seinen eigenen Hideout-Zugang. Computergegner bleiben als Gebietsverteidiger vorhanden. Die frühere lokale Kampagne ist nicht mehr spielbar; bestehender Online-Fortschritt bleibt erhalten.
 
-## Auf der bestehenden Website veröffentlichen
+## Wo die Website läuft
 
-Die Seite liegt auf Vercel unter [gehstock1.vercel.app](https://gehstock1.vercel.app).
+Die Website läuft auf einem Android-Handy (Termux) unter
+[gehstock.duckdns.org](https://gehstock.duckdns.org), die Spielerwelt liegt im
+Redis auf demselben Handy. Wie das eingerichtet ist und wie man es auf einem
+anderen Gerät neu aufsetzt: [docs/HANDY-SERVER.md](docs/HANDY-SERVER.md).
+Zugangsdaten und Spielstände sind nicht Bestandteil der ZIP.
 
-Dieselbe Seite ist außerdem unter [gehstock-hideout.vercel.app](https://gehstock-hideout.vercel.app)
-erreichbar - gleiches Projekt, gleicher Stand, gleiche Spielerwelt. Sperrt ein Netz den
-einen Namen, führt der andere trotzdem hin.
-
-Ein dritter Weg führt über [hideout.gehstock.deno.net](https://hideout.gehstock.deno.net)
-bei Deno Deploy - wieder dieselbe Seite und dieselbe Spielerwelt, nur ein anderer
-Anbieter und eine Endung, die nicht auf `vercel.app` lautet.
-
-1. Die ZIP vollständig in einen Ordner entpacken.
-2. Ein Terminal in diesem Ordner öffnen. Node.js 22.12 oder neuer muss installiert sein.
-3. Einmalig anmelden und den Ordner mit dem bestehenden Projekt verbinden:
+Eine Änderung kommt auf die Seite: pushen, dann auf dem Handy
 
 ```sh
-npm install -g vercel
-vercel login
-vercel link
+bash ~/gehstock1/tools/handy-aktualisieren.sh
 ```
-
-4. Veröffentlichen:
-
-```sh
-vercel --prod
-```
-
-Bei `link` das bestehende Projekt `gehstock1` auswählen, damit dessen gespeicherte Spielerwelt weiterverwendet wird. Ein neues Vercel-Projekt hat eine eigene, leere Datenbank und damit eine eigene, neue Welt. Zugangsdaten und lokale Testspielstände sind nicht Bestandteil der ZIP.
-
-Vercel baut selbst — der lokale Bauschritt entfällt. Was gebaut und ausgeliefert wird, steht in `vercel.json`; die beiden Serverfunktionen liegen unter `api/` und verweisen auf `netlify/functions/`. Die Website nur über `index.html` als Datei zu öffnen startet keinen Spielserver.
-
-Geht etwas schief, holt `vercel rollback` die vorherige Veröffentlichung sofort zurück.
-
-Die Spielstände liegen in einer Redis-Datenbank (Upstash), die im Vercel-Projekt unter **Storage** hängt. `netlify/functions/lib/speicher.mjs` entscheidet anhand der Umgebung, ob Redis oder die alten Netlify-Blobs benutzt werden; derselbe Code läuft dadurch auf beiden Plattformen.
-
-Ein weiterer Weg führt über [gehstock-mon.netlify.app](https://gehstock-mon.netlify.app) — dieselbe Seite und dieselbe Spielerwelt, nur bei Netlify. Veröffentlicht wird dorthin von Hand mit `netlify deploy --prod`.
-
-Tot sind `gehstock.netlify.app`, `gehstock-hideout.netlify.app` und seit dem 23.09.2026 auch `gehstockmon.netlify.app`: Die Konten dahinter haben ihr Kontingent aufgebraucht. Wer eine davon noch im Verlauf hat, braucht die neue Adresse.
 
 ## Ein Übergabepaket bauen
 
@@ -68,15 +42,15 @@ npm ci --prefix arena
 node tools/deploy-bauen.mjs
 ```
 
-Für die Veröffentlichung ist das nicht nötig — Vercel führt denselben Build selbst aus, `vercel.json` trägt ihn. Der lokale Bau lohnt sich, wenn du das Ergebnis vorher ansehen willst.
+Auf dem Handy erledigt das `tools/handy-aktualisieren.sh`. Lokal lohnt es sich, wenn du das Ergebnis vorher ansehen willst.
 
 ## Lokal prüfen
 
 ```sh
-node tools/serve.mjs 8792
+node tools/handy-server.mjs --dev 8792
 ```
 
-Die Vorschau läuft dann unter `http://localhost:8792/#/spiel/gehstockmon` mit einem lokalen Testserver. Die produktive Spielerwelt liegt in der Datenbank des Vercel-Projekts. Weitere Geräte teilen nur dann dieselbe Welt, wenn sie dieselbe veröffentlichte Website benutzen.
+Die Vorschau läuft dann unter `http://localhost:8792/#/spiel/gehstockmon` mit dem echten Servercode und einer leeren Testwelt im Arbeitsspeicher. Die echte Spielerwelt liegt nur auf dem Handy.
 
 ```sh
 node tools/test.mjs
@@ -91,6 +65,7 @@ node tools/gehstockmon-kampf-tests.mjs
 node tools/gehstockmon-ausbau-tests.mjs
 node tools/speicher-tests.mjs
 node tools/relais-tests.mjs
+npm run test:handy
 npm test --prefix arena
 npm run typecheck --prefix arena
 ```
