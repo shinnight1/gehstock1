@@ -19,7 +19,6 @@ fi
 
 command -v redis-server >/dev/null || pkg install -y redis
 command -v pkill >/dev/null || pkg install -y procps
-npm ci --no-audit --no-fund >/dev/null
 
 # Der Upstash-Zugang wird aufgehoben: Er bleibt Quelle fuer den Umzug
 # und spaeter Ablage fuer die Sicherungen ausser Haus.
