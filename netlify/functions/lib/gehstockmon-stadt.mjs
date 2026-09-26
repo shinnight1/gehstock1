@@ -56,7 +56,7 @@ function truppe(squad){
 export function aufstellung(p){
   return (p.truppe||[]).map(mid=>{
     const m=X.mon(p,mid);
-    return {id:mid,upgrade:m.upgrade,wesen:m.wesenId||null,plan:A.planOder(p.plaene&&p.plaene[mid]),...(m.schimmernd?{schimmernd:true}:{})};
+    return {id:mid,upgrade:m.upgrade,wesen:m.wesenId||null,plan:A.eigenerPlan(p.plaene&&p.plaene[mid]),...(m.schimmernd?{schimmernd:true}:{})};
   });
 }
 function gegnerliste(world,id,now){
@@ -264,7 +264,7 @@ export async function stadtAction({world,p,id,body,now,presence}){
     const titel=op==='champion_fordern';
     if(titel){
       const c=champion(world,now);
-      if(c.id===id)fail('Du hältst den Titel bereits. Verteidige ihn, indem du hier stehen bleibst.');
+      if(c.id===id)fail('Du hältst den Titel bereits. Deine eingefrorene Aufstellung verteidigt ihn von selbst.');
       if((p.titelCooldown||0)>now)fail('Der nächste Titelkampf ist in '+Math.ceil(((p.titelCooldown||0)-now)/60000)+' Minuten möglich.');
       if(X.arenaSiege(p)<X.TITEL_SIEGE)fail('Für einen Titelkampf brauchst du '+X.TITEL_SIEGE+' Ranglistensiege. Du hast '+X.arenaSiege(p)+'.');
       p.titelCooldown=now+X.TITEL_PAUSE;p.arenaVersuche=(p.arenaVersuche||0)+1;

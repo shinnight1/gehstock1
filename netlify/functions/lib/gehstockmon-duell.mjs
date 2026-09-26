@@ -7,7 +7,7 @@
    darauf. Der Zug des Gegners bleibt verborgen, bis die Runde gerechnet
    ist - sonst liesse sich einfach abwarten und kontern.
    ------------------------------------------------------------------ */
-import { data as D, arena as A, adventure as X } from './gehstockmon-rules.mjs';
+import { data as D, arena as A, hours as H, adventure as X } from './gehstockmon-rules.mjs';
 import { anwesende } from './gehstockmon-anwesenheit.mjs';
 import { tickern } from './gehstockmon-alltag.mjs';
 
@@ -20,10 +20,21 @@ export function aktivesDuell(world, p, id) {
 }
 export function imDuellKampf(world, p, id) { const d = aktivesDuell(world, p, id); return !!d && d.phase === 'kampf'; }
 
+/* Ob dieses Duell noch Gold und Ruhm bringt - siehe X.DUELL.lohnAbRunde. */
+function lohnFrei(world, d, now) {
+  if (!d.kampf || d.kampf.round < X.DUELL.lohnAbRunde) return false;
+  const tag = H.day(now), paar = [d.a, d.b].sort().join('|');
+  if (!world.duellLohn || world.duellLohn.tag !== tag) world.duellLohn = { tag, paare: {} };
+  const bisher = world.duellLohn.paare[paar] || 0;
+  if (bisher >= X.DUELL.lohnJePaar) return false;
+  world.duellLohn.paare[paar] = bisher + 1;
+  return true;
+}
 function beenden(world, d, sieger, grund, now) {
   d.phase = 'ende'; d.grund = grund; d.endeAm = now; d.sieger = sieger;
   if (d.belohnt || !d.kampf) return;
   d.belohnt = true;
+  if (!lohnFrei(world, d, now)) { d.ohneLohn = true; return; }
   const pa = world.players[d.a], pb = world.players[d.b], L = X.DUELL.lohn;
   if (sieger === 'patt') {
     for (const p of [pa, pb]) if (p) p.gold += L.patt;
@@ -117,6 +128,7 @@ function sicht(d, seite, zuschauer) {
     einladungBis: d.einladungBis, grund: d.grund || null, endeAm: d.endeAm || null,
     eingeladen: !zuschauer && d.phase === 'einladung' && seite === 1, wartetAufAntwort: !zuschauer && d.phase === 'einladung' && seite === 0 };
   if (d.phase === 'ende' && d.sieger !== undefined) v.ergebnis = d.sieger === 'patt' ? 'patt' : d.sieger === seite ? 'sieg' : 'niederlage';
+  if (d.ohneLohn) v.ohneLohn = true;
   if (d.kampf) {
     const s = d.kampf, o = seite ? [1, 0] : [0, 1];
     v.kampf = { teams: o.map((i) => s.teams[i]), active: o.map((i) => s.active[i]), round: s.round, revision: s.revision, deadline: s.deadline,

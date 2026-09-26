@@ -172,7 +172,7 @@ export function weltprojekte(world,id,now){
                       fertigAm:bau.fertigAm,eigen:bau.spender[id]||0,tafel:namen(bau.spender)},
           zerhacker:{hp:z.hp,maxHp:z.maxHp,besiegtAm:z.besiegtAm,eigen:z.beitraege[id]||0,
                      tafel:namen(z.beitraege),vorrat:X.zerhackerVorrat(world.players[id],now),vorratMax:X.ZERHACKER.vorratMax,naechsterIn:X.zerhackerWartezeit(world.players[id],now)},
-          wochenaufgabe:{name:ziel.name,was:ziel.was,stand:Math.min(a.stand,ziel.ziel),ziel:ziel.ziel,
+          wochenaufgabe:{name:ziel.name,was:ziel.was,stand:Math.min(a.stand,ziel.ziel),ziel:ziel.ziel,lohn:ziel.lohn,
                          erfuellt:!!a.erfuelltAm,eigen:a.beitraege[id]||0,tafel:namen(a.beitraege)},
           erstschlag:world.erstschlag?{name:world.erstschlag.name,selbst:world.erstschlag.id===id,wert:world.erstschlag.wert}:null,
           kopfgeld:(()=>{const zaehler={};for(const t of world.territories||[])if(t.ownerId)zaehler[t.ownerId]=(zaehler[t.ownerId]||0)+1;

@@ -88,7 +88,8 @@
         if (d.zuschauer && d.ergebnis) titel = d.ergebnis === 'patt' ? 'Unentschieden.' : (d.ergebnis === 'sieg' ? d.namen[0] : d.namen[1]) + ' gewinnt.';
         panel.appendChild(el('h2', titel));
         var L = R.abenteuer.DUELL.lohn;
-        if (!d.zuschauer && d.ergebnis) panel.appendChild(el('p', d.ergebnis === 'sieg' ? '+' + L.sieg + ' Gold und +' + R.abenteuer.DUELL.ruhm + ' Ruhm' + (d.grund === 'aufgabe' ? ' - ' + d.namen[1] + ' hat aufgegeben.' : d.grund === 'zeit' ? ' - ' + d.namen[1] + ' hat zu oft nicht gezogen.' : '.')
+        if (!d.zuschauer && d.ergebnis && d.ohneLohn) panel.appendChild(el('p', 'Diesmal ohne Gold und Ruhm: Belohnt werden Duelle ab der ' + R.abenteuer.DUELL.lohnAbRunde + '. Runde, höchstens ' + R.abenteuer.DUELL.lohnJePaar + ' am Tag gegen denselben Gegner.', 'gm-arena-line'));
+        else if (!d.zuschauer && d.ergebnis) panel.appendChild(el('p', d.ergebnis === 'sieg' ? '+' + L.sieg + ' Gold und +' + R.abenteuer.DUELL.ruhm + ' Ruhm' + (d.grund === 'aufgabe' ? ' - ' + d.namen[1] + ' hat aufgegeben.' : d.grund === 'zeit' ? ' - ' + d.namen[1] + ' hat zu oft nicht gezogen.' : '.')
           : d.ergebnis === 'patt' ? '+' + L.patt + ' Gold für beide.' : '+' + L.trost + ' Gold Trost. Deine Mons bleiben dir.', 'gm-arena-line'));
         panel.appendChild(button('Zurück zur Karte', function () { merken(d.id); if (zuschauId) { zuschauId = null; zuschau = null; } schliessen(); }, 'gm-button gm-primary'));
         box.appendChild(panel);return;

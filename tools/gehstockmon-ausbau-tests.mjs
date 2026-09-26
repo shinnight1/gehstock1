@@ -57,7 +57,7 @@ await test('Scouting a player territory shows the plan and nature its defenders 
   assert.equal(sicht.defense[0].wesen,'wild','and so is the nature');
   const imBrowser=A.defenders(6,sicht.defense);
   assert.ok(A.planGueltig(imBrowser[0].plan),'the scouting view reads a plan, not "Faustregel"');
-  assert.ok(A.planGueltig(imBrowser[1].plan),'a Mon without an own plan shows the start plan it fights with');
+  assert.equal(imBrowser[1].plan,null,'a Mon without an own plan fights by the rule of thumb of its role - scouting says so');
 });
 
 await test('Confirming an unchanged squad no longer voids an attack on your territory',async()=>{
@@ -381,6 +381,32 @@ await test('Others can watch a running duel from the island',async()=>{
   const id=zuschauer.duelleLaufend[0].id;
   r=await w.call(cc,'world',{zuschauen:id});assert.equal(r.zuschauDuell.zuschauer,true);assert.deepEqual(r.zuschauDuell.namen,['Anna','Ben']);
   assert.equal(r.duell,null,'watching is not taking part');
+});
+
+await test('An instant give-up pays nothing, and one pair is paid for at most three duels a day',async()=>{
+  const {w,a,b}=await duellWelt();
+  const gold=()=>[w.db.data.players[a.playerId].gold,w.db.data.players[b.playerId].gold];
+  /* Beide gehen n Runden in Deckung, dann gibt Ben auf. */
+  async function duell(runden){
+    await w.call(cb,'presence',{position:{...b.spawn,heading:0}});
+    const r=await w.call(ca,'duell_fordern',{targetId:b.playerId});assert.equal(r.status,200,r.error);
+    await w.call(cb,'duell_antwort',{duellId:r.duell.id,annehmen:true});
+    for(let i=0;i<runden;i++){
+      const da=(await w.call(ca,'world')).duell,db=(await w.call(cb,'world')).duell;
+      await zug(w,ca,da,{kind:'move',move:'guard'});await zug(w,cb,db,{kind:'move',move:'guard'});
+    }
+    const vorher=gold();
+    assert.equal((await w.call(cb,'duell_aufgeben',{duellId:r.duell.id})).status,200);
+    const nachher=gold(),sicht=(await w.call(ca,'world')).duell;
+    assert.equal(sicht.ergebnis,'sieg');
+    return {plus:[nachher[0]-vorher[0],nachher[1]-vorher[1]],ohneLohn:!!sicht.ohneLohn};
+  }
+  let e=await duell(0);
+  assert.deepEqual(e.plus,[0,0],'accepting and giving up at once pays nobody');assert.equal(e.ohneLohn,true,'and the result says why');
+  for(let n=0;n<X.DUELL.lohnJePaar;n++){e=await duell(X.DUELL.lohnAbRunde-1);assert.deepEqual(e.plus,[X.DUELL.lohn.sieg,X.DUELL.lohn.trost],'duel '+(n+1)+' after two rounds is paid');}
+  e=await duell(X.DUELL.lohnAbRunde-1);assert.deepEqual(e.plus,[0,0],'the fourth of the day against the same player is not');
+  w.uhr.t+=86400000;await w.call(ca,'presence',{position:{...a.spawn,heading:0}});
+  e=await duell(X.DUELL.lohnAbRunde-1);assert.deepEqual(e.plus,[X.DUELL.lohn.sieg,X.DUELL.lohn.trost],'the next day pays again');
 });
 
 console.log('\n'+checks+' Ausbau-Pruefungen bestanden.');

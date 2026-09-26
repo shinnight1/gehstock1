@@ -824,6 +824,10 @@ const SG = { rules: {} };
      gedeckelt. Dem Fuehrenden wird dabei nichts weggenommen - er wird nur
      angreifbar, und das ist der Unterschied zwischen Bremse und Strafe. */
   X.AUSSENSEITER_JE_GEBIET=.08;X.AUSSENSEITER_MAX=.4;
+  /* Wie ein Zuschlag im Kampf ankommt: voll auf die KP, zur Haelfte auf den
+     Angriff (A.create rechnet ihn wie den Ausbau eines Gebiets). Die Texte
+     versprachen lange "+X % KP und Angriff" - jetzt steht da, was wirkt. */
+  X.zuschlagText=function(anteil){return '+'+Math.round(anteil*100)+' % KP und +'+Math.round(anteil*50)+' % Angriff';};
   X.aussenseiterBonus=function(meine,seine){
     var m=Math.max(0,Math.floor(meine)||0),s=Math.max(0,Math.floor(seine)||0);
     if(s<=m)return 0;
@@ -1522,6 +1526,13 @@ const SG = { rules: {} };
         && A.PLAN_DANN.some(function (d) { return d.id === zeile[1]; });
     });
   };
+  /* Der Plan, den ein Verteidiger wirklich mitnimmt: der eigene, sonst keiner.
+     Ohne Plan greift in A.ai die Faustregel seiner Rolle - so steht es im
+     Planeditor, und so war es gedacht (siehe oben). Bis zum 27.09.2026 bekam
+     jeder Verteidiger ohne eigenen Plan stattdessen den Startplan, und der
+     verlor in gespiegelten Kaempfen drei von vier gegen die Faustregel: Pfleger
+     heilten erst, wenn der Gegner schon fast lag. */
+  A.eigenerPlan = function (plan) { return A.planGueltig(plan) ? plan.map(function (z) { return z.slice(0,2); }) : null; };
   A.planOder = function (plan) { return A.planGueltig(plan) ? plan.map(function (z) { return z.slice(0,2); }) : A.START_PLAN.map(function (z) { return z.slice(); }); };
   function trifftZu(wenn, me, other, round) {
     if (wenn === 'immer') return true;
@@ -2035,7 +2046,11 @@ const SG = { rules: {} };
   X.DUELL_OPS = ['duell_fordern', 'duell_antwort', 'duell_zug', 'duell_aufgeben'];
   X.SPIELZUEGE.push.apply(X.SPIELZUEGE, X.DUELL_OPS);
   X.DUELL = { einladung: 60000, runde: 30000, verpasstMax: 3, rundenMax: 60,
-    lohn: { sieg: 30, trost: 10, patt: 15 }, ruhm: 20, nachlauf: 10 * 60000 };
+    lohn: { sieg: 30, trost: 10, patt: 15 }, ruhm: 20, nachlauf: 10 * 60000,
+    /* Gold und Ruhm erst ab der dritten Runde und fuer hoechstens drei Duelle
+       am Tag gegen denselben Gegner. Vorher liess sich ein Duell annehmen und
+       sofort aufgeben, und zwei Spieler erzeugten so Gold ohne Ende. */
+    lohnAbRunde: 3, lohnJePaar: 3 };
 
   function lebt(u) { return !!u && u.hp > 0; }
   function ersatzNoetig(s, seite) { return !lebt(s.teams[seite][s.active[seite]]) && s.teams[seite].some(lebt); }

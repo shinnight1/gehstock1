@@ -56,7 +56,7 @@
       drawer.appendChild(b);
     }
     function rangTeil(t){
-      drawer.appendChild(el('h3','Ranglistenkaempfe'));
+      drawer.appendChild(el('h3','Ranglistenkämpfe'));
       drawer.appendChild(el('p','Dein Ruhm: '+t.ruhm+' · Sieg +'+X.RUHM_SIEG+' Ruhm und '+X.ARENA_LOHN+' Gold, Niederlage -'+X.RUHM_NIEDERLAGE+' Ruhm und '+X.ARENA_TROST+' Gold Trost. Niemand verliert dabei Mons, Eier oder Gebiete.'));
       /* Die Bilanz bleibt ueber Titelkaempfe hinweg stehen - die Zahl oben
          dagegen zaehlt nur bis zum naechsten Titelkampf. */
@@ -102,7 +102,7 @@
       findel.appendChild(fb);drawer.appendChild(findel);
     }
     function brutTeil(s){
-      drawer.appendChild(el('h3','Brutplaetze'));
+      drawer.appendChild(el('h3','Brutplätze'));
       drawer.appendChild(el('p','Du hast '+s.brutplaetze+' Plätze'+(s.gekauft?' ('+s.gekauft+' gekauft)':'')+'. Jeder weitere lässt dich ein Ei mehr gleichzeitig ausbrüten.'));
       if(!s.preis){drawer.appendChild(el('p','Mehr gibt es nicht zu kaufen.'));return;}
       var b=button('Brutplatz kaufen · '+s.preis+' Gold',function(){run('brutplatz_kaufen',{});},'gm-button gm-primary');

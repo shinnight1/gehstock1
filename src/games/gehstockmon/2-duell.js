@@ -14,7 +14,11 @@
   X.DUELL_OPS = ['duell_fordern', 'duell_antwort', 'duell_zug', 'duell_aufgeben'];
   X.SPIELZUEGE.push.apply(X.SPIELZUEGE, X.DUELL_OPS);
   X.DUELL = { einladung: 60000, runde: 30000, verpasstMax: 3, rundenMax: 60,
-    lohn: { sieg: 30, trost: 10, patt: 15 }, ruhm: 20, nachlauf: 10 * 60000 };
+    lohn: { sieg: 30, trost: 10, patt: 15 }, ruhm: 20, nachlauf: 10 * 60000,
+    /* Gold und Ruhm erst ab der dritten Runde und fuer hoechstens drei Duelle
+       am Tag gegen denselben Gegner. Vorher liess sich ein Duell annehmen und
+       sofort aufgeben, und zwei Spieler erzeugten so Gold ohne Ende. */
+    lohnAbRunde: 3, lohnJePaar: 3 };
 
   function lebt(u) { return !!u && u.hp > 0; }
   function ersatzNoetig(s, seite) { return !lebt(s.teams[seite][s.active[seite]]) && s.teams[seite].some(lebt); }

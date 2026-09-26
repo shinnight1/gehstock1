@@ -164,12 +164,13 @@ function verteidigungenPruefen(world) {
   }
 }
 /* Die gespeicherte Verteidigung eines Gebiets: seine eigene Besatzung, sonst
-   das Kampfteam. Sie traegt Runenstufe, Wesen und Kampfplan mit - ohne die
-   kaempfte jedes Gebiet nach derselben festen Heuristik, egal wem es gehoert. */
+   das Kampfteam. Sie traegt Runenstufe, Wesen und den eigenen Kampfplan mit.
+   Wer keinen gesetzt hat, kaempft nach der Faustregel seiner Rolle (plan null)
+   - siehe A.eigenerPlan. */
 function verteidigung(p, territoryId) {
   return X.besatzung(p, territoryId).map((mid) => {
     const m = X.mon(p, mid);
-    return { id: mid, upgrade: m.upgrade, wesen: m.wesenId || null, plan: A.planOder(p.plaene && p.plaene[mid]), ...(m.schimmernd ? { schimmernd: true } : {}) };
+    return { id: mid, upgrade: m.upgrade, wesen: m.wesenId || null, plan: A.eigenerPlan(p.plaene && p.plaene[mid]), ...(m.schimmernd ? { schimmernd: true } : {}) };
   });
 }
 /* Nach jeder Aenderung an Truppe, Besatzung oder Planen: alle eigenen Gebiete
@@ -325,7 +326,7 @@ function settleBattle(world, p, id, now, requestId) {
   b.settled = true; const t = target(world, b.territoryId), defenderId = t.ownerId;
   if (b.winner === 'wir') {
     if (t.version !== b.territoryVersion || t.ownerId === id || protectedOwner(world, t, now)) {
-      b.winner = 'stale'; b.message = 'Das Gebiet hat sich während des Kampfes verändert. Kläre es erneut auf; dieser Kampf kostet kein Gold.';
+      b.winner = 'stale'; b.message = 'Das Gebiet hat sich während des Kampfes verändert. Kläre es erneut auf und greif noch einmal an.';
     } else {
       const defender = defenderId && world.players[defenderId];
       if (defender && now - defender.lastSeen >= 12 * E.HOUR) defender.lastOfflineLoss = now;
@@ -544,8 +545,8 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
             const seine = t.ownerId ? world.territories.filter((v) => v.ownerId === t.ownerId).length : 0;
             const aussenseiter = X.aussenseiterBonus(meine, seine), rache = X.revancheBonus(p, t, timestamp);
             p.arena = A.create(p.truppe.map(mid=>X.mon(p,mid)), A.defenders(t.id, t.ownerId ? t.defense : null), { id: body.requestId, territoryId: t.id, version: t.version, level: t.level, npcTerritory: !t.ownerId, aussenseiter: aussenseiter + rache, now: timestamp });
-            if (rache) { p.arena.revanche = true; extra.revanche = 'Revanche: +' + Math.round(rache * 100) + ' % KP und Angriff gegen ' + t.ownerName + '.'; }
-            if (aussenseiter) extra.message = 'Außenseiterhilfe: +' + Math.round(aussenseiter * 100) + ' % KP und Angriff, weil ' + t.ownerName + ' mehr Gebiete hält als du.';
+            if (rache) { p.arena.revanche = true; extra.revanche = 'Revanche: ' + X.zuschlagText(rache) + ' gegen ' + t.ownerName + '.'; }
+            if (aussenseiter) extra.message = 'Außenseiterhilfe: ' + X.zuschlagText(aussenseiter) + ', weil ' + t.ownerName + ' mehr Gebiete hält als du.';
             if (extra.revanche) extra.message = extra.revanche + (extra.message ? ' ' + extra.message : '');
           }
           if (body.op === 'arena_turn' || body.op === 'arena_flee') {

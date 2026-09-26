@@ -371,6 +371,13 @@
         && A.PLAN_DANN.some(function (d) { return d.id === zeile[1]; });
     });
   };
+  /* Der Plan, den ein Verteidiger wirklich mitnimmt: der eigene, sonst keiner.
+     Ohne Plan greift in A.ai die Faustregel seiner Rolle - so steht es im
+     Planeditor, und so war es gedacht (siehe oben). Bis zum 27.09.2026 bekam
+     jeder Verteidiger ohne eigenen Plan stattdessen den Startplan, und der
+     verlor in gespiegelten Kaempfen drei von vier gegen die Faustregel: Pfleger
+     heilten erst, wenn der Gegner schon fast lag. */
+  A.eigenerPlan = function (plan) { return A.planGueltig(plan) ? plan.map(function (z) { return z.slice(0,2); }) : null; };
   A.planOder = function (plan) { return A.planGueltig(plan) ? plan.map(function (z) { return z.slice(0,2); }) : A.START_PLAN.map(function (z) { return z.slice(); }); };
   function trifftZu(wenn, me, other, round) {
     if (wenn === 'immer') return true;

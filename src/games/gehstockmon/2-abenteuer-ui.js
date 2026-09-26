@@ -106,6 +106,9 @@
         return;
       }
       drawer.appendChild(el('p', 'Ein Wesen, das jeden Gehstock hasst, zieht diese Woche seine Bahn über die Insel. Es fällt nur, wenn viele gemeinsam zuschlagen - jeder Treffer zählt auf dasselbe Ziel.'));
+      /* Die Beute stand bisher nirgends. Sie richtet sich nach dem Anteil am
+         Schaden (gehstockmon-adventure.mjs, zerhacker_schlagen). */
+      drawer.appendChild(el('p', 'Beute, wenn er fällt: Bei gleichem Anteil bekommt jeder, der zugeschlagen hat, ' + X.ZERHACKER.beuteGold + ' Gold und ' + X.ZERHACKER.beuteRunen + ' Mythisch-Runen. Wer mehr Schaden macht, bekommt mehr, jeder mindestens 50 Gold und eine Rune. Mythisch-Runen zerlegst du in der Runenschmiede in Stockhafen in Runen für deine Mons.'));
       drawer.appendChild(el('p', 'Lebenskraft: ' + z.hp.toLocaleString('de-DE') + ' von ' + z.maxHp.toLocaleString('de-DE')
         + (z.eigen ? ' · dein Anteil: ' + z.eigen.toLocaleString('de-DE') : '')));
       var l = projekte && projekte.leuchtturm, ziel = peilung();
@@ -166,9 +169,12 @@
       drawer.appendChild(el('p', a.was + ' - diese Woche zählt jeder Beitrag von euch allen auf dasselbe Ziel. '
         + 'Es gibt nichts zu warten und keinen Weg zu laufen: was du ohnehin tust, zählt mit.'));
       drawer.appendChild(el('p', a.stand + ' von ' + a.ziel + (a.eigen ? ' · dein Anteil: ' + a.eigen : '')));
+      /* Der Lohn stand bisher nirgends - man wusste nicht, wofuer man mitmacht. */
+      var lohn = a.lohn || (X.wochenziel(c.now()) || {}).lohn;
+      if (lohn) drawer.appendChild(el('p', 'Lohn: ' + lohn + ' Gold für jeden, der mindestens einmal beigetragen hat, dazu ein Bonus nach deinem Anteil - wer alles allein schafft, bekommt das Doppelte. Ausgezahlt wird sofort, wenn das Ziel erreicht ist. Bleibt es bis Sonntag offen, gibt es nichts.'));
       if (a.erfuellt) drawer.appendChild(el('p', 'Geschafft. Am Montag wartet die nächste Aufgabe.'));
       drawer.appendChild(el('h3', 'Wer mitgeholfen hat'));
-      drawer.appendChild(tafel(a.tafel, 'Stueck'));
+      drawer.appendChild(tafel(a.tafel, 'Stück'));
     }
 
     function zeigeLeuchtturm() {
@@ -192,10 +198,10 @@
       drawer.appendChild(tafel(l.tafel, 'Gold'));
     }
 
-    function player(skin,weapon){var p=el('div',undefined,'gm-skin-preview');p.style.setProperty('--skin',X.skin(skin).color);var canvas=el('canvas');canvas.width=canvas.height=128;canvas.setAttribute('aria-label',X.skin(skin).name);p.appendChild(canvas);R.drawAtlas(canvas,'skins',R.skinIndex(skin));p.appendChild(el('b',{gehstock:'⌁',eisenspeer:'♜',runenklinge:'⚔',sturmhammer:'⚒'}[weapon]||'✦','gm-weapon-icon'));return p;}
+    function player(skin,weapon){var p=el('div',undefined,'gm-skin-preview');p.style.setProperty('--skin',X.skin(skin).color);var canvas=el('canvas');canvas.width=canvas.height=128;canvas.setAttribute('aria-label',X.skin(skin).name);p.appendChild(canvas);R.drawAtlas(canvas,'skins',R.skinIndex(skin));p.appendChild(el('b',{gehstock:'⌁',eisenspeer:'♜',runenklinge:'⚔',sturmhammer:'⚒',titanenlanze:'↟',weltenbrecher:'✹'}[weapon]||'✦','gm-weapon-icon'));return p;}
     /* Ruestung und Schliff: beides haengt an den Runen aus den Dungeons. */
     function ruestungTeil(s) {
-      drawer.appendChild(el('h3', 'Ruestung'));
+      drawer.appendChild(el('h3', 'Rüstung'));
       drawer.appendChild(el('p', 'Fundstücke aus den Dungeons. Sie dämpfen, was ein Gehstock im Waffenduell anrichtet - gegen Mons helfen sie nicht.'));
       var besitz = s.ruestungen || [];
       if (!besitz.length) drawer.appendChild(el('p', 'Noch keins. Wer einen Dungeonboss zum ersten Mal legt, nimmt seins mit.'));
@@ -217,14 +223,14 @@
     function approach(e){e=Object.assign({},e,X.encounterPosition(e,c.now()));c.closeDrawer();var w=c.world();if(w&&w.walkToPoint)w.walkToPoint(e);c.notify('Du läufst zu '+e.name+'. Tippe dort erneut auf die Begegnung.');}
     function encounter(e){var live=X.encounterPosition(e,c.now());e=Object.assign({},e,live);if(!c.open(e.name,'encounter'))return;var s=state(),at=c.world().position(),near=Math.hypot(at.x-e.x,at.z-e.z)<8;
       if(e.kind==='trainer'){drawer.appendChild(player('trainermeister','gehstock'));drawer.appendChild(el('p',(c.state().progress&&c.state().progress.trainerWins>=3?(e.id.split(':')[1]==='1'?'Wandertrainer Bo stellt sich auf deine Truppe ein und tritt gleich stark an.':'Trainerin Mira stellt sich auf deine Truppe ein und bleibt etwas darunter.'):'Ein freundliches Training gegen einfache Mons.')+' Ein Sieg bringt 1 Ei und 25 Gold. Du verlierst bei einer Niederlage nichts.'));}
-      else drawer.appendChild(el('p','Sammle diese Rune für 10 Gold und den Runensucher-Skin.'));
+      else drawer.appendChild(el('p','Diese Rune bringt 10 Gold und zählt für die Quest Runensuche. Nach sechs gesammelten Runen schaltet sie den Runensucher-Skin frei.'));
       drawer.appendChild(el('p','Ort: '+D.FELDER[e.territoryId-1].biom+' · Zwei Wandertrainer ziehen stündlich weiter.'));
       drawer.appendChild(button(near?(e.kind==='trainer'?'Training starten':'Rune einsammeln'):'Hingehen',function(){if(!near){approach(e);return;}run(e.kind==='trainer'?'trainer_start':'gather',{encounterId:e.id,squad:s.truppe},'adventure');},'gm-button gm-primary'));
     }
     function adventure(){if(!c.open('Abenteuer & Quests','adventure'))return;var s=state();drawer.appendChild(el('p','Starte mit Trainerkämpfen und der Tauwiese in den Blütenauen. Trainer schenken dir Eier; stärkere Mons helfen beim Erobern.','gm-beginner-tip'));
       drawer.appendChild(button('Aktuelles Biom erkunden',function(){run('survey',{},'adventure');},'gm-button gm-primary'));
       drawer.appendChild(el('h3','In deiner Nähe'));var at=c.world().position();encounters.slice().sort(function(a,b){return Math.hypot(a.x-at.x,a.z-at.z)-Math.hypot(b.x-at.x,b.z-at.z);}).forEach(function(e){drawer.appendChild(button((e.kind==='trainer'?'⚔ ':'✦ ')+e.name+' · '+Math.round(Math.hypot(e.x-at.x,e.z-at.z))+' m',function(){encounter(e);}));});
-      drawer.appendChild(el('h3','Deine Quests'));X.QUESTS.forEach(function(q){var done=s.claimedQuests.indexOf(q.id)>=0,n=Math.min(q.goal,X.progress(s,q)),card=el('article',undefined,'gm-quest-card');card.appendChild(el('h3',q.name));card.appendChild(el('p',({trainerWins:'Trainingssiege',visited:'Biomen erkundet',gathered:'Runen gesammelt',hatched:'Eier ausgebrütet',upgrades:'Außenposten ausgebaut'}[q.stat])+' · '+n+'/'+q.goal));card.appendChild(SG.ui.el('progress',{value:n,max:q.goal,'aria-label':q.name}));card.appendChild(el('p',q.skin?'Skin: '+X.skin(q.skin).name:q.gold+' Gold'));var claim=button(done?'Erhalten':'Belohnung abholen',function(){run('quest_claim',{questId:q.id},'adventure');},'gm-button gm-primary');claim.disabled=done||n<q.goal;card.appendChild(claim);drawer.appendChild(card);});
+      drawer.appendChild(el('h3','Deine Quests'));X.QUESTS.forEach(function(q){var done=s.claimedQuests.indexOf(q.id)>=0,n=Math.min(q.goal,X.progress(s,q)),card=el('article',undefined,'gm-quest-card');card.appendChild(el('h3',q.name));card.appendChild(el('p',({trainerWins:'Trainingssiege',visited:'Biome erkundet',gathered:'Runen gesammelt',hatched:'Eier ausgebrütet',upgrades:'Außenposten ausgebaut'}[q.stat])+' · '+n+'/'+q.goal));card.appendChild(SG.ui.el('progress',{value:n,max:q.goal,'aria-label':q.name}));card.appendChild(el('p',q.skin?'Skin: '+X.skin(q.skin).name:q.gold+' Gold'));var claim=button(done?'Erhalten':'Belohnung abholen',function(){run('quest_claim',{questId:q.id},'adventure');},'gm-button gm-primary');claim.disabled=done||n<q.goal;card.appendChild(claim);drawer.appendChild(card);});
     }
     function shop(){if(!c.open('Skins & Waffen','shop'))return;var s=state();drawer.appendChild(el('p',s.gold+' Gold · Skins verändern deine Figur. Waffen bestimmen den Schaden im Waffenduell.'));
       var rang = X.rang(s);
@@ -247,7 +253,7 @@
     function rival(peer){if(!c.open(peer.name,'rival'))return;var s=state(),at=c.world().position(),near=Math.hypot(at.x-peer.x,at.z-peer.z)<8;drawer.appendChild(player(peer.skin,peer.weapon));
       fehdeTeil(peer);drawer.appendChild(el('p',X.skin(peer.skin).name+' · '+X.weapon(peer.weapon).name));
       /* Das Live-Duell: Kampfteam gegen Kampfteam, Zug um Zug - verlieren kann man dabei nichts. */
-      if(c.duell){var fordern=button('⚔ Zum Live-Duell fordern',function(){c.closeDrawer();c.duell(peer);},'gm-button gm-primary');fordern.disabled=c.busy()||peer.activity==='arena';drawer.appendChild(fordern);drawer.appendChild(el('p','Beide Kampfteams gegeneinander, beide wählen gleichzeitig. Sieg: +'+X.DUELL.lohn.sieg+' Gold und +'+X.DUELL.ruhm+' Ruhm. Niemand verliert Mons oder Eier.','gm-plan-hinweis'));}drawer.appendChild(el('p','Überfall in zwei Stufen: Besiege die gespeicherte Waffenverteidigung, danach die Mon-Truppe. Bei Erfolg bekommst du genau ein getragenes oder brütendes Ei. Der Besitzer muss dabei keine Züge eingeben.'));
+      if(c.duell){var fordern=button('⚔ Zum Live-Duell fordern',function(){c.closeDrawer();c.duell(peer);},'gm-button gm-primary');fordern.disabled=c.busy()||peer.activity==='arena';drawer.appendChild(fordern);drawer.appendChild(el('p','Beide Kampfteams gegeneinander, beide wählen gleichzeitig. Sieg: +'+X.DUELL.lohn.sieg+' Gold und +'+X.DUELL.ruhm+' Ruhm. Niemand verliert Mons oder Eier. Gold gibt es ab der '+X.DUELL.lohnAbRunde+'. Runde und für höchstens '+X.DUELL.lohnJePaar+' Duelle am Tag gegen denselben Gegner.','gm-plan-hinweis'));}drawer.appendChild(el('p','Überfall in zwei Stufen: Besiege die gespeicherte Waffenverteidigung, danach die Mon-Truppe. Bei Erfolg bekommst du genau ein getragenes oder brütendes Ei. Der Besitzer muss dabei keine Züge eingeben.'));
       var protection=!!peer.protected,ohneEi=peer.eier===0,pause=s.raidCooldown>c.now();
       drawer.appendChild(el('p',protection?'Dieser Spieler steht nach einem Diebstahl zwei Stunden unter Schutz.'
         :ohneEi?'Dieser Spieler trägt gerade kein Ei. Ohne Ei gibt es nichts zu holen.'

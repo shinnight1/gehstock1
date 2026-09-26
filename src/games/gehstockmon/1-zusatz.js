@@ -262,6 +262,10 @@
      gedeckelt. Dem Fuehrenden wird dabei nichts weggenommen - er wird nur
      angreifbar, und das ist der Unterschied zwischen Bremse und Strafe. */
   X.AUSSENSEITER_JE_GEBIET=.08;X.AUSSENSEITER_MAX=.4;
+  /* Wie ein Zuschlag im Kampf ankommt: voll auf die KP, zur Haelfte auf den
+     Angriff (A.create rechnet ihn wie den Ausbau eines Gebiets). Die Texte
+     versprachen lange "+X % KP und Angriff" - jetzt steht da, was wirkt. */
+  X.zuschlagText=function(anteil){return '+'+Math.round(anteil*100)+' % KP und +'+Math.round(anteil*50)+' % Angriff';};
   X.aussenseiterBonus=function(meine,seine){
     var m=Math.max(0,Math.floor(meine)||0),s=Math.max(0,Math.floor(seine)||0);
     if(s<=m)return 0;
