@@ -76,11 +76,49 @@ function faehigkeitEinsetzen(room, member, log) {
      darum laenger: zwei Runden statt einer. */
   else if (f.id === 'blendstoss') { treffer(f.faktor, f.name); room.boss.blendung = 2; }
   else if (f.id === 'windschnitt') { treffer(f.faktor * 1.15, f.name); }
+  /* Die zehn skalierten Faehigkeiten. Staerke und Faktor kommen aus derselben
+     Rechnung wie in der Arena (A.faehigkeitFaktor, A.skala). Was ein Boss
+     nicht kennt, wird zum naechstliegenden: Erdstoss daempft seinen naechsten
+     Schlag, Laehmstich laesst seinen Rundumschlag ausfallen, Runenraub schaerft
+     den eigenen naechsten Treffer, Zeitsprung laedt den Kraftschlag. */
+  else if (f.skaliert) {
+    const k = A.skala(member), faktor = A.faehigkeitFaktor(member);
+    if (f.id === 'erdstoss') { treffer(faktor, f.name); room.boss.geschwaecht = true; }
+    else if (f.id === 'sturmangriff') {
+      treffer(faktor, f.name);
+      const rueck = Math.min(member.hp - 1, Math.round(member.maxHp * f.rueckstoss));
+      if (rueck > 0) { member.hp -= rueck; log.push(member.name + ' zahlt ' + rueck + ' KP für den Sturmangriff.'); }
+    }
+    else if (f.id === 'klingenwirbel') {
+      treffer(faktor, f.name);
+      /* Ein Boss hat zehnmal so viele KP - ein Anteil davon waere riesig. Er
+         blutet darum nach der Wucht dessen, der ihn geschnitten hat. */
+      const n = Math.max(1, Math.round(member.attack * .35 * k));
+      room.boss.blutung = Math.max(room.boss.blutung || 0, f.runden);
+      room.boss.blutungSchaden = Math.max(room.boss.blutungSchaden || 0, n);
+    }
+    else if (f.id === 'regeneration') { heilen(f.heilung * k); member.regeneration = f.runden; member.regenAnteil = f.nachheilung * k; }
+    else if (f.id === 'heilkreis') {
+      for (const m of living(room)) {
+        const n = Math.min(m.maxHp - m.hp, Math.round(m.maxHp * (m === member ? f.heilung : f.andere) * k));
+        if (n > 0) { m.hp += n; log.push(member.name + ': Heilkreis heilt ' + m.name + ' um ' + n + ' KP.'); }
+      }
+    }
+    else if (f.id === 'laehmstich') { treffer(faktor, f.name); room.boss.gelaehmt = true; }
+    else if (f.id === 'zeitsprung') { treffer(faktor, f.name); member.powerReady = Math.min(member.powerReady || 1, room.round + 1); }
+    else if (f.id === 'runenraub') { treffer(faktor, f.name); member.geschaerft = true; }
+    else treffer(faktor, f.name);
+  }
   else treffer(f.faktor, f.name);
 }
 function resolveRound(world, room, now) {
   const team = living(room), log = [];
   for (const member of team) {
+    if (member.regeneration > 0) {
+      member.regeneration--;
+      const n = Math.min(member.maxHp - member.hp, Math.round(member.maxHp * (member.regenAnteil || .08)));
+      if (n > 0) { member.hp += n; log.push(member.name + ' regeneriert ' + n + ' KP.'); }
+    }
     const move = room.actions[member.id] || 'guard';
     if (!room.actions[member.id]) member.missed++; else { member.missed = 0; member.contributions++; }
     if (member.missed >= 3) { member.left = true; log.push(member.name + ' hat die Verbindung verloren.'); continue; }
@@ -95,11 +133,21 @@ function resolveRound(world, room, now) {
       room.boss.hp = Math.max(0, room.boss.hp - damage); log.push(member.name + ': ' + damage + ' Schaden.');
     }
   }
+  if (room.boss.blutung > 0 && room.boss.hp > 0) {
+    room.boss.blutung--;
+    const n = Math.min(room.boss.hp, room.boss.blutungSchaden || 1);
+    room.boss.hp -= n; log.push(room.boss.name + ' blutet: ' + n + ' Schaden.');
+    if (!room.boss.blutung) room.boss.blutungSchaden = 0;
+  }
   room.log = log;
   if (room.boss.hp <= 0) { finish(world, room, 'players', now); return; }
-  const survivors=living(room), targets=room.round%3===0?survivors:[survivors.find(m=>m.id===room.targetId)||survivors[0]].filter(Boolean);
+  /* Gelaehmt faellt der Rundumschlag aus - der Boss trifft dann nur einen. */
+  const rundum = room.round % 3 === 0 && !room.boss.gelaehmt;
+  if (room.round % 3 === 0 && room.boss.gelaehmt) log.push(room.boss.name + ' ist gelähmt - der Rundumschlag fällt aus.');
+  room.boss.gelaehmt = false;
+  const survivors=living(room), targets=rundum?survivors:[survivors.find(m=>m.id===room.targetId)||survivors[0]].filter(Boolean);
   for (const member of targets) {
-    let roh = room.boss.attack * (room.round % 3 === 0 ? 1.35 : 1) * (member.guarding ? .4 : 1);
+    let roh = room.boss.attack * (rundum ? 1.35 : 1) * (member.guarding ? .4 : 1);
     roh *= A.rollenFaktor(room.boss.role, member.role);
     if (room.boss.geschwaecht || room.boss.blendung > 0) roh *= .65;
     /* Ein Schild aus der eigenen Faehigkeit haelt genau einen Schlag. */
@@ -238,3 +286,6 @@ export async function dungeonAction({world, p, id, body, now, presence}) {
   }
   return {};
 }
+
+/* Nur fuer tools/gehstockmon-attacken-tests.mjs. */
+export const _faehigkeitEinsetzen = faehigkeitEinsetzen;

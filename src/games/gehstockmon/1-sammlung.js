@@ -95,6 +95,17 @@
     nachtflatter:1,kristallspinne:1,obsidianrabe:1,stahlkolibri:1,
     leerenwyrm:2,chronoschreiter:2,zeitphoenix:2,frostmanta:2,mondluchs:2
   };
+  /* Die zehn neuen Faehigkeiten (ab Index 3, 27.09.2026). Getragen vor allem
+     von Mons, die ihre alte nur ueber die Katalogposition hatten, und von
+     Schneiden - vorher trugen zehn von siebzehn den Aderlass. Jede neue gibt es
+     in mehreren Seltenheiten, weil sie mit ihr waechst. Starter und der
+     Einsteiger-Trainer (blattschleicher) behalten ihre gewohnte. */
+  Object.assign(D.FAEHIGKEIT_FEST,{
+    bernsteinkaefer:3,sturmhorn:3,aurorabaer:3, sumpfschnapper:4,grabesritter:4,endrichter:4,
+    donnerwidder:3,gewittergreif:3,aetherdrache:3, frostklaue:4,glutbasilisk:4, duenenschakal:5,weltenfresser:5,nullwyrm:5,
+    tauhupfer:3,korallenwacht:3, seelenqualle:4,novaorakel:4,
+    mondluchs:3,kristallspinne:3, stahlkolibri:4,chronoschreiter:4,zeitphoenix:4, obsidianrabe:5,leerenwyrm:5
+  });
   D.faehigkeitVon=function(mon){
     if(!mon)return 0;
     var fest=D.FAEHIGKEIT_FEST[mon.id];

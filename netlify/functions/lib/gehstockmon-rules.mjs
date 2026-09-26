@@ -246,6 +246,17 @@ const SG = { rules: {} };
     nachtflatter:1,kristallspinne:1,obsidianrabe:1,stahlkolibri:1,
     leerenwyrm:2,chronoschreiter:2,zeitphoenix:2,frostmanta:2,mondluchs:2
   };
+  /* Die zehn neuen Faehigkeiten (ab Index 3, 27.09.2026). Getragen vor allem
+     von Mons, die ihre alte nur ueber die Katalogposition hatten, und von
+     Schneiden - vorher trugen zehn von siebzehn den Aderlass. Jede neue gibt es
+     in mehreren Seltenheiten, weil sie mit ihr waechst. Starter und der
+     Einsteiger-Trainer (blattschleicher) behalten ihre gewohnte. */
+  Object.assign(D.FAEHIGKEIT_FEST,{
+    bernsteinkaefer:3,sturmhorn:3,aurorabaer:3, sumpfschnapper:4,grabesritter:4,endrichter:4,
+    donnerwidder:3,gewittergreif:3,aetherdrache:3, frostklaue:4,glutbasilisk:4, duenenschakal:5,weltenfresser:5,nullwyrm:5,
+    tauhupfer:3,korallenwacht:3, seelenqualle:4,novaorakel:4,
+    mondluchs:3,kristallspinne:3, stahlkolibri:4,chronoschreiter:4,zeitphoenix:4, obsidianrabe:5,leerenwyrm:5
+  });
   D.faehigkeitVon=function(mon){
     if(!mon)return 0;
     var fest=D.FAEHIGKEIT_FEST[mon.id];
@@ -1167,7 +1178,68 @@ const SG = { rules: {} };
       { id:'blendstoss',  name:'Blendstoß',    text:'Nimmt dem Gegner eine Fähigkeitsladung',     faktor:.6 },
       { id:'windschnitt', name:'Windschnitt',  text:'Geht durch Deckung und Schilde hindurch',    faktor:1.15 } ]
   ];
+  /* ------------------------------------------------------------------
+     Zehn weitere Faehigkeiten (27.09.2026). Sie bringen, was es bisher gar
+     nicht gab: Blutung und Heilung ueber mehrere Zuege, Laehmung, Rueckstoss,
+     eine Heilung fuer die ganze Truppe und Faehigkeiten, die sich nach der
+     Lage richten. Sie haengen hinten an ihrer Rolle - bestehende Indizes
+     bleiben damit stehen.
+
+     Anders als die ersten zwoelf wachsen sie mit der Seltenheit ihres Mons
+     (skaliert): ihre Hauptwirkung ist bei einem gewoehnlichen Mon 85 %, bei
+     einem epischen 100 % und bei einem apokalyptischen 115 % stark. Die
+     Grundwerte selbst sind mit tools/gehstockmon-attacken-tests.mjs gegen die
+     alten zwoelf eingemessen: keine gewinnt deutlich haeufiger als die
+     bisherigen ihrer Rolle.
+     ------------------------------------------------------------------ */
+  A.SELTENHEIT_SKALA = [.85, .9, .95, 1, 1.05, 1.1, 1.15];
+  function prozent(x) { return Math.round(x * 100); }
+  /* Die Texte lesen ihre Zahlen aus den Werten daneben (this) - so koennen
+     Beschreibung und Wirkung nie auseinanderlaufen. */
+  A.FAEHIGKEITEN[0].push(
+    { id:'erdstoss',   name:'Erdstoß',     skaliert:true, faktor:.85, verzoegerung:2,
+      text:function (k) { return prozent(this.faktor * k) + ' % Schaden, und der Kraftschlag des Gegners lädt zwei Runden später'; } },
+    { id:'vergeltung', name:'Vergeltung',  skaliert:true, faktor:.5, zuwachs:1.1,
+      text:function (k) { return 'Je mehr KP dir fehlen, desto härter: ' + prozent(this.faktor * k) + ' bis ' + prozent((this.faktor + this.zuwachs) * k) + ' % Schaden'; } });
+  A.FAEHIGKEITEN[1].push(
+    { id:'sturmangriff',  name:'Sturmangriff',  skaliert:true, faktor:1.45, rueckstoss:.15,
+      text:function (k) { return prozent(this.faktor * k) + ' % Schaden, kostet dich ' + prozent(this.rueckstoss) + ' % deiner KP'; } },
+    { id:'klingenwirbel', name:'Klingenwirbel', skaliert:true, faktor:.7, blutung:.05, runden:3,
+      text:function (k) { return prozent(this.faktor * k) + ' % Schaden, dann blutet der Gegner drei Züge lang je ' + prozent(this.blutung * k) + ' % seiner KP'; } },
+    { id:'blutrausch',    name:'Blutrausch',    skaliert:true, faktor:1.1, heilung:.15,
+      text:function (k) { return prozent(this.faktor * k) + ' % Schaden; fällt der Gegner, kommt die Ladung zurück und du heilst ' + prozent(this.heilung * k) + ' %'; } });
+  A.FAEHIGKEITEN[2].push(
+    { id:'regeneration', name:'Regeneration', skaliert:true, faktor:0, nurVerletzt:true, heilung:.1, nachheilung:.08, runden:3,
+      text:function (k) { return 'Heilt ' + prozent(this.heilung * k) + ' % sofort und drei Züge lang je ' + prozent(this.nachheilung * k) + ' %'; } },
+    { id:'heilkreis',    name:'Heilkreis',    skaliert:true, faktor:0, heilung:.24, andere:.12,
+      text:function (k) { return 'Heilt dich um ' + prozent(this.heilung * k) + ' % und jedes andere kampffähige Mon deiner Truppe um ' + prozent(this.andere * k) + ' %, auch auf der Bank'; } });
+  A.FAEHIGKEITEN[3].push(
+    { id:'laehmstich', name:'Lähmstich', skaliert:true, faktor:.8, runden:2,
+      text:function (k) { return prozent(this.faktor * k) + ' % Schaden, der Gegner kann zwei Züge lang weder Kraftschlag noch Fähigkeit einsetzen'; } },
+    { id:'zeitsprung', name:'Zeitsprung', skaliert:true, faktor:.6,
+      text:function (k) { return prozent(this.faktor * k) + ' % Schaden, und dein Kraftschlag ist sofort wieder geladen'; } },
+    { id:'runenraub',  name:'Runenraub',  skaliert:true, faktor:.6,
+      text:function (k) { return prozent(this.faktor * k) + ' % Schaden und stiehlt dem Gegner eine Fähigkeitsladung'; } });
   A.faehigkeit = function (u) { return A.FAEHIGKEITEN[u.role][u.skill || 0] || A.FAEHIGKEITEN[u.role][0]; };
+  /* Wie stark die Faehigkeit dieses Mons wirkt: nur die skalierten haengen an
+     der Seltenheit. Die Einheit kennt ihr Mon ueber monId - so gilt das auch
+     fuer Kaempfe, die vor dieser Aenderung begonnen haben. */
+  A.skala = function (u) {
+    if (!A.faehigkeit(u).skaliert) return 1;
+    var mon = u && D.mon(u.monId);
+    return mon ? A.SELTENHEIT_SKALA[mon.seltenheit] || 1 : 1;
+  };
+  A.faehigkeitText = function (u) {
+    var f = A.faehigkeit(u);
+    return typeof f.text === 'function' ? f.text(A.skala(u)) : f.text;
+  };
+  /* Der Schadensfaktor, mit dem die Faehigkeit gerade zuschlagen wuerde.
+     Dieselbe Rechnung fuer Arena, Duell, Dungeon und die Vorschau. */
+  A.faehigkeitFaktor = function (u) {
+    var f = A.faehigkeit(u), k = A.skala(u);
+    if (f.id === 'vergeltung') return (f.faktor + f.zuwachs * (1 - u.hp / u.maxHp)) * k;
+    return f.faktor * k;
+  };
   /* Ob eine Faehigkeit bei vollem Leben verpufft. Dungeon und Arena fragen
      dieselbe Stelle, sonst gilt im einen Kampf eine andere Regel als im
      anderen - und genau das war der Fall: im Dungeon war jede Faehigkeit bis
@@ -1213,11 +1285,11 @@ const SG = { rules: {} };
     var voll = u.maxCharges || A.LADUNGEN, pause = (u.powerPause || A.POWER_PAUSE) - 1, f = A.faehigkeit(u);
     /* Eine reine Heilung darf nur bei Schaden eingesetzt werden - sonst
        verpufft sie. Alles andere geht immer, solange eine Ladung da ist. */
-    var heiler = A.nurBeiSchaden(u);
+    var heiler = A.nurBeiSchaden(u), gelaehmt = u.gelaehmt > 0;
     return [
       { id: 'strike', name: 'Stockhieb', text: 'Zuverlässiger Angriff', damage: u.ang, enabled: true },
-      { id: 'power', name: 'Kraftschlag', text: round < u.powerReady ? 'Bereit ab Runde ' + u.powerReady : 'Danach ' + pause + (pause === 1 ? ' Runde Pause' : ' Runden Pause'), damage: Math.round(u.ang * 1.55), enabled: round >= u.powerReady },
-      { id: 'special', name: f.name, text: f.text + ' · ' + u.charges + '/' + voll, damage: Math.round(u.ang * f.faktor * (f.id === 'doppelhieb' ? 2 : 1)), enabled: u.charges > 0 && (!heiler || u.hp < u.maxHp) },
+      { id: 'power', name: 'Kraftschlag', text: gelaehmt ? 'Gelähmt' : round < u.powerReady ? 'Bereit ab Runde ' + u.powerReady : 'Danach ' + pause + (pause === 1 ? ' Runde Pause' : ' Runden Pause'), damage: Math.round(u.ang * 1.55), enabled: round >= u.powerReady && !gelaehmt },
+      { id: 'special', name: f.name, text: (gelaehmt ? 'Gelähmt · ' : '') + A.faehigkeitText(u) + ' · ' + u.charges + '/' + voll, damage: Math.round(u.ang * A.faehigkeitFaktor(u) * (f.id === 'doppelhieb' ? 2 : 1)), enabled: u.charges > 0 && (!heiler || u.hp < u.maxHp) && !gelaehmt },
       { id: 'guard', name: 'Deckung', text: 'Nächster Treffer −60 %', damage: 0, enabled: true }
     ];
   };
@@ -1331,8 +1403,26 @@ const SG = { rules: {} };
     if (n > 0) { me.hp += n; record(s, me.name + ' heilt ' + n + ' KP.', me, me, n); }
     return n;
   }
+  /* Was ueber mehrere Zuege wirkt, rechnet zu Beginn des eigenen Zuges ab:
+     erst die Heilung, dann die Blutung. Wer daran faellt, handelt nicht mehr. */
+  function zustaende(s, me) {
+    if (me.regeneration > 0) { me.regeneration--; heile(s, me, me.regenAnteil || 0.08); }
+    if (me.blutung > 0) {
+      me.blutung--;
+      var n = Math.min(me.hp, Math.max(1, me.blutungSchaden || 1)); me.hp -= n;
+      record(s, me.name + ' blutet: ' + n + ' Schaden.', null, me, -n, 'blutung');
+    }
+  }
   function attack(s, side, move) {
     var me = active(s, side), other = active(s, 1-side); if (me.hp <= 0 || other.hp <= 0) return;
+    zustaende(s, me); if (me.hp <= 0) return;
+    /* Gelaehmt bleiben Stockhieb und Deckung. Auch ein Plan oder die KI, die
+       trotzdem zur Faehigkeit greifen, schlagen dann nur zu. */
+    var gelaehmt = me.gelaehmt > 0;
+    if (gelaehmt) {
+      me.gelaehmt--;
+      if (move === 'power' || move === 'special') { record(s, me.name + ' ist gelähmt und schlägt nur zu.', me); move = 'strike'; }
+    }
     me.shield = 0;
     if (move === 'guard') { me.shield = 0.6; record(s, me.name + ' geht in Deckung.', me); }
     else if (move === 'power') { me.powerReady = s.round + (me.powerPause || A.POWER_PAUSE); damage(s,me,other,me.ang*1.55,'Kraftschlag'); }
@@ -1351,8 +1441,43 @@ const SG = { rules: {} };
       else if (f.id === 'runenstoerung') { damage(s,me,other,me.ang*f.faktor,f.name); if (other.hp > 0) other.weakened = true; }
       else if (f.id === 'blendstoss') { damage(s,me,other,me.ang*f.faktor,f.name); if (other.hp > 0 && other.charges > 0) { other.charges--; record(s,other.name+' verliert eine Ladung.',me,other); } }
       else if (f.id === 'windschnitt') { damage(s,me,other,me.ang*f.faktor,f.name,true); }
+      else if (f.skaliert) neueFaehigkeit(s, side, me, other, f, A.skala(me));
       else damage(s,me,other,me.ang*f.faktor,f.name);
     } else damage(s,me,other,me.ang,'Stockhieb');
+  }
+  function neueFaehigkeit(s, side, me, other, f, k) {
+    var treffer = function () { damage(s, me, other, me.ang * A.faehigkeitFaktor(me), f.name); };
+    if (f.id === 'erdstoss') {
+      treffer();
+      if (other.hp > 0) { other.powerReady = Math.max(other.powerReady || 1, s.round + f.verzoegerung); record(s, other.name + ' wankt - sein Kraftschlag lädt später.', me, other); }
+    } else if (f.id === 'vergeltung') treffer();
+    else if (f.id === 'sturmangriff') {
+      treffer();
+      var rueck = Math.min(me.hp - 1, Math.round(me.maxHp * f.rueckstoss));
+      if (rueck > 0) { me.hp -= rueck; record(s, me.name + ' zahlt ' + rueck + ' KP für den Sturmangriff.', me, me, -rueck, 'rueckstoss'); }
+    } else if (f.id === 'klingenwirbel') {
+      treffer();
+      if (other.hp > 0) { other.blutung = f.runden; other.blutungSchaden = Math.max(1, Math.round(other.maxHp * f.blutung * k)); record(s, other.name + ' blutet.', me, other); }
+    } else if (f.id === 'blutrausch') {
+      treffer();
+      if (other.hp <= 0) { me.charges = Math.min(me.maxCharges || A.LADUNGEN, me.charges + 1); heile(s, me, f.heilung * k); record(s, me.name + ' gerät in einen Blutrausch - die Ladung kommt zurück.', me); }
+    } else if (f.id === 'regeneration') {
+      heile(s, me, f.heilung * k); me.regeneration = f.runden; me.regenAnteil = f.nachheilung * k;
+      record(s, me.name + ' regeneriert sich.', me);
+    } else if (f.id === 'heilkreis') {
+      var geheilt = 0;
+      s.teams[side].forEach(function (u) { if (u.hp > 0) geheilt += heile(s, u, (u === me ? f.heilung : f.andere) * k); });
+      if (!geheilt) record(s, me.name + ': Heilkreis - alle sind unverletzt.', me);
+    } else if (f.id === 'laehmstich') {
+      treffer();
+      if (other.hp > 0) { other.gelaehmt = f.runden; record(s, other.name + ' ist gelähmt.', me, other); }
+    } else if (f.id === 'zeitsprung') {
+      treffer();
+      me.powerReady = Math.min(me.powerReady, s.round + 1); record(s, me.name + ' springt durch die Zeit - der Kraftschlag ist geladen.', me);
+    } else if (f.id === 'runenraub') {
+      treffer();
+      if (other.hp > 0 && other.charges > 0) { other.charges--; me.charges = Math.min(me.maxCharges || A.LADUNGEN, me.charges + 1); record(s, me.name + ' stiehlt ' + other.name + ' eine Ladung.', me, other); }
+    } else treffer();
   }
   function finish(s) {
     if (!s.teams[1].some(function (u) { return u.hp > 0; })) { s.winner='wir'; s.phase='finished'; }
@@ -1410,6 +1535,20 @@ const SG = { rules: {} };
     if (wenn === 'geschuetzt') return other.shield > 0;
     return false;
   }
+  function kiNeu(f, me, other, s) {
+    if (!f.skaliert) return null;
+    if (f.id === 'erdstoss') return other.powerReady <= s.round + 1 || s.round % 3 === 1;
+    if (f.id === 'vergeltung') return me.hp <= me.maxHp * .5;
+    if (f.id === 'sturmangriff') return me.hp > me.maxHp * .45;
+    if (f.id === 'klingenwirbel') return !(other.blutung > 0) && other.hp > other.maxHp * .3;
+    if (f.id === 'blutrausch') return other.hp <= other.maxHp * .4;
+    if (f.id === 'regeneration') return me.hp < me.maxHp * .75 && !(me.regeneration > 0);
+    if (f.id === 'heilkreis') return me.hp < me.maxHp * .6 || s.teams[1].filter(function (u) { return u.hp > 0 && u.hp < u.maxHp * .75; }).length >= 2;
+    if (f.id === 'laehmstich') return !(other.gelaehmt > 0) && (other.charges > 0 || other.powerReady <= s.round + 1);
+    if (f.id === 'zeitsprung') return s.round < me.powerReady;
+    if (f.id === 'runenraub') return other.charges > 0;
+    return false;
+  }
   A.ai = function(s) {
     var me=active(s,1), other=active(s,0);
     var moeglich = A.moves(me, s.round);
@@ -1422,8 +1561,12 @@ const SG = { rules: {} };
         if (erlaubt(dann)) return dann;
       }
     }
-    if(me.charges>0 && ((me.role===2 && me.hp<me.maxHp*0.65)||(me.role===1 && other.hp<other.maxHp*0.35)||(me.role===3 && !other.weakened)||(me.role===0 && s.round%3===1)))return 'special';
-    return s.round>=me.powerReady?'power':'strike';
+    /* Die neuen Faehigkeiten wollen je ihren eigenen Moment - die alten
+       folgen weiter der Faustregel ihrer Rolle. */
+    var neu = kiNeu(A.faehigkeit(me), me, other, s);
+    if (neu !== null) { if (neu && erlaubt('special')) return 'special'; }
+    else if(me.charges>0 && ((me.role===2 && me.hp<me.maxHp*0.65)||(me.role===1 && other.hp<other.maxHp*0.35)||(me.role===3 && !other.weakened)||(me.role===0 && s.round%3===1)))return 'special';
+    return s.round>=me.powerReady&&erlaubt('power')?'power':'strike';
   };
   A.turn = function (original, action) {
     if(!original || original.phase==='finished') throw new Error('Dieser Kampf ist bereits beendet.');

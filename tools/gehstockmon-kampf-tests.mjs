@@ -1,4 +1,4 @@
-/* Die sechs Systeme, die den Kern des Kampfes ausmachen: zwoelf Faehigkeiten,
+/* Die sechs Systeme, die den Kern des Kampfes ausmachen: zweiundzwanzig Faehigkeiten,
    das Rollen-Dreieck, die Kampfplaene, die Aussenseiterhilfe, der nachlesbare
    Bericht und das Tauschbrett. */
 import assert from 'node:assert/strict';
@@ -20,21 +20,27 @@ function auskaempfen(b,zug){
   return b;
 }
 
-await test('Twelve abilities exist, three per role, and every Mon has exactly one',()=>{
+await test('Twenty-two abilities exist (5/6/5/6 per role), and every Mon has exactly one',()=>{
   assert.equal(A.FAEHIGKEITEN.length,4);
-  for(const rolle of A.FAEHIGKEITEN)assert.equal(rolle.length,3);
-  assert.equal(new Set(A.FAEHIGKEITEN.flat().map(f=>f.id)).size,12,'no duplicate ids');
-  /* Jede der zwoelf wird von mindestens einem Mon getragen - sonst ist sie tot. */
+  assert.deepEqual(A.FAEHIGKEITEN.map(r=>r.length),[5,6,5,6]);
+  assert.equal(new Set(A.FAEHIGKEITEN.flat().map(f=>f.id)).size,22,'no duplicate ids');
+  /* Jede wird von mindestens einem Mon getragen - sonst ist sie tot. */
   const belegt=new Set();
   for(const k of D.KATALOG){
     const i=D.faehigkeitVon(k);
-    assert.ok(i>=0&&i<3,k.id+' has ability index '+i);
+    assert.ok(i>=0&&i<A.FAEHIGKEITEN[k.typ].length,k.id+' has ability index '+i);
     belegt.add(k.typ+':'+i);
   }
-  assert.equal(belegt.size,12,'every role/ability pair is carried by a Mon');
-  /* Die erste jeder Rolle bleibt die alte - sonst aendert sich fuer bestehende
-     Spielstaende die gewohnte Attacke. */
+  assert.equal(belegt.size,22,'every role/ability pair is carried by a Mon');
+  /* Die ersten drei jeder Rolle bleiben an ihrem Platz - sonst aendert sich
+     fuer bestehende Spielstaende die gewohnte Attacke. Die neuen haengen hinten
+     an und sind die einzigen, die mit der Seltenheit wachsen. */
   assert.deepEqual(A.FAEHIGKEITEN.map(r=>r[0].name),['Schildstoß','Sichelstreich','Lebensquell','Runenstörung']);
+  assert.deepEqual(A.FAEHIGKEITEN.map(r=>r.slice(0,3).map(f=>f.id).join(',')),
+    ['schildstoss,steinwall,dornenpanzer','sichelstreich,doppelhieb,aderlass','lebensquell,sammelruf,laeuterung','runenstoerung,blendstoss,windschnitt']);
+  for(const rolle of A.FAEHIGKEITEN)rolle.forEach((f,i)=>assert.equal(!!f.skaliert,i>=3,f.id+' scales with rarity only if it is new'));
+  /* Die Startermons behalten ihre Attacke. */
+  assert.deepEqual(D.STARTER.map(id=>A.FAEHIGKEITEN[D.mon(id).typ][D.faehigkeitVon(D.mon(id))].id),['schildstoss','sichelstreich','lebensquell','runenstoerung']);
 });
 await test('Every ability actually does what it promises',()=>{
   function kampf(monId,gegnerId){
