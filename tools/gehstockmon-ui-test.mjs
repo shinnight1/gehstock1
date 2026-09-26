@@ -25,7 +25,7 @@ export async function checkUi(D,E,A,handler,code,clock,otherCode){
     const response=await handler(new Request('http://localhost'+url,opts));if(response.ok){const data=await response.clone().json();if(data.profile)latest=data;}
     if(loseResponse){loseResponse=false;throw new TypeError('Antwort verloren');}if(delayReply){delayReply=false;await new Promise(resolve=>releaseReply=resolve);}return response;
   }});
-  for(const file of['src/core/ui.js','src/games/gehstockmon/1-zeiten.js','src/games/gehstockmon/1-zusatz.js','src/games/gehstockmon/2-figuren.js','src/games/gehstockmon/2-online.js','src/games/gehstockmon/2-abenteuer-ui.js','src/games/gehstockmon/2-dungeon-ui.js','src/games/gehstockmon/2-stadt-ui.js','src/games/gehstockmon/3-ui.js'])vm.runInContext(fs.readFileSync(file,'utf8'),context);
+  for(const file of['src/core/ui.js','src/games/gehstockmon/1-zeiten.js','src/games/gehstockmon/1-zusatz.js','src/games/gehstockmon/2-figuren.js','src/games/gehstockmon/2-online.js','src/games/gehstockmon/2-abenteuer-ui.js','src/games/gehstockmon/2-dungeon-ui.js','src/games/gehstockmon/2-stadt-ui.js','src/games/gehstockmon/2-alltag.js','src/games/gehstockmon/2-heute-ui.js','src/games/gehstockmon/2-schlupf-ui.js','src/games/gehstockmon/3-ui.js'])vm.runInContext(fs.readFileSync(file,'utf8'),context);
   const mount=()=>definition.mount({stage,root,store:storage,onLeave(){},sfx(){},after:(fn,ms)=>{timers.set(++timerId,{fn,at:clock.value+ms});return timerId;},cancel:id=>timers.delete(id)});
   let game=mount();
   const find=fn=>{const e=root.all().find(e=>e.visible&&fn(e));assert.ok(e,'control exists');return e;};
@@ -55,6 +55,10 @@ export async function checkUi(D,E,A,handler,code,clock,otherCode){
   const goldAfterWin=game.state.gold;advance(3000);assert.equal(game.state.gold,goldAfterWin,'client never grants rewards');
   await jump(latest.territories[0].eggAt+E.EGG_TIME);click('⚑ Außenposten');click('Außenposten verwalten');click('Eier abholen');await flush();assert.equal(game.state.eggs.length,1);
   click('◉ Eier');click('Ausbrüten · 1 Stunde');await flush();const egg=game.state.eggs[0];assert.ok(egg.readyAt>clock.value);await jump(egg.readyAt);click('Schlüpfen lassen');await flush();assert.equal(game.state.besitz.length,5);assert.equal(game.state.eggs.length,0);
+  /* Der Schlüpf-Moment: erst das Ei, dann das Mon, dann geht es mit einem Tipp weiter. */
+  const szene=root.querySelector('.gm-schlupf');assert.ok(szene,'hatching plays the hatch scene');
+  advance(3000);assert.ok(szene.classList.contains('gm-schlupf-da'),'the Mon is revealed');
+  szene.fire('click');assert.equal(root.querySelector('.gm-schlupf'),null,'a tap closes the scene');click('×');
   click('▦ Mons');find(e=>e.classList.contains('gm-party-card')).fire('click');const old=game.state.truppe.slice();click('2. Platz: '+D.mon(old[1]).name);await flush();assert.equal(game.state.truppe[1],old[0]);assert.equal(latest.profile.truppe[1],old[0],'squad saved on server immediately');
   click('×');find(e=>e.attrs['aria-label']===D.FELDER[1].name+' auswählen').fire('click');click('⚔ Arena betreten');await flush();
   game.destroy();timers.clear();while(stage.firstChild)stage.removeChild(stage.firstChild);game=mount();await flush();assert.equal(game.state.besitz.length,5);assert.equal(game.state.truppe[1],old[0]);assert.equal(root.querySelector('.gm-arena').hidden,false,'active server arena resumes on reload');
@@ -125,6 +129,11 @@ export async function checkUi(D,E,A,handler,code,clock,otherCode){
   click('♛ Stockhafen');await flush();
   assert.ok(root.textContent.includes('Tauschbrett'),'the trading board renders');
   assert.ok(root.textContent.includes('Der Gehstock-Champion'));
+  /* Heute: oben in der Leiste, drei Aufgaben und die Truhe. */
+  find(e=>e.classList.contains('gm-projekt')&&e.textContent.startsWith('Heute')).fire('click');await flush();
+  assert.ok(root.textContent.includes('Heute auf der Insel'),'the daily window opens');
+  assert.equal(root.querySelectorAll('.gm-heute-aufgabe').length,3,'three daily tasks');
+  assert.ok(root.querySelector('.gm-heute-truhe').disabled,'the chest waits for all three');
   game.destroy();
   assert.equal(listeners.offline,undefined);assert.equal(listeners.online,undefined);
   // A direct offline-file route is gated too, even though the catalog hides it.

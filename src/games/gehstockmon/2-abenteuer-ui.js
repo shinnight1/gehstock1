@@ -29,6 +29,14 @@
     function zeigeProjekte() {
       if (!projektLeiste) { projektLeiste = el('div', undefined, 'gm-projekte'); c.layer.appendChild(projektLeiste); }
       projektLeiste.textContent = '';
+      /* Ganz vorn: was heute zu tun ist - mit Serie und Truhe. */
+      var heute = projekte && projekte.alltag;
+      if (heute && c.heute) {
+        var erledigt = heute.aufgaben.filter(function (a) { return a.stand >= a.ziel; }).length;
+        projektLeiste.appendChild(marke('Heute' + (heute.serie ? ' · 🔥' + heute.serie : ''),
+          heute.truhe ? '✓ Truhe geöffnet' : heute.fertig ? '🎁 Truhe bereit!' : erledigt + '/3 Aufgaben',
+          heute.fertig && !heute.truhe ? '#81d2a3' : '#f0b429', c.heute));
+      }
       var z = projekte && projekte.zerhacker, l = projekte && projekte.leuchtturm;
       if (z && z.hp > 0) projektLeiste.appendChild(balken('Zerhacker', z.hp, z.maxHp, '#f2705a', zeigeZerhacker));
       else if (z) projektLeiste.appendChild(balken('Zerhacker erlegt', 1, 1, '#81d2a3', zeigeZerhacker));

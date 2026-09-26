@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-import {data as D,economy as E,arena as A,adventure as X} from '../netlify/functions/lib/gehstockmon-rules.mjs';
+import {data as D,economy as E,arena as A,adventure as X,hours as H} from '../netlify/functions/lib/gehstockmon-rules.mjs';
 import {createHandler} from '../netlify/functions/gehstockmon.mjs';
 
 const mon=Date.parse('2026-09-21T09:00:00+02:00');
@@ -193,6 +193,77 @@ await test('The endgame territory can be taken by the best possible team, but no
     if(b.winner==='wir')s++;}return s;};
   assert.ok(siege(['endrichter','nullwyrm','risskaiser','chronoschreiter'],200)>=20,'the best team wins at least now and then');
   assert.equal(siege(['titanenkrone','sonnenkoenig','sternengeweih','leerenwyrm'],200),0,'four legendaries never do');
+});
+
+await test('Everyone gets the same three daily tasks, and they change with the school day',()=>{
+  const heute=X.tagesaufgaben(mon);
+  assert.equal(heute.length,3);assert.equal(new Set(heute.map(t=>t.id)).size,3,'three different tasks');
+  assert.deepEqual(X.tagesaufgaben(mon+5*3600000).map(t=>t.id),heute.map(t=>t.id),'the whole day keeps its tasks');
+  let anders=false;for(let d=1;d<10;d++)if(X.tagesaufgaben(mon+d*86400000).map(t=>t.id).join()!==heute.map(t=>t.id).join())anders=true;
+  assert.ok(anders,'other days bring other tasks');
+});
+
+await test('Hatching and exploring count towards the daily tasks, and the chest opens only once all three are done',async()=>{
+  const w=welt({random:()=>.45}),a=await w.call(ca,'join'),p=()=>w.db.data.players[a.playerId];
+  p().eggs=[{id:'heute',territoryId:1,producedAt:mon,startedAt:mon-E.HATCH_TIME,readyAt:mon}];
+  let r=await w.call(ca,'hatch',{eggId:'heute'});assert.equal(r.status,200,r.error);
+  assert.equal(p().alltag.zaehler.ei,1,'a hatch counts');
+  await w.call(ca,'presence',{position:{...a.spawn,heading:0}});
+  r=await w.call(ca,'survey');assert.equal(r.status,200,r.error);
+  assert.equal(p().alltag.zaehler.erkunden,1,'exploring counts');
+  assert.equal((await w.call(ca,'survey')).status,200);assert.equal(p().alltag.zaehler.erkunden,1,'the same biome twice is still one');
+  r=await w.call(ca,'tagestruhe');assert.equal(r.status,400);assert.match(r.error,/alle drei/);
+  for(const t of X.tagesaufgaben(w.uhr.t))for(let i=0;i<t.ziel;i++)X.alltagSchritt(p(),t.id,w.uhr.t,t.id==='erkunden'?i+5:1);
+  const gold=p().gold,eier=p().eggs.length;
+  r=await w.call(ca,'tagestruhe');assert.equal(r.status,200,r.error);
+  assert.equal(r.profile.gold,gold+X.SERIE.gold);assert.equal(r.profile.eggs.length,eier+1,'the chest holds an egg');
+  assert.equal(r.alltag.truhe,true);assert.equal(r.alltag.serie,1);
+  r=await w.call(ca,'tagestruhe');assert.equal(r.status,400);assert.match(r.error,/schon geöffnet/);
+});
+
+await test('The streak counts school days, jumps the weekend, pays special eggs and breaks on a missed day',async()=>{
+  const w=welt({zeit:Date.parse('2026-09-21T08:00:00+02:00')}),a=await w.call(ca,'join'),p=()=>w.db.data.players[a.playerId];
+  const truhe=async(tag)=>{w.uhr.t=Date.parse(tag+'T08:00:00+02:00');await w.call(ca,'world');
+    for(const t of X.tagesaufgaben(w.uhr.t))for(let i=0;i<t.ziel;i++)X.alltagSchritt(p(),t.id,w.uhr.t,t.id==='erkunden'?i+1:1);
+    const r=await w.call(ca,'tagestruhe');assert.equal(r.status,200,tag+': '+r.error);return r;};
+  const tage=['2026-09-21','2026-09-22','2026-09-23','2026-09-24','2026-09-25','2026-09-28'];
+  let r;for(let i=0;i<tage.length;i++){r=await truhe(tage[i]);assert.equal(r.truhe.serie,i+1,tage[i]+' continues the streak');
+    if(i+1===5){assert.equal(r.truhe.eiMindestens,3,'day five brings an Episch egg');assert.equal(r.profile.eggs.at(-1).mindestens,3);
+      assert.ok(r.ticker.some(e=>/Serie seit 5 Schultagen/.test(e.text)),'day five is news for everyone');}}
+  assert.equal(r.truhe.gold,X.SERIE.gold+5*X.SERIE.jeTag,'gold grows with the streak');
+  /* Dienstag verpasst: am Mittwoch faengt sie von vorn an. */
+  r=await truhe('2026-09-30');assert.equal(r.truhe.serie,1,'a missed school day breaks it');
+});
+
+await test('A chest egg waits for room in a full bag and moves in when a slot frees up',async()=>{
+  const w=welt({random:()=>.45}),a=await w.call(ca,'join'),p=()=>w.db.data.players[a.playerId];
+  p().eggs=Array.from({length:E.BAG_LIMIT},(_,i)=>({id:'voll'+i,territoryId:1,producedAt:mon,startedAt:i?null:mon-E.HATCH_TIME,readyAt:i?null:mon}));
+  for(const t of X.tagesaufgaben(mon))for(let i=0;i<t.ziel;i++)X.alltagSchritt(p(),t.id,mon,t.id==='erkunden'?i+1:1);
+  let r=await w.call(ca,'tagestruhe');assert.equal(r.status,200,r.error);assert.equal(r.truhe.wartet,true);
+  assert.equal(r.profile.sonderEier.length,1);assert.equal(r.profile.eggs.length,E.BAG_LIMIT);
+  r=await w.call(ca,'hatch',{eggId:'voll0'});assert.equal(r.status,200,r.error);
+  assert.equal(r.profile.sonderEier.length,0);assert.ok(r.profile.eggs.some(e=>e.art==='truhe'),'the waiting egg moved into the bag');
+});
+
+await test('The island ticker reports rare hatches and conquests to everyone, tagged with the actor',async()=>{
+  let folge=[];const w=welt({random:()=>folge.length?folge.shift():.5}),a=await w.call(ca,'join'),b=await w.call(cb,'join');
+  const p=()=>w.db.data.players[a.playerId];
+  p().eggs=[{id:'selten',territoryId:1,producedAt:mon,startedAt:mon-E.HATCH_TIME,readyAt:mon}];
+  folge=[.5,.97,.5,.9,.5];/* Anfrage, Seltenheit (Legendaer), Mon, kein Schimmer, Wesen */
+  let r=await w.call(ca,'hatch',{eggId:'selten'});assert.equal(r.status,200,r.error);assert.equal(r.schlupf.rang,4);
+  const sicht=await w.call(cb,'world'),eintrag=sicht.ticker.at(-1);
+  assert.match(eintrag.text,/Anna hat .* ausgebrütet \(Legendär\)/);assert.equal(eintrag.wer,a.playerId);
+  /* Gewoehnliches bleibt still. */
+  p().eggs=[{id:'alltag',territoryId:1,producedAt:mon,startedAt:mon-E.HATCH_TIME,readyAt:mon}];folge=[.5,.1,.5,.9,.5];
+  assert.equal((await w.call(ca,'hatch',{eggId:'alltag'})).status,200);assert.equal((await w.call(cb,'world')).ticker.length,sicht.ticker.length);
+  /* Eine Eroberung von einem Spieler. */
+  Object.assign(w.db.data.territories[5],{ownerId:b.playerId,ownerName:'Ben',...E.outpost(null,mon)});
+  const stark=['endrichter','nullwyrm','risskaiser','aetherdrache'];p().besitz.push(...stark);
+  r=await w.call(ca,'arena_start',{territoryId:6,version:(await w.call(ca,'world')).territories[5].version,squad:stark});
+  let bt=r.arena;for(let i=0;bt.phase!=='finished'&&i<200;i++){const u=bt.teams[0][bt.active[0]];
+    r=await w.call(ca,'arena_turn',{battleId:bt.id,revision:bt.revision,action:bt.phase==='replace'?{kind:'switch',slot:bt.teams[0].findIndex(x=>x.hp>0)}:{kind:'move',move:bt.round>=u.powerReady?'power':'strike'}});bt=r.arena;}
+  assert.equal(bt.winner,'wir');assert.match(r.ticker.at(-1).text,/Anna erobert Tauwiese von Ben/);
+  assert.ok(r.ticker.length<=12,'the view stays short');
 });
 
 console.log('\n'+checks+' Ausbau-Pruefungen bestanden.');

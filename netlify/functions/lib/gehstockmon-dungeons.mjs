@@ -1,6 +1,7 @@
 import {data as D, arena as A, adventure as X} from './gehstockmon-rules.mjs';
 import {wochenschritt, fehdeSchritt} from './gehstockmon-adventure.mjs';
 import {anwesende} from './gehstockmon-anwesenheit.mjs';
+import {tickern} from './gehstockmon-alltag.mjs';
 
 const fail = message => { throw new Error(message); };
 export const activeDungeon = (world, p) => {
@@ -19,6 +20,7 @@ function finish(world, room, winner, now) {
     if (p && member.reward) {
       p.runes[dungeon.rarity] = Math.min(9999, p.runes[dungeon.rarity] + member.reward);
       wochenschritt(world, p, member.id, 'tiefe', now);
+      X.alltagSchritt(p, 'dungeon', now);
       fehdeSchritt(world, member.id, 'tiefe', now);
       /* Wer einen Boss zum ersten Mal legt, nimmt sein Fundstueck mit. */
       const fund = X.ruestungFuer(dungeon.id);
@@ -28,6 +30,10 @@ function finish(world, room, winner, now) {
         member.fund = fund.name;
       }
     }
+  }
+  if (winner === 'players') {
+    const namen = room.players.filter(m => !m.left && m.contributions > 0).map(m => m.name);
+    if (namen.length) tickern(world, '🗝️ ' + (namen.length > 1 ? namen.slice(0, -1).join(', ') + ' und ' + namen[namen.length - 1] + ' besiegen' : namen[0] + ' besiegt') + ' ' + D.mon(room.boss.monId).name + ' in ' + dungeon.name, 'dungeon', now);
   }
   room.message = winner === 'players' ? 'Boss besiegt! Eure Runen wurden gutgeschrieben.' : winner === 'expired' ? 'Die Expedition ist abgelaufen. Es gibt keine Runen.' : 'Die Gruppe zieht sich zurück. Eure Mons erholen sich vollständig.';
   room.revision++;

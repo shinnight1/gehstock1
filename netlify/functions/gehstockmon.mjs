@@ -6,6 +6,7 @@ import {activeDungeon,settleDungeons,dungeonResult,dungeonAction} from './lib/ge
 import {stadtAction,arenaStand,championSold} from './lib/gehstockmon-stadt.mjs';
 import {schenken,schenkungen} from './lib/gehstockmon-schenken.mjs';
 import {lesen as anwesenheitLesen,schreiben as anwesenheitSchreiben} from './lib/gehstockmon-anwesenheit.mjs';
+import {tickern,tickerSicht,alltagSicht,alltagAction} from './lib/gehstockmon-alltag.mjs';
 
 const KEY = 'world-v2';
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -171,7 +172,8 @@ function publicResult(world, id, now, extra = {}) {
       defense: A.defenders(t.id, t.ownerId ? t.defense : null).map((k) => ({ id: k.id, name: k.name, upgrade:k.upgrade||0,
         wesen: k.wesenId || null, plan: k.plan || null, ...(k.schimmernd ? { schimmernd: true } : {}) })),
       eggStock: t.ownerId === id ? t.eggStock : 0, eggAt: t.ownerId === id ? t.eggAt : null })),
-    reports: world.reports.filter((r) => r.attackerId === id || r.defenderId === id).slice(-20), ...extra };
+    reports: world.reports.filter((r) => r.attackerId === id || r.defenderId === id).slice(-20),
+    alltag: alltagSicht(p, now), ticker: tickerSicht(world), ...extra };
 }
 
 // Anwesenheit ist kurzlebig und unabhängig von Gold, Eiern und Kampfaktionen.
@@ -296,6 +298,7 @@ function settleBattle(world, p, id, now, requestId) {
       if (defender && defender.posten) delete defender.posten[t.id];
       Object.assign(t, E.outpost(null, now), { level, ownerId: id, ownerName: p.name, defense: verteidigung(p, t.id), version: t.version + 1 });
       b.message = 'Gebiet erobert! +40 Gold. Dein Außenposten produziert jetzt Gold und alle 2 Stunden ein Ei.';
+      tickern(world, '⚔️ ' + p.name + ' erobert ' + D.FELDER[t.id - 1].name + (defender ? ' von ' + defender.name : ''), 'eroberung', now, id);
     }
   } else b.message = b.winner === 'fled' ? 'Zurückgezogen. Das Gebiet bleibt beim Verteidiger.' : 'Deine Truppe ist zurück im Lager. Versuche andere Attacken oder eine andere Aufstellung.';
   world.reports.push({ id: requestId, time: now, attackerId: id, defenderId, territoryId: t.id, winner: b.winner,
@@ -433,6 +436,7 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
           if(p.raidLock?.until>timestamp&&(['arena_start','trainer_start','raid_start','defend'].includes(body.op)||(['hatch','incubate'].includes(body.op)&&body.eggId===p.raidLock.eggId)))throw new GameError('Deine Verteidigung hält gerade einen Überfall ab. Dieses Ei bleibt bis zum Ergebnis reserviert.',409);
           if(X.DUNGEON_OPS.includes(body.op)||body.op==='mon_upgrade')Object.assign(extra,await dungeonAction({world,p,id,body,now:timestamp,presence:presenceStore||speicher('hgh-gehstockmon-presence')}));
           else if(X.STADT_OPS.includes(body.op))Object.assign(extra,await stadtAction({world,p,id,body,now:timestamp,presence:presenceStore||speicher('hgh-gehstockmon-presence')}));
+          else if(X.ALLTAG_OPS.includes(body.op))Object.assign(extra,alltagAction({world,p,id,body,now:timestamp}));
           else if(X.OPS.includes(body.op))Object.assign(extra,await adventureAction({world,p,id,body,now:timestamp,draw,presence:presenceStore||speicher('hgh-gehstockmon-presence'),validateSquad}));
           if (body.op === 'arena_start' || body.op === 'defend') {
             if (p.arena && p.arena.phase !== 'finished') throw new GameError('Beende zuerst deinen aktuellen Arenakampf.', 409);
@@ -516,7 +520,7 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
                Frueher bestimmte eine einzige Zahl Mon und Wesen zugleich, und
                dasselbe Mon kam damit fast immer mit demselben Wesen. */
             const schlupf = E.hatch(p,body.eggId,timestamp,random), mon = schlupf.mon;
-            p.progress.hatched++; wochenschritt(world, p, id, 'eier', timestamp); fehdeSchritt(world, id, 'ei', timestamp);
+            p.progress.hatched++; wochenschritt(world, p, id, 'eier', timestamp); fehdeSchritt(world, id, 'ei', timestamp); X.alltagSchritt(p, 'ei', timestamp);
             X.wesenZuweisen(p, mon.id, random()); extra.monId = mon.id;
             extra.schlupf = { monId: mon.id, neu: schlupf.neu, stufe: schlupf.stufe, runen: schlupf.runen, rang: schlupf.rang,
               garantiert: schlupf.garantiert, schimmernd: schlupf.schimmernd, schimmerNeu: schlupf.schimmerNeu };
@@ -531,8 +535,14 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
                der neuen Stufe - sonst haette der Zwilling auf dem eigenen Land
                keine Wirkung. */
             if (!schlupf.neu && (schlupf.stufe || schlupf.schimmerNeu)) verteidigungenAuffrischen(world, p, id);
+            /* Was selten ist, erfahren alle: ab Episch, und jeder Schimmer. */
+            if (schlupf.rang >= 3 || schlupf.schimmernd) {
+              const zeichen = ['', '', '', '💜', '🌟', '💠', '☄️'][schlupf.rang] || '🎉';
+              tickern(world, (schlupf.schimmernd ? '✨' : zeichen) + ' ' + p.name + ' hat ' + (schlupf.schimmernd ? 'einen schimmernden ' : '') + mon.name
+                + ' ausgebrütet (' + D.SELTENHEITEN[schlupf.rang].name + (schlupf.garantiert ? ', Garantie' : '') + ')', 'schlupf', timestamp, id);
+            }
           }
-          deliverRewards(p,timestamp);
+          deliverRewards(p,timestamp); X.sonderEierLiefern(p);
           const weekendEggs = activeArena(p)||activeDuel(p)?0:E.deliverWeekend(p, timestamp);
           if (weekendEggs) extra.weekendDelivery = weekendEggs;
         } catch (err) { if (err instanceof GameError) throw err; throw new GameError(err.message); }

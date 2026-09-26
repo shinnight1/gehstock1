@@ -2,6 +2,7 @@ import {data as D,economy as E,arena as A,adventure as X} from './gehstockmon-ru
 import {activeDungeon} from './gehstockmon-dungeons.mjs';
 import {stadtSettle} from './gehstockmon-stadt.mjs';
 import {anwesende} from './gehstockmon-anwesenheit.mjs';
+import {tickern} from './gehstockmon-alltag.mjs';
 const fail=(message)=>{throw new Error(message);};
 export const activeArena=p=>p.arena&&p.arena.phase!=='finished';
 export const activeDuel=p=>p.duel&&['choose','won'].includes(p.duel.phase);
@@ -20,7 +21,7 @@ export function finishEncounter(world,p,id,now){
   if(b.kind==='rang'||b.kind==='champion')return stadtSettle(world,p,id,now);
   if(b.kind==='trainer'){
     if(b.winner==='wir'&&!p.encounterClaims.includes(b.encounterId)){
-      p.encounterClaims=p.encounterClaims.concat(b.encounterId).slice(-100);p.progress.trainerWins++;p.gold+=25;wochenschritt(world,p,id,'trainer',now);fehdeSchritt(world,id,'trainer',now);
+      p.encounterClaims=p.encounterClaims.concat(b.encounterId).slice(-100);p.progress.trainerWins++;p.gold+=25;wochenschritt(world,p,id,'trainer',now);fehdeSchritt(world,id,'trainer',now);X.alltagSchritt(p,'trainer',now);
       if(p.eggs.length<E.BAG_LIMIT){egg(p,b.territoryId,now);b.message='Training gewonnen! Ein Ei und 25 Gold gehören dir.';}
       else {p.rewardEggs=p.rewardEggs||{};p.rewardEggs[b.territoryId]=(p.rewardEggs[b.territoryId]||0)+1;b.message='Training gewonnen! 25 Gold; dein Ei wartet auf Platz in der Tasche.';}
     }else b.message='Das Training ist beendet. Du verlierst weder Gold noch Eier. Probiere andere Attacken.';
@@ -149,6 +150,7 @@ export function wochenschritt(world,p,id,art,now,anzahl=1){
   a.stand+=anzahl;a.beitraege[id]=(a.beitraege[id]||0)+anzahl;
   if(a.stand<ziel.ziel)return null;
   a.erfuelltAm=now;
+  tickern(world,'🏆 Wochenaufgabe "'+ziel.name+'" geschafft - alle, die mitgeholfen haben, bekommen ihren Lohn.','woche',now);
   for(const [pid,anteil] of Object.entries(a.beitraege)){
     const wer=world.players[pid];if(!wer)continue;
     wer.gold+=ziel.lohn+Math.round(ziel.lohn*anteil/Math.max(1,a.stand));
@@ -192,11 +194,11 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
   if(activeDuel(p)&&!['raid_turn','raid_arena','raid_cancel'].includes(op))fail('Beende zuerst deinen Überfall.');
   async function position(pid){const v=(await anwesende(presence))[pid];if(!v||now-v.updatedAt>=15000||v.spawnAt!==world.players[pid].lastJoinAt)fail('Die Kartenposition ist nicht aktuell. Warte kurz auf die Verbindung.');return v;}
   async function nearby(point,distance=8){const at=await position(id);if(Math.hypot(at.x-point.x,at.z-point.z)>distance)fail('Laufe zuerst näher heran.');return at;}
-  if(op==='survey'){const at=await position(id);let best=0;D.BIOME.forEach((b,i)=>{if(Math.hypot(b.x-at.x,b.z-at.z)<Math.hypot(D.BIOME[best].x-at.x,D.BIOME[best].z-at.z))best=i;});if(!p.visited.includes(best+1))p.visited.push(best+1);extra.message=D.BIOME[best].terrain+' erkundet.';}
+  if(op==='survey'){const at=await position(id);let best=0;/* erkundet wird das naechstgelegene Biom */D.BIOME.forEach((b,i)=>{if(Math.hypot(b.x-at.x,b.z-at.z)<Math.hypot(D.BIOME[best].x-at.x,D.BIOME[best].z-at.z))best=i;});if(!p.visited.includes(best+1))p.visited.push(best+1);X.alltagSchritt(p,'erkunden',now,best+1);extra.message=D.BIOME[best].terrain+' erkundet.';}
   if(op==='gather'||op==='trainer_start'){
     const encounter=X.encounters(now,world.territories).find(e=>e.id===body.encounterId);if(!encounter||encounter.kind!==(op==='gather'?'rune':'trainer'))fail('Diese Begegnung ist weitergezogen. Aktualisiere die Karte.');
     if(p.encounterClaims.includes(encounter.id))fail('Diese Begegnung hast du bereits abgeschlossen.');await nearby(encounter);
-    if(op==='gather'){p.encounterClaims=p.encounterClaims.concat(encounter.id).slice(-100);p.progress.gathered++;p.gold+=10;fehdeSchritt(world,id,'rune',now);extra.message=wochenschritt(world,p,id,'runen',now)||'Rune gefunden! +10 Gold und Fortschritt für deine Quest.';}
+    if(op==='gather'){p.encounterClaims=p.encounterClaims.concat(encounter.id).slice(-100);p.progress.gathered++;p.gold+=10;fehdeSchritt(world,id,'rune',now);X.alltagSchritt(p,'rune',now);extra.message=wochenschritt(world,p,id,'runen',now)||'Rune gefunden! +10 Gold und Fortschritt für deine Quest.';}
     else {p.truppe=validateSquad(p,body.squad);p.arena=A.create(p.truppe.map(mid=>X.mon(p,mid)),['blattschleicher','tauhupfer'].slice(0,p.progress.trainerWins<3?1:2).map(D.mon),{id:body.requestId,territoryId:encounter.territoryId,now});Object.assign(p.arena,{kind:'trainer',encounterId:encounter.id,title:encounter.name});}
   }
   if(op==='leuchtturm_spenden'){
@@ -209,6 +211,7 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
     if(X.leuchtturmFertig(bau)&&!bau.fertigAm){
       bau.fertigAm=now;
       log(world,p,id,null,'vollendet den Leuchtturm. Er wacht jetzt über die ganze Insel.',now);
+      tickern(world,'🗼 '+p.name+' vollendet den Leuchtturm - er peilt jetzt den Zerhacker an.','bau',now,id);
       extra.message='Der Leuchtturm steht! Von nun an siehst du, wo der Zerhacker umherzieht.';
     }else extra.message=gibt+' Gold verbaut. Noch '+(X.LEUCHTTURM.ziel-bau.gold)+' Gold bis zur Spitze.';
   }
@@ -242,6 +245,7 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
         wer.runes[5]=Math.min(9999,(wer.runes[5]||0)+runen);
       }
       log(world,p,id,null,'streckt den gehstockhassenden Zerhacker nieder.',now);
+      tickern(world,'🪓 '+p.name+' streckt den Zerhacker nieder! Alle, die zugeschlagen haben, teilen die Beute.','boss',now,id);
       extra.message='Der Zerhacker ist gefallen! Alle Beteiligten haben ihre Beute erhalten.';
     }
   }

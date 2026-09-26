@@ -11,6 +11,7 @@
    etwas, das man jemandem abnehmen kann. */
 import {data as D,economy as E,arena as A,hours as H,adventure as X} from './gehstockmon-rules.mjs';
 import {anwesende} from './gehstockmon-anwesenheit.mjs';
+import {tickern} from './gehstockmon-alltag.mjs';
 const activeArena=(p)=>p.arena&&p.arena.phase!=='finished';
 const fail=(message)=>{throw new Error(message);};
 
@@ -114,7 +115,7 @@ export function stadtSettle(world,p,id,now){
     p.arenaRuhm=Math.max(100,X.ruhm(p)+(sieg?X.RUHM_SIEG:-X.RUHM_NIEDERLAGE));
     p.gold+=sieg?X.ARENA_LOHN:X.ARENA_TROST;
     if(sieg){
-      p.arenaSiege=X.arenaSiege(p)+1;
+      p.arenaSiege=X.arenaSiege(p)+1;X.alltagSchritt(p,'arena',now);
       b.message='Ranglistensieg gegen '+b.gegnerName+'! +'+X.ARENA_LOHN+' Gold, +'+X.RUHM_SIEG+' Ruhm · '
         +Math.min(p.arenaSiege,X.TITEL_SIEGE)+'/'+X.TITEL_SIEGE+' bis zum Titelkampf.';
     }else b.message='Niederlage gegen '+b.gegnerName+'. −'+X.RUHM_NIEDERLAGE+' Ruhm, '+X.ARENA_TROST+' Gold Trost. Deine Mons bleiben dir.';
@@ -137,7 +138,9 @@ export function stadtSettle(world,p,id,now){
     p.championTitel=(p.championTitel||0)+1;
     b.message='Du bist Gehstock-Champion! Deine Aufstellung verteidigt ab jetzt den Titel, und du bekommst '
       +X.CHAMPION_SOLD+' Gold Sold je Tag, solange du ihn hältst.';
-    log(world,p.name+' ist der neue Gehstock-Champion.',id,now);
+    log(world,p.name+' ist der neue Gehstock-Champion.',id,now);X.alltagSchritt(p,'arena',now);
+    const vorgaenger=(world.championChronik[world.championChronik.length-1]||{}).name||'dem Haus';
+    tickern(world,'♛ '+p.name+' entreißt '+vorgaenger+' den Titel und ist neuer Gehstock-Champion!','champion',now,id);
   }else{
     p.arenaRuhm=Math.max(100,X.ruhm(p)-X.RUHM_NIEDERLAGE);p.arenaSiege=0;p.gold+=X.ARENA_TROST;
     if(c.seit===b.championSeit)c.verteidigt=(c.verteidigt||0)+1;
