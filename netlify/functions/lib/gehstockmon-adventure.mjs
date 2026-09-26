@@ -186,6 +186,56 @@ export function weltprojekte(world,id,now){
                     eigeneAn:offen.filter(([von])=>von===id).map(([,an])=>world.players[an]?.name||'Unbekannt')};})()};
 }
 
+/* ------------------------------------------------------------------
+   Trainer auf dem Niveau des Spielers
+
+   Frueher stellte jeder Trainer dieselben zwei gewoehnlichen Mons - fuer
+   wen schon 26 Mons samt Runenstufen hatte, ein Spaziergang. Jetzt misst
+   sich der Trainer an der Truppe, mit der man antritt (A.staerke): Trainerin
+   Mira bleibt etwas darunter, Wandertrainer Bo tritt gleich stark an.
+
+   Die ersten drei Trainings bleiben die bekannten Einsteigerkaempfe, damit
+   niemand in seinem ersten Kampf auf eine volle Truppe trifft. Verlieren
+   kostet weiterhin nichts, und das Training laesst sich wiederholen.
+   ------------------------------------------------------------------ */
+export const TRAINER_EINSTIEG=3;
+/* Durchgerechnet mit der Arena-KI auf beiden Seiten (je 200 Kaempfe, von
+   gewoehnlich ohne Stufe bis mythisch auf Stufe 5): Mira gewinnt man in
+   77-88 % der Kaempfe, Bo in 65-80 %. Schon 0,9 lag bei fast 100 % - wenige
+   Prozent Staerke entscheiden hier viel. */
+export const TRAINER_FAKTOR=[.97,1];
+function mischen(liste,zufall){const a=liste.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(zufall()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+export function trainerTruppe(p,faktor,zufall){
+  const eigene=(p.truppe||[]).map(mid=>X.mon(p,mid)).filter(Boolean);
+  if(!eigene.length)return ['blattschleicher','tauhupfer'].map(D.mon);
+  const ziel=A.staerke(eigene)*faktor,anzahl=eigene.length;
+  const schnitt=Math.round(eigene.reduce((s,m)=>s+m.seltenheit,0)/eigene.length);
+  /* Nie seltener und nie hoeher gestuft als die eigene Truppe: Ab Runenstufe
+     3 und 4 kommen schnellere Spezialangriffe und eine Ladung mehr dazu, und
+     seltene Mons bringen staerkere Faehigkeiten mit. Beides misst A.staerke
+     nicht - ein Trainer mit wenigen hoch gestuften Mons waere viel haerter,
+     als seine Zahl sagt. Das hat die Simulation gezeigt. */
+  const hoechsteStufe=Math.max(...eigene.map(m=>X.upgradeLevel(m.upgrade)));
+  const kandidaten=[];
+  for(const rang of new Set([schnitt-1,schnitt].map(r=>Math.max(0,Math.min(D.SELTENHEITEN.length-1,r))))){
+    const pool=D.KATALOG.filter(k=>k.seltenheit===rang);
+    if(pool.length<anzahl)continue;
+    const wahl=mischen(pool,zufall).slice(0,anzahl);
+    for(let n=anzahl;n>=1;n--)for(let stufe=0;stufe<=hoechsteStufe;stufe++){
+      const team=wahl.slice(0,n).map(k=>A.ausSpeicher({id:k.id,upgrade:stufe}));
+      const staerke=A.staerke(team);
+      kandidaten.push({team,n,staerke,abstand:Math.abs(staerke-ziel)});
+    }
+  }
+  if(!kandidaten.length)return ['blattschleicher','tauhupfer'].map(D.mon);
+  /* Lieber etwas zu leicht als zu schwer: nur Truppen bis 3 % ueber dem
+     Ziel. Darunter eine volle Truppe, sobald eine auf 12 % herankommt;
+     kleiner wird sie nur, wenn schon die schwaechste volle zu stark waere -
+     bei Anfaengern mit lauter Startermons. */
+  const passend=kandidaten.filter(k=>k.staerke<=ziel*1.03);
+  const voll=passend.filter(k=>k.n===anzahl&&k.staerke>=ziel*.88);
+  return (voll.length?voll:passend.length?passend:kandidaten).reduce((a,b)=>b.abstand<a.abstand?b:a).team;
+}
 export function deliverRewards(p,now){if(activeArena(p)||activeDuel(p))return;for(const [id,n]of Object.entries(p.rewardEggs||{})){const count=Math.min(n,E.BAG_LIMIT-p.eggs.length);for(let i=0;i<count;i++)egg(p,Number(id),now);p.rewardEggs[id]-=count;if(!p.rewardEggs[id])delete p.rewardEggs[id];}}
 export async function adventureAction({world,p,id,body,now,draw,presence,validateSquad}){
   const op=body.op,extra={};
@@ -199,7 +249,14 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
     const encounter=X.encounters(now,world.territories).find(e=>e.id===body.encounterId);if(!encounter||encounter.kind!==(op==='gather'?'rune':'trainer'))fail('Diese Begegnung ist weitergezogen. Aktualisiere die Karte.');
     if(p.encounterClaims.includes(encounter.id))fail('Diese Begegnung hast du bereits abgeschlossen.');await nearby(encounter);
     if(op==='gather'){p.encounterClaims=p.encounterClaims.concat(encounter.id).slice(-100);p.progress.gathered++;p.gold+=10;fehdeSchritt(world,id,'rune',now);X.alltagSchritt(p,'rune',now);extra.message=wochenschritt(world,p,id,'runen',now)||'Rune gefunden! +10 Gold und Fortschritt für deine Quest.';}
-    else {p.truppe=validateSquad(p,body.squad);p.arena=A.create(p.truppe.map(mid=>X.mon(p,mid)),['blattschleicher','tauhupfer'].slice(0,p.progress.trainerWins<3?1:2).map(D.mon),{id:body.requestId,territoryId:encounter.territoryId,now});Object.assign(p.arena,{kind:'trainer',encounterId:encounter.id,title:encounter.name});}
+    else {
+      p.truppe=validateSquad(p,body.squad);
+      const einsteiger=p.progress.trainerWins<TRAINER_EINSTIEG,welcher=Number(String(encounter.id).split(':')[1])||0;
+      const gegner=einsteiger?['blattschleicher'].map(D.mon):trainerTruppe(p,TRAINER_FAKTOR[welcher]||TRAINER_FAKTOR[0],E.zufallsfolge(draw));
+      p.arena=A.create(p.truppe.map(mid=>X.mon(p,mid)),gegner,{id:body.requestId,territoryId:encounter.territoryId,now});
+      Object.assign(p.arena,{kind:'trainer',encounterId:encounter.id,title:encounter.name});
+      if(!einsteiger)extra.message=encounter.name+' stellt sich auf deine Truppe ein'+(welcher?' und tritt gleich stark an.':' und bleibt etwas darunter.');
+    }
   }
   if(op==='leuchtturm_spenden'){
     const bau=leuchtturm(world),betrag=Math.floor(Number(body.betrag));

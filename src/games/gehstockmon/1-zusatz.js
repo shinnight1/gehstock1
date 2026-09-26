@@ -507,6 +507,10 @@
     });
     p.brutplaetze=X.gekaufteBrutplaetze(old);
     p.arenaRuhm=X.ruhm(old);p.arenaSiege=X.arenaSiege(old);
+    /* arenaSiege zaehlt nur bis zum naechsten Titelkampf und faellt dann auf
+       null. Die Bilanz dagegen bleibt: Kaempfe und Siege seit Beginn. */
+    p.arenaVersuche=Math.max(0,Math.floor(Number(old.arenaVersuche)||0));
+    p.arenaSiegeGesamt=Math.max(p.arenaSiege,Math.floor(Number(old.arenaSiegeGesamt)||0));
     p.arenaCooldown=Number(old.arenaCooldown)||0;p.titelCooldown=Number(old.titelCooldown)||0;
     /* Wer zum ersten Mal in die Stadt kommt, faengt sofort an zu verdienen:
        beide Uhren starten jetzt, nicht bei null. */

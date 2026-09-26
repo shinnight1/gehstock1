@@ -141,7 +141,12 @@ function collectJs() {
      Eingebettet machten sie rund 12 der 14 MB des Skripts aus - bei jedem
      neuen Stand wurden sie komplett neu geladen, obwohl sich kein Bild
      geaendert hatte, und der Browser konnte erst loslegen, wenn alles da war.
-   Das Spiel sieht in beiden Faellen nur SG.assets[name] als Bildquelle. */
+   Das Spiel sieht in beiden Faellen nur SG.assets[name] als Bildquelle.
+
+   GehstockMon-Bilder (gm-*) kommen nicht in die Offline-Datei: Das Spiel
+   laeuft offline nicht, und SG.list() blendet es dort ganz aus
+   (src/core/registry.js). Eingebettet waren sie 6,8 MB totes Gewicht. */
+const NUR_ONLINE = /^gm-/;
 const BILD_TYP = {
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
   '.webp': 'image/webp', '.gif': 'image/gif',
@@ -157,7 +162,7 @@ const MODELL_PRAEFIX = 'gm-modell-';
 function bundleAssets() {
   const dir = path.join(SRC, 'assets');
   const eingebettet = {}, verlinkt = {};
-  let bytes = 0;
+  let bytes = 0, bytesOffline = 0;
   if (exists(dir)) {
     for (const f of fs.readdirSync(dir).sort()) {
       if (f.startsWith(MODELL_PRAEFIX)) continue;
@@ -167,7 +172,10 @@ function bundleAssets() {
       const buf = fs.readFileSync(path.join(dir, f));
       bytes += buf.length;
       const name = path.basename(f, endung).toLowerCase();
-      eingebettet[name] = 'data:' + typ + ';base64,' + buf.toString('base64');
+      if (!NUR_ONLINE.test(name)) {
+        eingebettet[name] = 'data:' + typ + ';base64,' + buf.toString('base64');
+        bytesOffline += buf.length;
+      }
       const datei = name + '.' + hash(buf.toString('latin1')) + endung;
       fs.writeFileSync(path.join(DIST, 'assets', datei), buf);
       verlinkt[name] = 'assets/' + datei;
@@ -175,7 +183,8 @@ function bundleAssets() {
   }
   const code = (tabelle) => '\n/* ==== assets ==== */\n'
     + '(function (SG) { SG.assets = ' + JSON.stringify(tabelle) + '; })(SG);\n';
-  return { online: code(verlinkt), offline: code(eingebettet), count: Object.keys(verlinkt).length, bytes };
+  return { online: code(verlinkt), offline: code(eingebettet), count: Object.keys(verlinkt).length, bytes,
+    countOffline: Object.keys(eingebettet).length, bytesOffline };
 }
 
 /* Legt Modell und Grundfarbe gehasht nach dist/assets/ und gibt dem
@@ -645,7 +654,7 @@ function build() {
   log('  Kommentare raus    : ' + kb(gespart) + ' gespart');
   log('  Offline-Einzeldatei: ' + kb(offSize) + '  (Budget 2048.0 kB)');
   if (externCount) log('  Eigene Seiten      : ' + externCount + ' (nicht in der Offline-Datei)');
-  if (assets.count) log('  Bilder (online eigene Dateien, offline eingebettet): ' + assets.count + ' (' + kb(assets.bytes) + ')');
+  if (assets.count) log('  Bilder online       : ' + assets.count + ' (' + kb(assets.bytes) + '), offline eingebettet: ' + assets.countOffline + ' (' + kb(assets.bytesOffline) + ')');
   if (skins.count) log('  Modelle daneben     : ' + skins.count + ' (' + kb(skins.bytes) + ')');
   log('');
   const adm = ersterAdminCode();

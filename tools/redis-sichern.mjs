@@ -12,6 +12,8 @@
    Kurzlebiges bleibt draussen: room:* (20 Minuten), schirm:*,
    presence-v1 und anwesenheit-v2 (wer gerade wo auf der Insel steht).
    anwesenheit-v2 ist ein Hash, kein Text - ein GET darauf schluege fehl.
+   Ebenso kampfverlaeufe: die Zeilen zum Nachlesen eines Gebietskampfes.
+   Fehlen sie nach dem Einspielen, bleibt nur der Satz im Bericht stehen.
 
    Das Ergebnis laesst sich mit tools/welt-einspielen.mjs zurueckspielen -
    auch in eine andere Datenbank.
@@ -28,7 +30,7 @@ import path from 'node:path';
 import { datenbank } from './datenbank.mjs';
 
 const STORES = ['hgh-gehstockmon', 'hgh-rooms', 'hgh-gehstockmon-presence'];
-const FLUECHTIG = [/^room:/, /^schirm:/, /^presence-v1$/, /^anwesenheit-v2$/, /:v$/];
+const FLUECHTIG = [/^room:/, /^schirm:/, /^presence-v1$/, /^anwesenheit-v2$/, /^kampfverlaeufe$/, /:v$/];
 
 const r = await datenbank();
 if (!r) {

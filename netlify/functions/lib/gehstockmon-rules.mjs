@@ -357,9 +357,26 @@ const SG = { rules: {} };
     st.geschafft.forEach(function (id) { st.outposts[id] = E.outpost(old.outposts && old.outposts[id], now); });
     return st;
   };
-  E.settle = function (st, post, now) {
+  /* Abnehmender Ertrag. Im September hielten drei von vierzehn Spielern
+     acht der neun Gebiete, und wer vier Festungen hat, verdient vier Mal so
+     viel wie einer mit einer - das Gold zieht davon. Die zwei ertragreichsten
+     Gebiete eines Spielers bringen darum volles Gold, jedes weitere die
+     Haelfte. Mehr Land lohnt sich weiter, nur nicht mehr im selben Mass. */
+  E.VOLLE_GEBIETE = 2; E.WEITERE_ANTEIL = 0.5;
+  E.ertragsAnteile = function (territories) {
+    var jeBesitzer = {}, anteil = {};
+    (territories || []).forEach(function (t) { if (t && t.ownerId) (jeBesitzer[t.ownerId] = jeBesitzer[t.ownerId] || []).push(t); });
+    Object.keys(jeBesitzer).forEach(function (id) {
+      jeBesitzer[id].slice().sort(function (a, b) {
+        return E.LEVELS[b.level || 1].income - E.LEVELS[a.level || 1].income || (a.capturedAt || 0) - (b.capturedAt || 0) || a.id - b.id;
+      }).forEach(function (t, i) { anteil[t.id] = i < E.VOLLE_GEBIETE ? 1 : E.WEITERE_ANTEIL; });
+    });
+    return anteil;
+  };
+  E.settle = function (st, post, now, anteil) {
     now = Math.max(st.clockAt || 0, now); st.clockAt = now;
-    var end = Math.max(post.incomeAt, now), earned = st.goldRemainder + (SG.gehstockmon.zeiten.openTime(end) - SG.gehstockmon.zeiten.openTime(post.incomeAt)) / E.HOUR * E.LEVELS[post.level].income;
+    anteil = Number.isFinite(anteil) ? anteil : 1;
+    var end = Math.max(post.incomeAt, now), earned = st.goldRemainder + (SG.gehstockmon.zeiten.openTime(end) - SG.gehstockmon.zeiten.openTime(post.incomeAt)) / E.HOUR * E.LEVELS[post.level].income * anteil;
     var whole = Math.floor(earned + 1e-8); st.gold += whole; st.goldRemainder = Math.max(0, earned - whole); post.incomeAt = end;
     var H = SG.gehstockmon.zeiten;
     var days=Math.max(0,H.day(now)-H.day(post.dailyAt));
@@ -1041,6 +1058,10 @@ const SG = { rules: {} };
     });
     p.brutplaetze=X.gekaufteBrutplaetze(old);
     p.arenaRuhm=X.ruhm(old);p.arenaSiege=X.arenaSiege(old);
+    /* arenaSiege zaehlt nur bis zum naechsten Titelkampf und faellt dann auf
+       null. Die Bilanz dagegen bleibt: Kaempfe und Siege seit Beginn. */
+    p.arenaVersuche=Math.max(0,Math.floor(Number(old.arenaVersuche)||0));
+    p.arenaSiegeGesamt=Math.max(p.arenaSiege,Math.floor(Number(old.arenaSiegeGesamt)||0));
     p.arenaCooldown=Number(old.arenaCooldown)||0;p.titelCooldown=Number(old.titelCooldown)||0;
     /* Wer zum ersten Mal in die Stadt kommt, faengt sofort an zu verdienen:
        beide Uhren starten jetzt, nicht bei null. */
@@ -1176,6 +1197,17 @@ const SG = { rules: {} };
     var hp = Math.floor(Math.round(s[0]*factor)*bonus), ang = Math.floor(Math.round(s[1]*factor)*bonus), tempo = s[2];
     if (w) { hp = Math.max(1, Math.round(hp*(1+w.hp))); ang = Math.max(1, Math.round(ang*(1+w.ang))); tempo = Math.max(1, tempo+w.tempo); }
     return { hp: hp, ang: ang, tempo: tempo };
+  };
+  /* Eine Zahl fuer die Staerke einer Truppe: je Mon die Wurzel aus KP mal
+     Angriff, zusammengezaehlt. Seltenheit, Runenstufe und Wesen stecken ueber
+     A.stats schon darin. Dient zum Vergleichen - in der Arena als Orientierung
+     und fuer Trainer, die sich auf die eigene Truppe einstellen. */
+  A.staerke = function (mons) {
+    return Math.round((mons || []).reduce(function (summe, mon) {
+      if (!mon) return summe;
+      var s = A.stats(mon);
+      return summe + Math.sqrt(s.hp * s.ang);
+    }, 0));
   };
   A.moves = function (u, round) {
     var voll = u.maxCharges || A.LADUNGEN, pause = (u.powerPause || A.POWER_PAUSE) - 1, f = A.faehigkeit(u);

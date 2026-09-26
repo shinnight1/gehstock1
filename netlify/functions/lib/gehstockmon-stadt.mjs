@@ -82,14 +82,38 @@ export function tauschliste(world,now){
   });
   return world.tausch;
 }
+/* Wie schwer ein Gegner im Vergleich zur eigenen Truppe ist. Unter 85 %
+   der eigenen Staerke gilt er als leichter, ueber 115 % als schwerer. */
+export const ARENA_LEICHT=.85,ARENA_SCHWER=1.15,ARENA_EINSTEIGER=3;
+export function arenaEinstufung(eigene,seine){
+  if(!eigene)return 'unbekannt';
+  const verhaeltnis=seine/eigene;
+  return verhaeltnis<ARENA_LEICHT?'leichter':verhaeltnis>ARENA_SCHWER?'schwerer':'ausgeglichen';
+}
+/* Fuer Einsteiger (weniger als drei Arenasiege insgesamt) wird ein Gegner
+   empfohlen: der staerkste, der noch unter 85 % der eigenen Staerke bleibt -
+   gut zu schaffen, aber kein reines Geschenk. Gibt es keinen, der schwaechste. */
+export function arenaEmpfehlung(eigene,gegner){
+  if(!eigene||!gegner.length)return null;
+  const leichte=gegner.filter(g=>g.staerke<eigene*ARENA_LEICHT).sort((a,b)=>b.staerke-a.staerke);
+  return (leichte[0]||gegner.slice().sort((a,b)=>a.staerke-b.staerke)[0]).id;
+}
 /* Was der Client von der Arena sehen darf. */
 export function arenaStand(world,id,now){
   const c=champion(world,now),p=world.players[id];
+  const eigeneStaerke=A.staerke((p.truppe||[]).map(mid=>X.mon(p,mid)));
+  const gegner=gegnerliste(world,id,now).map(g=>{
+    const staerke=A.staerke(truppe(g.squad));
+    return {...g,staerke,einstufung:arenaEinstufung(eigeneStaerke,staerke)};
+  });
+  const siegeGesamt=p.arenaSiegeGesamt||0;
   return {turnier:{
     ruhm:X.ruhm(p),siege:X.arenaSiege(p),noetig:X.TITEL_SIEGE,
+    versuche:p.arenaVersuche||0,siegeGesamt,eigeneStaerke,
+    empfohlen:siegeGesamt<ARENA_EINSTEIGER?arenaEmpfehlung(eigeneStaerke,gegner):null,
     pause:Math.max(0,(p.arenaCooldown||0)-now),titelPause:Math.max(0,(p.titelCooldown||0)-now),
     champion:{name:c.name,selbst:!!c.id&&c.id===id,haus:!c.id,seit:c.seit,verteidigt:c.verteidigt||0,squad:c.squad},
-    gegner:gegnerliste(world,id,now),
+    gegner,
     chronik:chronik(world).slice(-8).reverse()},
     stadt:{
       ohneGebiet:!world.territories.some(t=>t.ownerId===id),
@@ -115,7 +139,7 @@ export function stadtSettle(world,p,id,now){
     p.arenaRuhm=Math.max(100,X.ruhm(p)+(sieg?X.RUHM_SIEG:-X.RUHM_NIEDERLAGE));
     p.gold+=sieg?X.ARENA_LOHN:X.ARENA_TROST;
     if(sieg){
-      p.arenaSiege=X.arenaSiege(p)+1;X.alltagSchritt(p,'arena',now);
+      p.arenaSiege=X.arenaSiege(p)+1;p.arenaSiegeGesamt=(p.arenaSiegeGesamt||0)+1;X.alltagSchritt(p,'arena',now);
       b.message='Ranglistensieg gegen '+b.gegnerName+'! +'+X.ARENA_LOHN+' Gold, +'+X.RUHM_SIEG+' Ruhm · '
         +Math.min(p.arenaSiege,X.TITEL_SIEGE)+'/'+X.TITEL_SIEGE+' bis zum Titelkampf.';
     }else b.message='Niederlage gegen '+b.gegnerName+'. −'+X.RUHM_NIEDERLAGE+' Ruhm, '+X.ARENA_TROST+' Gold Trost. Deine Mons bleiben dir.';
@@ -127,14 +151,14 @@ export function stadtSettle(world,p,id,now){
     /* Waehrend des Kampfes kann ein anderer den Titel geholt haben. Dann
        zaehlt der Sieg als Ranglistensieg und nicht als Titelgewinn. */
     if(c.seit!==b.championSeit){
-      p.arenaRuhm=X.ruhm(p)+X.RUHM_SIEG;p.gold+=X.ARENA_LOHN;
+      p.arenaRuhm=X.ruhm(p)+X.RUHM_SIEG;p.gold+=X.ARENA_LOHN;p.arenaSiegeGesamt=(p.arenaSiegeGesamt||0)+1;
       b.message='Gewonnen - aber der Titel hat während des Kampfes den Besitzer gewechselt. Der Sieg zählt als Ranglistensieg.';
       return true;
     }
     chronik(world).push({name:c.name,haus:!c.id,von:c.seit,bis:now,verteidigt:c.verteidigt||0});
     world.championChronik=chronik(world).slice(-20);
     Object.assign(c,{id,name:p.name,squad:aufstellung(p),seit:now,verteidigt:0,soldAt:now});
-    p.arenaRuhm=X.ruhm(p)+X.RUHM_TITEL;p.arenaSiege=0;p.championSeit=now;
+    p.arenaRuhm=X.ruhm(p)+X.RUHM_TITEL;p.arenaSiege=0;p.championSeit=now;p.arenaSiegeGesamt=(p.arenaSiegeGesamt||0)+1;
     p.championTitel=(p.championTitel||0)+1;
     b.message='Du bist Gehstock-Champion! Deine Aufstellung verteidigt ab jetzt den Titel, und du bekommst '
       +X.CHAMPION_SOLD+' Gold Sold je Tag, solange du ihn hältst.';
@@ -243,7 +267,7 @@ export async function stadtAction({world,p,id,body,now,presence}){
       if(c.id===id)fail('Du hältst den Titel bereits. Verteidige ihn, indem du hier stehen bleibst.');
       if((p.titelCooldown||0)>now)fail('Der nächste Titelkampf ist in '+Math.ceil(((p.titelCooldown||0)-now)/60000)+' Minuten möglich.');
       if(X.arenaSiege(p)<X.TITEL_SIEGE)fail('Für einen Titelkampf brauchst du '+X.TITEL_SIEGE+' Ranglistensiege. Du hast '+X.arenaSiege(p)+'.');
-      p.titelCooldown=now+X.TITEL_PAUSE;
+      p.titelCooldown=now+X.TITEL_PAUSE;p.arenaVersuche=(p.arenaVersuche||0)+1;
       p.arena=A.create(p.truppe.map(mid=>X.mon(p,mid)),truppe(c.squad),{id:body.requestId,territoryId:1,now,bonus:.1});
       Object.assign(p.arena,{kind:'champion',title:'TITELKAMPF · '+c.name,gegnerName:c.name,championSeit:c.seit});
       extra.message='Titelkampf gegen '+c.name+'. Der Champion kämpft mit einem Zehntel Heimvorteil.';
@@ -252,7 +276,7 @@ export async function stadtAction({world,p,id,body,now,presence}){
     if((p.arenaCooldown||0)>now)fail('Der nächste Ranglistenkampf ist in '+Math.ceil(((p.arenaCooldown||0)-now)/60000)+' Minuten möglich.');
     const gegner=gegnerliste(world,id,now).find(v=>v.id===body.targetId);
     if(!gegner)fail('Dieser Gegner steht nicht mehr auf der Liste. Aktualisiere die Arena.');
-    p.arenaCooldown=now+X.ARENA_PAUSE;
+    p.arenaCooldown=now+X.ARENA_PAUSE;p.arenaVersuche=(p.arenaVersuche||0)+1;
     p.arena=A.create(p.truppe.map(mid=>X.mon(p,mid)),truppe(gegner.squad),{id:body.requestId,territoryId:1,now});
     Object.assign(p.arena,{kind:'rang',title:'GROSSE ARENA · '+gegner.name,gegnerName:gegner.name});
     extra.message='Ranglistenkampf gegen '+gegner.name+'. Er muss dafür nicht anwesend sein.';

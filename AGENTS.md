@@ -60,7 +60,8 @@ Auslieferung schriebe in Upstash, also in eine veraltete Welt neben der echten.
 **Ein Push auf `main` geht von selbst live**, spätestens nach etwa drei Minuten:
 Das Handy schaut alle zwei Minuten auf GitHub nach (`tools/handy-autoupdate.sh`)
 und spielt den neuen Stand über `tools/handy-aktualisieren.sh` ein. Live geht er
-nur, wenn `node tools/test.mjs` und die Handy-Tests bestehen, der Build klappt und
+nur, wenn alle Tests bestehen (`tools/test.mjs`, alle `tools/gehstockmon-*-tests.mjs`,
+Speicher-, Relais- und Handy-Tests), der Build klappt und
 der Server damit startet - sonst bleibt der bisherige Stand stehen, und der
 Grund steht auf dem Handy in `~/.config/gehstock1/update.log`. Darum gilt mehr
 denn je: nur pushen, was fertig ist, und vorher selbst `node tools/test.mjs` und

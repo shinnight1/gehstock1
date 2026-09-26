@@ -58,6 +58,17 @@
     if (w) { hp = Math.max(1, Math.round(hp*(1+w.hp))); ang = Math.max(1, Math.round(ang*(1+w.ang))); tempo = Math.max(1, tempo+w.tempo); }
     return { hp: hp, ang: ang, tempo: tempo };
   };
+  /* Eine Zahl fuer die Staerke einer Truppe: je Mon die Wurzel aus KP mal
+     Angriff, zusammengezaehlt. Seltenheit, Runenstufe und Wesen stecken ueber
+     A.stats schon darin. Dient zum Vergleichen - in der Arena als Orientierung
+     und fuer Trainer, die sich auf die eigene Truppe einstellen. */
+  A.staerke = function (mons) {
+    return Math.round((mons || []).reduce(function (summe, mon) {
+      if (!mon) return summe;
+      var s = A.stats(mon);
+      return summe + Math.sqrt(s.hp * s.ang);
+    }, 0));
+  };
   A.moves = function (u, round) {
     var voll = u.maxCharges || A.LADUNGEN, pause = (u.powerPause || A.POWER_PAUSE) - 1, f = A.faehigkeit(u);
     /* Eine reine Heilung darf nur bei Schaden eingesetzt werden - sonst

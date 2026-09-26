@@ -45,9 +45,26 @@
     st.geschafft.forEach(function (id) { st.outposts[id] = E.outpost(old.outposts && old.outposts[id], now); });
     return st;
   };
-  E.settle = function (st, post, now) {
+  /* Abnehmender Ertrag. Im September hielten drei von vierzehn Spielern
+     acht der neun Gebiete, und wer vier Festungen hat, verdient vier Mal so
+     viel wie einer mit einer - das Gold zieht davon. Die zwei ertragreichsten
+     Gebiete eines Spielers bringen darum volles Gold, jedes weitere die
+     Haelfte. Mehr Land lohnt sich weiter, nur nicht mehr im selben Mass. */
+  E.VOLLE_GEBIETE = 2; E.WEITERE_ANTEIL = 0.5;
+  E.ertragsAnteile = function (territories) {
+    var jeBesitzer = {}, anteil = {};
+    (territories || []).forEach(function (t) { if (t && t.ownerId) (jeBesitzer[t.ownerId] = jeBesitzer[t.ownerId] || []).push(t); });
+    Object.keys(jeBesitzer).forEach(function (id) {
+      jeBesitzer[id].slice().sort(function (a, b) {
+        return E.LEVELS[b.level || 1].income - E.LEVELS[a.level || 1].income || (a.capturedAt || 0) - (b.capturedAt || 0) || a.id - b.id;
+      }).forEach(function (t, i) { anteil[t.id] = i < E.VOLLE_GEBIETE ? 1 : E.WEITERE_ANTEIL; });
+    });
+    return anteil;
+  };
+  E.settle = function (st, post, now, anteil) {
     now = Math.max(st.clockAt || 0, now); st.clockAt = now;
-    var end = Math.max(post.incomeAt, now), earned = st.goldRemainder + (SG.gehstockmon.zeiten.openTime(end) - SG.gehstockmon.zeiten.openTime(post.incomeAt)) / E.HOUR * E.LEVELS[post.level].income;
+    anteil = Number.isFinite(anteil) ? anteil : 1;
+    var end = Math.max(post.incomeAt, now), earned = st.goldRemainder + (SG.gehstockmon.zeiten.openTime(end) - SG.gehstockmon.zeiten.openTime(post.incomeAt)) / E.HOUR * E.LEVELS[post.level].income * anteil;
     var whole = Math.floor(earned + 1e-8); st.gold += whole; st.goldRemainder = Math.max(0, earned - whole); post.incomeAt = end;
     var H = SG.gehstockmon.zeiten;
     var days=Math.max(0,H.day(now)-H.day(post.dailyAt));

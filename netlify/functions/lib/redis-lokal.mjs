@@ -148,6 +148,7 @@ export function lokalerClient(url) {
       for (let i = 0; i + 1 < flach.length; i += 2) aus[flach[i]] = flach[i + 1];
       return aus;
     },
+    hget: (k, feld) => roh(['HGET', k, feld]),
     hset: (k, felder) => roh(['HSET', k, ...Object.entries(felder).flat()]),
     hdel: (k, ...felder) => roh(['HDEL', k, ...felder]),
     schliessen: () => v.schliessen(),
@@ -174,6 +175,7 @@ export function speicherClient() {
     },
     scan: async (cursor, { match = '*' } = {}) => ['0', [...daten.keys()].filter((k) => muster(match).test(k))],
     hgetall: async (k) => Object.fromEntries(daten.get(k) instanceof Map ? daten.get(k) : []),
+    hget: async (k, feld) => (daten.get(k) instanceof Map && daten.get(k).has(feld) ? daten.get(k).get(feld) : null),
     hset: async (k, felder) => {
       const h = daten.get(k) instanceof Map ? daten.get(k) : new Map();
       for (const [f, w] of Object.entries(felder)) h.set(f, String(w));

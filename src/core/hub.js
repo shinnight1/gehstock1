@@ -64,7 +64,7 @@
     var badges = UI.el('div.tile-badges');
     if (wartung) badges.appendChild(UI.el('span.badge.wartung', { text: '🔧 WARTUNG' }));
     else if (kreis) badges.appendChild(UI.el('span.badge.kreis', { text: '🔑 KREIS' }));
-    if (def.online) badges.appendChild(UI.el('span.badge.online', { text: 'ONLINE' }));
+    if (def.online || def.onlineOnly) badges.appendChild(UI.el('span.badge.online', { text: 'ONLINE' }));
     if (def.category === 'tycoon') badges.appendChild(UI.el('span.badge.tycoon', { text: 'TYCOON' }));
     if (def.external) badges.appendChild(UI.el('span.badge.online', { text: 'EIGENE SEITE' }));
 
@@ -319,7 +319,8 @@
         var favs = SG.scores.favorites();
         list = list.filter(function (g) { return favs.indexOf(g.id) >= 0; });
       } else if (state.filter === 'online') {
-        list = list.filter(function (g) { return g.online; });
+        // GehstockMon ist nur online spielbar und meldet sich darum als onlineOnly.
+        list = list.filter(function (g) { return g.online || g.onlineOnly; });
       } else if (state.filter !== 'alle') {
         list = list.filter(function (g) { return g.category === state.filter; });
       }

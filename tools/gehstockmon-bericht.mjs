@@ -71,7 +71,8 @@ try {
   nutzt('Ruestungen', (p) => (p.ruestungen || []).length > 0);
   nutzt('weitere Skins', (p) => (p.skins || []).length > 1);
   nutzt('weitere Waffen', (p) => (p.weapons || []).length > 1);
-  nutzt('Arena gewonnen', (p) => (p.arenaSiege || 0) > 0);
+  nutzt('Arena gekaempft (seit 27.09.)', (p) => (p.arenaVersuche || 0) > 0);
+  nutzt('Arena gewonnen (Bilanz)', (p) => (p.arenaSiegeGesamt || 0) > 0 || (p.arenaSiege || 0) > 0);
   nutzt('Champion-Titel', (p) => (p.championTitel || 0) > 0);
   nutzt('schimmernde Mons', (p) => Object.keys(p.schimmernd || {}).length > 0);
   nutzt('Sonder-Eier', (p) => (p.sonderEier || []).length > 0);
@@ -96,6 +97,22 @@ try {
   zeile('Spieler mit Gebieten', Object.keys(halter).length);
   zeile('Gebiete je Besitzer', Object.values(halter).sort((a, b) => b - a).join(', ') || '-');
   zeile('Meldungen im Weltprotokoll', (welt.reports || []).length);
+
+  /* Wer versucht, Land zu erobern, und mit welchem Erfolg - die Grundlage fuer
+     jede Aenderung an den Gebietsregeln. Gebietskaempfe erkennt man an den
+     Runden, die nur sie im Bericht tragen. */
+  const kaempfe = (welt.reports || []).filter((r) => Number.isFinite(r.runden) && r.territoryId);
+  const vierzehn = kaempfe.filter((r) => jetzt - (r.time || 0) < 14 * TAG);
+  const mitLand = new Set(Object.keys(halter));
+  const angreifer = new Set(vierzehn.map((r) => r.attackerId));
+  console.log('\nGebietskaempfe (letzte 14 Tage, aus den letzten ' + (welt.reports || []).length + ' Meldungen):');
+  zeile('Kaempfe', vierzehn.length + ', davon erobert ' + vierzehn.filter((r) => r.winner === 'wir').length
+    + ', aufgegeben ' + vierzehn.filter((r) => r.winner === 'fled').length);
+  zeile('verschiedene Angreifer', angreifer.size + ' (davon ohne eigenes Gebiet: ' + [...angreifer].filter((a) => !mitLand.has(a)).length + ')');
+  zeile('gegen Spieler / gegen Computer', vierzehn.filter((r) => r.defenderId).length + ' / ' + vierzehn.filter((r) => !r.defenderId).length);
+  const eintraege = Object.entries(welt.players || {});
+  zeile('Gold der Gebietsbesitzer', verteilung(eintraege.filter(([pid]) => mitLand.has(pid)).map(([, p]) => p.gold)));
+  zeile('Gold der uebrigen', verteilung(eintraege.filter(([pid]) => !mitLand.has(pid)).map(([, p]) => p.gold)));
 
   console.log('\n== Hideout');
   let cursor = '0'; const keys = [];

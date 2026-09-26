@@ -27,6 +27,7 @@
    felder() da ist, und faellt sonst auf ein Dokument zurueck:
 
      felder(key)                   -> { feld: wert } (leer: {})
+     feld(key, feld)               -> wert oder null (nur dieses eine Feld)
      feldSetzen(key, feld, wert)
      felderWeg(key, [feld, ...])
    ------------------------------------------------------------------ */
@@ -191,6 +192,13 @@ function redisStore(name, verbindung = redis) {
         try { aus[feld] = typeof wert === 'string' ? JSON.parse(wert) : wert; } catch { /* kaputtes Feld auslassen */ }
       }
       return aus;
+    },
+
+    async feld(key, feld) {
+      const r = await verbindung();
+      const roh = await nochmal(() => r.hget(d(key), feld));
+      if (roh === null || roh === undefined) return null;
+      try { return typeof roh === 'string' ? JSON.parse(roh) : roh; } catch { return null; }
     },
 
     async feldSetzen(key, feld, wert) {

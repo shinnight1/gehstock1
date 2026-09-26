@@ -63,7 +63,12 @@ main() {
     installieren || zurueck 'Pakete liessen sich nicht installieren'
   fi
 
-  node tools/test.mjs > "$config_dir/update-tests.log" 2>&1 || zurueck 'Tests durchgefallen, siehe update-tests.log'
+  # Alles, was das Live-Spiel bewacht: Regeln, GehstockMon, Speicher, Relais, Handy.
+  : > "$config_dir/update-tests.log"
+  for t in tools/test.mjs tools/speicher-tests.mjs tools/relais-tests.mjs tools/gehstockmon-tests.mjs tools/gehstockmon-*-tests.mjs; do
+    [[ -f "$t" ]] || continue
+    node "$t" >> "$config_dir/update-tests.log" 2>&1 || zurueck "Test $t durchgefallen, siehe update-tests.log"
+  done
   node --test tools/handy-tests.mjs tools/handy-redis-tests.mjs >> "$config_dir/update-tests.log" 2>&1 \
     || zurueck 'Handy-Tests durchgefallen, siehe update-tests.log'
   echo 'Tests bestanden.'

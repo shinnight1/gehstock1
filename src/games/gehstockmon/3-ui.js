@@ -63,7 +63,9 @@
     function territories(){return online?online.territories:[];}
     function own(t){return !!(online&&t&&t.ownerId===online.playerId);}
     function current(){return territories()[selected-1];}
-    function income(){if(!H.access(now()).open)return 0;return territories().reduce(function(sum,t){return sum+(own(t)?E.LEVELS[t.level].income:0);},0);}
+    function income(){if(!H.access(now()).open)return 0;var anteile=E.ertragsAnteile(territories());return territories().reduce(function(sum,t){return sum+(own(t)?E.LEVELS[t.level].income*(anteile[t.id]||1):0);},0);}
+    /* Was ein eigenes Gebiet wirklich bringt: ab dem dritten nur die Haelfte. */
+    function ertrag(t){var anteil=E.ertragsAnteile(territories())[t.id]||1;return '+'+Math.round(E.LEVELS[t.level].income*anteil)+' Gold/Std.'+(anteil<1?' (halber Ertrag ab dem 3. Gebiet)':'');}
     function updateResources(){gold.textContent=online?'● '+st.gold+' Gold · +'+income()+'/Std.':'Gemeinsame Spielerwelt';owned.textContent=online?st.besitz.length+'/'+D.KATALOG.length+' Mons':'Fortschritt wird geladen …';}
     function deadline(parent,until,ready){var span=el('span',until<=now()?ready:duration(until-now()),'gm-countdown');span.setAttribute('data-until',String(until));span.setAttribute('data-ready',ready);parent.appendChild(span);return span;}
     function update(){
@@ -87,7 +89,7 @@
         /* Die Revanche steht direkt am Gebiet, solange sie gilt. */
         var rache=X.revanche&&X.revanche(st,t,now());
         if(rache)badges.appendChild(el('span','🔥 Revanche +'+Math.round(X.REVANCHE_BONUS*100)+' % · noch '+Math.max(1,Math.round((rache.bis-now())/3600000))+' Std.','gm-badge-revanche'));
-      }badges.appendChild(el('span',own(t)?'+'+level.income+' Gold/Std.':'Verteidigung +'+Math.round(level.bonus*100)+' % KP'));badges.appendChild(el('span',own(t)?'Dein Tor öffnet sich bei Annäherung':'Tor geschlossen · Sieg gewährt Zutritt'));target.appendChild(badges);
+      }badges.appendChild(el('span',own(t)?ertrag(t):'Verteidigung +'+Math.round(level.bonus*100)+' % KP'));badges.appendChild(el('span',own(t)?'Dein Tor öffnet sich bei Annäherung':'Tor geschlossen · Sieg gewährt Zutritt'));target.appendChild(badges);
       if(own(t)){var production=el('p');production.appendChild(el('span',(t.eggStock||0)+'/3 Eier bereit · '));deadline(production,E.nextEggAt(t),'Ei bereit');target.appendChild(production);}
       var row=el('div',undefined,'gm-target-actions');row.appendChild(button(own(t)?'Verwalten':'Aufklären',own(t)?function(){showPost(selected);}:showScout,'gm-button gm-secondary'));
       var near=world?world.distanceTo(selected)<10:true;
@@ -207,7 +209,7 @@
           drawer.appendChild(auto);
         }
       }
-      ts.forEach(function(t){var card=el('article',undefined,'gm-post-card');card.appendChild(el('h3',D.FELDER[t.id-1].name));card.appendChild(el('p',E.LEVELS[t.level].name+' · +'+E.LEVELS[t.level].income+' Gold/Std. · '+t.eggStock+'/3 Eier'));
+      ts.forEach(function(t){var card=el('article',undefined,'gm-post-card');card.appendChild(el('h3',D.FELDER[t.id-1].name));card.appendChild(el('p',E.LEVELS[t.level].name+' · '+ertrag(t)+' · '+t.eggStock+'/3 Eier'));
         /* Die Besatzung steht direkt dabei - sonst muesste man neun Fenster
            oeffnen, um zu sehen, wer wo Dienst tut. */
         var wer=X.besatzung(st,t.id).map(function(mid){var k=D.mon(mid);return k?k.name:'?';}).join(', ');
@@ -413,6 +415,9 @@
     function resumeOnline(){if(busy)return;requestOnline(R.online.pending()?'resume':'world').then(function(res){applyOnline(res);if(dueling())adventures.showDuel();else if(res.arena)showArena(res.arena,false);else{showOnline();notify(res.message||'Aktueller Stand geladen.');}}).catch(onlineError);}
     /* Ein Kampf Zeile fuer Zeile, so wie er abgelaufen ist. */
     function zeigeBericht(r){
+      /* Den Verlauf haelt der Server getrennt von der Welt und schickt ihn
+         erst auf Nachfrage - aeltere Berichte tragen ihn noch selbst. */
+      if(!r.verlauf&&r.hatVerlauf){requestOnline('kampfbericht',{berichtId:r.id}).then(function(res){r.verlauf=res.verlauf||[];zeigeBericht(r);}).catch(function(err){notify((err&&err.message)||'Der Kampfbericht ließ sich nicht laden.');showOnline();});return;}
       if(!openDrawer('Kampfbericht · '+D.FELDER[(r.territoryId||1)-1].name,'bericht'))return;
       drawer.appendChild(el('p',r.text));
       drawer.appendChild(el('p','Angriff: '+(r.angreifer||[]).join(', '),'gm-report-seite'));
@@ -433,7 +438,7 @@
         /* Ein Bericht mit Verlauf laesst sich aufklappen. Vor allem fuer den
            Verteidiger, der nicht dabei war: sonst steht da nur ein Satz und
            er erfaehrt nie, woran seine Aufstellung gescheitert ist. */
-        if(!r.verlauf||!r.verlauf.length){drawer.appendChild(el('p',r.text,'gm-report-line'));return;}
+        if(!(r.verlauf&&r.verlauf.length)&&!r.hatVerlauf){drawer.appendChild(el('p',r.text,'gm-report-line'));return;}
         var karte=el('article',undefined,'gm-report-karte');
         var kopf=button(r.text+' · '+r.runden+' Runden',function(){zeigeBericht(r);},'gm-report-line gm-report-knopf');
         karte.appendChild(kopf);

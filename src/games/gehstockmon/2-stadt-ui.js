@@ -58,12 +58,17 @@
     function rangTeil(t){
       drawer.appendChild(el('h3','Ranglistenkaempfe'));
       drawer.appendChild(el('p','Dein Ruhm: '+t.ruhm+' · Sieg +'+X.RUHM_SIEG+' Ruhm und '+X.ARENA_LOHN+' Gold, Niederlage -'+X.RUHM_NIEDERLAGE+' Ruhm und '+X.ARENA_TROST+' Gold Trost. Niemand verliert dabei Mons, Eier oder Gebiete.'));
+      /* Die Bilanz bleibt ueber Titelkaempfe hinweg stehen - die Zahl oben
+         dagegen zaehlt nur bis zum naechsten Titelkampf. */
+      drawer.appendChild(el('p','Deine Truppe: Stärke '+(t.eigeneStaerke||0)+' · Bilanz: '+(t.siegeGesamt||0)+' Siege aus '+(t.versuche||0)+' Kämpfen'));
+      if(t.empfohlen)drawer.appendChild(el('p','Tipp für den Einstieg: Fang mit dem markierten Gegner an. Er ist etwas schwächer als deine Truppe - gut zu schaffen, aber kein Geschenk.'));
       if(t.pause>0)drawer.appendChild(el('p','Der nächste Kampf ist '+wartetext(t.pause)+' möglich.'));
       if(!nah()){drawer.appendChild(button('Nach '+X.STADT.name+' laufen',hingehen,'gm-button gm-primary'));return;}
       (t.gegner||[]).forEach(function(g){
         var karte=el('article',undefined,'gm-quest-card');
-        karte.appendChild(el('h3',g.name+(g.haus?' · Haus':'')));
-        karte.appendChild(el('p',(g.haus?'Gegner des Hauses':'Spieler')+' · Ruhm '+g.ruhm));
+        karte.appendChild(el('h3',(g.id===t.empfohlen?'★ ':'')+g.name+(g.haus?' · Haus':'')));
+        var stufe={leichter:'leichter als du',ausgeglichen:'etwa gleich stark',schwerer:'stärker als du'}[g.einstufung];
+        karte.appendChild(el('p',(g.haus?'Gegner des Hauses':'Spieler')+' · Ruhm '+g.ruhm+(g.staerke?' · Stärke '+g.staerke+(stufe?' ('+stufe+')':''):'')+(g.id===t.empfohlen?' · empfohlen':'')));
         karte.appendChild(truppenreihe(g.squad));
         var b=button('Herausfordern',function(){run('arena_rang',{targetId:g.id});},'gm-button');
         b.disabled=c.busy()||t.pause>0;

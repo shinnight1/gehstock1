@@ -10,6 +10,39 @@ import {tickern,tickerSicht,alltagSicht,alltagAction,morgenbericht} from './lib/
 import {duellAction,duelleAbrechnen,duellSicht,duellEinladung,imDuellKampf} from './lib/gehstockmon-duell.mjs';
 
 const KEY = 'world-v2';
+/* ------------------------------------------------------------------
+   Kampfverlaeufe ausserhalb des Weltdokuments
+
+   Bis Ende September 2026 lag in jedem Gebietsbericht der ganze Kampf, bis
+   zu 60 Zeilen. 150 Berichte machten damit 242 der 398 KB der Welt aus - und
+   die Welt wird bei jedem Spielzug ganz gelesen und geschrieben. Im Bericht
+   bleibt jetzt nur, was Liste und Morgenbericht brauchen: Satz, beide
+   Aufstellungen, Runden. Den Verlauf haelt ein eigener Hash, ein Feld je
+   Bericht, und gelesen wird er erst, wenn jemand den Bericht aufklappt
+   (op 'kampfbericht').
+
+   Ausgelagert wird vor dem Schreiben und idempotent (Feld = Berichtskennung):
+   scheitert das Schreiben der Welt, steht der Verlauf eben doppelt da, bis
+   der naechste Versuch ihn aus dem Dokument nimmt. Speicher ohne Felder -
+   Tests und die Testzone - behalten ihn wie bisher im Dokument.
+   ------------------------------------------------------------------ */
+const VERLAEUFE = 'kampfverlaeufe';
+async function verlaeufeAuslagern(db, world) {
+  if (typeof db.feldSetzen !== 'function') return;
+  for (const r of world.reports || []) {
+    if (!Array.isArray(r.verlauf)) continue;
+    await db.feldSetzen(VERLAEUFE, String(r.id), { a: r.attackerId || null, d: r.defenderId || null, verlauf: r.verlauf });
+    delete r.verlauf; r.hatVerlauf = true;
+  }
+}
+/* Erst nach dem Schreiben: Verlaeufe von Berichten, die aus der Liste der
+   letzten 150 gefallen sind. Scheitert das, bleibt nur etwas Platz belegt. */
+async function verlaeufeAufraeumen(db, vorher, world) {
+  if (typeof db.felderWeg !== 'function' || !vorher) return;
+  const bleibt = new Set((world.reports || []).map((r) => r.id));
+  const weg = (vorher.reports || []).filter((r) => (r.hatVerlauf || r.verlauf) && !bleibt.has(r.id)).map((r) => String(r.id));
+  if (weg.length) { try { await db.felderWeg(VERLAEUFE, weg); } catch { /* nur Platz, kein Spielstand */ } }
+}
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' } });
 const SANDBOX_IDLE = 5 * 60 * 1000;
@@ -92,9 +125,10 @@ function migrateAndSettle(world, now) {
       p.arena.message = 'Der Kampf wurde nach 20 Minuten ohne Zug beendet.';
     }
   }
+  const anteile = E.ertragsAnteile(world.territories);
   for (const t of world.territories) {
     Object.assign(t, E.outpost(t, now));
-    if (t.ownerId && world.players[t.ownerId]) { E.settle(world.players[t.ownerId], t, now); E.weekend(world.players[t.ownerId], t, t.id, now); }
+    if (t.ownerId && world.players[t.ownerId]) { E.settle(world.players[t.ownerId], t, now, anteile[t.id]); E.weekend(world.players[t.ownerId], t, t.id, now); }
   }
   for (const [id,p] of Object.entries(world.players)) {
     p.geschafft = world.territories.filter(t=>t.ownerId===id).map(t=>t.id);
@@ -350,7 +384,7 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
       const raw = await request.text(); if (raw.length > 240000) throw new GameError('Anfrage zu groß.', 413);
       let body; try { body = JSON.parse(raw); } catch { throw new GameError('Ungültige Anfrage.'); }
       if (!body || !validCode(body.code)) throw new GameError('Bitte melde dich im Hideout an.', 401);
-      if (!['join','world','presence',...ADMIN_OPS,...mutations].includes(body.op)) throw new GameError('Diese Spielaktion wird nicht mehr unterstützt. Lade das Spiel neu.');
+      if (!['join','world','presence','kampfbericht',...ADMIN_OPS,...mutations].includes(body.op)) throw new GameError('Diese Spielaktion wird nicht mehr unterstützt. Lade das Spiel neu.');
       if (mutations.includes(body.op) && (typeof body.requestId !== 'string' || body.requestId.length < 8 || body.requestId.length > 80)) throw new GameError('Aktionskennung fehlt.');
       const id = createHash('sha256').update('gehstockmon-player:' + body.code).digest('hex').slice(0, 24), timestamp = now();
       const bypass = adminBypass(body);
@@ -368,6 +402,14 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
       if(body.adminOverride===true&&!bypass)throw new GameError('Die Testzone benötigt ein echtes Admin-Konto und den richtigen Testcode.',403);
       const name = typeof body.name === 'string' ? body.name.trim().replace(/[\u0000-\u001f]/g, '').slice(0, 30) : '';
       const db = store || speicher('hgh-gehstockmon'), draw = random();
+      if (body.op === 'kampfbericht') {
+        /* Nur lesen, und nur fuer die beiden, die gekaempft haben - genau die
+           bekommen den Bericht auch in ihrer Liste. */
+        const berichtId = typeof body.berichtId === 'string' ? body.berichtId.slice(0, 100) : '';
+        const eintrag = berichtId && typeof db.feld === 'function' ? await db.feld(VERLAEUFE, berichtId) : null;
+        if (!eintrag || (eintrag.a !== id && eintrag.d !== id)) throw new GameError('Diesen Kampfbericht gibt es nicht mehr.', 404);
+        return json({ serverTime: timestamp, berichtId, verlauf: Array.isArray(eintrag.verlauf) ? eintrag.verlauf : [] });
+      }
       if (body.op === 'presence') {
         /* Anwesenheit liest die Spielerwelt nur, um Namen, Skin, Truppe und
            die Gebietsgrenzen zu kennen - geschrieben wird dort nichts. Das
@@ -567,12 +609,19 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
             if (bericht) extra.morgenbericht = bericht;
           }
         } catch (err) { if (err instanceof GameError) throw err; throw new GameError(err.message); }
-        if (mutations.includes(body.op)) p.actionReceipts = receipts.concat({ id: body.requestId, op: body.op, extra }).slice(-40);
+        /* Quittungen braucht nur, wessen Antwort unterwegs verloren ging - er
+           fragt gleich danach nach. Fuenfzehn reichen; vierzig machten ein
+           Siebtel der Welt aus. */
+        if (mutations.includes(body.op)) p.actionReceipts = receipts.concat({ id: body.requestId, op: body.op, extra }).slice(-15);
         if (body.op === 'world' && entry && nurUhrGestellt(entry.data, world, id, timestamp)) return json(publicResult(world, id, timestamp, { ...extra, adminOverride: bypass }));
+        await verlaeufeAuslagern(db, world);
         world.version++;
         requireOpen(now(), bypass);
         const write = await db.setJSON(KEY, world, entry ? { onlyIfMatch: entry.etag } : { onlyIfNew: true });
-        if (write.modified) return json(publicResult(world, id, timestamp, { ...extra, adminOverride: bypass }));
+        if (write.modified) {
+          await verlaeufeAufraeumen(db, entry && entry.data, world);
+          return json(publicResult(world, id, timestamp, { ...extra, adminOverride: bypass }));
+        }
         await pause(attempt);
       }
       throw new GameError('Die Welt wird gerade verändert. Bitte versuche es erneut.', 409);
@@ -583,3 +632,5 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
   };
 }
 export default createHandler();
+/* Nur fuer tools/gehstockmon-balance-tests.mjs. */
+export const _verlaeufe = { auslagern: verlaeufeAuslagern, aufraeumen: verlaeufeAufraeumen, VERLAEUFE };
