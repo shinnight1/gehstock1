@@ -29,7 +29,7 @@
     codeweg: { icon: '✂️', name: 'Profil gelöscht' },
     rolle: { icon: '🎖', name: 'Rolle geändert' },
     name: { icon: '✏️', name: 'Umbenannt' },
-    owner: { icon: '👑', name: 'Owner' },
+    owner: { icon: '👑', name: 'CEO' },
     aufsicht: { icon: '⚖️', name: 'Aufsichtsrat' },
     sperre: { icon: '🚫', name: 'Spielsperre' },
     wartung: { icon: '🔧', name: 'Wartung' },

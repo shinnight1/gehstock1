@@ -445,6 +445,12 @@
   /* ------------------------------------------------------------------
      Owner und der Schutz unter Admins
 
+     Angezeigt heisst dieser Stuhl seit der Uebergabe ueberall CEO.
+     Intern heisst er weiter Owner: der Schluessel d.owner liegt so auf
+     dem Relais und in jedem Geraetespeicher, und umbenennen wuerde den
+     laufenden Stand verlieren. Wer hier liest, uebersetze also Owner
+     als CEO - die Rechte sind dieselben.
+
      Ein Admin darf viel - aber nichts gegen einen anderen Admin. Sonst
      sperrt einer den anderen aus und steht danach allein da. Ueber allen
      steht der Owner: an den kommt niemand heran, auch kein Admin.
@@ -641,21 +647,21 @@
           + 'dich wieder hereinlassen dürfte niemand. Gib die Rolle erst weiter.';
       }
       if (A.istOwner(k)) {
-        return 'Als Owner kannst du dich weder sperren noch löschen — dich '
+        return 'Als CEO kannst du dich weder sperren noch löschen — dich '
           + 'wieder hereinlassen dürfte niemand. Gib die Rolle erst weiter.';
       }
       return '';
     }
     if (A.istAufsicht(k)) {
       return 'Das ist der Aufsichtsrat. An den kommt niemand heran — auch der '
-        + 'Owner nicht.';
+        + 'CEO nicht.';
     }
     if (A.istOwner(k)) {
-      return 'Das ist der Owner. An den kommt nur der Aufsichtsrat heran.';
+      return 'Das ist der CEO. An den kommt nur der Aufsichtsrat heran.';
     }
     var g = A.pruefen(k);
     if (g && g.rolle === A.ADMIN) {
-      return 'Admins können einander nichts anhaben. Nur der Owner darf das — '
+      return 'Admins können einander nichts anhaben. Nur der CEO darf das — '
         + 'und über ihm der Aufsichtsrat.';
     }
     return 'Dafür fehlen dir die Rechte.';

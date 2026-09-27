@@ -27,8 +27,8 @@
     },
     {
       name: 'Lucas',
-      rolle: 'Quality Assurance · Führungsebene',
-      zusatz: 'Ehemaliger CEO',
+      rolle: 'Aufsichtsrat',
+      zusatz: 'Quality Assurance · Ehemaliger CEO',
       bild: 'ui-team-lucas',
       text: 'Hat das Hideout aufgebaut: Konzept, Kern und der allergrößte Teil des '
         + 'Codes, von den Spielen bis zu den großen Tycoons. In der Führungsebene '

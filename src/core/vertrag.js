@@ -38,13 +38,13 @@
   Vt.KETTE = [
     { ebene: 'Ebene 1', name: 'Aufsichtsrat', icon: '⚖️',
       text: 'Vorsitz: Lucas Hunke · Vollzugriff · Vetorecht' },
-    { ebene: 'Ebene 2', name: 'CEO', icon: '👑',
+    { ebene: 'Ebene 1', name: 'CEO', icon: '👑',
       text: 'Louis Siebrecht · operative Leitung · Owner-Rechte' },
-    { ebene: 'Ebene 3', name: 'Admins', icon: '🛡',
+    { ebene: 'Ebene 2', name: 'Admins', icon: '🛡',
       text: 'Verwaltung, Moderation und technische Pflege' },
-    { ebene: 'Ebene 4', name: 'Innerer Kreis', icon: '🔑',
+    { ebene: 'Ebene 3', name: 'Innerer Kreis', icon: '🔑',
       text: 'Erweiterte Rechte im engeren Kreis der Leitung' },
-    { ebene: 'Ebene 5', name: 'Member', icon: '🎮',
+    { ebene: 'Ebene 4', name: 'Member', icon: '🎮',
       text: 'Basisrechte und Zugang zur Website' },
     { ebene: 'Bedingt', name: 'BND', icon: '🕵',
       text: 'Externe Partei · verwaltet Member nur bei Verdacht oder '
@@ -331,7 +331,8 @@
     function kette(ziel) {
       kopf(ziel);
       ziel.appendChild(UI.el('div.notice', {
-        html: '<b>Anlage A · Chain of Command</b><br>Der Aufsichtsrat steht '
+        html: '<b>Anlage A · Chain of Command</b><br>Aufsichtsrat und CEO '
+          + 'stehen gemeinsam auf Ebene 1. Der Aufsichtsrat steht dabei '
           + 'außerhalb der operativen Kette: voller Zugriff auf alle Ebenen und '
           + 'ein Veto gegen jede Entscheidung des CEO. Weisungen laufen von '
           + 'oben nach unten, vom CEO über die Admins und den inneren Kreis bis '

@@ -154,7 +154,7 @@
         + '<p class="kr-name"></p>'
         + '<div class="kr-rang"><i></i><span>CHIEF EXECUTIVE OFFICER</span><i></i></div>'
       + '</div>'
-      + '<div class="kr-fuss">OWNER-RECHTE ÜBERTRAGEN</div>'
+      + '<div class="kr-fuss">GESCHÄFTSFÜHRUNG ÜBERTRAGEN</div>'
       + '<button class="kr-skip" type="button">Überspringen</button>';
 
     /* Der Name kommt von einer Person und wird deshalb gesetzt, nicht
