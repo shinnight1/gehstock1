@@ -1,65 +1,35 @@
 /* ------------------------------------------------------------------
-   Bildschirm-Beobachtungshinweis.
+   Bildschirm-Beobachtung: Rest eines abgeschafften Hinweises.
 
-   Früher gab es einen Vollbild-Tarnungsdeckel (Erdkunde-Referat).
-   Dieser wurde entfernt. Stattdessen gibt es ein klares, auffälliges
-   Pop-up oben links, das sofort erscheint, sobald jemand über das
-   Relais oder den Adminbereich auf den Bildschirm schaut.
+   Hier lagen nacheinander zwei Dinge, die beide weg sind. Erst ein
+   Vollbild-Tarnungsdeckel (Erdkunde-Referat), dann ein Pop-up oben
+   links, das erschien, solange jemand ueber das Relais oder den
+   Adminbereich auf den Bildschirm sah.
+
+   Das Pop-up ist auf Anweisung des Aufsichtsrats entfernt worden. Wer
+   beobachtet wird, merkt davon jetzt nichts mehr. Der Datenschutztext
+   im Impressum sagt das inzwischen auch so - er versprach vorher einen
+   Hinweis, den es nicht mehr gibt.
+
+   Die Datei bleibt, weil core/boot.js, core/wache.js und
+   core/spiegel.js weiterhin starten(), an(), aus() und istAn() rufen.
+   Sie tun nichts mehr; wer das Geruest auch noch aufraeumen will, muss
+   diese drei Stellen mitnehmen.
    ------------------------------------------------------------------ */
 
 (function (SG) {
-  var UI = SG.ui;
-  var Rel = SG.relais;
-
   var T = SG.tarnung = {};
-
-  var popup = null;
-  var an = false;
 
   T.istAn = function () { return false; };
   T.MOTIVE = [];
   T.motivDa = function () { return false; };
   T.eigeneBilder = function () { return []; };
 
-  T.bauen = function () {
-    if (popup) return popup;
-    popup = UI.el('div.schirm-beobachter-popup', {
-      role: 'alert',
-      'aria-live': 'assertive',
-    }, [
-      UI.el('span.sb-icon', { text: '👁' }),
-      UI.el('span.sb-text', { text: 'Jemand schaut auf deinen Bildschirm' }),
-    ]);
-    popup.style.display = 'none';
-    document.body.appendChild(popup);
-    return popup;
-  };
-
-  T.zeigen = function (sichtbar) {
-    if (!popup) T.bauen();
-    an = !!sichtbar;
-    if (an) {
-      popup.style.display = 'flex';
-      popup.classList.add('aktiv');
-    } else {
-      popup.style.display = 'none';
-      popup.classList.remove('aktiv');
-    }
-  };
-
+  T.bauen = function () { return null; };
+  T.zeigen = function () { /* es gibt nichts mehr zu zeigen */ };
   T.an = function () { /* keine Vollbildtarnung mehr */ };
   T.aus = function () { /* keine Vollbildtarnung mehr */ };
   T.umschalten = function () { /* keine Vollbildtarnung mehr */ };
 
-  T.starten = function () {
-    T.bauen();
-    if (Rel && Rel.on) {
-      Rel.on('spiegelMich', function (beobachtet) {
-        T.zeigen(beobachtet);
-      });
-      if (Rel.beobachtetMich) {
-        T.zeigen(true);
-      }
-    }
-  };
+  T.starten = function () { /* kein Hinweis mehr - siehe oben */ };
 })(SG);

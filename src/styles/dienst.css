@@ -215,40 +215,6 @@
 .gate-bann { gap: 4px; }
 .thumb.rot { background: rgba(255, 95, 107, .16); }
 
-/* ================================================================== Bildschirm-Beobachtung */
-
-.schirm-beobachter-popup {
-  position: fixed;
-  top: 14px;
-  left: 14px;
-  z-index: 2147483000;
-  display: none;
-  align-items: center;
-  gap: 8px;
-  background: rgba(18, 22, 32, 0.94);
-  color: #ffcc00;
-  border: 1px solid rgba(255, 204, 0, 0.45);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), 0 0 12px rgba(255, 204, 0, 0.25);
-  border-radius: 999px;
-  padding: 7px 16px 7px 11px;
-  font: 600 13px/1.2 var(--ui);
-  pointer-events: none;
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
-  animation: pulseBeobachter 2.2s infinite ease-in-out;
-}
-.schirm-beobachter-popup.aktiv {
-  display: flex;
-}
-.schirm-beobachter-popup .sb-icon {
-  font-size: 16px;
-  line-height: 1;
-}
-@keyframes pulseBeobachter {
-  0%, 100% { box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), 0 0 10px rgba(255, 204, 0, 0.2); }
-  50% { box-shadow: 0 4px 24px rgba(0, 0, 0, 0.6), 0 0 18px rgba(255, 204, 0, 0.45); }
-}
-
 .tarnung { display: none !important; }
 
 
