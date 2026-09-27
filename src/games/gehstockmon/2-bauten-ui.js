@@ -19,14 +19,40 @@
       c.layer.appendChild(node);
       pins.push({ node: node, b: b });
     });
+    /* Auf der Weltkarte ist der Platz nur ein paar Pixel gross - die sieben
+       Pins laegen aufeinander. Dort steht die Arena in der Mitte und die
+       Gebaeude im Kreis darum, jedes in der Richtung, in der es wirklich
+       steht, aber mindestens RING Pixel weit und mit LUECKE Abstand
+       zum Nachbarn, damit jeder Pin fuer sich antippbar bleibt. */
+    var RING = 60, LUECKE = 0.72;
+    function auffaechern(mitte, punkte) {
+      var liste = punkte.map(function (q) { return { q: q, w: Math.atan2(q.y - mitte.y, q.x - mitte.x) }; })
+        .sort(function (a, b) { return a.w - b.w; });
+      /* Ein paar Runden Auseinanderschieben reichen fuer sechs Stueck. */
+      for (var runde = 0; runde < 8; runde++) {
+        for (var i = 0; i < liste.length; i++) {
+          var a = liste[i], b = liste[(i + 1) % liste.length];
+          var abstand = b.w - a.w + (i === liste.length - 1 ? Math.PI * 2 : 0);
+          if (abstand < LUECKE) { var schub = (LUECKE - abstand) / 2; a.w -= schub; b.w += schub; }
+        }
+      }
+      liste.forEach(function (v) {
+        var d = Math.max(RING, Math.hypot(v.q.x - mitte.x, v.q.y - mitte.y));
+        v.q.x = mitte.x + Math.cos(v.w) * d; v.q.y = mitte.y + Math.sin(v.w) * d;
+      });
+    }
     return {
-      /* Auf der Weltkarte stuenden sieben Pins auf einem Fleck - dort zeigt
-         nur die Arena ihren, die Gebaeude erst aus der Naehe. */
       frame: function (project, hidden, overview) {
+        var mitte = overview ? project({ x: X.ARENA_BAU.x, z: X.ARENA_BAU.z, y: 4 }) : null, ring = [];
         pins.forEach(function (p) {
           var pt = project({ x: p.b.x, z: p.b.z, y: p.b.hoehe });
-          p.node.hidden = hidden || !pt.visible || (overview ? p.b.id !== 'stadt' : !pt.near);
-          p.node.style.transform = 'translate(' + pt.x + 'px,' + pt.y + 'px) translate(-50%,-100%)';
+          p.node.hidden = hidden || !pt.visible || !pt.near && !overview;
+          p.pos = { x: pt.x, y: pt.y };
+          if (mitte) { if (p.b.id === 'stadt') p.pos = { x: mitte.x, y: mitte.y }; else ring.push(p.pos); }
+        });
+        if (mitte) auffaechern(mitte, ring);
+        pins.forEach(function (p) {
+          p.node.style.transform = 'translate(' + p.pos.x + 'px,' + p.pos.y + 'px) translate(-50%,' + (mitte ? '-50%' : '-100%') + ')';
         });
       }
     };
