@@ -9,7 +9,9 @@
   var U = SG.util;
 
   SG.categories = [
-    { id: 'gehstockmon', name: 'GehstockMon', icon: '🐉' },
+    /* Die beiden grossen eigenen Spiele stehen ganz oben. Die Kennung
+       bleibt 'gehstockmon', auch wenn die Arena mit drinsteht. */
+    { id: 'gehstockmon', name: 'GehstockMon & Arena', icon: '🐉' },
     { id: 'arcade', name: 'Arcade', icon: '👾' },
     { id: 'casual', name: 'Schnell & locker', icon: '⚡' },
     { id: 'puzzle', name: 'Rätsel', icon: '🧩' },
@@ -28,6 +30,8 @@
        online      true, wenn es einen Online-Modus gibt
        heavy       true, wenn das Spiel rechenintensiv ist (Pixeldichte sinkt)
        preview     (ctx,w,h) => zeichnet die Kachelvorschau
+       bildKachel  true, wenn die Vorschau ein Bild mit eigenem Schriftzug
+                   ist - dann liegt kein Abzeichen "Eigene Seite" darueber
        mount       (host) => Controller mit optionalem selftest()
        scoreLabel  (bests, stats) => Text fuer die Kachel
   */

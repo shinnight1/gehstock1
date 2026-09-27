@@ -9,7 +9,7 @@ import {lesen as anwesenheitLesen,schreiben as anwesenheitSchreiben} from './lib
 import {tickern,tickerSicht,alltagSicht,alltagAction,morgenbericht} from './lib/gehstockmon-alltag.mjs';
 import {duellAction,duelleAbrechnen,duellSicht,duellEinladung,imDuellKampf} from './lib/gehstockmon-duell.mjs';
 import {abgabeSatz,abgabeEinzahlen,kurierPflegen,handelSicht,handelAction} from './lib/gehstockmon-handel.mjs';
-import {effekt,inselWoche,inselSicht} from './lib/gehstockmon-insel.mjs';
+import {effekt,inselWoche,inselSicht,inselAction,amtTitel} from './lib/gehstockmon-insel.mjs';
 
 const KEY = 'world-v2';
 /* ------------------------------------------------------------------
@@ -279,7 +279,7 @@ async function updatePresence(db, world, id, position, timestamp, clock, bypass 
     if(!route)return json({serverTime:timestamp,access:accessFor(timestamp,bypass),position:{x:from.x,z:from.z,heading:from.heading||0},positionCorrected:true,peers:peers()});
     let traveled=0,cursor=from;for(const point of route){traveled+=Math.hypot(point.x-cursor.x,point.z-cursor.z);cursor=point;}
     const eintrag=!players[id]||players[id].updatedAt<=timestamp?{ id, name:p.name, x:Math.round(position.x*100)/100, z:Math.round(position.z*100)/100,
-      heading:position.heading, activity:activeArena(p)||activeDuel(p)||activeDungeon(world,p)||imDuellKampf(world,p,id)?'arena':'map', updatedAt:timestamp,spawnAt:p.lastJoinAt,credit:Math.max(0,credit-traveled),skin:p.skin,weapon:p.weapon,squad:p.truppe.slice(),protected:X.protected(p,timestamp),eier:p.eggs.length,champion:world.champion?.id===id,titel:X.titelName(p) }:null;
+      heading:position.heading, activity:activeArena(p)||activeDuel(p)||activeDungeon(world,p)||imDuellKampf(world,p,id)?'arena':'map', updatedAt:timestamp,spawnAt:p.lastJoinAt,credit:Math.max(0,credit-traveled),skin:p.skin,weapon:p.weapon,squad:p.truppe.slice(),protected:X.protected(p,timestamp),eier:p.eggs.length,champion:world.champion?.id===id,titel:amtTitel(world,id,timestamp)||X.titelName(p) }:null;
     requireOpen(clock(), bypass);
     /* Eine Duell-Einladung muss schnell ankommen - die Anwesenheit laeuft alle paar Sekunden, die Weltabfrage nur alle dreissig. */
     if(await anwesenheitSchreiben(db,stand,id,eintrag,weg))return json({serverTime:timestamp,access:accessFor(timestamp,bypass),peers:peers(),duellEinladung:duellEinladung(world,p,id,timestamp)});
@@ -492,6 +492,8 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
            wurde jedes Mal neu gesetzt und nie abgelegt, der Beutel blieb auf
            null, und der Wochenboss war schlicht unerreichbar. */
         X.zerhackerUhrStellen(p, timestamp);
+        /* Die Schultage, an denen jemand da war - sie entscheiden ueber das Wahlrecht. */
+        X.aktivMerken(p, timestamp);
         if(body.op==='join'){p.dailyDelivery=E.deliverDaily(p,timestamp);p.lastJoinAt=timestamp;p.spawn=startpunkt(zuletzt,world,id,timestamp);}
         const receipts = p.actionReceipts || [], receipt = receipts.find((r) => r.id === body.requestId && r.op === body.op);
         if (receipt) return json(publicResult(world, id, timestamp, { ...receipt.extra, duplicate: true, adminOverride: bypass }));
@@ -512,6 +514,7 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
           if(X.DUNGEON_OPS.includes(body.op)||body.op==='mon_upgrade')Object.assign(extra,await dungeonAction({world,p,id,body,now:timestamp,presence:presenceStore||speicher('hgh-gehstockmon-presence')}));
           else if(X.STADT_OPS.includes(body.op))Object.assign(extra,await stadtAction({world,p,id,body,now:timestamp,presence:presenceStore||speicher('hgh-gehstockmon-presence')}));
           else if(X.ALLTAG_OPS.includes(body.op))Object.assign(extra,alltagAction({world,p,id,body,now:timestamp}));
+          else if(X.WAHL_OPS.includes(body.op))Object.assign(extra,inselAction({world,p,id,body,now:timestamp}));
           else if(X.HANDEL_OPS.includes(body.op))Object.assign(extra,await handelAction({world,p,id,body,now:timestamp,presence:presenceStore||speicher('hgh-gehstockmon-presence')}));
           else if(X.DUELL_OPS.includes(body.op))Object.assign(extra,await duellAction({world,p,id,body,now:timestamp,presence:presenceStore||speicher('hgh-gehstockmon-presence')}));
           else if(X.OPS.includes(body.op))Object.assign(extra,await adventureAction({world,p,id,body,now:timestamp,draw,presence:presenceStore||speicher('hgh-gehstockmon-presence'),validateSquad}));

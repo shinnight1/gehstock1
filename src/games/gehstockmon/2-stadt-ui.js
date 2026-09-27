@@ -121,6 +121,15 @@
       var b=button(k?'Zum Paket':'Aufträge ansehen',function(){if(R.kurierOeffnen)R.kurierOeffnen();},'gm-button gm-primary');
       b.disabled=c.busy();karte.appendChild(b);drawer.appendChild(karte);
     }
+    /* Das Rathaus steht in Stockhafen - die Wahl selbst im eigenen Fenster. */
+    function rathausTeil(){
+      var r=stand&&stand.insel&&stand.insel.rathaus,karte=el('article',undefined,'gm-quest-card');
+      karte.appendChild(titel('Rathaus','rathaus'));
+      var amt=r&&r.amt?'👑 '+r.amt.name+' regiert diese Woche: '+(r.amt.erlass?r.amt.erlass.name:'')+'.':'Diese Woche regiert niemand.';
+      karte.appendChild(el('p',amt+(r&&r.kandidaten.length?' Für nächste Woche '+(r.kandidaten.length===1?'kandidiert eine Person.':'kandidieren '+r.kandidaten.length+'.'):' Für nächste Woche kandidiert noch niemand.')));
+      var b=button('Zum Rathaus',function(){if(R.rathausOeffnen)R.rathausOeffnen();},'gm-button gm-primary');b.disabled=c.busy();karte.appendChild(b);
+      drawer.appendChild(karte);
+    }
     function brutTeil(s){
       drawer.appendChild(titel('Brutplätze','brutplatz'));
       drawer.appendChild(el('p','Du hast '+s.brutplaetze+' Plätze'+(s.gekauft?' ('+s.gekauft+' gekauft)':'')+'. Jeder weitere lässt dich ein Ei mehr gleichzeitig ausbrüten.'));
@@ -301,6 +310,7 @@
       setze('hafen');
       hafenTeil(stand.stadt);
       kontorTeil();
+      rathausTeil();
       brutTeil(stand.stadt);
       setze('handel');
       haendlerTeil();

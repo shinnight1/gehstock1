@@ -12,7 +12,7 @@
 import {data as D,economy as E,arena as A,hours as H,adventure as X} from './gehstockmon-rules.mjs';
 import {anwesende} from './gehstockmon-anwesenheit.mjs';
 import {tickern} from './gehstockmon-alltag.mjs';
-import {effekt} from './gehstockmon-insel.mjs';
+import {effekt,amtTitel} from './gehstockmon-insel.mjs';
 const activeArena=(p)=>p.arena&&p.arena.phase!=='finished';
 const fail=(message)=>{throw new Error(message);};
 
@@ -65,7 +65,7 @@ function gegnerliste(world,id,now){
   const ich=world.players[id],meinRuhm=X.ruhm(ich);
   const echte=Object.entries(world.players)
     .filter(([pid,v])=>pid!==id&&Array.isArray(v.truppe)&&v.truppe.length===4)
-    .map(([pid,v])=>({id:pid,name:v.name,ruhm:X.ruhm(v),squad:aufstellung(v),haus:false,titel:X.titelName(v)}))
+    .map(([pid,v])=>({id:pid,name:v.name,ruhm:X.ruhm(v),squad:aufstellung(v),haus:false,titel:amtTitel(world,pid,now)||X.titelName(v)}))
     .sort((a,b)=>Math.abs(a.ruhm-meinRuhm)-Math.abs(b.ruhm-meinRuhm)).slice(0,5);
   return echte.concat(X.ARENA_GEGNER.map(v=>({...v,squad:v.squad.slice()})));
 }

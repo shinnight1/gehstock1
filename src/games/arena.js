@@ -20,6 +20,11 @@
 
   var SEITE = 'games/arena/index.html';
 
+  /* Das Kachelbild liegt als eigene Datei daneben (src/assets/ui-arena.webp)
+     und wird beim ersten Malen geholt. Wer darauf wartet, steht hier. */
+  var kachelBild = null;
+  var kachelWartend = [];
+
   /* Farben aus der Palette des Spiels, damit Kachel und Arena
      zusammenpassen. Wer dort etwas aendert, sollte hier nachziehen. */
   var RASEN = '#3a6b41';
@@ -35,16 +40,48 @@
   SG.register({
     id: 'arena',
     name: 'Arena',
-    category: 'karten',
+    category: 'gehstockmon',
     desc: 'Echtzeit-Duell: Deck, Elixir, zwei Brücken — wer zuerst den Turm knackt',
     tags: ['echtzeit', 'karten', 'deck', 'elixir', 'türme', 'duell', 'strategie'],
     credit: { icon: '⚔️', text: 'Von Louis gebaut.' },
     external: SEITE,
+    bildKachel: true,
 
-    /* Kachelvorschau: das Spielfeld aus derselben Blickrichtung wie im
-       Spiel - hinten schmaler, Fluss quer, zwei Brücken, je ein Turm
-       pro Seite. Wer die Kachel sieht, weiß, was ihn erwartet. */
+    /* Kachelvorschau: das Arena-Motiv, randlos zugeschnitten. Es ist beim
+       ersten Malen oft noch nicht geladen - bis dahin steht das gezeichnete
+       Spielfeld, danach malt sich die Kachel mit dem Bild nach. Hat der Hub
+       die Flaeche inzwischen neu vermessen, gilt dessen Malen. Offline gibt
+       es das Bild nicht; dort fehlt die Arena ohnehin. */
     preview: function (c, w, h) {
+      var def = this;
+      var breite = c.canvas && c.canvas.width;
+      function malen() {
+        if (c.canvas && c.canvas.width !== breite) return;
+        var b = kachelBild;
+        if (b && b.complete && b.naturalWidth) {
+          var s = Math.max(w / b.naturalWidth, h / b.naturalHeight);
+          var bw = b.naturalWidth * s;
+          var bh = b.naturalHeight * s;
+          c.drawImage(b, (w - bw) / 2, (h - bh) / 2, bw, bh);
+          return;
+        }
+        def.spielfeld(c, w, h);
+      }
+      if (!kachelBild && SG.assets && SG.assets['ui-arena']) {
+        kachelBild = new Image();
+        kachelBild.onload = function () {
+          kachelWartend.splice(0).forEach(function (f) { f(); });
+        };
+        kachelBild.src = SG.assets['ui-arena'];
+      }
+      malen();
+      if (kachelBild && !kachelBild.complete) kachelWartend.push(malen);
+    },
+
+    /* Das gezeichnete Spielfeld aus derselben Blickrichtung wie im Spiel -
+       hinten schmaler, Fluss quer, zwei Brücken, je ein Turm pro Seite.
+       Steht, solange das Kachelbild noch lädt. */
+    spielfeld: function (c, w, h) {
       c.fillStyle = '#080b12';
       c.fillRect(0, 0, w, h);
 

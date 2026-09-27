@@ -145,6 +145,9 @@ export async function checkUi(D,E,A,handler,code,clock,otherCode){
   /* Kurierkontor, Runenhandel und die Sprungleiste im selben Fenster. */
   assert.ok(root.textContent.includes('Kurierkontor')&&root.textContent.includes('Runenhandel'),'office and rune trade render');
   assert.equal(root.querySelector('.gm-sprungleiste').children.length,4,'four jumps through the long window');
+  click('Zum Rathaus');await flush();
+  assert.ok(root.textContent.includes('Die Wahl für nächste Woche'),'the town hall opens from Stockhafen');
+  click('♛ Stockhafen');await flush();
   click('Aufträge ansehen');await flush();
   assert.equal(root.querySelectorAll('.gm-kurier-auftrag').length,SG.gehstockmon.abenteuer.KURIER_VORRAT,'a newcomer finds a full board');
   /* Die Wochenbilanz liegt hinter dem Gold, die Markthalle hinter ihrem Balken. */
