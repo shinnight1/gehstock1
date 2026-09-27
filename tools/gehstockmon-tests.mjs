@@ -299,6 +299,23 @@ await test('An admin returns a territory to the computer as on the first day of 
   const sicht=await call(h,cb,'world');
   assert.equal(sicht.territories[8].ownerId,null);assert.ok(!sicht.profile.geschafft.includes(9));
 });
+await test('The one-time adjustment gives Mooswacht and Tauwiese to Louis and the Weltenschlund back to the computer, exactly once',async()=>{
+  const store=memoryStore(),h=createHandler({store,now:()=>stamp});const cl=codeAt(2);
+  const louisRuft=async(op)=>{const res=await h(new Request('http://localhost/api/gehstockmon',{method:'POST',body:JSON.stringify({code:cl,name:'Louis',op,requestId:'louis-'+(++sequence)})}));return{status:res.status,...await res.json()};};
+  await call(h,ca,'join');const b=await call(h,cb,'join');
+  await call(h,ca,'admin_grant',{zielCode:cb,zielName:'Test B',gebiete:[1,9]});
+  assert.equal(store.data.einmalig,undefined,'ohne Louis passiert nichts');assert.equal(store.data.territories[8].ownerId,b.playerId);
+  const l=await louisRuft('join');assert.equal(l.status,200,l.error);
+  // Louis gibt es jetzt; beim nächsten Laden der Welt greift die Anpassung.
+  assert.equal((await louisRuft('join')).status,200);
+  assert.deepEqual([1,6].map(i=>store.data.territories[i-1].ownerId),[l.playerId,l.playerId]);
+  assert.equal(store.data.territories[8].ownerId,null,'der Weltenschlund gehört wieder dem Computer');
+  assert.deepEqual(store.data.players[b.playerId].geschafft,[],'Test B verliert Mooswacht und Weltenschlund');
+  assert.ok(store.data.einmalig['2026-09-28-gebiete']);
+  // Nur einmal: wer den Weltenschlund danach erobert oder bekommt, behält ihn.
+  await call(h,ca,'admin_grant',{zielCode:cb,gebiete:[9]});await louisRuft('world');
+  assert.equal(store.data.territories[8].ownerId,b.playerId);
+});
 await test('The admin gift tab and the server agree on every field',async()=>{
   const store=memoryStore(),h=createHandler({store,now:()=>stamp});
   const SG={ui:{el:()=>({}),empty:()=>({}),modal:()=>({close(){}}),toast:()=>{},confirm:()=>Promise.resolve(false),clear:()=>{},remove:()=>{}},

@@ -118,8 +118,22 @@ function migrateMap(world, now) {
   });
   world.mapVersion = D.MAP_VERSION;
 }
+/* Einmalig (28.09.2026, auf Wunsch von Louis): Mooswacht (1) und Tauwiese (6)
+   gehen an Louis, der Weltenschlund (9) an den Computer. Laeuft genau einmal
+   und steht im Buch. Gibt es nicht genau einen Spieler namens Louis, passiert
+   noch nichts - dann beim naechsten Laden, sobald es ihn gibt. */
+const ANPASSUNG = '2026-09-28-gebiete';
+function einmaligAnpassen(world, now) {
+  if (world.einmalig && world.einmalig[ANPASSUNG]) return;
+  const louis = Object.keys(world.players).filter((pid) => String(world.players[pid].name || '').trim().toLowerCase() === 'louis');
+  if (louis.length !== 1) return;
+  schenken(world, { zielId: louis[0], gebiete: [1, 6], wegnehmen: true, now, quelle: 'Einmalige Anpassung', id: ANPASSUNG + '-louis' });
+  freigeben(world, { gebiete: [9], now, quelle: 'Einmalige Anpassung', id: ANPASSUNG + '-computer' });
+  world.einmalig = { ...(world.einmalig || {}), [ANPASSUNG]: now };
+}
 function migrateAndSettle(world, now) {
   migrateMap(world, now);
+  einmaligAnpassen(world, now);
   for (const p of Object.values(world.players)) {
     Object.assign(p, D.neuerStand(p, now));
     if (p.arena && p.arena.phase !== 'finished' && now - p.arena.lastActionAt > 20 * 60000) {

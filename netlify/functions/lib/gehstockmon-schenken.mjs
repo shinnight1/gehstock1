@@ -27,8 +27,8 @@ export const spielerId = (code) => createHash('sha256').update('gehstockmon-play
 
 export const BUCH_LIMIT = 100;
 
-export function schenken(welt, { code, name = '', mons = [], gebiete = [], gold = 0, eier = 0, now = Date.now(), wegnehmen = false, von = null, quelle = 'Adminmenü', id = null }) {
-  if (!/^\d{4}$/.test(String(code))) throw new Error('Der Zugangscode besteht aus vier Ziffern.');
+export function schenken(welt, { code, zielId = null, name = '', mons = [], gebiete = [], gold = 0, eier = 0, now = Date.now(), wegnehmen = false, von = null, quelle = 'Adminmenü', id = null }) {
+  if (!zielId && !/^\d{4}$/.test(String(code))) throw new Error('Der Zugangscode besteht aus vier Ziffern.');
   /* Eine alte Karte wird beim naechsten Spielzug umgerechnet, und dabei
      wandern Gebiete. Erst spielen, dann verschenken. */
   if (welt.mapVersion !== D.MAP_VERSION) throw new Error('Die gespeicherte Welt steht auf Karte ' + welt.mapVersion + ', das Spiel auf ' + D.MAP_VERSION + '. Einmal GehstockMon öffnen, dann erneut versuchen.');
@@ -38,7 +38,8 @@ export function schenken(welt, { code, name = '', mons = [], gebiete = [], gold 
   const daneben = gebiete.filter((gebietId) => !D.FELDER.some((f) => f.id === gebietId));
   if (daneben.length) throw new Error('Diese Gebiete gibt es nicht: ' + daneben.join(', ') + ' (1 bis ' + D.FELDER.length + ').');
 
-  const ziel = spielerId(String(code));
+  /* Eine bekannte Spielerkennung geht auch direkt (einmalige Anpassungen). */
+  const ziel = zielId || spielerId(String(code));
   const gabe = Math.min(10000000, Math.max(0, Math.floor(Number(gold) || 0)));
   const bericht = { id: ziel, neu: false, name: '', mons: [], schonDa: [], gebiete: [], schonSeine: [], genommen: [], gold: 0, eier: 0, eierAbgelehnt: 0 };
   let p = welt.players[ziel];
