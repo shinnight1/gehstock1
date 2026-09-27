@@ -1,6 +1,9 @@
 /* Regel-Engines ohne Browser testen: node tools/test.mjs */
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { extraTests } from './extra-tests.mjs';
 
 globalThis.window = globalThis;
@@ -21,8 +24,25 @@ Object.defineProperty(globalThis, 'navigator', { value: { userAgent: 'node', max
 Object.defineProperty(globalThis, 'performance', { value: { now: () => Date.now() }, configurable: true });
 Object.defineProperty(globalThis, 'location', { value: { protocol: 'http:', hash: '', search: '' }, configurable: true });
 
-const bundleDir = path.resolve('dist/assets');
-const file = fs.readdirSync(bundleDir).find((f) => f.endsWith('.js'));
+/* Geprueft wird immer der Code, der gerade im Ordner liegt: vorher frisch
+   bauen, in einen eigenen Ordner. Frueher las der Test dist/ - auf dem Handy
+   laufen die Tests aber vor dem Bauen, dort lag also noch der Build des
+   alten Stands, und neue Tests fielen durch, obwohl der Code stimmte
+   (27.09.2026: zehn Aufsichtsrat-Tests, jedes Update wurde abgelehnt).
+   Die Bauausgabe bleibt stumm - sie nennt den ersten Admin-Code, und die
+   Testausgabe landet auf dem Handy in einem Protokoll. */
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const testDist = fs.mkdtempSync(path.join(os.tmpdir(), 'hideout-test-'));
+process.on('exit', () => { try { fs.rmSync(testDist, { recursive: true, force: true }); } catch { /* egal */ } });
+const bau = spawnSync(process.execPath, [path.join(ROOT, 'build.mjs')], {
+  cwd: ROOT, env: { ...process.env, HIDEOUT_DIST: testDist }, encoding: 'utf8',
+});
+if (bau.status !== 0) {
+  console.log('Build fuer den Test gescheitert:\n' + String(bau.stderr || '').slice(-2000));
+  process.exit(1);
+}
+const bundleDir = path.join(testDist, 'assets');
+const file = fs.readdirSync(bundleDir).find((f) => /^app\..*\.js$/.test(f));
 eval(fs.readFileSync(path.join(bundleDir, file), 'utf8'));
 
 let pass = 0, fail = 0;
