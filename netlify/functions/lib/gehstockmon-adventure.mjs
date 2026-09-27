@@ -25,6 +25,7 @@ export function finishEncounter(world,p,id,now){
       p.encounterClaims=p.encounterClaims.concat(b.encounterId).slice(-100);p.progress.trainerWins++;E.buchen(p,25,'trainer',now);wochenschritt(world,p,id,'trainer',now);fehdeSchritt(world,id,'trainer',now);X.alltagSchritt(p,'trainer',now);
       if(p.eggs.length<E.BAG_LIMIT){egg(p,b.territoryId,now);b.message='Training gewonnen! Ein Ei und 25 Gold gehören dir.';}
       else {p.rewardEggs=p.rewardEggs||{};p.rewardEggs[b.territoryId]=(p.rewardEggs[b.territoryId]||0)+1;b.message='Training gewonnen! 25 Gold; dein Ei wartet auf Platz in der Tasche.';}
+      if(X.schatzFetzen(p,'trainer'))b.message+=' 🗺️ Dazu ein Kartenfetzen!';
     }else b.message='Das Training ist beendet. Du verlierst weder Gold noch Eier. Probiere andere Attacken.';
     return true;
   }
@@ -382,8 +383,32 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
     if(e.ei){const ei={id:'streifzug-'+now+'-'+(++p.eggSerial),territoryId:X.FINDELEI_FELD,producedAt:now,startedAt:null,readyAt:null,art:'streifzug'};
       if(p.eggs.length<E.BAG_LIMIT)p.eggs.push(ei);else p.sonderEier=(p.sonderEier||[]).concat(ei);teile.push('ein Ei');}
     p.streifzuege.splice(at,1);p.streifzuegeGesamt=(p.streifzuegeGesamt||0)+1;
+    /* Wer lange unterwegs war, bringt ein Stueck Karte mit. */
+    if(z.dauer===X.STREIFZUG_DAUERN[X.STREIFZUG_DAUERN.length-1]&&X.schatzFetzen(p,'streifzug'))teile.push('einen Kartenfetzen');
     extra.monId=z.monId;extra.streifzug={runen:e.runen,rang:e.rang,gold:e.gold,ei:e.ei};
     extra.message=mon.name+' ist zurück: '+teile.join(', ')+'.';
+  }
+  if(op==='schatz_lesen'){
+    const s=X.schatzStand(p);
+    if(s.karte)fail('Du hast schon eine Karte gelesen - folge ihr.');
+    if(s.fetzen<X.SCHATZ_FETZEN)fail('Dafür brauchst du '+X.SCHATZ_FETZEN+' Kartenfetzen. Du hast '+s.fetzen+'.');
+    if(s.woche===X.zerhackerWoche(now))fail('Diese Woche hast du schon einen Schatz gehoben. Die nächste Karte liest du ab Montag.');
+    const ort=X.schatzOrt(E.zufallsfolge(draw),world.territories);
+    s.karte={...ort,seit:now};s.fetzen=0;p.schatz=s;
+    extra.message='Die Karte zeigt eine Stelle bei '+D.FELDER[ort.gebiet-1].name+' ('+D.BIOME[ort.gebiet-1].terrain+'), außerhalb der Mauern. Die Wünschelrute führt dich hin.';
+  }
+  if(op==='schatz_graben'){
+    const s=X.schatzStand(p);
+    if(!s.karte)fail('Du hast gerade keine Schatzkarte.');
+    const v=await position(id),weit=Math.hypot(v.x-s.karte.x,v.z-s.karte.z);
+    if(weit>X.SCHATZ_NAEHE)fail('Hier ist nichts. Die Wünschelrute sagt: '+X.schatzRute(weit).text+'.');
+    const fund=X.schatzFund(E.zufallsfolge(draw),s.karte.gebiet),gebiet=s.karte.gebiet;
+    E.buchen(p,fund.gold,'schatz',now);p.runes[fund.rang]=Math.min(9999,(p.runes[fund.rang]||0)+fund.runen);
+    const kam=E.einlagern(p,fund.rohstoff,fund.menge);
+    s.karte=null;s.woche=X.zerhackerWoche(now);s.funde=(s.funde||0)+1;p.schatz=s;
+    extra.schatz={...fund,gebiet};
+    extra.message='Ein Schatz! '+fund.runen+' '+D.SELTENHEITEN[fund.rang].name+'-Runen, '+fund.gold+' Gold und '+kam+' '+E.rohstoff(fund.rohstoff).name+'.';
+    tickern(world,'🗺️ '+p.name+' hebt einen Schatz bei '+D.FELDER[gebiet-1].name+'!','schatz',now,id);
   }
   if(op==='titel_waehlen'){
     if(body.titel===null||body.titel===''){p.titel=null;extra.message='Du trägst keinen Titel mehr.';}

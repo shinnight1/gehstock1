@@ -1,6 +1,6 @@
 /* Abenteuer, Ausrüstung und das zweistufige Spielerduell. */
 (function(SG){var R=SG.gehstockmon,X=R.abenteuer,D=R.daten;
-  R.mountAdventure=function(c){var el=c.el,button=c.button,drawer=c.drawer,duel=null,pins=[],encounters=[],dungeons=R.mountDungeons(c),handel=R.mountHandel(c),insel=R.mountInsel(c),rohstoffe=R.mountRohstoffe(c),projekte=null,projektLeiste=null;
+  R.mountAdventure=function(c){var el=c.el,button=c.button,drawer=c.drawer,duel=null,pins=[],encounters=[],dungeons=R.mountDungeons(c),handel=R.mountHandel(c),insel=R.mountInsel(c),rohstoffe=R.mountRohstoffe(c),schatz=R.mountSchatz(c),projekte=null,projektLeiste=null;
     function state(){return c.state();}
     /* Die Leiste ueber der Karte zeigt, woran die Insel gerade gemeinsam
        arbeitet: die Lebenskraft des Zerhackers und die Hoehe des Leuchtturms.
@@ -58,6 +58,8 @@
       /* Kurierkontor und Gemeinschaftsbau kommen aus 2-handel-ui.js. */
       var handelKacheln = handel.kacheln(marke, balken);
       if (handelKacheln.kurier) projektLeiste.appendChild(handelKacheln.kurier);
+      var schatzKachel = schatz.kacheln(marke).schatz;
+      if (schatzKachel) projektLeiste.appendChild(schatzKachel);
       var z = projekte && projekte.zerhacker, l = projekte && projekte.leuchtturm;
       if (z && z.hp > 0) projektLeiste.appendChild(balken('Zerhacker', z.hp, z.maxHp, '#f2705a', zeigeZerhacker, 'zerhacker'));
       else if (z) projektLeiste.appendChild(balken('Zerhacker erlegt', 1, 1, '#81d2a3', zeigeZerhacker, 'zerhacker'));
@@ -331,6 +333,7 @@
       streifzugTeil();
       drawer.appendChild(button('Aktuelles Biom erkunden',function(){run('survey',{},'adventure');},'gm-button gm-primary'));
       drawer.appendChild(el('p','Dein Lager: '+R.lagerText(s),'gm-plan-hinweis'));
+      var karte=X.schatzStand(s),kb=button('🗺️ Schatzkarte · '+(karte.karte?'auf der Suche':karte.fetzen+'/'+X.SCHATZ_FETZEN+' Fetzen'),schatz.fenster,'gm-button');drawer.appendChild(kb);
       drawer.appendChild(el('h3','In deiner Nähe'));var at=c.world().position();
       /* Rohstoffstellen stehen mit in der Liste - jeder darf sie abbauen. */
       rohstoffe.stellen().slice().sort(function(a,b){return Math.hypot(a.x-at.x,a.z-at.z)-Math.hypot(b.x-at.x,b.z-at.z);}).slice(0,3).forEach(function(st){var sym=R.symbol&&R.symbol(st.rohstoff),b=button(rohstoffe.name(st)+' · '+Math.round(Math.hypot(st.x-at.x,st.z-at.z))+' m',function(){c.closeDrawer();rohstoffe.tippen(st);},'gm-button gm-mit-symbol');if(sym)b.insertBefore(sym,b.firstChild);drawer.appendChild(b);});
@@ -373,10 +376,10 @@
       if(duel.phase==='won'){var next=button('Stufe 2: Mon-Kampf starten',function(){run('raid_arena',{squad:state().truppe});},'gm-button gm-primary');next.disabled=c.busy();panel.appendChild(next);}
       var cancel=button('Zurück zur Karte',function(){run('raid_cancel',{});},'gm-button gm-secondary');cancel.disabled=c.busy();panel.appendChild(cancel);var retry=button('Duellstand prüfen',function(){c.resume();},'gm-button');retry.disabled=c.busy();panel.appendChild(retry);box.appendChild(panel);
     }
-    return{dungeons:dungeons.menu,dungeonActive:dungeons.active,adventure:adventure,shop:shop,rival:rival,showDuel:showDuel,kurier:handel.kurier,markthalle:handel.markthalle,bilanz:handel.bilanz,wetter:insel.wetter,active:function(){return dungeons.active()||!!duel&&duel.phase!=='arena';},clear:function(){duel=null;dungeons.clear();handel.clear();rohstoffe.clear();},
-      refresh:function(view){if(view==='dungeons')dungeons.menu();if(view==='shop')shop();if(view==='adventure')adventure();if(view==='kurier')handel.kurier();if(view==='markthalle')handel.markthalle();if(view==='bilanz')handel.bilanz();if(view==='wetter')insel.wetter();},
+    return{dungeons:dungeons.menu,dungeonActive:dungeons.active,adventure:adventure,shop:shop,rival:rival,showDuel:showDuel,kurier:handel.kurier,markthalle:handel.markthalle,bilanz:handel.bilanz,wetter:insel.wetter,schatz:schatz.fenster,active:function(){return dungeons.active()||!!duel&&duel.phase!=='arena';},clear:function(){duel=null;dungeons.clear();handel.clear();rohstoffe.clear();schatz.clear();},
+      refresh:function(view){if(view==='dungeons')dungeons.menu();if(view==='shop')shop();if(view==='adventure')adventure();if(view==='kurier')handel.kurier();if(view==='markthalle')handel.markthalle();if(view==='bilanz')handel.bilanz();if(view==='wetter')insel.wetter();if(view==='schatz')schatz.fenster();},
       apply:function(res){dungeons.apply(res);handel.apply(res);insel.apply(res);rohstoffe.apply(res);duel=res.duel||null;encounters=res.encounters||[];projekte=res;if(c.world()&&c.world().setProjekte)c.world().setProjekte(res);zeigeProjekte();if(c.world()&&c.world().setEncounters)c.world().setEncounters(encounters,res.serverTime);pins.forEach(function(p){p.node.remove();});pins=encounters.map(function(e){var sym=e.kind==='rune'&&R.symbol&&R.symbol('rune','gm-pin-symbol'),node=button(sym?'':e.kind==='trainer'?'⚔':'✦',function(){encounter(e);},'gm-encounter-pin '+e.kind+(sym?' gm-mit-symbol':''));if(sym)node.appendChild(sym);node.title=e.name;node.setAttribute('aria-label',e.name);node.appendChild(el('span',e.name));c.layer.appendChild(node);return{node:node,e:e};});},
-      frame:function(project,hidden,overview){dungeons.frame(project,hidden,overview);handel.frame(project,hidden,overview);rohstoffe.frame(project,hidden,overview);pins.forEach(function(p){var at=X.encounterPosition(p.e,c.now()),point=project({x:at.x,z:at.z,y:p.e.kind==='trainer'?4.7:1.5});p.node.hidden=hidden||!point.visible||!point.near&&!overview;p.node.style.transform='translate('+point.x+'px,'+point.y+'px) translate(-50%,-100%)';});}
+      frame:function(project,hidden,overview){dungeons.frame(project,hidden,overview);handel.frame(project,hidden,overview);rohstoffe.frame(project,hidden,overview);schatz.frame(project,hidden,overview);pins.forEach(function(p){var at=X.encounterPosition(p.e,c.now()),point=project({x:at.x,z:at.z,y:p.e.kind==='trainer'?4.7:1.5});p.node.hidden=hidden||!point.visible||!point.near&&!overview;p.node.style.transform='translate('+point.x+'px,'+point.y+'px) translate(-50%,-100%)';});}
     };
   };
 })(SG);

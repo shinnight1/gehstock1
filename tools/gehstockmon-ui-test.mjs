@@ -25,7 +25,7 @@ export async function checkUi(D,E,A,handler,code,clock,otherCode){
     const response=await handler(new Request('http://localhost'+url,opts));if(response.ok){const data=await response.clone().json();if(data.profile)latest=data;}
     if(loseResponse){loseResponse=false;throw new TypeError('Antwort verloren');}if(delayReply){delayReply=false;await new Promise(resolve=>releaseReply=resolve);}return response;
   }});
-  for(const file of['src/core/ui.js','src/games/gehstockmon/1-zeiten.js','src/games/gehstockmon/1-zusatz.js','src/games/gehstockmon/2-figuren.js','src/games/gehstockmon/2-online.js','src/games/gehstockmon/2-abenteuer-ui.js','src/games/gehstockmon/2-dungeon-ui.js','src/games/gehstockmon/2-stadt-ui.js','src/games/gehstockmon/2-alltag.js','src/games/gehstockmon/2-heute-ui.js','src/games/gehstockmon/2-schlupf-ui.js','src/games/gehstockmon/2-duell.js','src/games/gehstockmon/2-duell-ui.js','src/games/gehstockmon/2-handel.js','src/games/gehstockmon/2-handel-ui.js','src/games/gehstockmon/2-rohstoffe.js','src/games/gehstockmon/2-rohstoffe-ui.js','src/games/gehstockmon/2-insel.js','src/games/gehstockmon/2-insel-ui.js','src/games/gehstockmon/3-ui.js'])vm.runInContext(fs.readFileSync(file,'utf8'),context);
+  for(const file of['src/core/ui.js','src/games/gehstockmon/1-zeiten.js','src/games/gehstockmon/1-zusatz.js','src/games/gehstockmon/2-figuren.js','src/games/gehstockmon/2-online.js','src/games/gehstockmon/2-abenteuer-ui.js','src/games/gehstockmon/2-dungeon-ui.js','src/games/gehstockmon/2-stadt-ui.js','src/games/gehstockmon/2-alltag.js','src/games/gehstockmon/2-heute-ui.js','src/games/gehstockmon/2-schlupf-ui.js','src/games/gehstockmon/2-duell.js','src/games/gehstockmon/2-duell-ui.js','src/games/gehstockmon/2-handel.js','src/games/gehstockmon/2-handel-ui.js','src/games/gehstockmon/2-rohstoffe.js','src/games/gehstockmon/2-rohstoffe-ui.js','src/games/gehstockmon/2-insel.js','src/games/gehstockmon/2-schatz.js','src/games/gehstockmon/2-schatz-ui.js','src/games/gehstockmon/2-insel-ui.js','src/games/gehstockmon/3-ui.js'])vm.runInContext(fs.readFileSync(file,'utf8'),context);
   const mount=()=>definition.mount({stage,root,store:storage,onLeave(){},sfx(){},after:(fn,ms)=>{timers.set(++timerId,{fn,at:clock.value+ms});return timerId;},cancel:id=>timers.delete(id)});
   let game=mount();
   const find=fn=>{const e=root.all().find(e=>e.visible&&fn(e));assert.ok(e,'control exists');return e;};
@@ -160,6 +160,9 @@ export async function checkUi(D,E,A,handler,code,clock,otherCode){
   assert.ok(root.textContent.includes('Streifzüge'),'the adventure window lists the trips');
   assert.ok(root.textContent.includes('Dein Lager:'),'and the resources in store');
   assert.equal(root.querySelectorAll('.gm-rohstoff-pin').length,latest.rohstoffStellen.length,'every resource node has its pin');
+  find(e=>e.tagName==='button'&&e.textContent.startsWith('🗺️ Schatzkarte')).fire('click');await flush();
+  assert.ok(root.textContent.includes('Kartenfetzen')&&root.textContent.includes('Woher die Fetzen kommen'),'the treasure map window explains the fragments');
+  click('✦ Abenteuer');await flush();
   const zielKnoepfe=root.all().filter(e=>e.tagName==='button'&&/Runen suchen|Waren tragen|Nester suchen/.test(e.textContent)).length;
   assert.ok(zielKnoepfe===3||root.textContent.includes('tun alle deine Mons Dienst'),'with three goals to pick, or the reason why not');
   /* Heute: oben in der Leiste, drei Aufgaben und die Truhe. */

@@ -125,9 +125,11 @@ export async function handelAction({ world, p, id, body, now, presence }) {
     const ware = k.von ? E.rohstoffVon(k.von) : null, mit = ware ? E.einlagern(p, ware.id, X.KURIER_ROHSTOFF) : 0;
     p.kurier = null; p.kurierGesamt = (p.kurierGesamt || 0) + 1;
     const besitzer = world.territories[k.nach - 1]?.ownerId, wem = besitzer && besitzer !== id ? world.players[besitzer]?.name : null;
+    const fetzen = X.schatzFetzen(p, 'kurier');
     extra.kurier = { lohn, eil };
     extra.message = k.ware + ' ist angekommen' + (wem ? ' - ' + wem + 's Außenposten sagt danke' : '') + '. +' + lohn + ' Gold'
-      + (eil ? ' mit Eilzuschlag' : k.eilig ? ' (die Eilfrist war vorbei)' : '') + (mit ? ' und ' + mit + ' ' + ware.name : '') + '.';
+      + (eil ? ' mit Eilzuschlag' : k.eilig ? ' (die Eilfrist war vorbei)' : '') + (mit ? ' und ' + mit + ' ' + ware.name : '') + '.'
+      + (fetzen ? ' 🗺️ Dazu ein Kartenfetzen!' : '');
     return extra;
   }
   if (op === 'kurier_abbrechen') {
@@ -178,7 +180,8 @@ export async function handelAction({ world, p, id, body, now, presence }) {
     const r = E.rohstoff(stelle.rohstoff), menge = Math.max(1, Math.round(stelle.menge * effekt(world, now, 'rohstoffStelle')));
     const kam = E.einlagern(p, r.id, menge);
     p.rohstoffClaims = (p.rohstoffClaims || []).concat(stelle.id).slice(-60); p.abgebaut = (p.abgebaut || 0) + 1;
-    extra.message = '+' + kam + ' ' + r.name + (kam < menge ? ' - dein Lager ist voll.' : '. Im Lager: ' + p.lager[r.id] + '.');
+    extra.message = '+' + kam + ' ' + r.name + (kam < menge ? ' - dein Lager ist voll.' : '. Im Lager: ' + p.lager[r.id] + '.')
+      + (X.schatzFetzen(p, 'rohstoff') ? ' 🗺️ Dazu ein Kartenfetzen!' : '');
     return extra;
   }
   if (op === 'rohstoff_kaufen' || op === 'rohstoff_verkaufen') {

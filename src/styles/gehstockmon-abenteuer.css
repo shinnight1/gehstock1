@@ -231,3 +231,11 @@
 .gm-bau-roh .gm-titel-symbol{width:24px;height:24px;margin:0}
 .gm-bau-roh .gm-bau-spur{margin:0}
 .gm-bau-roh .gm-button{min-height:34px;padding:5px 10px;font-size:12px!important}
+/* Schatzkarten: die Wuenschelrute ueber der eigenen Figur */
+.gm-rute{position:absolute;top:0;left:0;pointer-events:auto;cursor:pointer;padding:5px 10px;border-radius:999px;border:1px solid #e8c77a;
+  background:#1d2c30ee;color:#f3e2b3;font:700 12px/1.2 inherit;white-space:nowrap;box-shadow:0 4px 14px #0008}
+.gm-rute.stufe-0{border-color:#89cce5;color:#bfe3f0}
+.gm-rute.stufe-2,.gm-rute.stufe-3{border-color:#f2a35a;color:#ffd7a8}
+.gm-rute.stufe-4{border-color:#81d2a3;color:#caf5dc;animation:gm-rune-glow 1s ease-in-out infinite alternate}
+@media(prefers-reduced-motion:reduce){.gm-rute.stufe-4{animation:none}}
+.gm-drawer-open .gm-rute{display:none}
