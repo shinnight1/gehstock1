@@ -25,7 +25,7 @@ export async function checkUi(D,E,A,handler,code,clock,otherCode){
     const response=await handler(new Request('http://localhost'+url,opts));if(response.ok){const data=await response.clone().json();if(data.profile)latest=data;}
     if(loseResponse){loseResponse=false;throw new TypeError('Antwort verloren');}if(delayReply){delayReply=false;await new Promise(resolve=>releaseReply=resolve);}return response;
   }});
-  for(const file of['src/core/ui.js','src/games/gehstockmon/1-zeiten.js','src/games/gehstockmon/1-zusatz.js','src/games/gehstockmon/2-figuren.js','src/games/gehstockmon/2-online.js','src/games/gehstockmon/2-abenteuer-ui.js','src/games/gehstockmon/2-dungeon-ui.js','src/games/gehstockmon/2-stadt-ui.js','src/games/gehstockmon/2-alltag.js','src/games/gehstockmon/2-heute-ui.js','src/games/gehstockmon/2-schlupf-ui.js','src/games/gehstockmon/2-duell.js','src/games/gehstockmon/2-duell-ui.js','src/games/gehstockmon/2-handel.js','src/games/gehstockmon/2-handel-ui.js','src/games/gehstockmon/2-rohstoffe.js','src/games/gehstockmon/2-rohstoffe-ui.js','src/games/gehstockmon/2-insel.js','src/games/gehstockmon/2-schatz.js','src/games/gehstockmon/2-schatz-ui.js','src/games/gehstockmon/2-insel-ui.js','src/games/gehstockmon/3-ui.js'])vm.runInContext(fs.readFileSync(file,'utf8'),context);
+  for(const file of['src/core/ui.js','src/games/gehstockmon/1-zeiten.js','src/games/gehstockmon/1-zusatz.js','src/games/gehstockmon/2-figuren.js','src/games/gehstockmon/2-online.js','src/games/gehstockmon/2-abenteuer-ui.js','src/games/gehstockmon/2-dungeon-ui.js','src/games/gehstockmon/2-stadt-ui.js','src/games/gehstockmon/2-bauten-ui.js','src/games/gehstockmon/2-alltag.js','src/games/gehstockmon/2-heute-ui.js','src/games/gehstockmon/2-schlupf-ui.js','src/games/gehstockmon/2-duell.js','src/games/gehstockmon/2-duell-ui.js','src/games/gehstockmon/2-handel.js','src/games/gehstockmon/2-handel-ui.js','src/games/gehstockmon/2-rohstoffe.js','src/games/gehstockmon/2-rohstoffe-ui.js','src/games/gehstockmon/2-insel.js','src/games/gehstockmon/2-schatz.js','src/games/gehstockmon/2-schatz-ui.js','src/games/gehstockmon/2-insel-ui.js','src/games/gehstockmon/3-ui.js'])vm.runInContext(fs.readFileSync(file,'utf8'),context);
   const mount=()=>definition.mount({stage,root,store:storage,onLeave(){},sfx(){},after:(fn,ms)=>{timers.set(++timerId,{fn,at:clock.value+ms});return timerId;},cancel:id=>timers.delete(id)});
   let game=mount();
   const find=fn=>{const e=root.all().find(e=>e.visible&&fn(e));assert.ok(e,'control exists');return e;};
@@ -136,18 +136,23 @@ export async function checkUi(D,E,A,handler,code,clock,otherCode){
   /* Die Aussenpostenliste zeigt die Besatzung und den Verteilknopf. */
   click('⚑ Außenposten');await flush();
   assert.ok(root.textContent.includes('ohne eigene Besatzung'),'the outpost list counts the posts without a garrison');
-  /* Das Tauschbrett in Stockhafen baut sich auf. */
-  click('♛ Stockhafen');await flush();
-  assert.ok(root.textContent.includes('Tauschbrett'),'the trading board renders');
-  assert.ok(root.textContent.includes('Der Händler')&&root.textContent.includes('Die Runenschmiede'),'the gold wares render');
+  /* Der Arenaplatz: kein Knopf mehr im Dock, dafuer ein Pin je Gebaeude. */
+  assert.ok(!root.all().some(e=>e.tagName==='button'&&/Stockhafen/.test(e.textContent)),'Stockhafen is gone from the dock');
+  const bau=name=>{const pin=root.all().find(e=>e.classList.contains('gm-bau-pin')&&e.attrs['aria-label']===name);assert.ok(pin,'building pin '+name);pin.fire('click');};
+  assert.equal(root.querySelectorAll('.gm-bau-pin').length,SG.gehstockmon.abenteuer.GEBAEUDE.length+1,'one pin per building plus the arena');
+  bau('Arena');await flush();
+  assert.ok(root.textContent.includes('Der Gehstock-Champion')&&root.textContent.includes('Ranglistenkämpfe'),'the arena is about fighting');
+  assert.ok(!root.textContent.includes('Tauschbrett')&&!root.textContent.includes('Kurierkontor'),'and only about fighting');
+  bau('Tauschhaus');await flush();
+  assert.ok(root.textContent.includes('Eigenes Angebot')||root.textContent.includes('entbehren'),'the trading board renders');
+  bau('Händler');await flush();
+  assert.ok(root.textContent.includes('Schimmerperle')&&root.textContent.includes('Runenhandel'),'the gold wares and the rune trade render');
+  bau('Runenschmiede');await flush();
   assert.equal(root.querySelectorAll('.gm-schmiede-zeile').length,D.SELTENHEITEN.length,'one forge row per rarity');
-  assert.ok(root.textContent.includes('Der Gehstock-Champion'));
-  /* Kurierkontor, Runenhandel und die Sprungleiste im selben Fenster. */
-  assert.ok(root.textContent.includes('Kurierkontor')&&root.textContent.includes('Runenhandel'),'office and rune trade render');
-  assert.equal(root.querySelector('.gm-sprungleiste').children.length,4,'four jumps through the long window');
-  click('Zum Rathaus');await flush();
-  assert.ok(root.textContent.includes('Die Wahl für nächste Woche'),'the town hall opens from Stockhafen');
-  click('♛ Stockhafen');await flush();
+  bau('Rathaus');await flush();
+  assert.ok(root.textContent.includes('Die Wahl für nächste Woche'),'the town hall has its own building');
+  bau('Hafenkontor');await flush();
+  assert.ok(root.textContent.includes('Kurierkontor'),'the harbour office holds the courier');
   click('Aufträge ansehen');await flush();
   assert.equal(root.querySelectorAll('.gm-kurier-auftrag').length,SG.gehstockmon.abenteuer.KURIER_VORRAT,'a newcomer finds a full board');
   /* Die Wochenbilanz liegt hinter dem Gold, die Markthalle hinter ihrem Balken. */
@@ -160,12 +165,13 @@ export async function checkUi(D,E,A,handler,code,clock,otherCode){
   click('⚒ Ausrüstung');await flush();
   assert.equal(root.querySelectorAll('.gm-titel-zeile').length,SG.gehstockmon.abenteuer.TITEL.length,'every title is listed with its progress');
   click('✦ Abenteuer');await flush();
-  assert.ok(root.textContent.includes('Streifzüge'),'the adventure window lists the trips');
-  assert.ok(root.textContent.includes('Dein Lager:'),'and the resources in store');
+  assert.ok(root.textContent.includes('Dein Lager:'),'the adventure window shows the resources in store');
+  assert.ok(!root.all().some(e=>e.tagName==='button'&&e.textContent==='Aktuelles Biom erkunden'),'exploring needs no button any more');
+  assert.ok(!root.textContent.includes('In deiner Nähe'),'and the nearby list is gone');
   assert.equal(root.querySelectorAll('.gm-rohstoff-pin').length,latest.rohstoffStellen.length,'every resource node has its pin');
   find(e=>e.tagName==='button'&&e.textContent.startsWith('🗺️ Schatzkarte')).fire('click');await flush();
   assert.ok(root.textContent.includes('Kartenfetzen')&&root.textContent.includes('Woher die Fetzen kommen'),'the treasure map window explains the fragments');
-  click('✦ Abenteuer');await flush();
+  root.all().find(e=>e.classList.contains('gm-bau-pin')&&e.attrs['aria-label']==='Streifzughaus').fire('click');await flush();
   const zielKnoepfe=root.all().filter(e=>e.tagName==='button'&&/Runen suchen|Waren tragen|Nester suchen/.test(e.textContent)).length;
   assert.ok(zielKnoepfe===3||root.textContent.includes('tun alle deine Mons Dienst'),'with three goals to pick, or the reason why not');
   /* Heute: oben in der Leiste, drei Aufgaben und die Truhe. */

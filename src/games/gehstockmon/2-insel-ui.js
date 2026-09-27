@@ -38,7 +38,7 @@
       drawer.appendChild(wirkungen());
       drawer.appendChild(el('h3', 'Vorhersage'));
       drawer.appendChild(el('p', 'Nächste Woche: ' + n.zeichen + ' ' + n.name + ' - ' + n.text));
-      drawer.appendChild(el('p', 'Das Wetter wechselt jeden Montag und steht eine Woche vorher fest. In sieben Wochen kommt jedes einmal. Aufs Schlüpfen wirkt keins.', 'gm-plan-hinweis'));
+      drawer.appendChild(el('p', 'Das Wetter wechselt jeden Montag und wirkt nie aufs Schlüpfen.', 'gm-plan-hinweis'));
     }
     /* ---------------- Rathaus ---------------- */
     function run(op, data) {
@@ -47,7 +47,7 @@
     function erlassZeile(e) { return e ? e.zeichen + ' ' + e.name + ' - ' + e.text : ''; }
     function rathausFenster() {
       var r = insel && insel.rathaus; if (!r || !c.open('Rathaus', 'rathaus')) return;
-      drawer.appendChild(el('p', 'Jede Woche wählt die Insel einen Bürgermeister. Wer kandidiert, verspricht einen Erlass - und der gilt die ganze nächste Woche. Gewählt wird bis zum Wochenende, ausgezählt am Montag. Die Stimmen bleiben bis dahin geheim.', 'gm-beginner-tip'));
+      drawer.appendChild(el('p', 'Jede Woche wählt die Insel einen Bürgermeister, dessen Erlass die ganze nächste Woche gilt. Gewählt wird bis zum Wochenende, ausgezählt am Montag.', 'gm-beginner-tip'));
       drawer.appendChild(titel('Diese Woche', 'rathaus'));
       drawer.appendChild(el('p', r.amt ? '👑 ' + (r.amt.selbst ? 'Du bist' : r.amt.name + ' ist') + ' Bürgermeister dieser Woche (' + r.amt.stimmen + (r.amt.stimmen === 1 ? ' Stimme' : ' Stimmen') + '). Erlass: ' + erlassZeile(r.amt.erlass)
         : 'Diese Woche regiert niemand - es gilt kein Erlass.'));
@@ -93,7 +93,7 @@
       else if (r && r.kandidaten.length) out.rathaus = marke('Wahl', r.kandidaten.length + (r.kandidaten.length === 1 ? ' Kandidat' : ' Kandidaten'), '#c9b6ff', rathausFenster, 'wahl');
       return out;
     }
-    /* Stockhafen oeffnet das Rathaus ueber diesen Weg. */
+    /* Das Rathaus am Arenaplatz oeffnet sich ueber diesen Weg (2-bauten-ui.js). */
     R.rathausOeffnen = rathausFenster;
     return {
       wetter: wetterFenster, rathaus: rathausFenster, kacheln: kacheln,

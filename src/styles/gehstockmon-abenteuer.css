@@ -242,3 +242,6 @@
 /* Rathaus */
 .gm-kandidat.gewaehlt{border-color:#81d2a3aa}
 .gm-drawer select[aria-label="Dein Wahlversprechen"]{width:100%;margin:6px 0}
+/* Gebaeude am Arenaplatz (2-bauten-ui.js): Goldring statt Seltenheitsfarbe, die Arena etwas groesser. */
+.gm-encounter-pin.gm-bau-pin.gm-mit-symbol{box-shadow:0 0 0 2px #e7c77c,0 0 12px #0008}
+.gm-encounter-pin.gm-bau-arena{width:46px;height:46px}

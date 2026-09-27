@@ -103,7 +103,7 @@ await test('Picking up needs the pickup spot, delivering needs the gate, and the
   assert.equal(r.status, 400); assert.match(r.error, /Kartenposition/);
   await w.hinstellen(w.id, tor(w, 2));
   r = await w.call(ca, 'kurier_annehmen', { auftragId: 'k901' });
-  assert.equal(r.status, 400); assert.match(r.error, /Stockhafen/, 'the parcel waits at the office');
+  assert.equal(r.status, 400); assert.match(r.error, /Arenaplatz/, 'the parcel waits at the office');
   await w.hinstellen(w.id, X.STADT_TOR);
   r = await w.call(ca, 'kurier_annehmen', { auftragId: 'k901' }); assert.equal(r.status, 200, r.error);
   assert.equal(r.profile.kurier.nach, 2); assert.deepEqual(r.profile.kurierBrett.map((a) => a.id), ['k902']);

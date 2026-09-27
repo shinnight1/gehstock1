@@ -61,10 +61,10 @@ export function morgenbericht(world, p, id, seit, now, extra = {}) {
   if (aussen || roh) zeilen.push({ art: 'info', text: '🏕️ ' + [aussen ? aussen + (aussen === 1 ? ' Ei' : ' Eier') : '', roh ? roh + ' Rohstoffe' : ''].filter(Boolean).join(' und ')
     + ((aussen + roh) === 1 ? ' wartet' : ' warten') + ' auf deinen Außenposten.' });
   const zurueck = (p.streifzuege || []).filter((z) => z.fertigAt <= now).length;
-  if (zurueck) zeilen.push({ art: 'gut', text: '🎒 ' + zurueck + (zurueck === 1 ? ' Streifzug ist' : ' Streifzüge sind') + ' zurück - die Beute wartet im Abenteuer-Fenster.' });
+  if (zurueck) zeilen.push({ art: 'gut', text: '🎒 ' + zurueck + (zurueck === 1 ? ' Streifzug ist' : ' Streifzüge sind') + ' zurück - die Beute wartet im Streifzughaus.' });
   /* Kurierdienst: ein Paket, das noch unterwegs ist, oder ein voller Stapel. */
   if (p.kurier) zeilen.push({ art: 'info', text: '📦 Du trägst noch ' + p.kurier.ware + ' nach ' + X.kurierOrtName(p.kurier.nach) + '.' });
-  else if (p.kurierGesamt && (p.kurierBrett || []).length >= X.KURIER_VORRAT) zeilen.push({ art: 'info', text: '📦 Im Kurierkontor in Stockhafen liegen ' + X.KURIER_VORRAT + ' Aufträge bereit - mehr passen nicht auf den Stapel.' });
+  else if (p.kurierGesamt && (p.kurierBrett || []).length >= X.KURIER_VORRAT) zeilen.push({ art: 'info', text: '📦 Im Hafenkontor an der Arena liegen ' + X.KURIER_VORRAT + ' Aufträge bereit - mehr passen nicht auf den Stapel.' });
   /* Beim ersten Besuch einer neuen Woche: das Wetter und was die letzte gebracht hat. */
   if (seit < X.wochenStart(now)) {
     const w = X.wetter(now), n = X.wetterNaechste(now);
@@ -83,7 +83,7 @@ export function morgenbericht(world, p, id, seit, now, extra = {}) {
   if (fertig) zeilen.push({ art: 'gut', text: '🐣 ' + fertig + (fertig === 1 ? ' Ei ist' : ' Eier sind') + ' fertig ausgebrütet.' });
   if (!world.territories.some((t) => t.ownerId === id)) {
     const n = X.findeleiStand(p, now).fertig;
-    if (n) zeilen.push({ art: 'info', text: '🏠 Du hältst kein Gebiet - im Findelhaus in Stockhafen ' + (n === 1 ? 'liegt ein Ei' : 'liegen ' + n + ' Eier') + ' für dich.' });
+    if (n) zeilen.push({ art: 'info', text: '🏠 Du hältst kein Gebiet - im Findelhaus am Arenaplatz ' + (n === 1 ? 'liegt ein Ei' : 'liegen ' + n + ' Eier') + ' für dich.' });
   }
   const serie = X.serieStand(p, now), a = X.alltagStand(p, now);
   if (serie && !a.truhe) zeilen.push({ art: 'info', text: '🔥 Deine Serie: ' + serie + (serie === 1 ? ' Tag' : ' Tage') + '. Öffne heute die Tagestruhe, sonst reißt sie.' });

@@ -1,4 +1,4 @@
-/* Stockhafen: die Grosse Arena, der Gehstock-Champion und die Arbeit fuer
+/* Der Arenaplatz (frueher Stockhafen): die Grosse Arena, der Gehstock-Champion und die Arbeit fuer
    alle, die gerade kein Gebiet halten.
 
    Der Grundgedanke der Arena ist, dass niemand dafuer da sein muss. Man
@@ -182,7 +182,7 @@ export async function stadtAction({world,p,id,body,now,presence}){
   async function amTor(){
     const v=(await anwesende(presence))[id];
     if(!v||now-v.updatedAt>=15000||v.spawnAt!==p.lastJoinAt)fail('Die Kartenposition ist nicht aktuell. Warte kurz auf die Verbindung.');
-    if(!X.inStadt(v))fail('Dafür musst du in Stockhafen stehen. Lauf zuerst in die Stadt.');
+    if(!X.inStadt(v))fail('Dafür musst du auf dem Arenaplatz stehen. Lauf zuerst dorthin.');
     return v;
   }
   function ohneGebiet(){

@@ -24,7 +24,7 @@
     function hinlaufen(o) {
       c.closeDrawer(); var w = c.world(), t = ort(o);
       if (w && w.walkToPoint && t) w.walkToPoint(t);
-      c.notify('Deine Figur läuft ' + (o ? 'vor das Tor von ' + X.kurierOrtName(o) : 'nach ' + X.STADT.name) + '.');
+      c.notify('Deine Figur läuft ' + (o ? 'vor das Tor von ' + X.kurierOrtName(o) : 'zum Kontor an der ' + X.STADT.name) + '.');
     }
     function run(op, data, view) {
       c.request(op, data).then(function (res) {
@@ -43,7 +43,7 @@
     function kurier() {
       if (!c.open('Kurierkontor', 'kurier')) return;
       var s = state(), k = s.kurier, brett = s.kurierBrett || [], gebiete = (s.geschafft || []).length, jetzt = c.now();
-      drawer.appendChild(el('p', 'Im Kontor von ' + X.STADT.name + ' warten Pakete für die Außenposten der Insel: abholen, vor das Tor tragen, Gold kassieren. Jede geöffnete Stunde kommt ein Auftrag dazu, bis zu ' + X.KURIER_VORRAT + ' liegen bereit.', 'gm-beginner-tip'));
+      drawer.appendChild(el('p', 'Paket abholen, vor das Tor eines Außenpostens tragen, Gold kassieren. Jede geöffnete Stunde kommt ein Auftrag dazu, bis zu ' + X.KURIER_VORRAT + '.', 'gm-beginner-tip'));
       if (k) {
         var paket = el('article', undefined, 'gm-quest-card gm-kurier-paket'), eil = !!(k.eilig && k.frist && jetzt <= k.frist);
         paket.appendChild(el('h3', '📦 ' + k.ware + ' → ' + X.kurierOrtName(k.nach)));
@@ -72,12 +72,12 @@
           + (a.eilig ? ' · ' + X.kurierBetrag(a, gebiete, true, kurierFaktor()) + ' in der Eilfrist (' + frist(X.kurierFrist(a)) + ')' : '')
           + ' · ' + X.kurierWeg(a.von, a.nach) + ' Schritte' + (a.von ? ' · Abholung vor dem Tor' : '')));
         var hier = amOrt(a.von);
-        var b = button(k ? 'Erst das Paket abliefern' : hier ? 'Aufladen' : a.von ? 'Zum Tor von ' + X.kurierOrtName(a.von) : 'Nach ' + X.STADT.name + ' laufen', function () {
+        var b = button(k ? 'Erst das Paket abliefern' : hier ? 'Aufladen' : a.von ? 'Zum Tor von ' + X.kurierOrtName(a.von) : 'Zum Kontor laufen', function () {
           if (!amOrt(a.von)) { hinZumAuftrag(a); return; } run('kurier_annehmen', { auftragId: a.id }, null);
         }, 'gm-button' + (hier && !k ? ' gm-primary' : ''));
         b.disabled = c.busy() || !!k; karte.appendChild(b); drawer.appendChild(karte);
       });
-      if (gebiete) drawer.appendChild(el('p', 'Mit ' + gebiete + (gebiete === 1 ? ' Gebiet' : ' Gebieten') + ' zahlt das Kontor ' + (gebiete <= 2 ? 'die Hälfte' : 'ein Viertel') + ' - wer kein Land hat, braucht das Gold dringender.', 'gm-plan-hinweis'));
+      if (gebiete) drawer.appendChild(el('p', 'Mit ' + gebiete + (gebiete === 1 ? ' Gebiet' : ' Gebieten') + ' zahlt das Kontor nur ' + (gebiete <= 2 ? 'die Hälfte' : 'ein Viertel') + '.', 'gm-plan-hinweis'));
       drawer.appendChild(el('p', 'Abgeliefert: ' + (s.kurierGesamt || 0) + ' Pakete. Ab ' + X.TITEL.find(function (t) { return t.id === 'eilbote'; }).ziel + ' trägst du den Titel Eilbote.', 'gm-plan-hinweis'));
     }
 
@@ -97,7 +97,7 @@
       karte.appendChild(titel(bau.name + (bau.fertig ? ' · steht' : ''), bau.id));
       karte.appendChild(el('p', bau.was));
       if (bau.fertig) {
-        karte.appendChild(el('p', bau.id === 'markthalle' ? 'Den Handel findest du beim Händler in ' + X.STADT.name + '.' : 'Fertig seit dem Bau - die Wirkung gilt für alle.', 'gm-plan-hinweis'));
+        karte.appendChild(el('p', bau.id === 'markthalle' ? 'Den Handel findest du beim Händler an der ' + X.STADT.name + '.' : 'Fertig seit dem Bau - die Wirkung gilt für alle.', 'gm-plan-hinweis'));
         drawer.appendChild(karte); return;
       }
       karte.appendChild(el('p', zahl(bau.gold) + ' von ' + zahl(bau.ziel) + ' Gold · davon ' + zahl(bau.abgabe) + ' aus der Gebietsabgabe' + (bau.eigen ? ' · von dir: ' + zahl(bau.eigen) : '')));

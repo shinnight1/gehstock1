@@ -156,14 +156,17 @@
       });
       var siegel = mesh(fixed, 'ring', '#f0b429', B.x, 0.2, B.z + B.radius + 8.5, 5.2, 5.2, 1, '#7a5c14');
       siegel.rotation.x = Math.PI / 2; siegel.castShadow = false;
-      /* Haeuser im Ring dazwischen: nur dort, wo wirklich Platz ist. */
-      /* Der Sueden zwischen 1.2 und 2.0 bleibt frei: dort steht das Torhaus,
-         und ein Dach davor nimmt genau die Sicht, die den Weg weist. */
-      var haeuser = [[0.15, '#a24e34'], [0.75, '#497f92'], [2.25, '#b98841'], [2.85, '#a24e34'],
-                     [3.45, '#65518c'], [4.05, '#497f92'], [4.75, '#a95037'], [5.45, '#cda95c']];
-      haeuser.forEach(function (v, i) {
-        var r = B.radius + 6.5 + (i % 3) * 2.2;
-        building(S.x + Math.cos(v[0]) * r, S.z + Math.sin(v[0]) * r, 1 + i % 3, v[1]);
+      /* Im Ring dazwischen die Gebaeude mit eigenem Fenster (X.GEBAEUDE), dazu
+         zwei Wohnhaeuser. Der Sueden zwischen 1.2 und 2.0 bleibt frei: dort
+         steht das Torhaus, und ein Dach davor naehme die Sicht auf den Weg. */
+      X.GEBAEUDE.forEach(function (b) {
+        building(b.x, b.z, 2, b.dach);
+        /* Ein Schild ueber der Tuer in der Dachfarbe - so sieht man von
+           weitem, dass hier mehr ist als ein Wohnhaus. */
+        mesh(fixed, 'box', b.dach, b.x, 2.42, b.z + 1.72, 2.6, 0.5, 0.12);
+      });
+      [[4.75, '#a95037', 17.5], [5.45, '#cda95c', 19.7]].forEach(function (v) {
+        building(S.x + Math.cos(v[0]) * v[2], S.z + Math.sin(v[0]) * v[2], 1, v[1]);
       });
     })();
 

@@ -896,17 +896,29 @@ const SG = { rules: {} };
   X.wesenPreis=function(rang){return 100+Math.max(0,Math.floor(rang)||0)*100;};
   X.schmiedeKosten=function(art,rang){return art==='zerlegen'?20*rang:40*(rang+1);};
 
-  /* Stockhafen: der eine Ort auf der Insel, den niemand erobern kann. Er ist
-     die Antwort auf die Frage, was jemand tut, der gerade kein Gebiet haelt -
-     hier gibt es Arbeit, ein Findelei und die Grosse Arena. Das Rund der
-     Arena selbst ist massiv: man laeuft aussen herum, nicht hindurch. */
-  X.STADT={x:-46,z:24,name:'Stockhafen',radius:26};
+  /* Die Arena (bis 27.09.2026 Stockhafen): der eine Ort auf der Insel, den
+     niemand erobern kann. In der Mitte steht die Grosse Arena - massiv, man
+     laeuft aussen herum. Im Ring darum stehen die Gebaeude (X.GEBAEUDE) mit
+     allem, was nicht Kampf ist. X.inStadt meint weiter den ganzen Platz. */
+  X.STADT={x:-46,z:24,name:'Arena',radius:26};
   X.ARENA_BAU={x:-46,z:24,radius:11};
   X.inStadt=function(p){return Math.hypot(p.x-X.STADT.x,p.z-X.STADT.z)<X.STADT.radius;};
   X.imArenaBau=function(p){return Math.hypot(p.x-X.ARENA_BAU.x,p.z-X.ARENA_BAU.z)<X.ARENA_BAU.radius;};
   /* Vor dem Tor auf der Suedseite steht man nah genug fuer alles, was die
      Stadt anbietet. */
   X.STADT_TOR={x:X.STADT.x,z:X.STADT.z+X.ARENA_BAU.radius+4};
+  /* Die Gebaeude am Arenaplatz. Winkel und Abstand sind die Plaetze, auf
+     denen vorher nur Deko-Haeuser standen (2-welt.js); der Sueden zwischen
+     1.2 und 2.0 bleibt fuer das Torhaus frei. Tuer = wo die Figur hinlaeuft. */
+  X.GEBAEUDE=[
+    {id:'hafen',name:'Hafenkontor',bild:'tagwerk',winkel:0.75,abstand:19.7,dach:'#497f92'},
+    {id:'haendler',name:'Händler',bild:'haendler',winkel:2.25,abstand:21.9,dach:'#b98841'},
+    {id:'rathaus',name:'Rathaus',bild:'rathaus',winkel:0.15,abstand:17.5,dach:'#a24e34'},
+    {id:'tausch',name:'Tauschhaus',bild:'tausch',winkel:2.85,abstand:17.5,dach:'#65518c'},
+    {id:'schmiede',name:'Runenschmiede',bild:'schmiede',winkel:3.45,abstand:19.7,dach:'#a95037'},
+    {id:'streifzug',name:'Streifzughaus',bild:'streifzug',winkel:4.05,abstand:21.9,dach:'#5b8a4e'}
+  ].map(function(b){b.x=X.STADT.x+Math.cos(b.winkel)*b.abstand;b.z=X.STADT.z+Math.sin(b.winkel)*b.abstand;b.tuer={x:b.x,z:b.z+3.6};return b;});
+  X.gebaeude=function(id){return X.GEBAEUDE.find(function(b){return b.id===id;})||null;};
 
   /* Der gehstockhassende Zerhacker zieht eine Woche lang seine Bahn ueber die
      Insel. Seine Lage rechnet sich wie bei den Wandertrainern aus der Zeit,
@@ -2418,7 +2430,7 @@ const SG = { rules: {} };
   /* ----------------------------------------------------------------
      Kurierdienst
 
-     Im Kontor in Stockhafen liegen Auftraege: ein Paket am Kontor oder am
+     Im Kontor am Arenaplatz liegen Auftraege: ein Paket am Kontor oder am
      Tor eines Aussenpostens abholen und zum Tor eines anderen tragen. Wer
      ankommt, wird bezahlt. Jede geoeffnete Stunde kommt ein Auftrag dazu,
      bis zu fuenf warten - wer nur einmal am Tag hereinschaut, findet also

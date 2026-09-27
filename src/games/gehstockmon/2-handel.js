@@ -19,7 +19,7 @@
   /* ----------------------------------------------------------------
      Kurierdienst
 
-     Im Kontor in Stockhafen liegen Auftraege: ein Paket am Kontor oder am
+     Im Kontor am Arenaplatz liegen Auftraege: ein Paket am Kontor oder am
      Tor eines Aussenpostens abholen und zum Tor eines anderen tragen. Wer
      ankommt, wird bezahlt. Jede geoeffnete Stunde kommt ein Auftrag dazu,
      bis zu fuenf warten - wer nur einmal am Tag hereinschaut, findet also

@@ -89,10 +89,10 @@ export async function handelAction({ world, p, id, body, now, presence }) {
     if (!v || now - v.updatedAt >= 15000 || v.spawnAt !== p.lastJoinAt) fail('Die Kartenposition ist nicht aktuell. Warte kurz auf die Verbindung.');
     return v;
   }
-  /* Am Kontor heisst: in Stockhafen. An einem Gebiet heisst: vor seinem Tor. */
+  /* Am Kontor heisst: auf dem Arenaplatz. An einem Gebiet heisst: vor seinem Tor. */
   async function amOrt(ort) {
     const v = await position();
-    if (!ort) { if (!X.inStadt(v)) fail('Das Kontor ist in ' + X.STADT.name + '. Lauf zuerst in die Stadt.'); return; }
+    if (!ort) { if (!X.inStadt(v)) fail('Das Kontor steht am Arenaplatz. Lauf zuerst dorthin.'); return; }
     const tor = X.tor(X.layout(world.territories), ort);
     if (!tor || Math.hypot(v.x - tor.x, v.z - tor.z) > X.KURIER_NAEHE) fail('Lauf zuerst vor das Tor von ' + X.kurierOrtName(ort) + '.');
   }

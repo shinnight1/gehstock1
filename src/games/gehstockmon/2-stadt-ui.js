@@ -1,22 +1,27 @@
-/* Stockhafen: die Grosse Arena, der Gehstock-Champion und die Arbeit fuer
-   alle ohne Gebiet.
+/* Der Arenaplatz (bis 27.09.2026 Stockhafen). Frueher ein einziges langes
+   Fenster, jetzt eins je Gebaeude:
 
-   Das Fenster hat bewusst zwei Haelften. Oben die Arena - der einzige
-   Spielerkampf, den man jederzeit haben kann, weil der Gegner dafuer nicht
-   da sein muss. Unten der Hafen - Tagwerk und Findelhaus fuer jeden, der
-   gerade keinen Aussenposten haelt. Wer eins hat, sieht die untere Haelfte
-   ausgegraut und weiss damit, was ihn erwartet, wenn er alles verliert. */
+     Arena          Champion, Ranglistenkaempfe, Tafel - nur Kampf
+     Hafenkontor    Tagwerk und Findelhaus (ohne Gebiet), Kurierkontor
+     Haendler       Ei, Schimmerperle, Runen- und Rohstoffhandel
+     Tauschhaus     das Tauschbrett
+     Runenschmiede  zerlegen und verschmelzen
+
+   Rathaus und Streifzughaus haben ihre Fenster in 2-insel-ui.js und
+   2-abenteuer-ui.js, die Brutplaetze stehen in der Brutstation (3-ui.js).
+   Die Pins ueber den Gebaeuden setzt 2-bauten-ui.js. */
 (function(SG){
   var R=SG.gehstockmon,X=R.abenteuer,D=R.daten;
   R.mountStadt=function(c){
-    var el=c.el,button=c.button,drawer=c.drawer,stand=null;
+    var el=c.el,button=c.button,drawer=c.drawer,stand=null,aktuell=null;
     function state(){return c.state();}
     /* Ueberschrift mit Medaillon (R.symbol aus 3-ui.js); ohne Bild nur Text. */
     function titel(text,bild){var h=el('h3',text),sym=R.symbol&&R.symbol(bild,'gm-titel-symbol');if(sym)h.insertBefore(sym,h.firstChild);return h;}
     function dauer(ms){var m=Math.max(0,Math.ceil(ms/60000));return m>=60?Math.floor(m/60)+' Std. '+m%60+' Min.':m+' Min.';}
     function wartetext(ms){return ms>90*60000?'wenn die Insel wieder öffnet':'in '+dauer(ms);}
     function nah(){var w=c.world(),p=w&&w.position&&w.position();return !!p&&X.inStadt(p);}
-    function hingehen(){c.closeDrawer();var w=c.world();if(w&&w.walkToPoint)w.walkToPoint(X.STADT_TOR);c.notify('Deine Figur läuft nach '+X.STADT.name+'.');}
+    /* Zum Gebaeude laufen, ohne bau zum Tor der Arena. */
+    function hingehen(bau){c.closeDrawer();var w=c.world();if(w&&w.walkToPoint)w.walkToPoint(bau?bau.tuer:X.STADT_TOR);c.notify('Deine Figur läuft zum '+(bau?bau.name:'Tor der '+X.STADT.name)+'.');}
     function zahl(n){return Math.round(n||0).toLocaleString('de-DE');}
     /* Das Arenafest des Buergermeisters legt auf jeden Sieg ein Viertel drauf. */
     function arenaFaktor(){return (stand&&stand.insel&&stand.insel.effekte&&stand.insel.effekte.arenaLohn)||1;}
@@ -28,7 +33,7 @@
       c.request(op,data).then(function(res){
         c.apply(res);
         if(res.arena&&res.arena.phase!=='finished')c.arena(res.arena,true);
-        else{zeigeStadt();drawer.scrollTop=oben;}
+        else if(aktuell){aktuell();drawer.scrollTop=oben;}
         if(res.message)c.notify(res.message);
       }).catch(function(error){c.error(error);});
     }
@@ -50,29 +55,28 @@
     function championTeil(t){
       var ch=t.champion;
       drawer.appendChild(titel('Der Gehstock-Champion','champion'));
-      drawer.appendChild(el('p',ch.selbst?'Du hältst den Titel seit '+dauer(c.now()-ch.seit)+'. '+ch.verteidigt+' Herausforderung(en) abgewehrt. Solange er dir gehört, bekommst du '+X.CHAMPION_SOLD+' Gold Sold je Tag.'
-        :ch.name+(ch.haus?' hält den Titel für das Haus, bis ihn jemand holt.':' trägt den Titel seit '+dauer(c.now()-ch.seit)+' und hat '+ch.verteidigt+' Herausforderung(en) abgewehrt.'),ch.selbst?'gm-selbst':undefined));
-      drawer.appendChild(el('p','Er verteidigt mit der Aufstellung, die beim Titelgewinn eingefroren wurde - und mit einem Zehntel Heimvorteil.'));
+      drawer.appendChild(el('p',ch.selbst?'Du hältst den Titel seit '+dauer(c.now()-ch.seit)+' und hast '+ch.verteidigt+' Herausforderung(en) abgewehrt. Das bringt '+X.CHAMPION_SOLD+' Gold am Tag.'
+        :ch.name+(ch.haus?' hält den Titel für das Haus, bis ihn jemand holt.':' trägt den Titel seit '+dauer(c.now()-ch.seit)+' und hat '+ch.verteidigt+' Herausforderung(en) abgewehrt.')+' Verteidigt wird mit der eingefrorenen Truppe und einem Zehntel Heimvorteil.',ch.selbst?'gm-selbst':undefined));
       drawer.appendChild(truppenreihe(ch.squad));
-      if(ch.selbst){drawer.appendChild(el('p','Du kannst dich nicht selbst herausfordern. Halte den Titel, indem andere an dir scheitern.'));return;}
+      if(ch.selbst)return;
       var reif=t.siege>=t.noetig,pause=t.titelPause>0;
       drawer.appendChild(el('p','Titelkampf: '+Math.min(t.siege,t.noetig)+'/'+t.noetig+' Ranglistensiege'
         +(pause?' · nächster Versuch '+wartetext(t.titelPause):reif?' · du darfst antreten':' · sammle noch '+(t.noetig-t.siege))));
-      var b=button(nah()?'Um den Titel kämpfen':'Nach '+X.STADT.name+' laufen',function(){
-        if(!nah()){hingehen();return;}run('champion_fordern',{});
+      var b=button(nah()?'Um den Titel kämpfen':'Zur '+X.STADT.name+' laufen',function(){
+        if(!nah()){hingehen(null);return;}run('champion_fordern',{});
       },'gm-button gm-primary');
       b.disabled=c.busy()||(nah()&&(!reif||pause));
       drawer.appendChild(b);
     }
     function rangTeil(t){
       drawer.appendChild(titel('Ranglistenkämpfe','arena'));
-      drawer.appendChild(el('p','Dein Ruhm: '+t.ruhm+' · Sieg +'+X.RUHM_SIEG+' Ruhm und Gold nach Gegner: '+lohn('leichter')+' gegen Leichtere, '+lohn('ausgeglichen')+' gegen Gleichstarke, '+lohn('schwerer')+' gegen Stärkere'+(arenaFaktor()!==1?' (Arenafest)':'')+'. Niederlage -'+X.RUHM_NIEDERLAGE+' Ruhm und '+X.ARENA_TROST+' Gold Trost. Niemand verliert dabei Mons, Eier oder Gebiete.'));
-      /* Die Bilanz bleibt ueber Titelkaempfe hinweg stehen - die Zahl oben
+      drawer.appendChild(el('p','Sieg: +'+X.RUHM_SIEG+' Ruhm und '+lohn('leichter')+' / '+lohn('ausgeglichen')+' / '+lohn('schwerer')+' Gold gegen Leichtere / Gleichstarke / Stärkere'+(arenaFaktor()!==1?' (Arenafest)':'')+'. Niederlage: −'+X.RUHM_NIEDERLAGE+' Ruhm und '+X.ARENA_TROST+' Gold Trost.'));
+      /* Die Bilanz bleibt ueber Titelkaempfe hinweg stehen - der Ruhm
          dagegen zaehlt nur bis zum naechsten Titelkampf. */
-      drawer.appendChild(el('p','Deine Truppe: Stärke '+(t.eigeneStaerke||0)+' · Bilanz: '+(t.siegeGesamt||0)+' Siege aus '+(t.versuche||0)+' Kämpfen'));
-      if(t.empfohlen)drawer.appendChild(el('p','Tipp für den Einstieg: Fang mit dem markierten Gegner an. Er ist etwas schwächer als deine Truppe - gut zu schaffen, aber kein Geschenk.'));
+      drawer.appendChild(el('p','Ruhm '+t.ruhm+' · Stärke '+(t.eigeneStaerke||0)+' · '+(t.siegeGesamt||0)+' Siege aus '+(t.versuche||0)+' Kämpfen','gm-plan-hinweis'));
+      if(t.empfohlen)drawer.appendChild(el('p','Tipp: Fang mit dem markierten Gegner an.','gm-plan-hinweis'));
       if(t.pause>0)drawer.appendChild(el('p','Der nächste Kampf ist '+wartetext(t.pause)+' möglich.'));
-      if(!nah()){drawer.appendChild(button('Nach '+X.STADT.name+' laufen',hingehen,'gm-button gm-primary'));return;}
+      if(!nah()){drawer.appendChild(button('Zur '+X.STADT.name+' laufen',function(){hingehen(null);},'gm-button gm-primary'));return;}
       (t.gegner||[]).forEach(function(g){
         var karte=el('article',undefined,'gm-quest-card');
         karte.appendChild(el('h3',(g.id===t.empfohlen?'★ ':'')+g.name+(g.haus?' · Haus':'')));
@@ -85,17 +89,16 @@
       });
     }
     function hafenTeil(s){
-      drawer.appendChild(el('h3','Der Hafen'));
       if(!s.ohneGebiet){
-        drawer.appendChild(el('p','Tagwerk und Findelhaus sind für alle da, die gerade keinen Außenposten halten. Du hältst einen - deine Eier kommen von dort.'));
+        drawer.appendChild(el('p','Tagwerk und Findelhaus gibt es nur für Spieler ohne Gebiet.','gm-plan-hinweis'));
         return;
       }
-      drawer.appendChild(el('p','Du hältst gerade kein Gebiet. Im Hafen gibt es trotzdem Arbeit und Nachwuchs: du bleibst im Spiel, auch ohne einen Fußbreit Land.'));
+      var hafen=X.gebaeude('hafen');
       var arbeit=el('article',undefined,'gm-quest-card');
       arbeit.appendChild(titel('Tagwerk · '+s.tagwerkLohn+' Gold','tagwerk'));
       arbeit.appendChild(el('p',s.tagwerk+'/'+s.tagwerkMax+' Aufträge liegen bereit'+(s.tagwerk<s.tagwerkMax?' · der nächste '+wartetext(s.tagwerkIn):' · Vorrat voll')));
-      var ab=button(nah()?'Tagwerk annehmen ('+s.tagwerk+')':'Nach '+X.STADT.name+' laufen',function(){
-        if(!nah()){hingehen();return;}run('tagwerk',{});
+      var ab=button(nah()?'Tagwerk annehmen ('+s.tagwerk+')':'Hingehen',function(){
+        if(!nah()){hingehen(hafen);return;}run('tagwerk',{});
       },'gm-button gm-primary');
       ab.disabled=c.busy()||(nah()&&!s.tagwerk);
       arbeit.appendChild(ab);drawer.appendChild(arbeit);
@@ -103,9 +106,9 @@
       findel.appendChild(titel('Das Findelhaus','findelhaus'));
       /* Jede geoeffnete Stunde ein Ei, bis zu zwei liegen bereit. */
       var bereit=Number(s.findelei)||0,max=s.findeleiMax||1;
-      findel.appendChild(el('p',bereit+'/'+max+(bereit===1?' Ei liegt':' Eier liegen')+' bereit'+(bereit<max?' · das nächste '+wartetext(s.findeleiIn):' · Vorrat voll')+'. Jede geöffnete Stunde kommt eins dazu.'));
-      var fb=button(nah()?'Ei abholen ('+bereit+')':'Nach '+X.STADT.name+' laufen',function(){
-        if(!nah()){hingehen();return;}run('findelei',{});
+      findel.appendChild(el('p',bereit+'/'+max+(bereit===1?' Ei liegt':' Eier liegen')+' bereit'+(bereit<max?' · das nächste '+wartetext(s.findeleiIn):' · Vorrat voll')));
+      var fb=button(nah()?'Ei abholen ('+bereit+')':'Hingehen',function(){
+        if(!nah()){hingehen(hafen);return;}run('findelei',{});
       },'gm-button gm-primary');
       fb.disabled=c.busy()||(nah()&&!s.findelei);
       findel.appendChild(fb);drawer.appendChild(findel);
@@ -117,44 +120,26 @@
       var karte=el('article',undefined,'gm-quest-card');
       karte.appendChild(titel('Kurierkontor','kurier'));
       karte.appendChild(el('p',k?'Du trägst '+k.ware+' nach '+X.kurierOrtName(k.nach)+'.'
-        :brett.length+'/'+X.KURIER_VORRAT+(brett.length===1?' Auftrag liegt':' Aufträge liegen')+' bereit: Pakete zu den Außenposten tragen, 12 bis 35 Gold je Weg.'));
+        :brett.length+'/'+X.KURIER_VORRAT+(brett.length===1?' Auftrag liegt':' Aufträge liegen')+' bereit · 12 bis 35 Gold je Weg.'));
       var b=button(k?'Zum Paket':'Aufträge ansehen',function(){if(R.kurierOeffnen)R.kurierOeffnen();},'gm-button gm-primary');
       b.disabled=c.busy();karte.appendChild(b);drawer.appendChild(karte);
-    }
-    /* Das Rathaus steht in Stockhafen - die Wahl selbst im eigenen Fenster. */
-    function rathausTeil(){
-      var r=stand&&stand.insel&&stand.insel.rathaus,karte=el('article',undefined,'gm-quest-card');
-      karte.appendChild(titel('Rathaus','rathaus'));
-      var amt=r&&r.amt?'👑 '+r.amt.name+' regiert diese Woche: '+(r.amt.erlass?r.amt.erlass.name:'')+'.':'Diese Woche regiert niemand.';
-      karte.appendChild(el('p',amt+(r&&r.kandidaten.length?' Für nächste Woche '+(r.kandidaten.length===1?'kandidiert eine Person.':'kandidieren '+r.kandidaten.length+'.'):' Für nächste Woche kandidiert noch niemand.')));
-      var b=button('Zum Rathaus',function(){if(R.rathausOeffnen)R.rathausOeffnen();},'gm-button gm-primary');b.disabled=c.busy();karte.appendChild(b);
-      drawer.appendChild(karte);
-    }
-    function brutTeil(s){
-      drawer.appendChild(titel('Brutplätze','brutplatz'));
-      drawer.appendChild(el('p','Du hast '+s.brutplaetze+' Plätze'+(s.gekauft?' ('+s.gekauft+' gekauft)':'')+'. Jeder weitere lässt dich ein Ei mehr gleichzeitig ausbrüten.'));
-      if(!s.preis){drawer.appendChild(el('p','Mehr gibt es nicht zu kaufen.'));return;}
-      var b=button('Brutplatz kaufen · '+s.preis+' Gold',function(){run('brutplatz_kaufen',{});},'gm-button gm-primary');
-      b.disabled=c.busy()||state().gold<s.preis;
-      drawer.appendChild(b);
     }
     /* Goldwaren: der Haendler mit einem Ei je Tag und der Schimmerperle, dann
        die Runenschmiede. Gekauft wird von ueberall, wie beim Brutplatz. */
     function haendlerTeil(){
       var s=state(),heute=R.zeiten.day(c.now()),gekauft=s.haendlerTag===heute,voll=s.eggs.length>=R.wirtschaft.BAG_LIMIT;
-      drawer.appendChild(el('h3','Der Händler'));
       var raster=el('div',undefined,'gm-shop-grid');
       var ei=el('article',undefined,'gm-shop-card'),eiBild=R.symbol&&R.symbol('haendler','gm-waren-bild');
       if(eiBild)ei.appendChild(eiBild);
       ei.appendChild(el('h3','Ein Ei'));
-      ei.appendChild(el('p','Ein Ei wie jedes andere, mit denselben Chancen. Der Händler verkauft dir eins pro Tag.'));
+      ei.appendChild(el('p','Normale Chancen, eins pro Tag.'));
       var kaufen=button(gekauft?'Heute schon gekauft':voll?'Bruttasche voll':'Kaufen · '+X.HAENDLER_EI_PREIS+' Gold',function(){run('ei_kaufen',{});},'gm-button gm-primary');
       kaufen.disabled=c.busy()||gekauft||voll||s.gold<X.HAENDLER_EI_PREIS;
       ei.appendChild(kaufen);raster.appendChild(ei);
       var perle=el('article',undefined,'gm-shop-card'),perleBild=R.symbol&&R.symbol('perle','gm-waren-bild');
       if(perleBild)perle.appendChild(perleBild);
       perle.appendChild(el('h3','Schimmerperle'));
-      perle.appendChild(el('p','Das nächste Mon, das du ausbrütest und das noch nicht schimmert, schlüpft schimmernd. Nur zum Ansehen - stärker wird es davon nicht.'));
+      perle.appendChild(el('p','Dein nächstes Mon schlüpft schimmernd. Nur Optik.'));
       var perleKaufen=button(s.schimmerperle?'Liegt bereit':'Kaufen · '+X.SCHIMMERPERLE_PREIS+' Gold',function(){run('schimmerperle_kaufen',{});},'gm-button gm-primary');
       perleKaufen.disabled=c.busy()||!!s.schimmerperle||s.gold<X.SCHIMMERPERLE_PREIS;
       perle.appendChild(perleKaufen);raster.appendChild(perle);
@@ -167,10 +152,10 @@
       drawer.appendChild(titel('Runenhandel','runenhandel'));
       if(!r){
         var bau=((h&&h.bauten)||[]).find(function(b){return b.id==='markthalle';});
-        drawer.appendChild(el('p','Runen und Rohstoffe handelt der Händler erst, wenn die Markthalle steht'+(bau?' ('+zahl(bau.gold)+' von '+zahl(bau.ziel)+' Gold)':'')+'. Jeder kann dafür spenden, und wer Gebiete hält, zahlt ein Zehntel seines Gebietsgolds hinein.'));
+        drawer.appendChild(el('p','Öffnet, wenn die Markthalle steht'+(bau?' ('+zahl(bau.gold)+' von '+zahl(bau.ziel)+' Gold)':'')+'.'));
         return;
       }
-      drawer.appendChild(el('p','Feste Preise; der Händler kauft zu '+Math.round(X.RUNEN_ANKAUF*100)+' % zurück. Diese Woche noch offen: kaufen für '+zahl(r.kaufFrei)+' Gold, verkaufen für '+zahl(r.verkaufFrei)+' Gold. Am Montag geht es von vorn los.'));
+      drawer.appendChild(el('p','Rückkauf zu '+Math.round(X.RUNEN_ANKAUF*100)+' %. Diese Woche noch frei: kaufen für '+zahl(r.kaufFrei)+' Gold, verkaufen für '+zahl(r.verkaufFrei)+' Gold.'));
       var liste=el('div',undefined,'gm-schmiede');
       D.SELTENHEITEN.forEach(function(sel,i){
         var n=runen[i]||0,zeile=el('div',undefined,'gm-schmiede-zeile'),preis=X.RUNEN_PREISE[i],ankauf=X.runenAnkauf(i);
@@ -190,7 +175,7 @@
     function rohstoffhandelTeil(r){
       var s=state(),lager=s.lager||{};
       drawer.appendChild(titel('Rohstoffe','kristall'));
-      drawer.appendChild(el('p','Fünf Stück auf einmal. Dein Lager: '+R.lagerText(s)+'.'));
+      drawer.appendChild(el('p','Immer fünf Stück. Dein Lager: '+R.lagerText(s)+'.'));
       var liste=el('div',undefined,'gm-schmiede');
       R.wirtschaft.ROHSTOFFE.forEach(function(ro){
         var zeile=el('div',undefined,'gm-schmiede-zeile'),preis=X.ROHSTOFF_PREISE[ro.id]*5,ankauf=X.rohstoffAnkauf(ro.id)*5,n=lager[ro.id]||0;
@@ -205,10 +190,7 @@
     }
     function schmiedeTeil(){
       var s=state(),runen=s.runes||[],letzte=D.SELTENHEITEN.length-1;
-      var schmiedeTitel=el('h3','Die Runenschmiede'),amboss=R.symbol&&R.symbol('schmiede','gm-titel-symbol');
-      if(amboss)schmiedeTitel.insertBefore(amboss,schmiedeTitel.firstChild);
-      drawer.appendChild(schmiedeTitel);
-      drawer.appendChild(el('p','Eine Rune zerfällt hier in zwei der nächstniedrigeren Seltenheit, drei verschmelzen zu einer der nächsthöheren. So werden auch Runen nützlich, zu denen dir das Mon fehlt - etwa die Mythisch-Runen vom Zerhacker.'));
+      drawer.appendChild(el('p','Eine Rune zerfällt in zwei der Stufe darunter, drei verschmelzen zu einer darüber.'));
       var liste=el('div',undefined,'gm-schmiede');
       D.SELTENHEITEN.forEach(function(r,i){
         var n=runen[i]||0,zeile=el('div',undefined,'gm-schmiede-zeile');
@@ -225,8 +207,7 @@
     /* Das Tauschbrett. Nur gleiche Seltenheit gegen gleiche Seltenheit - das
        ist die Regel, die verhindert, dass ein zweites Konto das erste hochzieht. */
     function tauschTeil(liste){
-      drawer.appendChild(titel('Das Tauschbrett','tausch'));
-      drawer.appendChild(el('p','Mon gegen Mon, immer innerhalb derselben Seltenheit. Was du weggibst, ist weg - samt Runenstufe und Wesen. Was in deiner Truppe steht, kannst du nicht anbieten.'));
+      drawer.appendChild(el('p','Mon gegen Mon, nur in derselben Seltenheit. Was du weggibst, ist samt Runen weg.'));
       var s=state(),eigene=(liste||[]).filter(function(v){return v.selbst;});
       (liste||[]).forEach(function(v){
         var gebe=D.mon(v.gebe),suche=D.mon(v.suche);if(!gebe||!suche)return;
@@ -249,7 +230,7 @@
         }
         drawer.appendChild(karte);
       });
-      if(!(liste||[]).length)drawer.appendChild(el('p','Das Brett ist leer. Häng das erste Angebot auf.'));
+      if(!(liste||[]).length)drawer.appendChild(el('p','Das Tauschbrett ist leer.'));
       if(eigene.length>=3){drawer.appendChild(el('p','Du hast drei Angebote am Brett - mehr gehen nicht.'));return;}
       /* Ein eigenes Angebot aufhaengen: nur Mons, die nirgends Dienst tun und
          nicht schon am Brett haengen, und gesucht wird nur, was fehlt. */
@@ -292,39 +273,31 @@
       t.chronik.forEach(function(v){liste.appendChild(el('li',v.name+(v.haus?' (Haus)':'')+' · '+v.verteidigt+' Verteidigung(en)'));});
       drawer.appendChild(liste);
     }
-    function zeigeStadt(){
-      if(!stand||!c.open(X.STADT.name,'stadt'))return;
-      drawer.appendChild(el('p','Eine freie Stadt: sie gehört niemandem und kann nicht erobert werden. In ihrer Mitte steht die Große Arena - massives Gemäuer, man geht außen herum.','gm-beginner-tip'));
-      if(!nah())drawer.appendChild(el('p','Du stehst noch außerhalb. Für alles hier musst du in der Stadt sein.'));
-      /* Das Fenster ist lang geworden. Oben eine Sprungleiste zu den vier
-         Bereichen - die Anker setzt jeder Bereich, bevor er sich zeichnet. */
-      var leiste=el('div',undefined,'gm-sprungleiste'),anker={};
-      [['arena','Arena'],['hafen','Hafen & Kontor'],['handel','Händler & Runen'],['tausch','Tausch']].forEach(function(v){
-        leiste.appendChild(button(v[1],function(){if(anker[v[0]])anker[v[0]].scrollIntoView({behavior:'smooth',block:'start'});},'gm-button gm-secondary'));
-      });
-      drawer.appendChild(leiste);
-      function setze(name){anker[name]=el('span',undefined,'gm-anker');drawer.appendChild(anker[name]);}
-      setze('arena');
+    /* Ein Fenster je Gebaeude. aktuell merkt sich, welches offen ist, damit
+       run() nach einem Kauf genau das wieder zeichnet. */
+    function fenster(titelText,view,zeichnen){
+      if(!stand||!c.open(titelText,view))return;
+      aktuell=function(){fenster(titelText,view,zeichnen);};
+      zeichnen();
+    }
+    function zeigeArena(){fenster(X.STADT.name,'stadt',function(){
+      drawer.appendChild(el('p','Hier kämpfst du gegen die gespeicherten Truppen anderer Spieler. Verlieren kostet nie Mons, Eier oder Gebiete.','gm-beginner-tip'));
       championTeil(stand.turnier);
       rangTeil(stand.turnier);
-      setze('hafen');
-      hafenTeil(stand.stadt);
-      kontorTeil();
-      rathausTeil();
-      brutTeil(stand.stadt);
-      setze('handel');
-      haendlerTeil();
-      runenhandelTeil();
-      schmiedeTeil();
-      setze('tausch');
-      tauschTeil(stand.tausch);
       chronikTeil(stand.turnier);
-    }
+    });}
+    function zeigeHafen(){fenster('Hafenkontor','hafen',function(){hafenTeil(stand.stadt);kontorTeil();});}
+    function zeigeHaendler(){fenster('Händler','haendler',function(){haendlerTeil();runenhandelTeil();});}
+    function zeigeTausch(){fenster('Tauschhaus','tausch',function(){tauschTeil(stand.tausch);});}
+    function zeigeSchmiede(){fenster('Runenschmiede','schmiede',function(){schmiedeTeil();});}
+    var FENSTER={stadt:zeigeArena,hafen:zeigeHafen,haendler:zeigeHaendler,tausch:zeigeTausch,schmiede:zeigeSchmiede};
     return {
-      menu:zeigeStadt,
+      menu:zeigeArena,hafen:zeigeHafen,haendler:zeigeHaendler,tausch:zeigeTausch,schmiede:zeigeSchmiede,
+      views:Object.keys(FENSTER),
       apply:function(res){if(res&&res.turnier)stand={turnier:res.turnier,stadt:res.stadt,tausch:res.tausch||[],handel:res.handel||null,insel:res.insel||null};},
+      stadt:function(){return stand&&stand.stadt;},
       champion:function(){return stand&&stand.turnier&&stand.turnier.champion;},
-      refresh:function(view){if(view==='stadt')zeigeStadt();}
+      refresh:function(view){if(FENSTER[view])FENSTER[view]();}
     };
   };
 })(SG);

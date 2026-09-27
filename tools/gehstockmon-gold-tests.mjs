@@ -115,7 +115,7 @@ await test('Every new ware is a game move the browser marks, and the help names 
     assert.ok(X.SPIELZUEGE.includes(op), op + ' needs a request id');
   const fs = await import('node:fs');
   const hilfe = fs.readFileSync('src/games/gehstockmon/3-ui.js', 'utf8');
-  assert.match(hilfe, /Goldwaren in Stockhafen/);
+  assert.match(hilfe, /'Goldwaren'/);
 });
 
 console.log('\n' + checks + ' Goldwaren-Pruefungen bestanden.');

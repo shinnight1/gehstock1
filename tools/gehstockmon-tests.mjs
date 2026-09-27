@@ -107,7 +107,7 @@ await test('Presence in per-player fields: nobody blocks anybody, and the list i
   const p=store.data.players[joined[2].playerId];
   const ohne=await call(h,codes[2],'tagwerk');assert.match(ohne.error||'',/Kartenposition/);
   await presence.feldSetzen('anwesenheit-v2',joined[2].playerId,{id:joined[2].playerId,name:p.name,x:X.STADT_TOR.x,z:X.STADT_TOR.z,heading:0,activity:'map',updatedAt:time,spawnAt:p.lastJoinAt,credit:55,skin:p.skin,squad:p.truppe.slice(),eier:0});
-  const mit=await call(h,codes[2],'tagwerk');assert.doesNotMatch(mit.error||'',/Kartenposition|Stockhafen/);
+  const mit=await call(h,codes[2],'tagwerk');assert.doesNotMatch(mit.error||'',/Kartenposition|Arenaplatz/);
 });
 await test('A plain world poll writes only when more than the clocks changed, and no gold gets lost',async()=>{
   let time=Date.parse('2026-09-17T09:00:00+02:00'),writes=0;const store=memoryStore(),presence=memoryStore(),h=createHandler({store,presenceStore:presence,now:()=>time});
