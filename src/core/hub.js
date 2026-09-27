@@ -470,7 +470,7 @@
         html: 'Herr Gehstocks Hideout · Version ' + SG.version +
           '<br>' + SG.list().length + ' Spiele · ' +
           (SG.offline ? 'Offline-Einzeldatei' : 'Webseite') +
-          '<br>Alle Grafiken und Klänge entstehen im Browser — keine externen Dateien.',
+          '<br>Die klassischen Spiele zeichnen Grafik und Ton selbst im Browser.',
       }),
     ]);
 
