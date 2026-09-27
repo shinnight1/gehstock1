@@ -277,6 +277,28 @@ await test('Only an admin hands out Mons and territories, also outside opening h
   assert.equal((await call(zu,ca,'admin_grant',{zielCode:cb,mons:['nachtflatter']})).status,200);
   assert.equal((await call(zu,ca,'admin_log')).status,200);
 });
+await test('An admin returns a territory to the computer as on the first day of the world, and it is written down',async()=>{
+  const store=memoryStore(),h=createHandler({store,now:()=>stamp});
+  await call(h,ca,'join');const b=await call(h,cb,'join');
+  const anfang=structuredClone(store.data.territories[8]);
+  assert.equal((await call(h,ca,'admin_grant',{zielCode:cb,zielName:'Test B',gebiete:[9]})).status,200);
+  const pb=store.data.players[b.playerId];pb.posten={9:pb.truppe.slice()};
+  assert.equal((await call(h,cb,'admin_release',{gebiete:[9]})).status,403,'ein Spieler darf nichts zurückgeben');
+  let r=await call(h,ca,'admin_release',{gebiete:[9]});
+  assert.equal(r.status,200,r.error);assert.deepEqual(r.bericht.gebiete,[9]);assert.deepEqual(r.bericht.genommen,[{id:9,name:'Test B'}]);
+  const t=store.data.territories[8];
+  assert.equal(t.ownerId,null);assert.equal(t.ownerName,anfang.ownerName,'wieder der Clan vom ersten Tag');
+  assert.deepEqual(t.defense,anfang.defense,'wieder die Computertruppe');
+  const nachher=store.data.players[b.playerId];
+  assert.ok(!nachher.geschafft.includes(9));assert.equal(nachher.outposts[9],undefined);assert.equal(nachher.posten[9],undefined,'die Besatzung zieht ab');
+  assert.deepEqual([r.schenkungen[0].vonName,r.schenkungen[0].anName,r.schenkungen[0].gebiete],['Test A','Computer',[9]]);
+  // Ein zweites Mal ändert nichts und schreibt nichts.
+  r=await call(h,ca,'admin_release',{gebiete:[9]});
+  assert.deepEqual([r.bericht.gebiete,r.bericht.schonFrei],[[],[9]]);assert.equal(r.schenkungen.length,2);
+  assert.equal((await call(h,ca,'admin_release',{gebiete:[10]})).status,400,'das Gebiet gibt es nicht');
+  const sicht=await call(h,cb,'world');
+  assert.equal(sicht.territories[8].ownerId,null);assert.ok(!sicht.profile.geschafft.includes(9));
+});
 await test('The admin gift tab and the server agree on every field',async()=>{
   const store=memoryStore(),h=createHandler({store,now:()=>stamp});
   const SG={ui:{el:()=>({}),empty:()=>({}),modal:()=>({close(){}}),toast:()=>{},confirm:()=>Promise.resolve(false),clear:()=>{},remove:()=>{}},

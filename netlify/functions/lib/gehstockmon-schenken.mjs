@@ -9,7 +9,9 @@
    Darum steht die Logik hier und nicht in einem der beiden. Wer den
    Ablauf aendert, aendert ihn fuer beide.
 
-   Vergeben werden Mons, Aussenposten, Gold und Eier.
+   Vergeben werden Mons, Aussenposten, Gold und Eier. Aussenposten gehen
+   ausserdem an den Computer zurueck (freigeben) - das gibt es nur im
+   Adminmenue.
 
    Jede Schenkung kommt ins Buch: wer, an wen, was, woher. Sich selbst
    zu beschenken ist erlaubt und faellt genau deshalb auf - im Buch
@@ -17,7 +19,7 @@
    ------------------------------------------------------------------ */
 
 import { createHash } from 'node:crypto';
-import { data as D, economy as E, adventure as X } from './gehstockmon-rules.mjs';
+import { data as D, economy as E, adventure as X, arena as A } from './gehstockmon-rules.mjs';
 
 /* Dieselbe Ableitung wie im Spielserver. Weicht sie ab, landet das
    Geschenk bei einem Spieler, den es nicht gibt. */
@@ -112,6 +114,57 @@ export function schenken(welt, { code, name = '', mons = [], gebiete = [], gold 
     gebiete: bericht.gebiete.slice(),
     gold: bericht.gold,
     eier: bericht.eier,
+    genommen: bericht.genommen.slice(),
+    quelle: quelle,
+  }).slice(-BUCH_LIMIT);
+  bericht.eintrag = welt.schenkungen[welt.schenkungen.length - 1];
+  return bericht;
+}
+
+/* Wem ein Gebiet ohne Spieler gehoert: dem Clan seines Bioms, wie am
+   ersten Tag der Welt (initialWorld in gehstockmon.mjs). */
+export const computerClan = (gebietId) => ['Wilder Clan', 'Flusswächter', 'Aschenclan', 'Nebelwache', 'Die Krone'][(gebietId - 1) % 5];
+
+/* Zurueck an den Computer. Das Gebiet steht danach da wie am ersten Tag:
+   Clan, Computertruppe, frische Produktion. Nur die Ausbaustufe bleibt am
+   Gebiet, genau wie bei einer Eroberung. Der Vorbesitzer verliert es wie
+   beim Wegnehmen, und ins Buch kommt es mit dem Computer als Empfaenger. */
+export function freigeben(welt, { gebiete = [], now = Date.now(), von = null, quelle = 'Adminmenü', id = null }) {
+  if (welt.mapVersion !== D.MAP_VERSION) throw new Error('Die gespeicherte Welt steht auf Karte ' + welt.mapVersion + ', das Spiel auf ' + D.MAP_VERSION + '. Einmal GehstockMon öffnen, dann erneut versuchen.');
+  const daneben = gebiete.filter((gebietId) => !D.FELDER.some((f) => f.id === gebietId));
+  if (daneben.length) throw new Error('Diese Gebiete gibt es nicht: ' + daneben.join(', ') + ' (1 bis ' + D.FELDER.length + ').');
+
+  const bericht = { gebiete: [], schonFrei: [], genommen: [] };
+  for (const gebietId of gebiete) {
+    const t = welt.territories[gebietId - 1];
+    if (!t.ownerId) { bericht.schonFrei.push(gebietId); continue; }
+    const vorbesitzer = welt.players[t.ownerId];
+    if (vorbesitzer) {
+      vorbesitzer.geschafft = (vorbesitzer.geschafft || []).filter((v) => v !== gebietId);
+      if (vorbesitzer.outposts) delete vorbesitzer.outposts[gebietId];
+      if (vorbesitzer.posten) delete vorbesitzer.posten[gebietId];
+    }
+    bericht.genommen.push({ id: gebietId, name: vorbesitzer ? vorbesitzer.name : t.ownerName });
+    const stufe = t.level;
+    Object.assign(t, E.outpost(null, now), { level: stufe, ownerId: null, ownerName: computerClan(gebietId),
+      defense: A.defenders(gebietId).map((k) => ({ id: k.id })), version: (t.version || 1) + 1 });
+    bericht.gebiete.push(gebietId);
+  }
+  if (!bericht.gebiete.length) return bericht;
+
+  welt.version = (welt.version || 1) + 1;
+  welt.schenkungen = (welt.schenkungen || []).concat({
+    id: id || 'freigabe-' + now,
+    t: now,
+    vonId: von && von.id ? von.id : null,
+    vonName: (von && von.name) || quelle,
+    anId: null,
+    anName: 'Computer',
+    selbst: false,
+    mons: [],
+    gebiete: bericht.gebiete.slice(),
+    gold: 0,
+    eier: 0,
     genommen: bericht.genommen.slice(),
     quelle: quelle,
   }).slice(-BUCH_LIMIT);

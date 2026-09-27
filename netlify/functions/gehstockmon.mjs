@@ -4,7 +4,7 @@ import { data as D, economy as E, arena as A, hours as H, adventure as X } from 
 import {adventureAction,finishEncounter,expireAdventure,deliverRewards,activeArena,activeDuel,weltprojekte,wochenschritt,fehdeSchritt,zerhacker,wochenaufgabe,fehden} from './lib/gehstockmon-adventure.mjs';
 import {activeDungeon,settleDungeons,dungeonResult,dungeonAction} from './lib/gehstockmon-dungeons.mjs';
 import {stadtAction,arenaStand,championSold} from './lib/gehstockmon-stadt.mjs';
-import {schenken,schenkungen} from './lib/gehstockmon-schenken.mjs';
+import {schenken,schenkungen,freigeben,computerClan} from './lib/gehstockmon-schenken.mjs';
 import {lesen as anwesenheitLesen,schreiben as anwesenheitSchreiben} from './lib/gehstockmon-anwesenheit.mjs';
 import {tickern,tickerSicht,alltagSicht,alltagAction,morgenbericht} from './lib/gehstockmon-alltag.mjs';
 import {duellAction,duelleAbrechnen,duellSicht,duellEinladung,imDuellKampf} from './lib/gehstockmon-duell.mjs';
@@ -63,7 +63,7 @@ function volatileStore() {
 const mutations = X.SPIELZUEGE;
 /* Verschenken und Nachlesen sind Verwaltung, kein Spielzug: sie brauchen
    keinen eigenen Spielstand und richten sich nicht nach den Oeffnungszeiten. */
-const ADMIN_OPS = ['admin_grant', 'admin_log'];
+const ADMIN_OPS = ['admin_grant', 'admin_release', 'admin_log'];
 class GameError extends Error { constructor(message, status = 400) { super(message); this.status = status; } }
 function adminBypass(body) {
   return body && body.adminOverride === true && body.adminCode === '3141' && roleForCode(body.code) === 'A';
@@ -90,7 +90,7 @@ function roleForCode(value) {
 }
 function initialWorld(now) {
   return { version: 1, mapVersion: D.MAP_VERSION, players: {}, reports: [], territories: D.FELDER.map((f) => ({ id: f.id, ownerId: null,
-    ownerName: ['Wilder Clan','Flusswächter','Aschenclan','Nebelwache','Die Krone'][(f.id - 1) % 5],
+    ownerName: computerClan(f.id),
     defense: A.defenders(f.id).map((k) => ({ id: k.id })), version: 1, ...E.outpost(null, now) })) };
 }
 function migrateMap(world, now) {
@@ -452,6 +452,18 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
               von: { id, name: name || 'Admin' } });
           } catch (err) { throw new GameError(err.message); }
           if (!bericht.mons.length && !bericht.gebiete.length && !bericht.gold && !bericht.eier) return json({ serverTime: timestamp, bericht, schenkungen: schenkungen(world) });
+          const geschrieben = await db.setJSON(KEY, world, entry ? { onlyIfMatch: entry.etag } : { onlyIfNew: true });
+          if (geschrieben.modified) return json({ serverTime: timestamp, bericht, schenkungen: schenkungen(world) });
+          await pause(attempt);
+          continue;
+        }
+        if (body.op === 'admin_release') {
+          let bericht;
+          try {
+            bericht = freigeben(world, { gebiete: body.gebiete || [], now: timestamp, quelle: 'Adminmenü', id: body.requestId,
+              von: { id, name: name || 'Admin' } });
+          } catch (err) { throw new GameError(err.message); }
+          if (!bericht.gebiete.length) return json({ serverTime: timestamp, bericht, schenkungen: schenkungen(world) });
           const geschrieben = await db.setJSON(KEY, world, entry ? { onlyIfMatch: entry.etag } : { onlyIfNew: true });
           if (geschrieben.modified) return json({ serverTime: timestamp, bericht, schenkungen: schenkungen(world) });
           await pause(attempt);

@@ -103,6 +103,19 @@
       ]));
     });
 
+    /* Der Computer steht mit in der Liste: an ihn gehen Aussenposten
+       zurueck, die kein Spieler mehr halten soll. */
+    ziel.appendChild(UI.el('div.item.tap', {
+      on: { click: function () { computerDialog(neu); } },
+    }, [
+      UI.el('div.thumb', { text: '🖥️' }),
+      UI.el('div.main', null, [
+        UI.el('div.t', { text: 'Computer' }),
+        UI.el('div.d', { text: 'Außenposten an den Computer zurückgeben' }),
+      ]),
+      UI.el('div.side', null, [UI.el('div.s', { text: '›' })]),
+    ]));
+
     var buch = UI.el('div');
     ziel.appendChild(buch);
     buchZeigen(buch);
@@ -129,7 +142,7 @@
       }
       eintraege.slice(0, 20).forEach(function (s) {
         ziel.appendChild(UI.el('div.item', null, [
-          UI.el('div.thumb', { text: s.selbst ? '🪞' : '🎁' }),
+          UI.el('div.thumb', { text: s.selbst ? '🪞' : !s.anId ? '🖥️' : '🎁' }),
           UI.el('div.main', null, [
             UI.el('div.t', {
               text: s.vonName + ' → ' + s.anName + (s.selbst ? ' (sich selbst)' : ''),
@@ -173,25 +186,25 @@
 
   /* ------------------------------------------------------------ Der Dialog */
 
+  function schalter(ziel, text, an, um) {
+    var b = UI.el('button.chip' + (an ? '.on' : ''), {
+      type: 'button', text: text,
+      on: {
+        click: function () {
+          var jetzt = !b.classList.contains('on');
+          b.classList.toggle('on', jetzt);
+          um(jetzt);
+          SG.audio.play('click');
+        },
+      },
+    });
+    ziel.appendChild(b);
+    return b;
+  }
+
   function dialog(person, neu) {
     var D = spiel();
     var mons = {}, gebiete = {};
-
-    function schalter(ziel, text, an, um) {
-      var b = UI.el('button.chip' + (an ? '.on' : ''), {
-        type: 'button', text: text,
-        on: {
-          click: function () {
-            var jetzt = !b.classList.contains('on');
-            b.classList.toggle('on', jetzt);
-            um(jetzt);
-            SG.audio.play('click');
-          },
-        },
-      });
-      ziel.appendChild(b);
-      return b;
-    }
 
     var reihe = { display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' };
 
@@ -304,6 +317,60 @@
             .then(function (ok) { if (ok) geben(true); });
           return;
         }
+        hinweis.textContent = err.message;
+      });
+    }
+  }
+
+  /* ---------------------------------------------- Zurueck an den Computer */
+
+  function computerDialog(neu) {
+    var D = spiel();
+    var gebiete = {};
+    var gebietfeld = UI.el('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' } });
+    D.FELDER.forEach(function (f) {
+      schalter(gebietfeld, f.id + ' · ' + f.name, false, function (an) {
+        if (an) gebiete[f.id] = true; else delete gebiete[f.id];
+      });
+    });
+    var hinweis = UI.el('div.small', { style: { color: 'var(--red)', minHeight: '18px' } });
+
+    var dlg = UI.modal({
+      title: 'Zurück an den Computer',
+      wide: true,
+      body: [
+        UI.el('p.small.muted', {
+          text: 'Das Gebiet gehört danach wieder seinem Clan, wie am ersten Tag der Welt. '
+            + 'Wer es hält, verliert es samt Besatzung. Die Ausbaustufe bleibt am Gebiet.',
+        }),
+        gebietfeld,
+        hinweis,
+      ],
+      actions: [
+        { label: 'Abbrechen', cls: 'ghost' },
+        { label: '🖥️ Zurückgeben', cls: 'primary', keepOpen: true, onClick: zurueck },
+      ],
+    });
+
+    function zurueck() {
+      var auswahl = Object.keys(gebiete).map(Number);
+      if (!auswahl.length) { hinweis.textContent = 'Nichts ausgewählt.'; return; }
+      hinweis.textContent = '';
+      G.senden('admin_release', {
+        gebiete: auswahl,
+        requestId: 'freigabe-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10),
+      }).then(function (r) {
+        var b = r.bericht || {};
+        if (!b.gebiete || !b.gebiete.length) {
+          hinweis.textContent = 'Das gehört schon alles dem Computer.';
+          return;
+        }
+        var text = was({ gebiete: b.gebiete, genommen: b.genommen });
+        dlg.close();
+        UI.toast('Zurück an den Computer: ' + text + '.', 'good');
+        SG.protokoll.schreiben('geschenk', 'GehstockMon: ' + text + ' an den Computer', '', '');
+        if (neu) neu();
+      }, function (err) {
         hinweis.textContent = err.message;
       });
     }
