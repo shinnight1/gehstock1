@@ -131,3 +131,9 @@
 }
 @media(max-width:650px){.gm-target{width:calc(100% - 145px);max-width:236px}}
 @media(max-width:380px){.gm-target{width:auto;max-width:none}}
+
+/* Runenschmiede in Stockhafen: eine Zeile je Seltenheit, links ihre Farbe. */
+.gm-schmiede{display:grid;gap:6px;margin:8px 0 14px}
+.gm-schmiede-zeile{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:6px 8px;border:1px solid #2f5560;border-left:4px solid var(--rarity,#2f5560);border-radius:10px;background:#0f2831}
+.gm-schmiede-zeile strong{flex:1 1 120px;font-size:13px;color:#e7ebd6}
+.gm-schmiede-zeile .gm-button{min-height:36px;padding:6px 9px;font-size:12px!important}

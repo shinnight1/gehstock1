@@ -109,6 +109,43 @@
       b.disabled=c.busy()||state().gold<s.preis;
       drawer.appendChild(b);
     }
+    /* Goldwaren: der Haendler mit einem Ei je Tag und der Schimmerperle, dann
+       die Runenschmiede. Gekauft wird von ueberall, wie beim Brutplatz. */
+    function haendlerTeil(){
+      var s=state(),heute=R.zeiten.day(c.now()),gekauft=s.haendlerTag===heute,voll=s.eggs.length>=R.wirtschaft.BAG_LIMIT;
+      drawer.appendChild(el('h3','Der Händler'));
+      var raster=el('div',undefined,'gm-shop-grid');
+      var ei=el('article',undefined,'gm-shop-card');
+      ei.appendChild(el('h3','Ein Ei'));
+      ei.appendChild(el('p','Ein Ei wie jedes andere, mit denselben Chancen. Der Händler verkauft dir eins pro Tag.'));
+      var kaufen=button(gekauft?'Heute schon gekauft':voll?'Bruttasche voll':'Kaufen · '+X.HAENDLER_EI_PREIS+' Gold',function(){run('ei_kaufen',{});},'gm-button gm-primary');
+      kaufen.disabled=c.busy()||gekauft||voll||s.gold<X.HAENDLER_EI_PREIS;
+      ei.appendChild(kaufen);raster.appendChild(ei);
+      var perle=el('article',undefined,'gm-shop-card');
+      perle.appendChild(el('h3','Schimmerperle'));
+      perle.appendChild(el('p','Das nächste Mon, das du ausbrütest und das noch nicht schimmert, schlüpft schimmernd. Nur zum Ansehen - stärker wird es davon nicht.'));
+      var perleKaufen=button(s.schimmerperle?'Liegt bereit':'Kaufen · '+X.SCHIMMERPERLE_PREIS+' Gold',function(){run('schimmerperle_kaufen',{});},'gm-button gm-primary');
+      perleKaufen.disabled=c.busy()||!!s.schimmerperle||s.gold<X.SCHIMMERPERLE_PREIS;
+      perle.appendChild(perleKaufen);raster.appendChild(perle);
+      drawer.appendChild(raster);
+    }
+    function schmiedeTeil(){
+      var s=state(),runen=s.runes||[],letzte=D.SELTENHEITEN.length-1;
+      drawer.appendChild(el('h3','Die Runenschmiede'));
+      drawer.appendChild(el('p','Eine Rune zerfällt hier in zwei der nächstniedrigeren Seltenheit, drei verschmelzen zu einer der nächsthöheren. So werden auch Runen nützlich, zu denen dir das Mon fehlt - etwa die Mythisch-Runen vom Zerhacker.'));
+      var liste=el('div',undefined,'gm-schmiede');
+      D.SELTENHEITEN.forEach(function(r,i){
+        var n=runen[i]||0,zeile=el('div',undefined,'gm-schmiede-zeile');
+        zeile.style.setProperty('--rarity',r.farbe);
+        zeile.appendChild(el('strong',r.name+': '+n));
+        if(i>0){var k=X.schmiedeKosten('zerlegen',i),z=button('1 → 2 '+D.SELTENHEITEN[i-1].name+' · '+k+' G',function(){run('runen_zerlegen',{rang:i});},'gm-button');
+          z.disabled=c.busy()||n<1||s.gold<k;zeile.appendChild(z);}
+        if(i<letzte){var v=X.schmiedeKosten('verschmelzen',i),m=button('3 → 1 '+D.SELTENHEITEN[i+1].name+' · '+v+' G',function(){run('runen_verschmelzen',{rang:i});},'gm-button');
+          m.disabled=c.busy()||n<3||s.gold<v;zeile.appendChild(m);}
+        liste.appendChild(zeile);
+      });
+      drawer.appendChild(liste);
+    }
     /* Das Tauschbrett. Nur gleiche Seltenheit gegen gleiche Seltenheit - das
        ist die Regel, die verhindert, dass ein zweites Konto das erste hochzieht. */
     function tauschTeil(liste){
@@ -187,6 +224,8 @@
       rangTeil(stand.turnier);
       hafenTeil(stand.stadt);
       brutTeil(stand.stadt);
+      haendlerTeil();
+      schmiedeTeil();
       tauschTeil(stand.tausch);
       chronikTeil(stand.turnier);
     }

@@ -106,6 +106,7 @@ export async function checkUi(D,E,A,handler,code,clock,otherCode){
   click('▦ Mons');await flush();
   find(e=>e.tagName==='button'&&e.textContent.includes(D.mon(eigenes).name)).fire('click');await flush();
   assert.ok(root.querySelector('.gm-plan-row'),'the plan editor renders');
+  assert.ok(root.all().some(e=>e.tagName==='button'&&e.textContent.startsWith('Wesen neu prägen')),'a Mon can get a new nature for gold');
   assert.equal(root.querySelectorAll('.gm-plan-row').length,A.START_PLAN.length,'one row per rule');
   const wahl=root.querySelectorAll('.gm-plan-row')[0].children.filter(e=>e.tagName==='select');
   assert.equal(wahl.length,2,'each rule has a condition and an action');
@@ -138,6 +139,8 @@ export async function checkUi(D,E,A,handler,code,clock,otherCode){
   /* Das Tauschbrett in Stockhafen baut sich auf. */
   click('♛ Stockhafen');await flush();
   assert.ok(root.textContent.includes('Tauschbrett'),'the trading board renders');
+  assert.ok(root.textContent.includes('Der Händler')&&root.textContent.includes('Die Runenschmiede'),'the gold wares render');
+  assert.equal(root.querySelectorAll('.gm-schmiede-zeile').length,D.SELTENHEITEN.length,'one forge row per rarity');
   assert.ok(root.textContent.includes('Der Gehstock-Champion'));
   /* Heute: oben in der Leiste, drei Aufgaben und die Truhe. */
   find(e=>e.classList.contains('gm-projekt')&&e.textContent.startsWith('Heute')).fire('click');await flush();

@@ -566,6 +566,20 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
             extra.monId = mon.id;
             extra.message = mon.name + ' kämpft jetzt nach deinem Plan - auch wenn du offline bist.';
           }
+          if (body.op === 'wesen_praegen') {
+            /* Ein anderes Wesen gegen Gold - der einzige Weg, ein misslungenes
+               loszuwerden, ohne das Mon wegzutauschen. */
+            const mon = D.mon(body.monId);
+            if (!mon || !p.besitz.includes(mon.id)) throw new GameError('Wähle ein Mon aus deiner Sammlung.');
+            const preis = X.wesenPreis(mon.seltenheit);
+            if (p.gold < preis) throw new GameError('Ein neues Wesen kostet für ' + mon.name + ' ' + preis + ' Gold.');
+            const bisher = p.wesen && p.wesen[mon.id], auswahl = X.WESEN.filter((w) => w.id !== bisher);
+            const neu = auswahl[Math.min(auswahl.length - 1, Math.floor(random() * auswahl.length))];
+            p.gold -= preis; p.wesen = p.wesen || {}; p.wesen[mon.id] = neu.id;
+            verteidigungenAuffrischen(world, p, id);
+            extra.monId = mon.id;
+            extra.message = mon.name + ' hat jetzt ein ' + neu.name + 'es Wesen (' + X.wesenText(neu) + '). −' + preis + ' Gold.';
+          }
           if (body.op === 'collect' || body.op === 'upgrade') {
             const t = target(world, body.territoryId);
             if (t.ownerId !== id) throw new GameError('Dieser Außenposten gehört dir nicht.', 403);
@@ -578,6 +592,12 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
                Frueher bestimmte eine einzige Zahl Mon und Wesen zugleich, und
                dasselbe Mon kam damit fast immer mit demselben Wesen. */
             const schlupf = E.hatch(p,body.eggId,timestamp,random), mon = schlupf.mon;
+            /* Die Schimmerperle aus Stockhafen wirkt auf das naechste Mon, das
+               noch nicht schimmert - schimmert es schon, bleibt sie liegen. */
+            if (p.schimmerperle && !(p.schimmernd && p.schimmernd[mon.id])) {
+              p.schimmernd = p.schimmernd || {}; p.schimmernd[mon.id] = true; p.schimmerperle = false;
+              schlupf.schimmernd = true; schlupf.schimmerNeu = true;
+            }
             p.progress.hatched++; wochenschritt(world, p, id, 'eier', timestamp); fehdeSchritt(world, id, 'ei', timestamp); X.alltagSchritt(p, 'ei', timestamp);
             X.wesenZuweisen(p, mon.id, random()); extra.monId = mon.id;
             extra.schlupf = { monId: mon.id, neu: schlupf.neu, stufe: schlupf.stufe, runen: schlupf.runen, rang: schlupf.rang,

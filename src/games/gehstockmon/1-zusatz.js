@@ -90,7 +90,7 @@
       .sort(function(a,b){return (b.level||1)-(a.level||1)||b.id-a.id;})
       .map(function(g){return {id:g.id,squad:truppe.slice()};});
   };
-  X.STADT_OPS=['arena_rang','champion_fordern','tagwerk','findelei','brutplatz_kaufen','tausch_anbieten','tausch_annehmen','tausch_zuruecknehmen'];
+  X.STADT_OPS=['arena_rang','champion_fordern','tagwerk','findelei','brutplatz_kaufen','tausch_anbieten','tausch_annehmen','tausch_zuruecknehmen','ei_kaufen','runen_zerlegen','runen_verschmelzen','schimmerperle_kaufen'];
   X.OPS=['survey','gather','trainer_start','quest_claim','shop_buy','equip','raid_start','raid_turn','raid_arena','raid_cancel','mon_upgrade','leuchtturm_spenden','zerhacker_schlagen','waffe_schleifen','panzer_anlegen','fehde_fordern','fehde_annehmen'].concat(X.STADT_OPS).concat(X.DUNGEON_OPS);
   /* Jeder Spielzug, der den Spielstand aendert - eine Liste fuer Browser und
      Server. Der Browser haengt nur an diese Zuege eine Kennung, und der
@@ -98,7 +98,7 @@
      Liste, und Kampfplan und Besatzungen fehlten auf der Browser-Seite: jedes
      Speichern scheiterte mit "Aktionskennung fehlt". Spaetere Dateien haengen
      ihre Zuege hier an. */
-  X.SPIELZUEGE=['arena_start','arena_turn','arena_flee','collect','incubate','hatch','upgrade','defend','plan','besatzung','besatzung_auto'].concat(X.OPS);
+  X.SPIELZUEGE=['arena_start','arena_turn','arena_flee','collect','incubate','hatch','upgrade','defend','plan','wesen_praegen','besatzung','besatzung_auto'].concat(X.OPS);
   X.SPAWN={x:0,z:30};X.SPAWN_TIME=60*60000;
   X.UPGRADE_LIMIT=5;
   /* Der Leuchtturm ist das gemeinsame Bauwerk: alle zahlen darauf ein, und
@@ -114,6 +114,24 @@
   X.gekaufteBrutplaetze=function(p){var n=p&&p.brutplaetze;
     return Number.isFinite(n)?Math.max(0,Math.min(X.BRUTPLATZ_PREISE.length,Math.floor(n))):0;};
   X.brutplaetze=function(bau,p){return E.INCUBATORS+(X.leuchtturmFertig(bau)?1:0)+X.gekaufteBrutplaetze(p);};
+
+  /* Goldwaren (27.09.2026). Gold sammelte sich an: ausser Ausbau, Brutplaetzen
+     und Ausruestung gab es nichts, wofuer es sich lohnte. Vier Dinge setzen es
+     dort ein, wo es bisher klemmte - bei Eiern, bei Runen, die zu keinem
+     eigenen Mon passen, beim Wesen, das man nie loswurde, und beim Schimmer,
+     auf den man sonst 64 Eier lang wartet.
+
+       Eierhaendler     ein normales Ei, eins je Tag
+       Runenschmiede    1 Rune -> 2 der naechstniedrigeren Seltenheit,
+                        3 Runen -> 1 der naechsthoeheren; beides gegen Gold.
+                        Hin und zurueck verliert man immer etwas, eine
+                        Runenschleife ohne Ende gibt es also nicht.
+       Wesen praegen    ein anderes Wesen, zufaellig; teurer, je seltener
+       Schimmerperle    das naechste Mon, das noch nicht schimmert, schimmert */
+  X.HAENDLER_EI_PREIS=350;
+  X.SCHIMMERPERLE_PREIS=2000;
+  X.wesenPreis=function(rang){return 100+Math.max(0,Math.floor(rang)||0)*100;};
+  X.schmiedeKosten=function(art,rang){return art==='zerlegen'?20*rang:40*(rang+1);};
 
   /* Stockhafen: der eine Ort auf der Insel, den niemand erobern kann. Er ist
      die Antwort auf die Frage, was jemand tut, der gerade kein Gebiet haelt -
@@ -521,7 +539,11 @@
     p.tagwerkAt=Number.isFinite(old.tagwerkAt)?old.tagwerkAt:now;
     p.findeleiAt=Number.isFinite(old.findeleiAt)?old.findeleiAt:X.schonReif(now,X.FINDELEI_ZEIT,1);
     p.championSeit=Number.isFinite(old.championSeit)?old.championSeit:null;
-    p.championTitel=Math.max(0,Math.floor(Number(old.championTitel)||0));return p;
+    p.championTitel=Math.max(0,Math.floor(Number(old.championTitel)||0));
+    /* Goldwaren: an welchem Tag zuletzt beim Haendler gekauft, und ob eine
+       Schimmerperle auf das naechste Schluepfen wartet. */
+    p.haendlerTag=Number.isFinite(old.haendlerTag)?Math.floor(old.haendlerTag):null;
+    p.schimmerperle=old.schimmerperle===true;return p;
   };
   X.progress=function(p,q){return q.stat==='visited'?p.visited.length:p.progress[q.stat]||0;};
   /* Ueberfallschutz gibt es nur noch aus einem Grund: Wer gerade bestohlen

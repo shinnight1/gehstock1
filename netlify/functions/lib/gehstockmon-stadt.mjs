@@ -193,6 +193,35 @@ export async function stadtAction({world,p,id,body,now,presence}){
     extra.message='Brutplatz gekauft: '+X.brutplaetze(world.leuchtturm,p)+' Plätze. Du kannst jetzt so viele Eier gleichzeitig ausbrüten.';
     return extra;
   }
+  /* Goldwaren - siehe X.HAENDLER_EI_PREIS in 1-zusatz.js. Alle drei gehen von
+     ueberall, genau wie der Kauf eines Brutplatzes. */
+  if(op==='ei_kaufen'){
+    const tag=H.day(now);
+    if(p.haendlerTag===tag)fail('Der Händler hat dir heute schon ein Ei verkauft. Morgen hat er ein neues.');
+    if(p.gold<X.HAENDLER_EI_PREIS)fail('Ein Ei kostet '+X.HAENDLER_EI_PREIS+' Gold.');
+    if(p.eggs.length>=E.BAG_LIMIT)fail('Deine Bruttasche ist voll.');
+    p.gold-=X.HAENDLER_EI_PREIS;p.haendlerTag=tag;
+    p.eggs.push({id:'handel-'+now+'-'+(++p.eggSerial),territoryId:X.FINDELEI_FELD,producedAt:now,startedAt:null,readyAt:null,art:'handel'});
+    extra.message='Der Händler gibt dir ein Ei. −'+X.HAENDLER_EI_PREIS+' Gold.';
+    return extra;
+  }
+  if(op==='runen_zerlegen'||op==='runen_verschmelzen'){
+    const zerlegen=op==='runen_zerlegen',rang=Number(body.rang),hoechster=D.SELTENHEITEN.length-1;
+    if(!Number.isInteger(rang)||(zerlegen?rang<1||rang>hoechster:rang<0||rang>=hoechster))fail('Diese Runen lassen sich so nicht umschmieden.');
+    const nimmt=zerlegen?1:3,gibt=zerlegen?2:1,ziel=zerlegen?rang-1:rang+1,kosten=X.schmiedeKosten(zerlegen?'zerlegen':'verschmelzen',rang);
+    if((p.runes[rang]||0)<nimmt)fail('Dafür brauchst du '+nimmt+' '+D.SELTENHEITEN[rang].name+'-'+(nimmt===1?'Rune':'Runen')+'.');
+    if(p.gold<kosten)fail('Die Schmiede verlangt '+kosten+' Gold.');
+    p.gold-=kosten;p.runes[rang]-=nimmt;p.runes[ziel]=Math.min(9999,(p.runes[ziel]||0)+gibt);
+    extra.message=(zerlegen?'Zerlegt':'Verschmolzen')+': '+nimmt+' '+D.SELTENHEITEN[rang].name+' → '+gibt+' '+D.SELTENHEITEN[ziel].name+'. −'+kosten+' Gold.';
+    return extra;
+  }
+  if(op==='schimmerperle_kaufen'){
+    if(p.schimmerperle)fail('Du hast schon eine Schimmerperle. Sie wirkt beim nächsten Schlüpfen.');
+    if(p.gold<X.SCHIMMERPERLE_PREIS)fail('Eine Schimmerperle kostet '+X.SCHIMMERPERLE_PREIS+' Gold.');
+    p.gold-=X.SCHIMMERPERLE_PREIS;p.schimmerperle=true;
+    extra.message='Schimmerperle gekauft: Das nächste Mon, das du ausbrütest und das noch nicht schimmert, schlüpft schimmernd.';
+    return extra;
+  }
   if(op==='tagwerk'){
     ohneGebiet();await amTor();
     if(X.tagwerkStand(p,now).fertig<1)fail('Im Hafen gibt es gerade keine Arbeit. Komm in einer Weile wieder.');
