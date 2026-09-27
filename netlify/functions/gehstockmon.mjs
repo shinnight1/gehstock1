@@ -131,9 +131,17 @@ function einmaligAnpassen(world, now) {
   freigeben(world, { gebiete: [9], now, quelle: 'Einmalige Anpassung', id: ANPASSUNG + '-computer' });
   world.einmalig = { ...(world.einmalig || {}), [ANPASSUNG]: now };
 }
+/* Auf Wunsch von Louis steht die Uebergabe an ihn nicht im Schenkungsbuch.
+   Die Gebiete bleiben bei ihm, nur der Eintrag verschwindet. Die Rueckgabe
+   des Weltenschlunds an den Computer bleibt stehen. */
+function buchBereinigen(world) {
+  const weg = ANPASSUNG + '-louis';
+  if (world.schenkungen && world.schenkungen.some((e) => e.id === weg)) world.schenkungen = world.schenkungen.filter((e) => e.id !== weg);
+}
 function migrateAndSettle(world, now) {
   migrateMap(world, now);
   einmaligAnpassen(world, now);
+  buchBereinigen(world);
   for (const p of Object.values(world.players)) {
     Object.assign(p, D.neuerStand(p, now));
     if (p.arena && p.arena.phase !== 'finished' && now - p.arena.lastActionAt > 20 * 60000) {
