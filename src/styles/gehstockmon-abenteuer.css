@@ -122,7 +122,8 @@
 .gm-target.eigen .gm-target-stufe{background:#8fd3b5}
 .gm-target .gm-target-zeile{display:block;margin:3px 0 0;font-size:12.5px;line-height:1.35;color:#c9d8d2}
 .gm-target .gm-target-badges{margin:6px 0 0;gap:4px 8px;font-size:12px}
-.gm-target .gm-target-badges span:last-child{color:inherit}
+/* Die aeltere Regel faerbt das letzte Kaertchen um - hier steht die Revanche oft hinten. */
+.gm-target .gm-target-badges .gm-badge-revanche{color:#ffb3a3}
 .gm-target .gm-target-actions{flex-wrap:nowrap;gap:6px;margin-top:9px}
 .gm-target .gm-target-actions .gm-button{flex:1 1 0;min-height:38px;padding:7px 8px;font-size:13px!important}
 @media (pointer:coarse){
