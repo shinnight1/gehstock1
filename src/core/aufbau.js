@@ -528,9 +528,23 @@
   /* ============================================================ Ablauf */
 
   function zeit(st) {
-    if (st.sprung) return st.sprung.ab + (performance.now() - st.sprung.um) / 1000 * 1.6;
-    if (st.ton && st.ton.ctx.state === 'running') return st.ton.ctx.currentTime - st.ton.beginn;
-    return (performance.now() - st.t0) / 1000;
+    var jetzt = performance.now();
+    if (st.sprung) return st.sprung.ab + (jetzt - st.sprung.um) / 1000 * 1.6;
+    if (st.ton && !st.tonWeg) {
+      if (st.ton.ctx.state === 'running') {
+        st.letzt = st.ton.ctx.currentTime - st.ton.beginn;
+        st.letztUm = jetzt;
+        return st.letzt;
+      }
+      /* Ton unterbrochen (Tab im Hintergrund, Anruf, iPad noch gesperrt):
+         ab hier zaehlt die Browseruhr weiter, und der Ton bleibt aus.
+         Sonst sprang das Bild beim Fortsetzen auf die zurueckliegende
+         Tonzeit zurueck. */
+      st.tonWeg = true;
+      try { st.ton.gain.gain.value = 0; st.ton.quelle.stop(); } catch (e) { /* egal */ }
+    }
+    if (st.letzt !== undefined) return st.letzt + (jetzt - st.letztUm) / 1000;
+    return (jetzt - st.t0) / 1000;
   }
 
   function ueberspringen(st) {
@@ -652,8 +666,18 @@
 
     /* Die Kacheln fahren beim Aufbau des Hubs kurz ein. Erst wenn sie
        stehen, wird vermessen - solange ist der Schirm ohnehin schwarz. */
-    st.warte = setTimeout(function () {
+    var versuche = 0;
+    st.warte = setTimeout(function los() {
       if (st.vorbei) return;
+      /* Vermessen wird erst, wenn die Seite wirklich sichtbar ist: ein Tab
+         im Hintergrund meldet 0 x 0, und ein geratener Ersatzwert passte
+         spaeter nicht zur Seite. Nach zehn Sekunden ohne Sicht: ohne
+         Animation weiter. */
+      if (!window.innerWidth || !window.innerHeight || document.hidden) {
+        if (++versuche > 40) { beenden(st); return; }
+        st.warte = setTimeout(los, 250);
+        return;
+      }
       /* Geht beim Vorbereiten etwas schief, darf der schwarze Schirm nicht
          stehen bleiben - dann eben ohne Animation weiter zur Seite. */
       try {
