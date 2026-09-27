@@ -432,6 +432,11 @@
         function () { return S.get('confirmExit'); },
         function (v) { S.set('confirmExit', v); }),
 
+      UI.toggleRow('Aufbau-Animation', 'Nach dem Anmelden baut sich die Seite im Licht auf, '
+        + 'mit Soundtrack, wenn der Ton an ist.',
+        function () { return S.get('aufbau'); },
+        function (v) { S.set('aufbau', v); }),
+
       UI.el('div.sec-head', null, [UI.el('h2', { text: 'Bildschirm-Beobachtung' })]),
 
       UI.el('div.notice', {
@@ -474,15 +479,24 @@
       }),
     ]);
 
-    /* Das Umzugs-Intro laesst sich jederzeit noch einmal ansehen. */
+    /* Aufbau-Animation und Umzugs-Intro lassen sich jederzeit noch einmal
+       ansehen. */
     var fenster = null;
+    var ansehen = [];
+    if (SG.aufbau) {
+      ansehen.push(UI.btn('Aufbau-Animation ansehen', function () {
+        if (fenster) fenster.close();
+        SG.aufbau.zeigen();
+      }, 'sm ghost'));
+    }
     if (!SG.offline && SG.umzug) {
-      body.appendChild(UI.el('div.row.wrap', { style: { gap: '8px', marginTop: '10px' } }, [
-        UI.btn('Umzugs-Intro ansehen', function () {
-          if (fenster) fenster.close();
-          SG.umzug.zeigen();
-        }, 'sm ghost'),
-      ]));
+      ansehen.push(UI.btn('Umzugs-Intro ansehen', function () {
+        if (fenster) fenster.close();
+        SG.umzug.zeigen();
+      }, 'sm ghost'));
+    }
+    if (ansehen.length) {
+      body.appendChild(UI.el('div.row.wrap', { style: { gap: '8px', marginTop: '10px' } }, ansehen));
     }
 
     fenster = UI.modal({ title: 'Einstellungen', body: body, wide: true });

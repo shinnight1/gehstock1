@@ -86,6 +86,7 @@ const CORE_ORDER = [
   'core/wache.js',
   'core/ansage.js',
   'core/umzug.js',
+  'core/aufbau.js',
   'core/router.js',
   'core/invariants.js',
   'core/selftest.js',
@@ -153,11 +154,13 @@ function collectJs() {
    laeuft offline nicht, und SG.list() blendet es dort ganz aus
    (src/core/registry.js). Eingebettet waren sie 6,8 MB totes Gewicht.
    Dasselbe gilt fuer Seitenbilder (ui-*), die nur online gebraucht werden:
-   das Arena-Kachelbild und das Bild im Umzugs-Intro. */
+   das Arena-Kachelbild, die Bilder im Umzugs-Intro und auf "Ueber uns" -
+   und der Ton der Aufbau-Animation (ui-aufbau-ton.mp3). */
 const NUR_ONLINE = /^(gm|ui)-/;
 const BILD_TYP = {
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
   '.webp': 'image/webp', '.gif': 'image/gif',
+  '.mp3': 'audio/mpeg',
 };
 
 /* Die Spielermodelle sind die Ausnahme: sie wiegen zusammen rund

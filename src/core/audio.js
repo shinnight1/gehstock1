@@ -4,6 +4,8 @@
    Es gibt keine Audiodateien, weil die Offline-Einzeldatei sonst gross
    wuerde und Dateien unter file:// ohnehin nicht nachgeladen werden
    koennen. Alles entsteht aus Oszillatoren und einem Rauschpuffer.
+   Einzige Ausnahme ist der Ton der Aufbau-Animation: er wird nur online
+   nachgeladen und laeuft ueber A.kontext() durch denselben Regler.
    ------------------------------------------------------------------ */
 
 (function (SG) {
@@ -163,6 +165,15 @@
 
     setVolume: function (v) {
       if (master) { try { master.gain.value = v; } catch (e) { /* egal */ } }
+    },
+
+    /* Fuer laengere Stuecke wie die Aufbau-Animation: derselbe, auf dem
+       iPad schon freigeschaltete Kontext und derselbe Lautstaerkeregler.
+       null, wenn der Ton aus ist. */
+    kontext: function () {
+      if (!on() || !ensure()) return null;
+      try { if (ctx.state === 'suspended') ctx.resume(); } catch (e) { /* egal */ }
+      return { ctx: ctx, ziel: master };
     },
   };
 

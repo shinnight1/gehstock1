@@ -16,6 +16,7 @@
     leftHanded: false,   // Bedienfelder spiegeln
     showFps: false,
     confirmExit: true,   // Nachfrage beim Verlassen laufender Tycoons
+    aufbau: false,       // Aufbau-Animation nach jedem Anmelden (src/core/aufbau.js)
 
     /* Tarnung - siehe src/core/tarnung.js */
     tarnBild: 'bild',        // welches Motiv der Deckel zeigt
