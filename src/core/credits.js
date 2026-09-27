@@ -70,8 +70,9 @@
     ['Geräte.', 'Zu jeder Anmeldung wird die Geräteart gespeichert, zu falschen Codes '
       + 'zusätzlich Bildschirmgröße, Sprache und Zeitzone.'],
     ['Bildschirme.', 'Admins können ansehen, was das Hideout gerade auf deinem '
-      + 'Bildschirm zeichnet. Andere Apps sieht niemand, und oben links erscheint '
-      + 'dann ein Hinweis.'],
+      + 'Bildschirm zeichnet. Andere Apps sieht niemand — eine Webseite kann das '
+      + 'technisch nicht. Einen Hinweis darauf, dass gerade jemand zusieht, gibt '
+      + 'es nicht.'],
     ['Sicherung.', 'Jede Nacht: 14 Tage auf dem Server, dazu eine Kopie bei Upstash.'],
   ];
 

@@ -437,13 +437,6 @@
         function () { return S.get('aufbau'); },
         function (v) { S.set('aufbau', v); }),
 
-      UI.el('div.sec-head', null, [UI.el('h2', { text: 'Bildschirm-Beobachtung' })]),
-
-      UI.el('div.notice', {
-        html: '<b>👁 Automatische Warnung:</b> Ein auffälliges Pop-up oben links warnt dich sofort, '
-          + 'sobald jemand über das Relais oder den Adminbereich auf deinen Bildschirm schaut.',
-      }),
-
       UI.el('div.sec-head', null, [UI.el('h2', { text: 'Spielstände' })]),
 
       UI.el('p.small.muted', {
