@@ -495,18 +495,32 @@
     return true;
   };
 
-  /* Der Code des Aufsichtsrats steht im Admin-Menue geschwaerzt. Das
-     ist keine Sicherheit - wer den Quelltext liest, kommt an alles
-     heran (siehe ganz oben). Es haelt nur den Code aus den Listen
-     heraus, in die jeder Admin taeglich sieht.
+  /* Die Codes der Leitung stehen im Admin-Menue geschwaerzt - so
+     verlangt es § 9 Absatz 2 des Vertrages GS-CEO-01 (nachzulesen im
+     Reiter Sitzung).
+
+     Wer wessen Code sieht:
+
+       den eigenen      immer
+       Aufsichtsrat     nur er selbst, auch der Owner nicht
+       Owner            er selbst und der Aufsichtsrat
+       alle anderen     jeder Admin, wie bisher
+
+     Das ist keine Sicherheit - wer den Quelltext liest, kommt an
+     alles heran (siehe ganz oben). Es haelt die Codes nur aus den
+     Listen heraus, in die jeder Admin taeglich sieht.
 
      UEberall dort, wo ein FREMDER Code angezeigt wird, steht deshalb
      A.codeAnzeige statt A.schoen. */
+
+  var VERDECKT = '••••';
+
   A.codeAnzeige = function (code) {
     var k = A.normieren(code);
-    if (!A.istAufsicht(k)) return A.schoen(k);
     if (A.aktuell && A.aktuell.code === k) return A.schoen(k);
-    return '••••';
+    if (A.istAufsicht(k)) return VERDECKT;
+    if (A.istOwner(k)) return A.binAufsicht() ? A.schoen(k) : VERDECKT;
+    return A.schoen(k);
   };
 
   /* ------------------------------------------------------------------

@@ -15,7 +15,7 @@
   C.team = [
     {
       name: 'Lucas',
-      rolle: 'Head Developer & Aufsichtsrat',
+      rolle: 'Vorsitzender des Aufsichtsrats · Head Developer',
       text: 'Konzept, Aufbau und der allergrößte Teil des Codes — vom Kern über '
         + 'die Spiele bis zu beiden großen Tycoons.',
     },

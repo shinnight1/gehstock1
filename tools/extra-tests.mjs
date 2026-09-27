@@ -794,6 +794,33 @@ export function extraTests(SG, U, test) {
     if (A.aufsicht() !== AUFSICHT) throw new Error('Aufsichtsrat hat gewechselt');
   });
 
+  test('Owner: sein Code ist fuer Admins verdeckt, nicht fuer die Leitung', () => {
+    /* § 9 Absatz 2 des Vertrages: die Codes der Leitung sind fuer
+       Admins nicht einsehbar. */
+    A.anmelden(AUFSICHT, 'Aufsicht');
+    A.ownerSetzen(OWNER);
+    if (A.codeAnzeige(OWNER) !== A.schoen(OWNER)) {
+      throw new Error('Der Aufsichtsrat sieht den Owner-Code nicht');
+    }
+    A.anmelden(OWNER, 'Owner');
+    if (A.codeAnzeige(OWNER) !== A.schoen(OWNER)) {
+      throw new Error('Der Owner sieht seinen eigenen Code nicht');
+    }
+    A.anmelden(ADMIN2, 'Zweiter');
+    if (A.codeAnzeige(OWNER).indexOf(A.schoen(OWNER)) >= 0) {
+      throw new Error('Ein Admin sieht den Owner-Code');
+    }
+    if (A.codeAnzeige(AUFSICHT).indexOf(A.schoen(AUFSICHT)) >= 0) {
+      throw new Error('Ein Admin sieht den Code des Aufsichtsrats');
+    }
+    if (A.codeAnzeige(ADMIN2) !== A.schoen(ADMIN2)) {
+      throw new Error('Der eigene Code eines Admins wurde verdeckt');
+    }
+    if (A.codeAnzeige(SPIELER) !== A.schoen(SPIELER)) {
+      throw new Error('Ein Spielercode wurde verdeckt');
+    }
+  });
+
   test('Aufsichtsrat: ein freier Owner-Stuhl gehoert ihm allein', () => {
     A.anmelden(AUFSICHT, 'Aufsicht');
     A.ownerAbsetzen();
