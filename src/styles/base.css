@@ -3,18 +3,24 @@
    ------------------------------------------------------------------ */
 
 :root {
-  --bg:        #0d1017;
-  --bg-2:      #121722;
-  --panel:     #191f2e;
-  --panel-2:   #212a3d;
-  --panel-3:   #2a344b;
-  --line:      #2f3a55;
-  --line-soft: #232c40;
+  --bg:        #0b0c0e;
+  --bg-2:      #111214;
+  --panel:     #16171a;
+  --panel-2:   #1c1d21;
+  --panel-3:   #25262b;
+  --line:      #2b2c31;
+  --line-soft: #202125;
 
-  --text:      #e9edf6;
-  --text-2:    #b9c3da;
-  --muted:     #8794b1;
-  --dim:       #5f6a85;
+  /* Titan: Lichtkanten statt Leuchten - eine schmale helle Kante oben,
+     wie am polierten Rahmen, statt Schatten und Verlaeufen. */
+  --edge:      rgba(255, 255, 255, .07);
+  --edge-hi:   rgba(255, 255, 255, .12);
+  --edge-line: #3a3c42;
+
+  --text:      #eef0f4;
+  --text-2:    #c4c7ce;
+  --muted:     #93969e;
+  --dim:       #63666d;
 
   --gold:      #f0b429;
   --gold-2:    #ffd166;
@@ -238,18 +244,20 @@ html.js #sg-boot .sg-help { animation: none; }
   font-weight: 600;
   font-size: 15px;
   border: 1px solid var(--line);
+  box-shadow: inset 0 1px 0 var(--edge);
   transition: transform .08s ease, background .15s ease, border-color .15s ease;
   white-space: nowrap;
 }
 .btn:active { transform: scale(.965); background: var(--panel-3); }
 .btn.primary {
-  background: linear-gradient(180deg, var(--gold-2), var(--gold));
+  background: var(--gold);
   color: #241a04; border-color: #c8901c;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35);
 }
-.btn.primary:active { background: var(--gold); }
+.btn.primary:active { background: #dca21f; }
 .btn.good { background: var(--green-dim); border-color: #2c8a55; color: #d8ffe9; }
 .btn.bad  { background: var(--red-dim);  border-color: #9a3140; color: #ffdde1; }
-.btn.ghost { background: transparent; border-color: var(--line); color: var(--text-2); }
+.btn.ghost { background: transparent; border-color: var(--line); color: var(--text-2); box-shadow: none; }
 .btn.ghost:active { background: var(--panel); }
 .btn.sm { min-height: 36px; padding: 0 12px; font-size: 13.5px; border-radius: var(--r-sm); }
 .btn.wide { width: 100%; }
@@ -262,6 +270,7 @@ html.js #sg-boot .sg-help { animation: none; }
   display: inline-flex; align-items: center; gap: 6px;
   height: 32px; padding: 0 12px; border-radius: 16px;
   background: var(--panel); border: 1px solid var(--line-soft);
+  box-shadow: inset 0 1px 0 var(--edge);
   font-size: 13px; color: var(--text-2); font-weight: 550;
   white-space: nowrap;
 }

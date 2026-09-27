@@ -106,6 +106,8 @@
         SG.verhoer.alarmWachen();
         SG.ansage.pruefen();
         SG.router.init(app);
+        /* Einmal je Person: was der Umzug auf den eigenen Server bringt */
+        SG.umzug.vielleicht();
         console.log('%c' + SG.name, 'color:#f0b429;font-weight:700',
           '· angemeldet als ' + (SG.auth.aktuell.name || SG.auth.aktuell.code));
       });

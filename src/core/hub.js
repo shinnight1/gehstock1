@@ -25,7 +25,7 @@
     cv.height = Math.round(h * dpr);
     var c = cv.getContext('2d');
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
-    c.fillStyle = '#0b0e15';
+    c.fillStyle = '#0e0f11';
     c.fillRect(0, 0, w, h);
     if (def.preview) {
       c.save();
@@ -66,7 +66,9 @@
     else if (kreis) badges.appendChild(UI.el('span.badge.kreis', { text: '🔑 KREIS' }));
     if (def.online || def.onlineOnly) badges.appendChild(UI.el('span.badge.online', { text: 'ONLINE' }));
     if (def.category === 'tycoon') badges.appendChild(UI.el('span.badge.tycoon', { text: 'TYCOON' }));
-    if (def.external) badges.appendChild(UI.el('span.badge.online', { text: 'EIGENE SEITE' }));
+    /* Kacheln mit eigenem Bild tragen ihren Schriftzug selbst - ein
+       Abzeichen darueber wuerde ihn verdecken. */
+    if (def.external && !def.bildKachel) badges.appendChild(UI.el('span.badge.online', { text: 'EIGENE SEITE' }));
 
     var el = UI.el('button.tile'
       + (sperre ? '.zu' : '')
@@ -343,10 +345,13 @@
         var favIds = SG.scores.favorites();
         var recent = SG.scores.recent().filter(function (id) { return favIds.indexOf(id) < 0; });
 
-        /* GehstockMon traegt die Seite und steht ganz oben in einer
-           eigenen Sektion - darum taucht es in Favoriten und "Zuletzt
-           gespielt" nicht noch einmal auf. */
-        var gm = section('GehstockMon', SG.byCategory('gehstockmon'));
+        /* GehstockMon und die Arena tragen die Seite und stehen ganz oben
+           in einer eigenen Sektion, GehstockMon zuerst - darum tauchen sie
+           in Favoriten und "Zuletzt gespielt" nicht noch einmal auf. */
+        var oben = SG.byCategory('gehstockmon').slice().sort(function (a, b) {
+          return (a.id === 'gehstockmon' ? 0 : 1) - (b.id === 'gehstockmon' ? 0 : 1);
+        });
+        var gm = section(SG.catName('gehstockmon'), oben);
         if (gm) gridHost.appendChild(gm);
 
         var ohneGm = function (id) {
@@ -469,7 +474,18 @@
       }),
     ]);
 
-    UI.modal({ title: 'Einstellungen', body: body, wide: true });
+    /* Das Umzugs-Intro laesst sich jederzeit noch einmal ansehen. */
+    var fenster = null;
+    if (!SG.offline && SG.umzug) {
+      body.appendChild(UI.el('div.row.wrap', { style: { gap: '8px', marginTop: '10px' } }, [
+        UI.btn('Umzugs-Intro ansehen', function () {
+          if (fenster) fenster.close();
+          SG.umzug.zeigen();
+        }, 'sm ghost'),
+      ]));
+    }
+
+    fenster = UI.modal({ title: 'Einstellungen', body: body, wide: true });
   };
 
   function exportCode() {

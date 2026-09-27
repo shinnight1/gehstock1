@@ -37,6 +37,7 @@ const CSS_ORDER = [
   'styles/gehstockmon-abenteuer.css',
   'styles/gehstockmon-dungeons.css',
   'styles/gehstockmon-alltag.css',
+  'styles/umzug.css',
 ];
 
 const CORE_ORDER = [
@@ -80,6 +81,7 @@ const CORE_ORDER = [
   'core/kreis.js',
   'core/wache.js',
   'core/ansage.js',
+  'core/umzug.js',
   'core/router.js',
   'core/invariants.js',
   'core/selftest.js',
@@ -145,8 +147,10 @@ function collectJs() {
 
    GehstockMon-Bilder (gm-*) kommen nicht in die Offline-Datei: Das Spiel
    laeuft offline nicht, und SG.list() blendet es dort ganz aus
-   (src/core/registry.js). Eingebettet waren sie 6,8 MB totes Gewicht. */
-const NUR_ONLINE = /^gm-/;
+   (src/core/registry.js). Eingebettet waren sie 6,8 MB totes Gewicht.
+   Dasselbe gilt fuer Seitenbilder (ui-*), die nur online gebraucht werden:
+   das Arena-Kachelbild und das Bild im Umzugs-Intro. */
+const NUR_ONLINE = /^(gm|ui)-/;
 const BILD_TYP = {
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
   '.webp': 'image/webp', '.gif': 'image/gif',
