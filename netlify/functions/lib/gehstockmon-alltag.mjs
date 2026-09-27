@@ -56,8 +56,10 @@ export function morgenbericht(world, p, id, seit, now, extra = {}) {
   for (const r of raub) zeilen.push({ art: 'schlecht', text: '🥚 ' + (world.players[r.attackerId]?.name || 'Jemand') + ' hat dir ein Ei gestohlen.' });
   if (extra.tagesgold) zeilen.push({ art: 'gut', text: '💰 +' + extra.tagesgold + ' Gold Tagesgeld für deine Gebiete.' });
   if (extra.wochenende) zeilen.push({ art: 'gut', text: '🥚 ' + extra.wochenende + ' Wochenend-Eier sind in deiner Tasche.' });
-  const aussen = world.territories.filter((t) => t.ownerId === id).reduce((s, t) => s + (t.eggStock || 0), 0);
-  if (aussen) zeilen.push({ art: 'info', text: '🏕️ ' + aussen + (aussen === 1 ? ' Ei wartet' : ' Eier warten') + ' auf deinen Außenposten.' });
+  const eigene = world.territories.filter((t) => t.ownerId === id), aussen = eigene.reduce((s, t) => s + (t.eggStock || 0), 0);
+  const roh = eigene.reduce((s, t) => s + (t.rohstoffVorrat || 0), 0);
+  if (aussen || roh) zeilen.push({ art: 'info', text: '🏕️ ' + [aussen ? aussen + (aussen === 1 ? ' Ei' : ' Eier') : '', roh ? roh + ' Rohstoffe' : ''].filter(Boolean).join(' und ')
+    + ((aussen + roh) === 1 ? ' wartet' : ' warten') + ' auf deinen Außenposten.' });
   const zurueck = (p.streifzuege || []).filter((z) => z.fertigAt <= now).length;
   if (zurueck) zeilen.push({ art: 'gut', text: '🎒 ' + zurueck + (zurueck === 1 ? ' Streifzug ist' : ' Streifzüge sind') + ' zurück - die Beute wartet im Abenteuer-Fenster.' });
   /* Kurierdienst: ein Paket, das noch unterwegs ist, oder ein voller Stapel. */
@@ -75,6 +77,8 @@ export function morgenbericht(world, p, id, seit, now, extra = {}) {
         + (beste ? ' · das meiste aus ' + (E.BILANZ_REIN[beste[0]] || beste[0]) : '') + '. Tippe oben auf dein Gold für die ganze Bilanz.' });
     }
   }
+  if (X.schatzLesbar(p, now)) zeilen.push({ art: 'gut', text: '🗺️ Deine Schatzkarte ist vollständig - lies sie im Abenteuer-Fenster.' });
+  else if (p.schatz && p.schatz.karte) zeilen.push({ art: 'info', text: '🗺️ Dein Schatz bei ' + D.FELDER[p.schatz.karte.gebiet - 1].name + ' wartet noch.' });
   const fertig = p.eggs.filter((e) => e.readyAt !== null && e.readyAt <= now).length;
   if (fertig) zeilen.push({ art: 'gut', text: '🐣 ' + fertig + (fertig === 1 ? ' Ei ist' : ' Eier sind') + ' fertig ausgebrütet.' });
   if (!world.territories.some((t) => t.ownerId === id)) {
@@ -104,8 +108,10 @@ export function alltagAction({ world, p, id, body, now }) {
   let wartet = false;
   if (p.eggs.length < E.BAG_LIMIT) p.eggs.push(ei); else { p.sonderEier = (p.sonderEier || []).concat(ei); wartet = true; }
   if (serie >= 5 && serie % 5 === 0) tickern(world, '🔥 ' + p.name + ' hält die Serie seit ' + serie + ' Schultagen!', 'serie', now, id);
-  extra.truhe = { gold: lohn.gold, serie, eiMindestens: lohn.eiMindestens, wartet };
+  const fetzen = X.schatzFetzen(p, 'truhe');
+  extra.truhe = { gold: lohn.gold, serie, eiMindestens: lohn.eiMindestens, wartet, fetzen };
   const eiText = lohn.eiMindestens ? 'ein Ei, garantiert ' + D.SELTENHEITEN[lohn.eiMindestens].name + ' oder besser' : 'ein Ei';
-  extra.message = 'Tagestruhe: +' + lohn.gold + ' Gold und ' + eiText + (wartet ? ' (wartet auf Platz in der Tasche)' : '') + '. Serie: ' + serie + (serie === 1 ? ' Tag.' : ' Tage.');
+  extra.message = 'Tagestruhe: +' + lohn.gold + ' Gold und ' + eiText + (wartet ? ' (wartet auf Platz in der Tasche)' : '') + '. Serie: ' + serie + (serie === 1 ? ' Tag.' : ' Tage.')
+    + (fetzen ? ' 🗺️ Dazu ein Kartenfetzen!' : '');
   return extra;
 }

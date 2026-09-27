@@ -6,7 +6,7 @@
   R.mountHandel = function (c) {
     var el = c.el, button = c.button, drawer = c.drawer, handel = null, karte = [], pin = null, effekte = {};
     /* Wetter und Erlass der Woche machen den Kurierlohn groesser oder kleiner. */
-    function kurierFaktor() { return effekte.kurier || 1; }
+    function kurierFaktor() { return (effekte.kurier || 1) * kranFaktor(); }
     function state() { return c.state(); }
     function titel(text, bild) { var h = el('h3', text), sym = R.symbol && R.symbol(bild, 'gm-titel-symbol'); if (sym) h.insertBefore(sym, h.firstChild); return h; }
     function zahl(n) { return Math.round(n || 0).toLocaleString('de-DE'); }
@@ -36,6 +36,8 @@
       var liste = (handel && handel.bauten) || [];
       return liste.find(function (b) { return !b.fertig; }) || liste[liste.length - 1] || null;
     }
+    /* Der Hafenkran legt auf jeden Kurierlohn ein Fuenftel drauf. */
+    function kranFaktor() { return handel && handel.hafenkran ? X.HAFENKRAN_KURIER : 1; }
 
     /* ---------------- Kurierkontor ---------------- */
     function kurier() {
@@ -79,34 +81,61 @@
       drawer.appendChild(el('p', 'Abgeliefert: ' + (s.kurierGesamt || 0) + ' Pakete. Ab ' + X.TITEL.find(function (t) { return t.id === 'eilbote'; }).ziel + ' trägst du den Titel Eilbote.', 'gm-plan-hinweis'));
     }
 
-    /* ---------------- Markthalle ---------------- */
-    function markthalle() {
-      var bau = aktuellerBau(); if (!bau || !c.open(bau.name, 'markthalle')) return;
+    /* ---------------- Gemeinschaftsbauten ---------------- */
+    function spur(anteil, farbe) {
+      var s = el('span', undefined, 'gm-projekt-spur gm-bau-spur'), f = el('i');
+      f.style.width = Math.round(100 * Math.max(0, Math.min(1, anteil))) + '%'; f.style.background = farbe; s.appendChild(f); return s;
+    }
+    function tafelListe(eintraege, einheit) {
+      var liste = el('ol', undefined, 'gm-tafel');
+      (eintraege || []).forEach(function (v) { var z = el('li', v.name + ' · ' + zahl(v.wert) + ' ' + einheit); if (v.selbst) z.className = 'gm-selbst'; liste.appendChild(z); });
+      if (!(eintraege || []).length) liste.appendChild(el('li', 'Noch leer - der erste Name steht ganz oben.'));
+      return liste;
+    }
+    function bauTeil(bau) {
+      var s = state(), karte = el('article', undefined, 'gm-quest-card gm-bau-karte' + (bau.fertig ? ' fertig' : ''));
+      karte.appendChild(titel(bau.name + (bau.fertig ? ' · steht' : ''), bau.id));
+      karte.appendChild(el('p', bau.was));
       if (bau.fertig) {
-        drawer.appendChild(el('p', 'Die ' + bau.name + ' steht. ' + bau.was + ' Du findest den Handel beim Händler in ' + X.STADT.name + '.'));
-        if (!handel.abgabe) drawer.appendChild(el('p', 'Solange die Insel an nichts Neuem baut, ruht die Gebietsabgabe.', 'gm-plan-hinweis'));
-      } else {
-        drawer.appendChild(el('p', 'Nach dem Leuchtturm baut die Insel eine ' + bau.name + '. ' + bau.was));
-        drawer.appendChild(el('p', 'Jeder kann Gold beisteuern und steht dafür auf der Tafel.'));
-        drawer.appendChild(titel('Die Gebietsabgabe', 'abgabe'));
-        drawer.appendChild(el('p', 'Wer Gebiete hält, zahlt ' + Math.round(E.ABGABE * 100) + ' % seines Gebietsgolds hinein, solange gebaut wird - Stundenertrag und Tagesgeld. Steht die Halle, ruht die Abgabe.'));
-        drawer.appendChild(el('p', zahl(bau.gold) + ' von ' + zahl(bau.ziel) + ' Gold verbaut · davon ' + zahl(bau.abgabe) + ' aus der Gebietsabgabe'
-          + (bau.eigen ? ' · deine Spenden: ' + zahl(bau.eigen) : '')));
-        var spur = el('span', undefined, 'gm-projekt-spur gm-bau-spur'), fuellung = el('i');
-        fuellung.style.width = Math.round(100 * bau.gold / bau.ziel) + '%'; fuellung.style.background = '#8fd18a';
-        spur.appendChild(fuellung); drawer.appendChild(spur);
-        var s = state(), reihe = el('div', undefined, 'gm-bau-knoepfe');
+        karte.appendChild(el('p', bau.id === 'markthalle' ? 'Den Handel findest du beim Händler in ' + X.STADT.name + '.' : 'Fertig seit dem Bau - die Wirkung gilt für alle.', 'gm-plan-hinweis'));
+        drawer.appendChild(karte); return;
+      }
+      karte.appendChild(el('p', zahl(bau.gold) + ' von ' + zahl(bau.ziel) + ' Gold · davon ' + zahl(bau.abgabe) + ' aus der Gebietsabgabe' + (bau.eigen ? ' · von dir: ' + zahl(bau.eigen) : '')));
+      karte.appendChild(spur(bau.gold / bau.ziel, '#f0b429'));
+      if (bau.gold < bau.ziel) {
+        var reihe = el('div', undefined, 'gm-bau-knoepfe');
         [50, 250, 1000].forEach(function (betrag) {
           var b = button(betrag + ' Gold geben', function () { run('bau_spenden', { bauId: bau.id, betrag: betrag }, 'markthalle'); }, 'gm-button');
           b.disabled = c.busy() || s.gold < betrag; reihe.appendChild(b);
         });
-        drawer.appendChild(reihe);
+        karte.appendChild(reihe);
       }
-      drawer.appendChild(el('h3', 'Die Tafel am Eingang'));
-      var liste = el('ol', undefined, 'gm-tafel');
-      (bau.tafel || []).forEach(function (v) { var z = el('li', v.name + ' · ' + zahl(v.wert) + ' Gold'); if (v.selbst) z.className = 'gm-selbst'; liste.appendChild(z); });
-      if (!(bau.tafel || []).length) liste.appendChild(el('li', 'Noch leer - der erste Name steht ganz oben.'));
-      drawer.appendChild(liste);
+      /* Rohstoffe: je einer Zeile Stand und ein Knopf fuer zehn Stueck (oder den Rest). */
+      Object.keys(bau.rohstoffe || {}).forEach(function (rid) {
+        var r = E.rohstoff(rid), soll = bau.rohstoffe[rid], ist = (bau.geliefert && bau.geliefert[rid]) || 0, habe = (s.lager && s.lager[rid]) || 0;
+        var zeile = el('div', undefined, 'gm-bau-roh');
+        var sym = R.symbol && R.symbol(rid, 'gm-titel-symbol'); if (sym) zeile.appendChild(sym);
+        zeile.appendChild(el('span', r.name + ': ' + ist + '/' + soll));
+        zeile.appendChild(spur(ist / soll, '#8fd18a'));
+        var menge = Math.min(10, soll - ist, habe);
+        if (ist < soll) {
+          var b = button(menge > 0 ? menge + ' geben' : 'Keins im Lager', function () { run('bau_spenden', { bauId: bau.id, rohstoff: rid, menge: menge }, 'markthalle'); }, 'gm-button');
+          b.disabled = c.busy() || menge < 1; zeile.appendChild(b);
+        }
+        karte.appendChild(zeile);
+      });
+      karte.appendChild(el('h4', 'Die Tafel', 'gm-bilanz-kopf'));
+      karte.appendChild(tafelListe(bau.tafel, 'Gold'));
+      if (bau.rohstoffe && (bau.tafelRoh || []).length) karte.appendChild(tafelListe(bau.tafelRoh, 'Rohstoffe'));
+      drawer.appendChild(karte);
+    }
+    function markthalle() {
+      var liste = (handel && handel.bauten) || []; if (!liste.length || !c.open('Gemeinschaftsbauten', 'markthalle')) return;
+      drawer.appendChild(el('p', 'Die Insel baut gemeinsam. Jeder kann Gold und Rohstoffe beisteuern und steht dann auf der Tafel. Dein Lager: ' + R.lagerText(state()) + '.', 'gm-beginner-tip'));
+      drawer.appendChild(titel('Die Gebietsabgabe', 'abgabe'));
+      drawer.appendChild(el('p', handel.abgabe ? 'Wer Gebiete hält, zahlt gerade ' + Math.round(handel.abgabe * 100) + ' % seines Gebietsgolds in den ersten Bau, der noch Gold braucht - Stundenertrag und Tagesgeld.'
+        : 'Kein Bau braucht gerade Gold - die Gebietsabgabe ruht.'));
+      liste.forEach(bauTeil);
     }
 
     /* ---------------- Wochenbilanz ---------------- */
@@ -150,7 +179,7 @@
       if (k) out.kurier = marke('Kurier', '📦 → ' + X.kurierOrtName(k.nach), '#f0b429', kurier, 'kurier');
       else if (brett.length) out.kurier = marke('Kurier', brett.length + (brett.length === 1 ? ' Auftrag' : ' Aufträge'), '#89cce5', kurier, 'kurier');
       var bau = aktuellerBau();
-      if (bau && !bau.fertig) out.bau = balken(bau.name, bau.gold, bau.ziel, '#8fd18a', markthalle, 'markthalle');
+      if (bau && !bau.fertig) out.bau = balken(bau.name, bau.gold, bau.ziel, '#8fd18a', markthalle, bau.id);
       return out;
     }
     /* Die Stecknadel auf der Karte: mit Paket am Ziel, sonst an der Abholung

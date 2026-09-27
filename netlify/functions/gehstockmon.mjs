@@ -217,7 +217,7 @@ function publicResult(world, id, now, extra = {}) {
          "kein eigener Plan", obwohl dort sehr wohl einer galt. */
       defense: A.defenders(t.id, t.ownerId ? t.defense : null).map((k) => ({ id: k.id, name: k.name, upgrade:k.upgrade||0,
         wesen: k.wesenId || null, plan: k.plan || null, ...(k.schimmernd ? { schimmernd: true } : {}) })),
-      eggStock: t.ownerId === id ? t.eggStock : 0, eggAt: t.ownerId === id ? t.eggAt : null })),
+      eggStock: t.ownerId === id ? t.eggStock : 0, eggAt: t.ownerId === id ? t.eggAt : null, rohstoffVorrat: t.ownerId === id ? (t.rohstoffVorrat || 0) : 0 })),
     reports: world.reports.filter((r) => r.attackerId === id || r.defenderId === id).slice(-20),
     alltag: alltagSicht(p, now), ticker: tickerSicht(world), ...extra };
 }
@@ -604,7 +604,16 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
           if (body.op === 'collect' || body.op === 'upgrade') {
             const t = target(world, body.territoryId);
             if (t.ownerId !== id) throw new GameError('Dieser Außenposten gehört dir nicht.', 403);
-            if (body.op === 'collect') extra.message = E.collect(p,t,t.id,timestamp) + ' Ei(er) in deiner Bruttasche.';
+            if (body.op === 'collect') {
+              /* Eier und Rohstoffe in einem Gang. Ist die Tasche voll, kommen
+                 die Rohstoffe trotzdem mit. */
+              const roh = E.rohstoffeAbholen(p, t, t.id, timestamp);
+              let eier = 0, eierFehler = null;
+              try { eier = E.collect(p, t, t.id, timestamp); } catch (err) { eierFehler = err.message; }
+              if (!eier && !roh.menge) throw new GameError(eierFehler && !/kein Ei/.test(eierFehler) ? eierFehler : 'Hier ist noch nichts bereit.');
+              extra.message = [eier ? eier + ' Ei(er) in deiner Bruttasche' : '', roh.menge ? roh.menge + ' ' + roh.name + ' im Lager' : ''].filter(Boolean).join(' und ') + '.'
+                + (eierFehler && roh.menge && !/kein Ei/.test(eierFehler) ? ' ' + eierFehler : '');
+            }
             else { E.upgrade(p,t,timestamp); p.progress.upgrades++;t.version++; extra.message = E.LEVELS[t.level].name + ' fertig: mehr Einkommen und stärkere Verteidigung.'; }
           }
           if (body.op === 'incubate') { E.incubate(p,body.eggId,timestamp,X.brutplaetze(world.leuchtturm,p)); extra.message = 'Die Brutzeit hat begonnen: 1 Stunde.'; }

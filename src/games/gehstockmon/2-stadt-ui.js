@@ -158,7 +158,7 @@
       drawer.appendChild(titel('Runenhandel','runenhandel'));
       if(!r){
         var bau=((h&&h.bauten)||[]).find(function(b){return b.id==='markthalle';});
-        drawer.appendChild(el('p','Runen handelt der Händler erst, wenn die Markthalle steht'+(bau?' ('+zahl(bau.gold)+' von '+zahl(bau.ziel)+' Gold)':'')+'. Jeder kann dafür spenden, und wer Gebiete hält, zahlt ein Zehntel seines Gebietsgolds hinein.'));
+        drawer.appendChild(el('p','Runen und Rohstoffe handelt der Händler erst, wenn die Markthalle steht'+(bau?' ('+zahl(bau.gold)+' von '+zahl(bau.ziel)+' Gold)':'')+'. Jeder kann dafür spenden, und wer Gebiete hält, zahlt ein Zehntel seines Gebietsgolds hinein.'));
         return;
       }
       drawer.appendChild(el('p','Feste Preise; der Händler kauft zu '+Math.round(X.RUNEN_ANKAUF*100)+' % zurück. Diese Woche noch offen: kaufen für '+zahl(r.kaufFrei)+' Gold, verkaufen für '+zahl(r.verkaufFrei)+' Gold. Am Montag geht es von vorn los.'));
@@ -171,6 +171,25 @@
         k.disabled=c.busy()||s.gold<preis||preis>r.kaufFrei;zeile.appendChild(k);
         var v=button('Verkaufen · '+ankauf+' G',function(){run('runen_verkaufen',{rang:i});},'gm-button');
         v.disabled=c.busy()||n<1||ankauf>r.verkaufFrei;zeile.appendChild(v);
+        liste.appendChild(zeile);
+      });
+      drawer.appendChild(liste);
+      rohstoffhandelTeil(r);
+    }
+    /* Rohstoffe beim Haendler: gleiche Wochengrenzen wie die Runen, er
+       verkauft zum vollen Preis und nimmt zur Haelfte zurueck. */
+    function rohstoffhandelTeil(r){
+      var s=state(),lager=s.lager||{};
+      drawer.appendChild(titel('Rohstoffe','kristall'));
+      drawer.appendChild(el('p','Fünf Stück auf einmal. Dein Lager: '+R.lagerText(s)+'.'));
+      var liste=el('div',undefined,'gm-schmiede');
+      R.wirtschaft.ROHSTOFFE.forEach(function(ro){
+        var zeile=el('div',undefined,'gm-schmiede-zeile'),preis=X.ROHSTOFF_PREISE[ro.id]*5,ankauf=X.rohstoffAnkauf(ro.id)*5,n=lager[ro.id]||0;
+        zeile.appendChild(el('strong',ro.name+': '+n));
+        var k=button('5 kaufen · '+preis+' G',function(){run('rohstoff_kaufen',{rohstoff:ro.id,menge:5});},'gm-button');
+        k.disabled=c.busy()||s.gold<preis||preis>r.kaufFrei;zeile.appendChild(k);
+        var v=button('5 verkaufen · '+ankauf+' G',function(){run('rohstoff_verkaufen',{rohstoff:ro.id,menge:5});},'gm-button');
+        v.disabled=c.busy()||n<5||ankauf>r.verkaufFrei;zeile.appendChild(v);
         liste.appendChild(zeile);
       });
       drawer.appendChild(liste);

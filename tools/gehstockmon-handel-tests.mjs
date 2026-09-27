@@ -165,8 +165,9 @@ await test('A tenth of all territory gold goes into the market hall while it is 
      zu 20 Gold, davon 10 in die Halle, dazu das Tagesgeld: 150, davon 15. */
   w.uhr.t = at('2026-09-22T08:00:00+02:00'); await w.call(cb, 'world');
   assert.equal(w.p().dailyGoldPending, 135); assert.equal(w.db.data.bauten.markthalle.abgabe, 2 + 10 + 15);
-  /* Steht die Halle, ruht die Abgabe. */
+  /* Steht die Halle, geht die Abgabe in den Hafenkran; braucht kein Bau mehr Gold, ruht sie. */
   w.db.data.bauten.markthalle.gold = X.bau('markthalle').ziel; w.db.data.bauten.markthalle.fertigAm = w.uhr.t;
+  w.db.data.bauten.hafenkran.gold = X.bau('hafenkran').ziel;
   const davor = w.p().gold; w.uhr.t += STUNDE; r = await w.call(cb, 'world');
   assert.equal(w.p().gold - davor, 20); assert.equal(r.handel.abgabe, 0);
 });

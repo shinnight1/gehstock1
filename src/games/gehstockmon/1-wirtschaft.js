@@ -4,12 +4,45 @@
   E.HOUR = 3600000; E.EGG_TIME = 2 * E.HOUR; E.HATCH_TIME = E.HOUR;
   E.DAILY_GOLD = 150;
   E.STOCK_LIMIT = 3; E.BAG_LIMIT = 12; E.INCUBATORS = 3;
+  /* Der Ausbau braucht seit der Warenwirtschaft (27.09.2026) auch Rohstoffe:
+     Holz fuer den Wachtposten, Erz und Kristall fuer die Festung. */
   E.LEVELS = [null,
-    { name: 'Lager', income: 20, bonus: 0, cost: 120 },
-    { name: 'Wachtposten', income: 35, bonus: 0.12, cost: 300 },
+    { name: 'Lager', income: 20, bonus: 0, cost: 120, rohstoffe: { holz: 6 } },
+    { name: 'Wachtposten', income: 35, bonus: 0.12, cost: 300, rohstoffe: { erz: 6, kristall: 4 } },
     { name: 'Festung', income: 55, bonus: 0.25, cost: null }
   ];
   function number(v, fallback) { return Number.isFinite(v) && v >= 0 ? v : fallback; }
+  /* ------------------------------------------------------------------
+     Warenwirtschaft (27.09.2026): drei Rohstoffe, jeder aus drei Biomen,
+     damit ihn nie ein einzelner Gebietsbesitzer allein in der Hand hat
+     (Codex: sonst wird ein Pflichtrohstoff zum Vetorecht). Jeder
+     Aussenposten foerdert den seines Bioms - eine Einheit je geoeffnete
+     Stunde, hoechstens vier liegen bereit, abgeholt wird mit den Eiern.
+     ------------------------------------------------------------------ */
+  E.ROHSTOFFE = [
+    { id: 'holz', name: 'Holz', gebiete: [1, 4, 6] },
+    { id: 'erz', name: 'Erz', gebiete: [3, 5, 8] },
+    { id: 'kristall', name: 'Kristall', gebiete: [2, 7, 9] }
+  ];
+  E.ROHSTOFF_ZEIT = E.HOUR; E.ROHSTOFF_VORRAT = 4; E.LAGER_MAX = 999;
+  E.rohstoff = function (id) { return E.ROHSTOFFE.find(function (r) { return r.id === id; }) || null; };
+  E.rohstoffVon = function (gebietId) { return E.ROHSTOFFE.find(function (r) { return r.gebiete.indexOf(gebietId) >= 0; }) || E.ROHSTOFFE[0]; };
+  E.lagerSauber = function (v) {
+    var out = {};
+    E.ROHSTOFFE.forEach(function (r) { var n = Math.floor(Number(v && v[r.id])); out[r.id] = Number.isFinite(n) && n > 0 ? Math.min(E.LAGER_MAX, n) : 0; });
+    return out;
+  };
+  E.einlagern = function (st, id, menge) {
+    st.lager = st.lager || E.lagerSauber(null);
+    var vorher = st.lager[id] || 0; st.lager[id] = Math.max(0, Math.min(E.LAGER_MAX, vorher + Math.floor(menge)));
+    return st.lager[id] - vorher;
+  };
+  /* Fehlt etwas fuer diese Kosten? Zurueck kommt ein Satz, sonst null. */
+  E.rohstoffeFehlen = function (st, kosten) {
+    var fehlt = [];
+    Object.keys(kosten || {}).forEach(function (id) { var n = kosten[id] - ((st.lager && st.lager[id]) || 0); if (n > 0) fehlt.push(n + ' ' + E.rohstoff(id).name); });
+    return fehlt.length ? 'Dir fehlen noch ' + fehlt.join(' und ') + '.' : null;
+  };
   /* ------------------------------------------------------------------
      Wochenbilanz (27.09.2026)
 
@@ -23,9 +56,9 @@
   E.BILANZ_REIN = { gebiete: 'Gebiete', tagesgeld: 'Tagesgeld', sold: 'Champion-Sold', eroberung: 'Eroberungen', arena: 'Große Arena',
     trainer: 'Wandertrainer', runen: 'Verlorene Runen', tagwerk: 'Tagwerk', truhe: 'Tagestruhe', streifzug: 'Streifzüge', kurier: 'Kurierdienst',
     quest: 'Quests', woche: 'Wochenaufgabe', zerhacker: 'Zerhacker', fehde: 'Fehde', duell: 'Live-Duelle', kopfgeld: 'Kopfgeld',
-    handel: 'Runenverkauf', geschenk: 'Geschenke' };
+    handel: 'Verkauf an den Händler', schatz: 'Schätze', geschenk: 'Geschenke' };
   E.BILANZ_RAUS = { abgabe: 'Gebietsabgabe', ausbau: 'Ausbau', ausruestung: 'Skins & Waffen', brutplatz: 'Brutplätze', eier: 'Eierhändler',
-    schmiede: 'Runenschmiede', perle: 'Schimmerperle', wesen: 'Wesen prägen', spende: 'Spenden', handel: 'Runenkauf' };
+    schmiede: 'Runenschmiede', perle: 'Schimmerperle', wesen: 'Wesen prägen', spende: 'Spenden', handel: 'Kauf beim Händler' };
   E.woche = function (now) { return Math.floor((now + 3 * 86400000) / (7 * 86400000)); };
   function bilanzSeite(v, namen) {
     var out = {};
@@ -75,6 +108,7 @@
       dailyAt: Math.max(captured, number(t.dailyAt, now)),
       incomeAt: Math.max(captured, number(t.incomeAt, captured)), eggAt: Math.max(captured, number(t.eggAt, captured)),
       eggStock: Math.min(E.STOCK_LIMIT, Math.floor(number(t.eggStock, 0))),
+      rohstoffAt: Math.max(captured, number(t.rohstoffAt, captured)), rohstoffVorrat: Math.min(E.ROHSTOFF_VORRAT, Math.floor(number(t.rohstoffVorrat, 0))),
       weekendAt: Math.max(captured, number(t.weekendAt, SG.gehstockmon.zeiten.REWARDS_START)) };
   };
   var previous = D.neuerStand;
@@ -89,6 +123,7 @@
     /* Gleich auf die laufende Woche gestellt: sonst legte erst die erste
        Buchung die Bilanz an, und eine blosse Abfrage muesste schreiben. */
     st.bilanz = E.bilanzSauber(old.bilanz); E.bilanz(st, now);
+    st.lager = E.lagerSauber(old.lager);
     st.clockAt = number(old.clockAt, now); st.eggSerial = Math.floor(number(old.eggSerial, 0));
     st.weekendEggs = {};
     D.FELDER.forEach(function (f) { var n = Math.floor(number(old.weekendEggs && old.weekendEggs[f.id], 0)); if (n) st.weekendEggs[f.id] = n; });
@@ -152,6 +187,11 @@
     }
     var produced = H.productionTime(post.eggAt), cycles = Math.max(0, Math.floor((H.productionTime(now) - produced) / E.EGG_TIME));
     if (cycles) { post.eggStock = Math.min(E.STOCK_LIMIT, post.eggStock + cycles); post.eggAt = H.productionAt(produced + cycles * E.EGG_TIME); }
+    /* Rohstoffe wie Eier: nur in geoeffneten Stunden, volles Lager laeuft ueber. */
+    if (Number.isFinite(post.rohstoffAt)) {
+      var rohStart = H.productionTime(post.rohstoffAt), rohZyklen = Math.max(0, Math.floor((H.productionTime(now) - rohStart) / E.ROHSTOFF_ZEIT));
+      if (rohZyklen) { post.rohstoffVorrat = Math.min(E.ROHSTOFF_VORRAT, (post.rohstoffVorrat || 0) + rohZyklen); post.rohstoffAt = H.productionAt(rohStart + rohZyklen * E.ROHSTOFF_ZEIT); }
+    }
     return kasse;
   };
   /* Zahlt das wartende Tagesgeld aus - Champion-Sold getrennt verbucht. */
@@ -179,6 +219,14 @@
   E.capture = function (st, id, now) {
     if (st.geschafft.indexOf(id) < 0) st.geschafft.push(id);
     st.outposts[id] = E.outpost(null, now); st.siege++; E.buchen(st, 40, 'eroberung', now);
+  };
+  /* Nimmt die Rohstoffe eines Aussenpostens mit - wirft nie, zurueck kommt,
+     was im Lager ankam. */
+  E.rohstoffeAbholen = function (st, post, id, now) {
+    E.settle(st, post, now);
+    var r = E.rohstoffVon(id), menge = E.einlagern(st, r.id, post.rohstoffVorrat || 0);
+    post.rohstoffVorrat = (post.rohstoffVorrat || 0) - menge;
+    return { id: r.id, name: r.name, menge: menge };
   };
   E.collect = function (st, post, id, now) {
     E.settle(st, post, now);
@@ -271,9 +319,12 @@
     return ergebnis;
   };
   E.upgrade = function (st, post, now) {
-    E.settle(st, post, now); var price = E.LEVELS[post.level].cost;
+    E.settle(st, post, now); var stufe = E.LEVELS[post.level], price = stufe.cost;
     if (!price) throw new Error('Deine Festung ist vollständig ausgebaut.');
     if (st.gold < price) throw new Error('Für den Ausbau brauchst du ' + price + ' Gold.');
+    var fehlt = E.rohstoffeFehlen(st, stufe.rohstoffe);
+    if (fehlt) throw new Error('Für den Ausbau brauchst du auch Rohstoffe. ' + fehlt);
+    Object.keys(stufe.rohstoffe || {}).forEach(function (rid) { st.lager[rid] -= stufe.rohstoffe[rid]; });
     E.buchen(st, -price, 'ausbau', now); post.level++; return post.level;
   };
 })(SG);

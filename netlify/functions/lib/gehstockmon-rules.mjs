@@ -327,12 +327,45 @@ const SG = { rules: {} };
   E.HOUR = 3600000; E.EGG_TIME = 2 * E.HOUR; E.HATCH_TIME = E.HOUR;
   E.DAILY_GOLD = 150;
   E.STOCK_LIMIT = 3; E.BAG_LIMIT = 12; E.INCUBATORS = 3;
+  /* Der Ausbau braucht seit der Warenwirtschaft (27.09.2026) auch Rohstoffe:
+     Holz fuer den Wachtposten, Erz und Kristall fuer die Festung. */
   E.LEVELS = [null,
-    { name: 'Lager', income: 20, bonus: 0, cost: 120 },
-    { name: 'Wachtposten', income: 35, bonus: 0.12, cost: 300 },
+    { name: 'Lager', income: 20, bonus: 0, cost: 120, rohstoffe: { holz: 6 } },
+    { name: 'Wachtposten', income: 35, bonus: 0.12, cost: 300, rohstoffe: { erz: 6, kristall: 4 } },
     { name: 'Festung', income: 55, bonus: 0.25, cost: null }
   ];
   function number(v, fallback) { return Number.isFinite(v) && v >= 0 ? v : fallback; }
+  /* ------------------------------------------------------------------
+     Warenwirtschaft (27.09.2026): drei Rohstoffe, jeder aus drei Biomen,
+     damit ihn nie ein einzelner Gebietsbesitzer allein in der Hand hat
+     (Codex: sonst wird ein Pflichtrohstoff zum Vetorecht). Jeder
+     Aussenposten foerdert den seines Bioms - eine Einheit je geoeffnete
+     Stunde, hoechstens vier liegen bereit, abgeholt wird mit den Eiern.
+     ------------------------------------------------------------------ */
+  E.ROHSTOFFE = [
+    { id: 'holz', name: 'Holz', gebiete: [1, 4, 6] },
+    { id: 'erz', name: 'Erz', gebiete: [3, 5, 8] },
+    { id: 'kristall', name: 'Kristall', gebiete: [2, 7, 9] }
+  ];
+  E.ROHSTOFF_ZEIT = E.HOUR; E.ROHSTOFF_VORRAT = 4; E.LAGER_MAX = 999;
+  E.rohstoff = function (id) { return E.ROHSTOFFE.find(function (r) { return r.id === id; }) || null; };
+  E.rohstoffVon = function (gebietId) { return E.ROHSTOFFE.find(function (r) { return r.gebiete.indexOf(gebietId) >= 0; }) || E.ROHSTOFFE[0]; };
+  E.lagerSauber = function (v) {
+    var out = {};
+    E.ROHSTOFFE.forEach(function (r) { var n = Math.floor(Number(v && v[r.id])); out[r.id] = Number.isFinite(n) && n > 0 ? Math.min(E.LAGER_MAX, n) : 0; });
+    return out;
+  };
+  E.einlagern = function (st, id, menge) {
+    st.lager = st.lager || E.lagerSauber(null);
+    var vorher = st.lager[id] || 0; st.lager[id] = Math.max(0, Math.min(E.LAGER_MAX, vorher + Math.floor(menge)));
+    return st.lager[id] - vorher;
+  };
+  /* Fehlt etwas fuer diese Kosten? Zurueck kommt ein Satz, sonst null. */
+  E.rohstoffeFehlen = function (st, kosten) {
+    var fehlt = [];
+    Object.keys(kosten || {}).forEach(function (id) { var n = kosten[id] - ((st.lager && st.lager[id]) || 0); if (n > 0) fehlt.push(n + ' ' + E.rohstoff(id).name); });
+    return fehlt.length ? 'Dir fehlen noch ' + fehlt.join(' und ') + '.' : null;
+  };
   /* ------------------------------------------------------------------
      Wochenbilanz (27.09.2026)
 
@@ -346,9 +379,9 @@ const SG = { rules: {} };
   E.BILANZ_REIN = { gebiete: 'Gebiete', tagesgeld: 'Tagesgeld', sold: 'Champion-Sold', eroberung: 'Eroberungen', arena: 'Große Arena',
     trainer: 'Wandertrainer', runen: 'Verlorene Runen', tagwerk: 'Tagwerk', truhe: 'Tagestruhe', streifzug: 'Streifzüge', kurier: 'Kurierdienst',
     quest: 'Quests', woche: 'Wochenaufgabe', zerhacker: 'Zerhacker', fehde: 'Fehde', duell: 'Live-Duelle', kopfgeld: 'Kopfgeld',
-    handel: 'Runenverkauf', geschenk: 'Geschenke' };
+    handel: 'Verkauf an den Händler', schatz: 'Schätze', geschenk: 'Geschenke' };
   E.BILANZ_RAUS = { abgabe: 'Gebietsabgabe', ausbau: 'Ausbau', ausruestung: 'Skins & Waffen', brutplatz: 'Brutplätze', eier: 'Eierhändler',
-    schmiede: 'Runenschmiede', perle: 'Schimmerperle', wesen: 'Wesen prägen', spende: 'Spenden', handel: 'Runenkauf' };
+    schmiede: 'Runenschmiede', perle: 'Schimmerperle', wesen: 'Wesen prägen', spende: 'Spenden', handel: 'Kauf beim Händler' };
   E.woche = function (now) { return Math.floor((now + 3 * 86400000) / (7 * 86400000)); };
   function bilanzSeite(v, namen) {
     var out = {};
@@ -398,6 +431,7 @@ const SG = { rules: {} };
       dailyAt: Math.max(captured, number(t.dailyAt, now)),
       incomeAt: Math.max(captured, number(t.incomeAt, captured)), eggAt: Math.max(captured, number(t.eggAt, captured)),
       eggStock: Math.min(E.STOCK_LIMIT, Math.floor(number(t.eggStock, 0))),
+      rohstoffAt: Math.max(captured, number(t.rohstoffAt, captured)), rohstoffVorrat: Math.min(E.ROHSTOFF_VORRAT, Math.floor(number(t.rohstoffVorrat, 0))),
       weekendAt: Math.max(captured, number(t.weekendAt, SG.gehstockmon.zeiten.REWARDS_START)) };
   };
   var previous = D.neuerStand;
@@ -412,6 +446,7 @@ const SG = { rules: {} };
     /* Gleich auf die laufende Woche gestellt: sonst legte erst die erste
        Buchung die Bilanz an, und eine blosse Abfrage muesste schreiben. */
     st.bilanz = E.bilanzSauber(old.bilanz); E.bilanz(st, now);
+    st.lager = E.lagerSauber(old.lager);
     st.clockAt = number(old.clockAt, now); st.eggSerial = Math.floor(number(old.eggSerial, 0));
     st.weekendEggs = {};
     D.FELDER.forEach(function (f) { var n = Math.floor(number(old.weekendEggs && old.weekendEggs[f.id], 0)); if (n) st.weekendEggs[f.id] = n; });
@@ -475,6 +510,11 @@ const SG = { rules: {} };
     }
     var produced = H.productionTime(post.eggAt), cycles = Math.max(0, Math.floor((H.productionTime(now) - produced) / E.EGG_TIME));
     if (cycles) { post.eggStock = Math.min(E.STOCK_LIMIT, post.eggStock + cycles); post.eggAt = H.productionAt(produced + cycles * E.EGG_TIME); }
+    /* Rohstoffe wie Eier: nur in geoeffneten Stunden, volles Lager laeuft ueber. */
+    if (Number.isFinite(post.rohstoffAt)) {
+      var rohStart = H.productionTime(post.rohstoffAt), rohZyklen = Math.max(0, Math.floor((H.productionTime(now) - rohStart) / E.ROHSTOFF_ZEIT));
+      if (rohZyklen) { post.rohstoffVorrat = Math.min(E.ROHSTOFF_VORRAT, (post.rohstoffVorrat || 0) + rohZyklen); post.rohstoffAt = H.productionAt(rohStart + rohZyklen * E.ROHSTOFF_ZEIT); }
+    }
     return kasse;
   };
   /* Zahlt das wartende Tagesgeld aus - Champion-Sold getrennt verbucht. */
@@ -502,6 +542,14 @@ const SG = { rules: {} };
   E.capture = function (st, id, now) {
     if (st.geschafft.indexOf(id) < 0) st.geschafft.push(id);
     st.outposts[id] = E.outpost(null, now); st.siege++; E.buchen(st, 40, 'eroberung', now);
+  };
+  /* Nimmt die Rohstoffe eines Aussenpostens mit - wirft nie, zurueck kommt,
+     was im Lager ankam. */
+  E.rohstoffeAbholen = function (st, post, id, now) {
+    E.settle(st, post, now);
+    var r = E.rohstoffVon(id), menge = E.einlagern(st, r.id, post.rohstoffVorrat || 0);
+    post.rohstoffVorrat = (post.rohstoffVorrat || 0) - menge;
+    return { id: r.id, name: r.name, menge: menge };
   };
   E.collect = function (st, post, id, now) {
     E.settle(st, post, now);
@@ -594,9 +642,12 @@ const SG = { rules: {} };
     return ergebnis;
   };
   E.upgrade = function (st, post, now) {
-    E.settle(st, post, now); var price = E.LEVELS[post.level].cost;
+    E.settle(st, post, now); var stufe = E.LEVELS[post.level], price = stufe.cost;
     if (!price) throw new Error('Deine Festung ist vollständig ausgebaut.');
     if (st.gold < price) throw new Error('Für den Ausbau brauchst du ' + price + ' Gold.');
+    var fehlt = E.rohstoffeFehlen(st, stufe.rohstoffe);
+    if (fehlt) throw new Error('Für den Ausbau brauchst du auch Rohstoffe. ' + fehlt);
+    Object.keys(stufe.rohstoffe || {}).forEach(function (rid) { st.lager[rid] -= stufe.rohstoffe[rid]; });
     E.buchen(st, -price, 'ausbau', now); post.level++; return post.level;
   };
 })(SG);
@@ -2540,6 +2591,89 @@ const SG = { rules: {} };
 })(SG);
 
 /* ------------------------------------------------------------------
+   GehstockMon - Warenwirtschaft (27.09.2026).
+
+   Holz, Erz und Kristall (E.ROHSTOFFE in 1-wirtschaft.js). Sie kommen von
+   drei Seiten:
+   - Aussenposten foerdern den Rohstoff ihres Bioms (abgeholt mit den Eiern);
+   - Rohstoffstellen auf der Insel kann jeder abbauen, auch ohne Gebiet;
+   - wer ein Paket an einem Aussenposten abholt, bekommt beim Abliefern eine
+     Einheit von dessen Rohstoff dazu.
+   Gebraucht werden sie fuer den Ausbau der Aussenposten, fuer den Hafenkran
+   und im Handel mit dem Haendler (nach der Markthalle).
+
+   Codex hat die erste Fassung verworfen, weil drei Spieler acht der neun
+   Gebiete halten: Pflichtrohstoffe aus Gebieten waeren ihr Vetorecht ueber
+   alle Bauten. Darum gibt es jeden Rohstoff auch an oeffentlichen Stellen
+   und beim Haendler, und es gibt keinen Weg, Rohstoffe an andere Spieler zu
+   geben - sonst schoebe ein Zweitkonto seine Ernte aufs Hauptkonto.
+   ------------------------------------------------------------------ */
+(function (SG) {
+  var R = SG.gehstockmon, D = R.daten, E = R.wirtschaft, H = R.zeiten, X = R.abenteuer;
+  X.ROHSTOFF_OPS = ['abbauen', 'rohstoff_kaufen', 'rohstoff_verkaufen'];
+  X.SPIELZUEGE.push.apply(X.SPIELZUEGE, X.ROHSTOFF_OPS);
+  X.HANDEL_OPS.push.apply(X.HANDEL_OPS, X.ROHSTOFF_OPS);
+
+  /* Je Stunde sechs Stellen, von jedem Rohstoff zwei in zwei seiner drei
+     Biome, ausserhalb der Mauern. Zwei Einheiten je Stelle, in der Erntezeit
+     doppelt so viel. Wie bei den Runen: jede Stelle einmal je Spieler. */
+  X.ROHSTOFF_STELLEN = 2; X.ROHSTOFF_MENGE = 2; X.ROHSTOFF_NAEHE = 8;
+  X.rohstoffStellen = function (now, territories) {
+    var epoche = Math.floor(now / X.SPAWN_TIME), saat = (Math.imul(epoche, 104729) + 7331) >>> 0, layout = X.layout(territories || []), out = [];
+    function zufall() { saat = (Math.imul(saat, 1664525) + 1013904223) >>> 0; return saat / 4294967296; }
+    E.ROHSTOFFE.forEach(function (r) {
+      var gebiete = r.gebiete.slice();
+      for (var n = 0; n < X.ROHSTOFF_STELLEN && gebiete.length; n++) {
+        var gebiet = gebiete.splice(Math.floor(zufall() * gebiete.length), 1)[0], mitte = D.BIOME[gebiet - 1], punkt = null;
+        for (var versuch = 0; versuch < 40 && !punkt; versuch++) {
+          var w = zufall() * Math.PI * 2, d = 54 + zufall() * 18, p = { x: mitte.x + Math.cos(w) * d, z: mitte.z + Math.sin(w) * d };
+          if (X.walkable(p) && !layout.some(function (g) { return X.inside(p, g); }) && X.canTravel(layout, p, p, 'public')) punkt = p;
+        }
+        if (punkt) out.push({ id: epoche + ':' + r.id + ':' + gebiet, rohstoff: r.id, gebiet: gebiet, x: Math.round(punkt.x * 10) / 10, z: Math.round(punkt.z * 10) / 10,
+          menge: X.ROHSTOFF_MENGE, expiresAt: (epoche + 1) * X.SPAWN_TIME });
+      }
+    });
+    return out;
+  };
+
+  /* Handel mit dem Haendler, erst wenn die Markthalle steht - dieselben
+     Wochengrenzen wie bei den Runen (Runen und Rohstoffe zusammen). Er
+     verkauft zum vollen Preis und kauft zur Haelfte zurueck. */
+  X.ROHSTOFF_PREISE = { holz: 8, erz: 10, kristall: 12 };
+  X.rohstoffAnkauf = function (id) { return Math.floor((X.ROHSTOFF_PREISE[id] || 0) / 2); };
+  /* Wer ein Paket an einem Aussenposten abholt, traegt dessen Ware mit. */
+  X.KURIER_ROHSTOFF = 1;
+
+  /* Der zweite Gemeinschaftsbau: der Hafenkran. Er braucht Gold und alle
+     drei Rohstoffe und macht die Kuriere fuer immer schneller reich. Er
+     steht gleichzeitig mit der Markthalle offen; die Gebietsabgabe geht in
+     den ersten Bau, der noch Gold braucht. */
+  X.HAFENKRAN_KURIER = 1.2;
+  X.BAUTEN.push({ id: 'hafenkran', name: 'Hafenkran', ziel: 1500, mindestens: 10, rohstoffe: { holz: 60, erz: 40, kristall: 30 },
+    was: 'Kuriere bekommen 20 % mehr Lohn - für immer.' });
+  X.bauGoldFertig = function (stand, id) { var def = X.bau(id), b = stand && stand[id]; return !!(def && b && b.gold >= def.ziel); };
+  X.bauFertig = function (stand, id) {
+    var def = X.bau(id), b = stand && stand[id];
+    if (!def || !b || b.gold < def.ziel) return false;
+    return Object.keys(def.rohstoffe || {}).every(function (r) { return ((b.rohstoffe && b.rohstoffe[r]) || 0) >= def.rohstoffe[r]; });
+  };
+  /* Wohin die Gebietsabgabe fliesst: in den ersten Bau, der noch Gold braucht. */
+  X.bauFuerGold = function (stand) { return X.BAUTEN.find(function (b) { return !X.bauGoldFertig(stand, b.id); }) || null; };
+
+  /* Rohstoffsammler: ein Titel fuer die, die am meisten abbauen. */
+  X.TITEL.push({ id: 'rohstoffsammler', name: 'Bergmann', was: 'Rohstoffstellen abgebaut', ziel: 60, wert: function (p) { return p.abgebaut || 0; } });
+
+  function ganz(n, max) { n = Math.floor(Number(n)); return Number.isFinite(n) && n >= 0 ? Math.min(max, n) : 0; }
+  var vorher = D.neuerStand;
+  D.neuerStand = function (save, now) {
+    var p = vorher(save, now), old = save || {};
+    p.rohstoffClaims = Array.isArray(old.rohstoffClaims) ? old.rohstoffClaims.filter(function (v) { return typeof v === 'string'; }).slice(-60) : [];
+    p.abgebaut = ganz(old.abgebaut, 1e6);
+    return p;
+  };
+})(SG);
+
+/* ------------------------------------------------------------------
    GehstockMon - die Insel als Ganzes (27.09.2026): Inselwetter und die
    Erlasse des Buergermeisters.
 
@@ -2637,6 +2771,98 @@ const SG = { rules: {} };
     var out = {};
     X.EFFEKT_SCHLUESSEL.forEach(function (k) { var m = X.effekt(now, erlassId, k); if (m !== 1) out[k] = Math.round(m * 1000) / 1000; });
     return out;
+  };
+})(SG);
+
+/* ------------------------------------------------------------------
+   GehstockMon - Schatzkarten (27.09.2026).
+
+   Vier Kartenfetzen ergeben eine Karte. Sie liest man, und sie fuehrt zu
+   einer Grabstelle, die nur fuer einen selbst gilt: kein Wettlauf, wer
+   zuerst da ist. Die Karte nennt das Biom, eine Wuenschelrute sagt beim
+   Laufen "kalt", "warm", "heiss" - gesucht ist man in zwei bis fuenf
+   Minuten, also in einer Pause.
+
+   Codex hat die erste Fassung geprueft. Uebernommen:
+   - Die Fetzen kommen sicher aus dem, was man ohnehin tut, nicht aus einem
+     seltenen Zufall (bei 10 % Chance waeren es vierzig Aktionen je Karte).
+   - Fortschritt verfaellt nicht, aber gelesen wird hoechstens eine Karte je
+     Woche.
+   - Der Fund sind Runen, Gold und Rohstoffe - kein garantiertes episches
+     Ei, das haette die Truhenserie entwertet.
+   ------------------------------------------------------------------ */
+(function (SG) {
+  var R = SG.gehstockmon, D = R.daten, E = R.wirtschaft, H = R.zeiten, X = R.abenteuer;
+  X.SCHATZ_OPS = ['schatz_lesen', 'schatz_graben'];
+  X.OPS.push.apply(X.OPS, X.SCHATZ_OPS);
+  X.SPIELZUEGE.push.apply(X.SPIELZUEGE, X.SCHATZ_OPS);
+
+  X.SCHATZ_FETZEN = 4;
+  /* Woher die Fetzen kommen: jede Quelle zaehlt fuer sich, und alle n Mal
+     gibt es einen Fetzen. Die Truhe jeden Tag, ein langer Streifzug jedes
+     Mal - so hat jede Spielweise ihren Weg zur Karte. */
+  X.SCHATZ_QUELLEN = { truhe: 1, streifzug: 1, kurier: 3, rohstoff: 4, trainer: 3 };
+  X.SCHATZ_NAME = { truhe: 'Tagestruhe', streifzug: 'lange Streifzüge', kurier: 'jede dritte Lieferung', rohstoff: 'jede vierte Rohstoffstelle', trainer: 'jeder dritte Trainersieg' };
+  X.schatzStand = function (p) {
+    var s = p && p.schatz;
+    return s && typeof s === 'object' ? s : { fetzen: 0, zaehler: {}, woche: null, karte: null, funde: 0 };
+  };
+  /* Zaehlt eine Taetigkeit. Zurueck kommt true, wenn daraus ein Fetzen wurde. */
+  X.schatzFetzen = function (p, quelle) {
+    var n = X.SCHATZ_QUELLEN[quelle]; if (!p || !n) return false;
+    var s = X.schatzStand(p); p.schatz = s;
+    if (s.karte || s.fetzen >= X.SCHATZ_FETZEN) return false;
+    s.zaehler = s.zaehler || {}; s.zaehler[quelle] = (s.zaehler[quelle] || 0) + 1;
+    if (s.zaehler[quelle] < n) return false;
+    s.zaehler[quelle] = 0; s.fetzen = Math.min(X.SCHATZ_FETZEN, s.fetzen + 1);
+    return true;
+  };
+  X.schatzLesbar = function (p, now) { var s = X.schatzStand(p); return !s.karte && s.fetzen >= X.SCHATZ_FETZEN && s.woche !== X.zerhackerWoche(now); };
+  /* Die Grabstelle: in einem Biom, ausserhalb aller Mauern, gut erreichbar. */
+  X.schatzOrt = function (zufall, territories) {
+    var layout = X.layout(territories || []);
+    for (var versuch = 0; versuch < 200; versuch++) {
+      var gebiet = 1 + Math.floor(zufall() * D.FELDER.length), mitte = D.BIOME[gebiet - 1];
+      var w = zufall() * Math.PI * 2, d = 50 + zufall() * 26, p = { x: mitte.x + Math.cos(w) * d, z: mitte.z + Math.sin(w) * d };
+      if (X.walkable(p) && !layout.some(function (g) { return X.inside(p, g); }) && X.canTravel(layout, p, p, 'public'))
+        return { x: Math.round(p.x * 10) / 10, z: Math.round(p.z * 10) / 10, gebiet: gebiet };
+    }
+    return { x: X.STADT_TOR.x, z: X.STADT_TOR.z + 20, gebiet: 6 };
+  };
+  /* Die Wuenschelrute: wie weit ist es noch? */
+  X.SCHATZ_NAEHE = 6;
+  X.schatzRute = function (abstand) {
+    if (abstand <= X.SCHATZ_NAEHE) return { stufe: 4, text: 'Hier graben!', zeichen: '✨' };
+    if (abstand <= 18) return { stufe: 3, text: 'ganz heiß', zeichen: '🔥' };
+    if (abstand <= 40) return { stufe: 2, text: 'heiß', zeichen: '♨️' };
+    if (abstand <= 80) return { stufe: 1, text: 'warm', zeichen: '🌡️' };
+    return { stufe: 0, text: 'kalt', zeichen: '❄️' };
+  };
+  /* Der Fund: drei Runen einer gewuerfelten Seltenheit, Gold und Rohstoffe
+     des Bioms. */
+  X.SCHATZ_GOLD = 100; X.SCHATZ_RUNEN = 3; X.SCHATZ_ROHSTOFF = 5;
+  X.schatzFund = function (zufall, gebiet) {
+    var w = zufall(), rang = w < .5 ? 2 : w < .85 ? 3 : 4;
+    return { gold: X.SCHATZ_GOLD, runen: X.SCHATZ_RUNEN, rang: rang, rohstoff: E.rohstoffVon(gebiet).id, menge: X.SCHATZ_ROHSTOFF };
+  };
+  X.TITEL.push({ id: 'schatzsucher', name: 'Schatzsucher', was: 'Schätze gehoben', ziel: 5, wert: function (p) { return (p.schatz && p.schatz.funde) || 0; } });
+
+  function ganz(n, max) { n = Math.floor(Number(n)); return Number.isFinite(n) && n >= 0 ? Math.min(max, n) : 0; }
+  var vorher = D.neuerStand;
+  D.neuerStand = function (save, now) {
+    var p = vorher(save, now), s = save && save.schatz;
+    var sauber = { fetzen: 0, zaehler: {}, woche: null, karte: null, funde: 0 };
+    if (s && typeof s === 'object') {
+      sauber.fetzen = ganz(s.fetzen, X.SCHATZ_FETZEN);
+      Object.keys(X.SCHATZ_QUELLEN).forEach(function (q) { var n = ganz(s.zaehler && s.zaehler[q], 99); if (n) sauber.zaehler[q] = n; });
+      sauber.woche = Number.isFinite(s.woche) ? Math.floor(s.woche) : null;
+      var k = s.karte;
+      if (k && Number.isFinite(k.x) && Number.isFinite(k.z) && ganz(k.gebiet, D.FELDER.length) > 0)
+        sauber.karte = { x: k.x, z: k.z, gebiet: ganz(k.gebiet, D.FELDER.length), seit: Number(k.seit) || 0 };
+      sauber.funde = ganz(s.funde, 1e6);
+    }
+    p.schatz = sauber;
+    return p;
   };
 })(SG);
 
