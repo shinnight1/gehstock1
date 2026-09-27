@@ -799,8 +799,7 @@
               SG.protokoll.schreiben('owner',
                 (A.aktuell.name || A.aktuell.code) + ' ist jetzt Owner', '',
                 A.aktuell.code);
-              UI.toast('Du bist jetzt Owner.', 'good');
-              neu();
+              kroenen(A.aktuell.name || A.codeAnzeige(A.aktuell.code));
             });
         }, 'wide primary'));
         return;
@@ -864,6 +863,7 @@
           hinweis: 'Danach bist du ein Admin wie jeder andere — und der Neue '
             + 'kann auch gegen dich vorgehen. Rückgängig macht das nur er.',
           icon: '👑',
+          feier: true,
           leer: 'Es gibt sonst keinen Admin.',
           frage: function (wen) { return 'An ' + wen + ' übergeben?'; },
           text: 'Du gibst die Rolle ab und kannst sie nicht zurückholen.',
@@ -887,6 +887,7 @@
           + 'vorgehen — nur nicht gegen dich. Austauschen kannst du ihn '
           + 'jederzeit wieder.',
         icon: '👑',
+        feier: true,
         leer: 'Es gibt keinen anderen Admin.',
         frage: function (wen) { return wen + ' zum Owner machen?'; },
         text: 'Ein amtierender Owner gibt den Stuhl dabei ab.',
@@ -929,8 +930,10 @@
                   UI.toast('Ging nicht.', 'bad');
                   return;
                 }
-                UI.toast('Erledigt.', 'good');
-                neu();
+                /* Wer den Owner-Stuhl besetzt, bekommt keine Meldung
+                   am Rand, sondern die Kroenung. */
+                if (o.feier) kroenen(wen);
+                else { UI.toast('Erledigt.', 'good'); neu(); }
               });
             },
           },
@@ -943,6 +946,14 @@
           UI.el('div.side', null, [UI.el('div.s', { text: '›' })]),
         ]));
       });
+    }
+
+    /* Das Bild laeuft ueber dem ganzen Dialog, also geht der erst zu.
+       Danach steht das Menue wieder da, wo es war - mit dem neuen
+       Owner darin. */
+    function kroenen(wen) {
+      if (m) { m.close(); m = null; }
+      SG.kroenung.zeigen({ name: wen }, function () { Adm.oeffnen(reiter); });
     }
 
     /* Wie der eigene Rang im Kopf der Sitzung steht */

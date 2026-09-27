@@ -38,6 +38,7 @@ const CSS_ORDER = [
   'styles/gehstockmon-dungeons.css',
   'styles/gehstockmon-alltag.css',
   'styles/umzug.css',
+  'styles/kroenung.css',
 ];
 
 const CORE_ORDER = [
@@ -77,6 +78,7 @@ const CORE_ORDER = [
   'core/credits.js',
   'core/gate.js',
   'core/geschenke.js',
+  'core/kroenung.js',
   'core/vertrag.js',
   'core/admin.js',
   'core/kreis.js',
