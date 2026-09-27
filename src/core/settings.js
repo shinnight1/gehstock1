@@ -25,7 +25,13 @@
     tarnSpiegel: true,       // AirPlay-Meldung und Bildschirmmasse beachten
   };
 
-  var current = U.assign({}, DEFAULTS, store.get('settings', {}));
+  /* Einstellungen gehoeren zum Geraet, nicht zur Person: Ton, Vibration
+     und Tarnung haengen davon ab, wo das Geraet gerade liegt. Deshalb im
+     gemeinsamen Raum. Frueher stand hier store.get/set - gelesen wurde
+     dann vor der Anmeldung aus dem gemeinsamen Raum, geschrieben nach
+     der Anmeldung in den Benutzerraum, und nach jedem Neuladen war
+     alles wieder beim alten. */
+  var current = U.assign({}, DEFAULTS, store.globalGet('settings', {}));
   var bus = U.emitter();
 
   var Set = SG.settings = {
@@ -35,7 +41,7 @@
     set: function (k, v) {
       if (current[k] === v) return;
       current[k] = v;
-      store.set('settings', current);
+      store.globalSet('settings', current);
       apply();
       bus.emit('change', k, v);
       bus.emit('change:' + k, v);
@@ -44,7 +50,7 @@
     toggle: function (k) { Set.set(k, !current[k]); return current[k]; },
     reset: function () {
       current = U.assign({}, DEFAULTS);
-      store.set('settings', current);
+      store.globalSet('settings', current);
       apply();
       bus.emit('change', null, null);
     },
