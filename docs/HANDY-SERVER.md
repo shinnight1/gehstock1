@@ -80,23 +80,26 @@ Neustart laeuft Node im Hintergrund und schreibt nach
 Port waere belegt. Termux und Termux:Boot brauchen in Android die Akku-Einstellung
 "Nicht eingeschraenkt".
 
-### Zweitadresse gehstock.dedyn.io
+### Zweitadresse gehstock.ddnss.de
 
 Manche Filter (etwa die Toulouse-Liste UT1, Kategorie `dynamic-dns`) sperren
-duckdns.org komplett. dedyn.io von deSEC steht dort nicht. Einmalig auf
-https://desec.io ein Konto mit dem Namen `gehstock.dedyn.io` anlegen, einen Token
+duckdns.org komplett. ddnss.de steht dort nicht, auch nicht in der IPFire-DBL
+(Stand 27.09.2026; dedyn.io von deSEC nimmt keine neuen Namen mehr an). Einmalig
+auf https://ddnss.de ein Konto anlegen, den Host `gehstock` unter ddnss.de
 erstellen und auf dem Handy im Heim-WLAN:
 
 ```sh
-bash tools/handy-zweitadresse.sh gehstock
+bash tools/handy-zweitadresse.sh gehstock.ddnss.de
 ```
 
-Das fragt den Token verdeckt ab, speichert ihn unter
-`~/.config/gehstock1/desec.env`, schreibt den Namen mit in die Adresszeile des
-Caddyfiles und wartet, bis Caddy das Zertifikat hat. `tools/handy-desec.sh` meldet
-danach alle fuenf Minuten die IPv4 (Protokoll `desec.log`) und haelt AAAA leer,
-aus demselben Grund wie bei DuckDNS. Beide Adressen fuehren auf denselben Server;
-eingeloggt ist man pro Adresse getrennt.
+Das fragt den Update-Key verdeckt ab, speichert ihn unter
+`~/.config/gehstock1/zweitadresse.env`, schreibt den Namen mit in die Adresszeile
+des Caddyfiles und wartet, bis Caddy das Zertifikat hat. Mehrfaches Aufrufen
+schadet nicht. `tools/handy-zweitdns.sh` meldet danach alle fuenf Minuten die
+IPv4 ueber `ip4.ddnss.de` (Protokoll `zweitadresse.log`); einen AAAA-Eintrag gibt
+es aus demselben Grund wie bei DuckDNS nicht. Beide Adressen fuehren auf denselben
+Server, eingeloggt ist man pro Adresse getrennt. ddnss loescht Konten nach einem
+Jahr ohne Login.
 
 ## Redis auf dem Handy statt Upstash
 

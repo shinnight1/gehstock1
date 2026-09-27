@@ -81,7 +81,7 @@ main() {
 
   # Caddy packt Antworten (zstd/gzip). Aeltere Caddyfiles bekommen das nachgeruestet.
   if [[ -f "$config_dir/Caddyfile" ]] && ! grep -q 'encode' "$config_dir/Caddyfile"; then
-    # Alle Namen der Adresszeile behalten, auch eine Zweitadresse bei deSEC.
+    # Alle Namen der Adresszeile behalten, auch die Zweitadresse.
     domain="$(grep -m1 -oE '^[a-z0-9][a-z0-9., -]*[a-z0-9]' "$config_dir/Caddyfile")"
     printf '{\n\thttp_port 8081\n\thttps_port 8443\n}\n\n%s {\n\tencode zstd gzip\n\treverse_proxy 127.0.0.1:8080\n}\n' \
       "$domain" > "$config_dir/Caddyfile"

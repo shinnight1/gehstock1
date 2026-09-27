@@ -1,5 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# Startet DuckDNS- und deSEC-Aktualisierung und Caddy im Hintergrund, falls sie noch nicht
+# Startet die DNS-Aktualisierung (DuckDNS, Zweitadresse) und Caddy im Hintergrund, falls sie noch nicht
 # laufen. Mehrfaches Aufrufen schadet nicht.
 set -u
 umask 077
@@ -18,13 +18,13 @@ if [[ -f "$config_dir/duckdns.env" ]]; then
   fi
 fi
 
-# Zweitadresse bei deSEC, eingerichtet von tools/handy-zweitadresse.sh.
-if [[ -f "$config_dir/desec.env" ]]; then
-  pid="$(cat "$config_dir/desec.pid" 2>/dev/null || true)"
+# Zweitadresse bei ddnss.de, eingerichtet von tools/handy-zweitadresse.sh.
+if [[ -f "$config_dir/zweitadresse.env" ]]; then
+  pid="$(cat "$config_dir/zweitadresse.pid" 2>/dev/null || true)"
   if [[ -z "$pid" ]] || ! kill -0 "$pid" 2>/dev/null; then
-    nohup bash "$repo/tools/handy-desec.sh" >/dev/null 2>&1 &
-    echo $! > "$config_dir/desec.pid"
-    echo 'deSEC-Aktualisierung gestartet.'
+    nohup bash "$repo/tools/handy-zweitdns.sh" >/dev/null 2>&1 &
+    echo $! > "$config_dir/zweitadresse.pid"
+    echo 'Aktualisierung der Zweitadresse gestartet.'
   fi
 fi
 
