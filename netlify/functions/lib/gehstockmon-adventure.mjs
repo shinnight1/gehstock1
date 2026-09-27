@@ -350,6 +350,15 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
       p.panzer=teil.id;extra.message=teil.name+' angelegt: '+teil.schutz+' % weniger Schaden durch Gehstöcke.';
     }
   }
+  if(op==='titel_waehlen'){
+    if(body.titel===null||body.titel===''){p.titel=null;extra.message='Du trägst keinen Titel mehr.';}
+    else{
+      const t=X.TITEL.find(v=>v.id===body.titel);
+      if(!t)fail('Diesen Titel gibt es nicht.');
+      if(t.wert(p)<t.ziel)fail(t.name+' bekommst du bei '+t.ziel+' '+t.was+'. Du hast '+t.wert(p)+'.');
+      p.titel=t.id;extra.message='Du trägst jetzt den Titel '+t.name+'. Alle sehen ihn unter deinem Namen.';
+    }
+  }
   if(op==='quest_claim'){const quest=X.QUESTS.find(q=>q.id===body.questId);if(!quest||p.claimedQuests.includes(quest.id)||X.progress(p,quest)<quest.goal)fail('Diese Questbelohnung ist noch nicht verfügbar.');p.claimedQuests.push(quest.id);if(quest.gold)p.gold+=quest.gold;if(quest.skin&&!p.skins.includes(quest.skin))p.skins.push(quest.skin);extra.message=quest.skin?X.skin(quest.skin).name+' freigeschaltet!':'Quest geschafft! +'+quest.gold+' Gold.';}
   if(op==='shop_buy'||op==='equip'){
     if(p.raidLock?.until>now)fail('Während eines Überfalls bleibt deine Ausrüstung fest.');

@@ -142,6 +142,8 @@ export async function checkUi(D,E,A,handler,code,clock,otherCode){
   assert.ok(root.textContent.includes('Der Händler')&&root.textContent.includes('Die Runenschmiede'),'the gold wares render');
   assert.equal(root.querySelectorAll('.gm-schmiede-zeile').length,D.SELTENHEITEN.length,'one forge row per rarity');
   assert.ok(root.textContent.includes('Der Gehstock-Champion'));
+  click('⚒ Ausrüstung');await flush();
+  assert.equal(root.querySelectorAll('.gm-titel-zeile').length,SG.gehstockmon.abenteuer.TITEL.length,'every title is listed with its progress');
   /* Heute: oben in der Leiste, drei Aufgaben und die Truhe. */
   find(e=>e.classList.contains('gm-projekt')&&e.textContent.startsWith('Heute')).fire('click');await flush();
   assert.ok(root.textContent.includes('Heute auf der Insel'),'the daily window opens');

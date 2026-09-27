@@ -70,7 +70,7 @@
         var karte=el('article',undefined,'gm-quest-card');
         karte.appendChild(el('h3',(g.id===t.empfohlen?'★ ':'')+g.name+(g.haus?' · Haus':'')));
         var stufe={leichter:'leichter als du',ausgeglichen:'etwa gleich stark',schwerer:'stärker als du'}[g.einstufung];
-        karte.appendChild(el('p',(g.haus?'Gegner des Hauses':'Spieler')+' · Ruhm '+g.ruhm+(g.staerke?' · Stärke '+g.staerke+(stufe?' ('+stufe+')':''):'')+(g.id===t.empfohlen?' · empfohlen':'')+' · Sieg: '+X.arenaLohn(g.einstufung)+' Gold'));
+        karte.appendChild(el('p',(g.haus?'Gegner des Hauses':'Spieler'+(g.titel?' · 🏅 '+g.titel:''))+' · Ruhm '+g.ruhm+(g.staerke?' · Stärke '+g.staerke+(stufe?' ('+stufe+')':''):'')+(g.id===t.empfohlen?' · empfohlen':'')+' · Sieg: '+X.arenaLohn(g.einstufung)+' Gold'));
         karte.appendChild(truppenreihe(g.squad));
         var b=button('Herausfordern',function(){run('arena_rang',{targetId:g.id});},'gm-button');
         b.disabled=c.busy()||t.pause>0;

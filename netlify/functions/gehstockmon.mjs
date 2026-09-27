@@ -270,7 +270,7 @@ async function updatePresence(db, world, id, position, timestamp, clock, bypass 
     if(!route)return json({serverTime:timestamp,access:accessFor(timestamp,bypass),position:{x:from.x,z:from.z,heading:from.heading||0},positionCorrected:true,peers:peers()});
     let traveled=0,cursor=from;for(const point of route){traveled+=Math.hypot(point.x-cursor.x,point.z-cursor.z);cursor=point;}
     const eintrag=!players[id]||players[id].updatedAt<=timestamp?{ id, name:p.name, x:Math.round(position.x*100)/100, z:Math.round(position.z*100)/100,
-      heading:position.heading, activity:activeArena(p)||activeDuel(p)||activeDungeon(world,p)||imDuellKampf(world,p,id)?'arena':'map', updatedAt:timestamp,spawnAt:p.lastJoinAt,credit:Math.max(0,credit-traveled),skin:p.skin,weapon:p.weapon,squad:p.truppe.slice(),protected:X.protected(p,timestamp),eier:p.eggs.length,champion:world.champion?.id===id }:null;
+      heading:position.heading, activity:activeArena(p)||activeDuel(p)||activeDungeon(world,p)||imDuellKampf(world,p,id)?'arena':'map', updatedAt:timestamp,spawnAt:p.lastJoinAt,credit:Math.max(0,credit-traveled),skin:p.skin,weapon:p.weapon,squad:p.truppe.slice(),protected:X.protected(p,timestamp),eier:p.eggs.length,champion:world.champion?.id===id,titel:X.titelName(p) }:null;
     requireOpen(clock(), bypass);
     /* Eine Duell-Einladung muss schnell ankommen - die Anwesenheit laeuft alle paar Sekunden, die Weltabfrage nur alle dreissig. */
     if(await anwesenheitSchreiben(db,stand,id,eintrag,weg))return json({serverTime:timestamp,access:accessFor(timestamp,bypass),peers:peers(),duellEinladung:duellEinladung(world,p,id,timestamp)});
@@ -483,6 +483,8 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
         const receipts = p.actionReceipts || [], receipt = receipts.find((r) => r.id === body.requestId && r.op === body.op);
         if (receipt) return json(publicResult(world, id, timestamp, { ...receipt.extra, duplicate: true, adminOverride: bypass }));
         let extra = {joining:body.op==='join',zuschauen:typeof body.zuschauen==='string'?body.zuschauen.slice(0,120):null};
+        /* Welche Titel schon erreicht waren - danach wird verglichen. */
+        const titelVorher = X.titelErreicht(p);
         try {
           if(activeArena(p)&&mutations.includes(body.op)&&!['arena_turn','arena_flee'].includes(body.op))throw new GameError('Beende zuerst deinen Mon-Kampf.',409);
           if(activeDuel(p)&&mutations.includes(body.op)&&!['raid_turn','raid_arena','raid_cancel'].includes(body.op))throw new GameError('Beende zuerst deinen Überfall.',409);
@@ -621,6 +623,8 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
             }
           }
           deliverRewards(p,timestamp); X.sonderEierLiefern(p);
+          const titelNeu = X.titelErreicht(p).filter((t) => !titelVorher.includes(t));
+          if (titelNeu.length && body.op !== 'join') extra.neueTitel = titelNeu.map((t) => X.TITEL.find((v) => v.id === t).name);
           const weekendEggs = activeArena(p)||activeDuel(p)?0:E.deliverWeekend(p, timestamp);
           if (weekendEggs) extra.weekendDelivery = weekendEggs;
           /* Wer nach mehr als zwanzig Minuten zurueckkommt, bekommt den

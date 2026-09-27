@@ -206,6 +206,28 @@
     }
 
     function player(skin,weapon){var p=el('div',undefined,'gm-skin-preview');p.style.setProperty('--skin',X.skin(skin).color);var canvas=el('canvas');canvas.width=canvas.height=128;canvas.setAttribute('aria-label',X.skin(skin).name);p.appendChild(canvas);R.drawAtlas(canvas,'skins',R.skinIndex(skin));p.appendChild(el('b',{gehstock:'⌁',eisenspeer:'♜',runenklinge:'⚔',sturmhammer:'⚒',titanenlanze:'↟',weltenbrecher:'✹'}[weapon]||'✦','gm-weapon-icon'));return p;}
+    /* Titel: alle mit Fortschritt, der erreichte laesst sich tragen. */
+    function titelTeil(s) {
+      drawer.appendChild(el('h3', 'Titel'));
+      drawer.appendChild(el('p', 'Der Titel steht unter deinem Namen - auf der Insel und in der Arena-Liste. Er bringt nur Ehre.'));
+      var liste = el('div', undefined, 'gm-titel-liste');
+      X.TITEL.forEach(function (t) {
+        var n = Math.min(t.ziel, t.wert(s)), da = n >= t.ziel, traegt = s.titel === t.id;
+        var zeile = el('div', undefined, 'gm-titel-zeile' + (da ? ' erreicht' : ''));
+        var text = el('div', undefined, 'gm-titel-text');
+        text.appendChild(el('strong', t.name));
+        text.appendChild(el('small', n.toLocaleString('de-DE') + ' / ' + t.ziel.toLocaleString('de-DE') + ' ' + t.was));
+        var spur = el('span', undefined, 'gm-projekt-spur'), fuellung = el('i');
+        fuellung.style.width = Math.round(100 * n / t.ziel) + '%'; fuellung.style.background = da ? '#81d2a3' : '#f0b429';
+        spur.appendChild(fuellung); text.appendChild(spur);
+        zeile.appendChild(text);
+        var b = button(traegt ? 'Getragen' : da ? 'Tragen' : 'Noch nicht', function () { run('titel_waehlen', { titel: t.id }, 'shop'); }, 'gm-button');
+        b.disabled = traegt || !da || c.busy();
+        zeile.appendChild(b); liste.appendChild(zeile);
+      });
+      drawer.appendChild(liste);
+      if (s.titel) { var ab = button('Titel ablegen', function () { run('titel_waehlen', { titel: null }, 'shop'); }, 'gm-button gm-secondary'); ab.disabled = c.busy(); drawer.appendChild(ab); }
+    }
     /* Ruestung und Schliff: beides haengt an den Runen aus den Dungeons. */
     function ruestungTeil(s) {
       drawer.appendChild(el('h3', 'Rüstung'));
@@ -250,6 +272,7 @@
       if (kopf) drawer.appendChild(el('p', kopf.selbst
         ? 'Auf dich liegt ein Kopfgeld von ' + kopf.gold + ' Gold - du hältst die meisten Gebiete.'
         : 'Kopfgeld auf ' + kopf.name + ': ' + kopf.gold + ' Gold für den, der ihn im Überfall schlägt.'));
+      titelTeil(s);
       ruestungTeil(s);
       [['skin','Skins',X.SKINS],['weapon','Waffen',X.WEAPONS]].forEach(function(section){drawer.appendChild(el('h3',section[1]));var grid=el('div',undefined,'gm-shop-grid');section[2].forEach(function(item){var kind=section[0],own=s[kind==='skin'?'skins':'weapons'].indexOf(item.id)>=0,equipped=s[kind]===item.id,card=el('article',undefined,'gm-shop-card');card.appendChild(player(kind==='skin'?item.id:s.skin,kind==='weapon'?item.id:s.weapon));card.appendChild(el('h3',item.name));card.appendChild(el('p',kind==='weapon'?item.attack+' Waffenschaden':item.quest?'Quest: '+X.QUESTS.find(function(q){return q.id===item.quest;}).name:'Für Gold freischalten'));var b=button(equipped?'Ausgerüstet':own?'Ausrüsten':item.quest?'Durch Quest erhältlich':item.price+' Gold',function(){run(own?'equip':'shop_buy',{kind:kind,itemId:item.id},'shop');},'gm-button gm-primary');b.disabled=equipped||!own&&(!!item.quest||s.gold<item.price);card.appendChild(b);
         if(kind==='weapon'&&own){var stufe=X.schliff(s,item.id),kosten=X.schliffKosten(stufe),voll=stufe>=X.SCHLIFF_LIMIT;
@@ -258,7 +281,7 @@
           sb.disabled=voll||(s.runes&&s.runes[0]||0)<kosten;card.appendChild(sb);}grid.appendChild(card);});drawer.appendChild(grid);});
     }
     function rival(peer){if(!c.open(peer.name,'rival'))return;var s=state(),at=c.world().position(),near=Math.hypot(at.x-peer.x,at.z-peer.z)<8;drawer.appendChild(player(peer.skin,peer.weapon));
-      fehdeTeil(peer);drawer.appendChild(el('p',X.skin(peer.skin).name+' · '+X.weapon(peer.weapon).name));
+      fehdeTeil(peer);if(peer.titel)drawer.appendChild(el('p','🏅 '+peer.titel,'gm-peer-titel-zeile'));drawer.appendChild(el('p',X.skin(peer.skin).name+' · '+X.weapon(peer.weapon).name));
       /* Das Live-Duell: Kampfteam gegen Kampfteam, Zug um Zug - verlieren kann man dabei nichts. */
       if(c.duell){var fordern=button('⚔ Zum Live-Duell fordern',function(){c.closeDrawer();c.duell(peer);},'gm-button gm-primary');fordern.disabled=c.busy()||peer.activity==='arena';drawer.appendChild(fordern);drawer.appendChild(el('p','Beide Kampfteams gegeneinander, beide wählen gleichzeitig. Sieg: +'+X.DUELL.lohn.sieg+' Gold und +'+X.DUELL.ruhm+' Ruhm. Niemand verliert Mons oder Eier. Gold gibt es ab der '+X.DUELL.lohnAbRunde+'. Runde und für höchstens '+X.DUELL.lohnJePaar+' Duelle am Tag gegen denselben Gegner.','gm-plan-hinweis'));}drawer.appendChild(el('p','Überfall in zwei Stufen: Besiege die gespeicherte Waffenverteidigung, danach die Mon-Truppe. Bei Erfolg bekommst du genau ein getragenes oder brütendes Ei. Der Besitzer muss dabei keine Züge eingeben.'));
       var protection=!!peer.protected,ohneEi=peer.eier===0,pause=s.raidCooldown>c.now();

@@ -91,7 +91,7 @@
       .map(function(g){return {id:g.id,squad:truppe.slice()};});
   };
   X.STADT_OPS=['arena_rang','champion_fordern','tagwerk','findelei','brutplatz_kaufen','tausch_anbieten','tausch_annehmen','tausch_zuruecknehmen','ei_kaufen','runen_zerlegen','runen_verschmelzen','schimmerperle_kaufen'];
-  X.OPS=['survey','gather','trainer_start','quest_claim','shop_buy','equip','raid_start','raid_turn','raid_arena','raid_cancel','mon_upgrade','leuchtturm_spenden','zerhacker_schlagen','waffe_schleifen','panzer_anlegen','fehde_fordern','fehde_annehmen'].concat(X.STADT_OPS).concat(X.DUNGEON_OPS);
+  X.OPS=['survey','gather','trainer_start','quest_claim','shop_buy','equip','raid_start','raid_turn','raid_arena','raid_cancel','mon_upgrade','leuchtturm_spenden','zerhacker_schlagen','waffe_schleifen','panzer_anlegen','fehde_fordern','fehde_annehmen','titel_waehlen'].concat(X.STADT_OPS).concat(X.DUNGEON_OPS);
   /* Jeder Spielzug, der den Spielstand aendert - eine Liste fuer Browser und
      Server. Der Browser haengt nur an diese Zuege eine Kennung, und der
      Server verlangt sie genau dafuer. Frueher fuehrte jede Seite ihre eigene
@@ -253,6 +253,25 @@
   X.WEAPONS.push({id:'titanenlanze',name:'Titanenlanze',attack:37,price:2500},{id:'weltenbrecher',name:'Weltenbrecher',attack:43,price:6500});
   X.QUESTS=[{id:'trainer1',name:'Der erste Trainingssieg',stat:'trainerWins',goal:1,gold:80},{id:'trainer3',name:'Mit Geduld zum Meister',stat:'trainerWins',goal:3,skin:'trainermeister'},{id:'visit3',name:'Drei Horizonte',stat:'visited',goal:3,gold:120},{id:'visit9',name:'Die ganze Insel',stat:'visited',goal:9,skin:'weltenwanderer'},{id:'gather6',name:'Runensuche',stat:'gathered',goal:6,skin:'runensucher'},{id:'hatch1',name:'Ein neuer Begleiter',stat:'hatched',goal:1,gold:100},{id:'upgrade1',name:'Ein sicherer Rückzugsort',stat:'upgrades',goal:1,gold:100}];
   X.skin=function(id){return X.SKINS.find(function(v){return v.id===id;})||X.SKINS[0];};
+  /* Titel (27.09.2026): Anerkennung fuer verschiedene Spielweisen, sichtbar
+     unter dem Namen auf der Insel und in der Arena-Liste. Rein kosmetisch -
+     kein Gold, keine Werte. Erreicht ist ein Titel, sobald sein Zaehler das
+     Ziel erreicht; gespeichert wird nur, welchen man gerade traegt. Die Ziele
+     sind an den Daten vom 26.09. ausgerichtet (Median nach knapp zwei Wochen:
+     31 Eier, 26 Arten, 24 Trainer, 2 Eroberungen). */
+  X.TITEL=[
+    {id:'brutmeister',   name:'Brutmeister',   was:'Eier ausgebrütet',            ziel:100,  wert:function(p){return (p.progress&&p.progress.hatched)||0;}},
+    {id:'sammler',       name:'Sammler',       was:'Mon-Arten in der Sammlung',   ziel:40,   wert:function(p){return (p.besitz||[]).length;}},
+    {id:'kundschafter',  name:'Kundschafter',  was:'Biome erkundet',              ziel:9,    wert:function(p){return (p.visited||[]).length;}},
+    {id:'runenjaeger',   name:'Runenjäger',    was:'verlorene Runen gesammelt',   ziel:50,   wert:function(p){return (p.progress&&p.progress.gathered)||0;}},
+    {id:'trainerschreck',name:'Trainerschreck',was:'Wandertrainer besiegt',       ziel:60,   wert:function(p){return (p.progress&&p.progress.trainerWins)||0;}},
+    {id:'arenaheld',     name:'Arenaheld',     was:'Siege in der Großen Arena',   ziel:25,   wert:function(p){return p.arenaSiegeGesamt||0;}},
+    {id:'eroberer',      name:'Eroberer',      was:'Gebiete erobert',             ziel:5,    wert:function(p){return p.siege||0;}},
+    {id:'zerhackerschreck',name:'Zerhacker-Schreck',was:'Schaden am Zerhacker',   ziel:8000, wert:function(p){return p.zerhackerGesamt||0;}}
+  ];
+  X.titelErreicht=function(p){return X.TITEL.filter(function(t){return t.wert(p||{})>=t.ziel;}).map(function(t){return t.id;});};
+  /* Der Titel, den man traegt - nur, wenn er noch gilt. */
+  X.titelName=function(p){var t=p&&p.titel&&X.TITEL.find(function(v){return v.id===p.titel;});return t&&t.wert(p)>=t.ziel?t.name:null;};
   /* Wer in einer Woche den meisten Schaden am Zerhacker macht, traegt in der
      naechsten den Erstschlag - ein Zehntel mehr Schlagkraft. So entsteht ein
      Wettstreit mitten in der Zusammenarbeit. */
@@ -551,6 +570,7 @@
     /* Goldwaren: an welchem Tag zuletzt beim Haendler gekauft, und ob eine
        Schimmerperle auf das naechste Schluepfen wartet. */
     p.haendlerTag=Number.isFinite(old.haendlerTag)?Math.floor(old.haendlerTag):null;
+    p.titel=X.TITEL.some(function(t){return t.id===old.titel;})?old.titel:null;
     p.schimmerperle=old.schimmerperle===true;return p;
   };
   X.progress=function(p,q){return q.stat==='visited'?p.visited.length:p.progress[q.stat]||0;};

@@ -63,7 +63,7 @@ function gegnerliste(world,id,now){
   const ich=world.players[id],meinRuhm=X.ruhm(ich);
   const echte=Object.entries(world.players)
     .filter(([pid,v])=>pid!==id&&Array.isArray(v.truppe)&&v.truppe.length===4)
-    .map(([pid,v])=>({id:pid,name:v.name,ruhm:X.ruhm(v),squad:aufstellung(v),haus:false}))
+    .map(([pid,v])=>({id:pid,name:v.name,ruhm:X.ruhm(v),squad:aufstellung(v),haus:false,titel:X.titelName(v)}))
     .sort((a,b)=>Math.abs(a.ruhm-meinRuhm)-Math.abs(b.ruhm-meinRuhm)).slice(0,5);
   return echte.concat(X.ARENA_GEGNER.map(v=>({...v,squad:v.squad.slice()})));
 }
