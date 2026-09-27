@@ -11,14 +11,14 @@
   SG.categories = [
     /* Die beiden grossen eigenen Spiele stehen ganz oben. Die Kennung
        bleibt 'gehstockmon', auch wenn die Arena mit drinsteht. */
-    { id: 'gehstockmon', name: 'GehstockMon & Arena', icon: '🐉' },
-    { id: 'arcade', name: 'Arcade', icon: '👾' },
-    { id: 'casual', name: 'Schnell & locker', icon: '⚡' },
-    { id: 'puzzle', name: 'Rätsel', icon: '🧩' },
-    { id: 'karten', name: 'Karten & Brett', icon: '🃏' },
-    { id: 'tycoon', name: 'Tycoon', icon: '🏗️' },
-    { id: 'story', name: 'Geschichte', icon: '📖' },
-    { id: 'gemeinsam', name: 'Gemeinsam', icon: '🌍' },
+    { id: 'gehstockmon', name: 'GehstockMon & Arena', icon: '🐉', bild: 'drache' },
+    { id: 'arcade', name: 'Arcade', icon: '👾', bild: 'joystick' },
+    { id: 'casual', name: 'Schnell & locker', icon: '⚡', bild: 'blitz' },
+    { id: 'puzzle', name: 'Rätsel', icon: '🧩', bild: 'puzzle' },
+    { id: 'karten', name: 'Karten & Brett', icon: '🃏', bild: 'karten' },
+    { id: 'tycoon', name: 'Tycoon', icon: '🏗️', bild: 'kran' },
+    { id: 'story', name: 'Geschichte', icon: '📖', bild: 'buch' },
+    { id: 'gemeinsam', name: 'Gemeinsam', icon: '🌍', bild: 'globus' },
   ];
 
   /* def:

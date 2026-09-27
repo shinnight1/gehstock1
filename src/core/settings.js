@@ -1,6 +1,6 @@
 /* ------------------------------------------------------------------
-   Globale Einstellungen. Ton ist bewusst standardmaessig aus -
-   die Sammlung wird in der Schule benutzt.
+   Globale Einstellungen. Ton und Aufbau-Animation sind seit Stand 2
+   standardmaessig an.
    ------------------------------------------------------------------ */
 
 (function (SG) {
@@ -8,7 +8,7 @@
   var store = SG.storage;
 
   var DEFAULTS = {
-    sound: false,        // Toene an/aus
+    sound: true,         // Toene an/aus
     volume: 0.6,
     haptics: true,       // Vibration, wo verfuegbar
     reduced: false,      // reduzierte Effekte fuer maximale Bildrate
@@ -16,7 +16,7 @@
     leftHanded: false,   // Bedienfelder spiegeln
     showFps: false,
     confirmExit: true,   // Nachfrage beim Verlassen laufender Tycoons
-    aufbau: false,       // Aufbau-Animation nach jedem Anmelden (src/core/aufbau.js)
+    aufbau: true,        // Aufbau-Animation nach jedem Anmelden (src/core/aufbau.js)
 
     /* Tarnung - siehe src/core/tarnung.js */
     tarnBild: 'bild',        // welches Motiv der Deckel zeigt
@@ -31,7 +31,22 @@
      dann vor der Anmeldung aus dem gemeinsamen Raum, geschrieben nach
      der Anmeldung in den Benutzerraum, und nach jedem Neuladen war
      alles wieder beim alten. */
-  var current = U.assign({}, DEFAULTS, store.globalGet('settings', {}));
+  var gespeichert = store.globalGet('settings', {}) || {};
+
+  /* Gespeichert wird immer der ganze Satz, also auch Werte, die nie
+     jemand angefasst hat. Damit die neuen Standards (Stand 2: Ton und
+     Aufbau-Animation an) auch auf Geraeten ankommen, die schon einmal
+     etwas gespeichert haben, fallen die alten Werte dieser beiden
+     einmalig weg. Wer danach wieder ausschaltet, behaelt das. */
+  var STAND = 2;
+  if ((gespeichert._stand || 1) < STAND) {
+    delete gespeichert.sound;
+    delete gespeichert.aufbau;
+    gespeichert._stand = STAND;
+    store.globalSet('settings', U.assign({}, DEFAULTS, gespeichert));
+  }
+
+  var current = U.assign({}, DEFAULTS, gespeichert);
   var bus = U.emitter();
 
   var Set = SG.settings = {
@@ -49,7 +64,7 @@
 
     toggle: function (k) { Set.set(k, !current[k]); return current[k]; },
     reset: function () {
-      current = U.assign({}, DEFAULTS);
+      current = U.assign({}, DEFAULTS, { _stand: STAND });
       store.globalSet('settings', current);
       apply();
       bus.emit('change', null, null);

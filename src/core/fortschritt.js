@@ -55,16 +55,16 @@
   F.MAXSTUFE = 60;
 
   F.RAENGE = [
-    { ab: 1, name: 'Gast', icon: '🚪' },
-    { ab: 3, name: 'Stammgast', icon: '🪑' },
-    { ab: 6, name: 'Kenner', icon: '🎯' },
-    { ab: 10, name: 'Sammler', icon: '🗝' },
-    { ab: 15, name: 'Veteran', icon: '🎖' },
-    { ab: 21, name: 'Meister', icon: '🏅' },
-    { ab: 28, name: 'Großmeister', icon: '👑' },
-    { ab: 36, name: 'Legende', icon: '⭐' },
-    { ab: 45, name: 'Gehstockträger', icon: '🦯' },
-    { ab: 55, name: 'Herr Gehstocks Vertrauter', icon: '🎩' },
+    { ab: 1, name: 'Gast', icon: '🚪', bild: 'tuer' },
+    { ab: 3, name: 'Stammgast', icon: '🪑', bild: 'stuhl' },
+    { ab: 6, name: 'Kenner', icon: '🎯', bild: 'ziel' },
+    { ab: 10, name: 'Sammler', icon: '🗝', bild: 'schluesselbund' },
+    { ab: 15, name: 'Veteran', icon: '🎖', bild: 'orden' },
+    { ab: 21, name: 'Meister', icon: '🏅', bild: 'medaille' },
+    { ab: 28, name: 'Großmeister', icon: '👑', bild: 'krone' },
+    { ab: 36, name: 'Legende', icon: '⭐', bild: 'komet' },
+    { ab: 45, name: 'Gehstockträger', icon: '🦯', bild: 'gehstock' },
+    { ab: 55, name: 'Herr Gehstocks Vertrauter', icon: '🎩', bild: 'zylinder' },
   ];
 
   F.rang = function (stufe) {

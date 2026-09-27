@@ -437,9 +437,32 @@
     return b;
   };
 
+  /* Symbol als Bild, wenn es eins gibt (src/assets/ui-ico-<name>.webp),
+     sonst das Zeichen als Text. Die Bilder sind nur online dabei - die
+     Offline-Datei bekommt sie nicht mit und zeigt weiter das Zeichen.
+     Zurueck kommt immer ein span mit der Klasse cls (Standard .ico),
+     damit bestehende Regeln fuer Groesse und Abstand weiter greifen. */
+  UI.symbol = function (name, ersatz, cls) {
+    var sp = UI.el('span.' + (cls || 'ico'));
+    UI.symbolSetzen(sp, name, ersatz);
+    return sp;
+  };
+
+  UI.symbolSetzen = function (sp, name, ersatz) {
+    var src = name && SG.assets && SG.assets['ui-ico-' + name];
+    sp.textContent = '';
+    if (src) {
+      sp.classList.add('ico-bild');
+      sp.appendChild(UI.el('img', { src: src, alt: '', draggable: false }));
+    } else {
+      sp.classList.remove('ico-bild');
+      sp.textContent = ersatz || '';
+    }
+  };
+
   UI.empty = function (icon, title, sub) {
     return UI.el('div.empty', null, [
-      UI.el('div.big', { text: icon || '∅' }),
+      icon && icon.nodeType ? UI.el('div.big', null, [icon]) : UI.el('div.big', { text: icon || '∅' }),
       UI.el('div', { text: title }),
       sub ? UI.el('div.small', { text: sub, style: { marginTop: '6px', opacity: '.8' } }) : null,
     ]);

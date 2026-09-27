@@ -82,9 +82,10 @@
       ]),
       UI.el('div.pf-wer', null, [
         UI.el('div.pf-name', { text: name }),
-        UI.el('div.pf-rang', {
-          text: stand.rang.icon + ' ' + stand.rang.name,
-        }),
+        UI.el('div.pf-rang', null, [
+          UI.symbol(stand.rang.bild, stand.rang.icon, 'pf-rang-ico'),
+          document.createTextNode(' ' + stand.rang.name),
+        ]),
         UI.el('div.pf-xp', {
           text: stand.voll
             ? U.num(stand.xp) + ' XP · Höchststufe erreicht'
@@ -105,15 +106,15 @@
 
     var zahlen = UI.el('div.pf-zahlen');
     [
-      ['🎮', 'Runden', U.num(stand.runden)],
-      ['🏅', 'Siege', U.num(stand.siege)],
-      ['📈', 'Bestwerte', U.num(stand.rekorde)],
-      ['🧭', 'Spiele probiert', F.verschiedeneSpiele() + ' / ' + spieleGesamt()],
-      ['📅', 'Tage gespielt', U.num(stand.tage)],
-      ['🎯', 'Erfolge', stand.erfolge + ' / ' + stand.erfolgeGesamt],
+      ['🎮', 'Runden', U.num(stand.runden), 'gamepad'],
+      ['🏅', 'Siege', U.num(stand.siege), 'pokal'],
+      ['📈', 'Bestwerte', U.num(stand.rekorde), 'bestwerte'],
+      ['🧭', 'Spiele probiert', F.verschiedeneSpiele() + ' / ' + spieleGesamt(), 'kompass'],
+      ['📅', 'Tage gespielt', U.num(stand.tage), 'kalender'],
+      ['🎯', 'Erfolge', stand.erfolge + ' / ' + stand.erfolgeGesamt, 'lorbeer'],
     ].forEach(function (z) {
       zahlen.appendChild(UI.el('div.pf-zahl', null, [
-        UI.el('div.ic', { text: z[0] }),
+        UI.el('div.ic', null, [UI.symbol(z[3], z[0], 'pf-ico')]),
         UI.el('div.v', { text: z[2] }),
         UI.el('div.k', { text: z[1] }),
       ]));
@@ -127,10 +128,14 @@
       if (F.RAENGE[i].ab > stand.stufe) { naechster = F.RAENGE[i]; break; }
     }
     if (naechster) {
-      wrap.appendChild(UI.el('div.pf-hinweis', {
-        html: 'Nächster Rang: <b>' + naechster.icon + ' ' + naechster.name
-          + '</b> ab Stufe ' + naechster.ab + '.',
-      }));
+      wrap.appendChild(UI.el('div.pf-hinweis', null, [
+        document.createTextNode('Nächster Rang: '),
+        UI.el('b', null, [
+          UI.symbol(naechster.bild, naechster.icon, 'pf-rang-ico'),
+          document.createTextNode(' ' + naechster.name),
+        ]),
+        document.createTextNode(' ab Stufe ' + naechster.ab + '.'),
+      ]));
     }
 
     /* ---------------------------------------------------- Erfolge */
@@ -292,7 +297,7 @@
 
   P.stufeKarte = function (info) {
     einblenden(UI.el('div.pf-karte.stufe', null, [
-      UI.el('div.ic', { text: info.rang.icon }),
+      UI.el('div.ic', null, [UI.symbol(info.rang.bild, info.rang.icon, 'pf-ico')]),
       UI.el('div.tx', null, [
         UI.el('div.k', { text: 'Stufe ' + info.auf }),
         UI.el('div.t', { text: info.rang.name }),

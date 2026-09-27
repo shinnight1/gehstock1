@@ -862,3 +862,27 @@
 @media (prefers-reduced-motion: reduce) {
   .xp-flug, .pf-karte, .pf-balken-in, .stufe-bar i { transition: none; }
 }
+
+/* ---------------------------------------------------------- Symbole als Bild
+   UI.symbol legt ein img in den span, sobald es ui-ico-<name> gibt.
+   Die Groesse haengt an der Schriftgroesse des Behaelters, damit ein
+   Bild genau dort sitzt, wo vorher das Zeichen stand. */
+.ico-bild { display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; line-height: 0; }
+.ico-bild img {
+  width: 1.4em; height: 1.4em; display: block; border-radius: 50%;
+  -webkit-user-drag: none; user-select: none; pointer-events: none;
+}
+.btn .ico.ico-bild img { width: 22px; height: 22px; }
+.chip .c-ico.ico-bild img { width: 20px; height: 20px; margin-left: -6px; }
+.search .ico.ico-bild img { width: 20px; height: 20px; opacity: .85; }
+.sec-head h2 { display: flex; align-items: center; }
+.sec-head .sec-ico.ico-bild { margin-right: 8px; }
+.sec-head .sec-ico.ico-bild img { width: 24px; height: 24px; }
+.badge .b-ico.ico-bild img { width: 13px; height: 13px; }
+.badge .b-ico.ico-bild { vertical-align: -2px; }
+.bnd-knopf-wappen .w-ico.ico-bild img { width: 38px; height: 38px; }
+.pf-zahl .pf-ico.ico-bild img { width: 30px; height: 30px; }
+.pf-karte .pf-ico.ico-bild img { width: 40px; height: 40px; }
+.pf-rang .pf-rang-ico.ico-bild img, .pf-hinweis .pf-rang-ico.ico-bild img { width: 22px; height: 22px; }
+.pf-rang .pf-rang-ico.ico-bild, .pf-hinweis .pf-rang-ico.ico-bild { vertical-align: -5px; }
+.empty .leer-ico.ico-bild img { width: 56px; height: 56px; }

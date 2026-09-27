@@ -62,8 +62,8 @@
     var kreis = SG.auth.nurKreis(def.id);
 
     var badges = UI.el('div.tile-badges');
-    if (wartung) badges.appendChild(UI.el('span.badge.wartung', { text: '🔧 WARTUNG' }));
-    else if (kreis) badges.appendChild(UI.el('span.badge.kreis', { text: '🔑 KREIS' }));
+    if (wartung) badges.appendChild(UI.el('span.badge.wartung', null, [UI.symbol('wartung', '🔧', 'b-ico'), document.createTextNode(' WARTUNG')]));
+    else if (kreis) badges.appendChild(UI.el('span.badge.kreis', null, [UI.symbol('schluessel', '🔑', 'b-ico'), document.createTextNode(' KREIS')]));
     if (def.online || def.onlineOnly) badges.appendChild(UI.el('span.badge.online', { text: 'ONLINE' }));
     if (def.category === 'tycoon') badges.appendChild(UI.el('span.badge.tycoon', { text: 'TYCOON' }));
     /* Kacheln mit eigenem Bild tragen ihren Schriftzug selbst - ein
@@ -119,7 +119,7 @@
       title: stand.rang.name + ' · ' + U.num(stand.xp) + ' XP',
       on: { click: function () { SG.router.go('#/profil'); } },
     }, [
-      UI.el('span.ico', { text: stand.rang.icon }),
+      UI.symbol(stand.rang.bild, stand.rang.icon),
       UI.el('span.lbl', { text: 'Stufe ' + stand.stufe }),
       UI.el('span.stufe-bar', null, [balken]),
     ]);
@@ -129,7 +129,7 @@
     var ab = function (s) {
       balken.style.width = Math.round(s.anteil * 100) + '%';
       chip.querySelector('.lbl').textContent = 'Stufe ' + s.stufe;
-      chip.querySelector('.ico').textContent = s.rang.icon;
+      UI.symbolSetzen(chip.querySelector('.ico'), s.rang.bild, s.rang.icon);
     };
     SG.fortschritt.on('aenderung', ab);
     chip.__ab = ab;
@@ -150,7 +150,7 @@
         },
       },
     }, [
-      UI.el('div.bnd-knopf-wappen', { text: '🦅' }),
+      UI.el('div.bnd-knopf-wappen', null, [UI.symbol('adler', '🦅', 'w-ico')]),
       UI.el('div.bnd-knopf-text', null, [
         UI.el('div.bk-t', { text: 'Bundesnachrichtendienst' }),
         UI.el('div.bk-d', { text: 'Lagezentrale · Zugang nur mit Dienstschlüssel' }),
@@ -206,25 +206,22 @@
           on: { click: function () { SG.router.go('#/offline'); } },
         }),
         SG.auth.imKreis() ? UI.el('button.btn.sm.kreis', {
-          html: '<span class="ico">🔑</span><span class="lbl">Kreis</span>',
           'aria-label': 'Innerer Kreis',
           on: { click: function () { SG.router.go('#/kreis'); } },
-        }) : null,
+        }, [UI.symbol('schluessel', '🔑'), UI.el('span.lbl', { text: 'Kreis' })]) : null,
         SG.auth.istAdmin() ? UI.el('button.btn.sm.gold', {
-          html: '<span class="ico">🛡</span><span class="lbl">Admin</span>',
           'aria-label': 'Admin-Menü',
           on: { click: function () { SG.router.go('#/adminraum'); } },
-        }) : null,
+        }, [UI.symbol('schild', '🛡'), UI.el('span.lbl', { text: 'Admin' })]) : null,
         UI.el('button.btn.sm.ghost', {
           html: '<span class="ico">ⓘ</span>',
           'aria-label': 'Über uns',
           on: { click: function () { SG.router.go('#/ueber'); } },
         }),
         UI.el('button.btn.sm.ghost', {
-          html: '<span class="ico">⚙</span>',
           'aria-label': 'Einstellungen',
           on: { click: function () { Hub.settings(); } },
-        }),
+        }, [UI.symbol('zahnrad', '⚙')]),
       ]),
     ]);
     app.appendChild(top);
@@ -246,13 +243,12 @@
 
     var filters = UI.el('div.filters');
     var filterDefs = [{ id: 'alle', name: 'Alle', icon: '▦' }]
-      .concat(SG.scores.favorites().length ? [{ id: 'fav', name: 'Favoriten', icon: '★' }] : [])
+      .concat(SG.scores.favorites().length ? [{ id: 'fav', name: 'Favoriten', icon: '★', bild: 'stern' }] : [])
       .concat(SG.categories)
-      .concat([{ id: 'online', name: 'Mehrspieler', icon: '🌐' }]);
+      .concat([{ id: 'online', name: 'Mehrspieler', icon: '🌐', bild: 'mehrspieler' }]);
 
     filterDefs.forEach(function (f) {
       var b = UI.el('button.chip' + (state.filter === f.id ? '.on' : ''), {
-        html: '<span>' + f.icon + '</span> ' + f.name,
         on: {
           click: function () {
             state.filter = f.id;
@@ -264,7 +260,7 @@
             renderGrid();
           },
         },
-      });
+      }, [UI.symbol(f.bild, f.icon, 'c-ico'), document.createTextNode(' ' + f.name)]);
       filters.appendChild(b);
     });
 
@@ -276,7 +272,7 @@
     if (!SG.offline) wrap.appendChild(SG.flix.knopf());
 
     wrap.appendChild(UI.el('div.hub-tools', null, [
-      UI.el('div.search', null, [UI.el('span.ico', { text: '⌕' }), searchInput]),
+      UI.el('div.search', null, [UI.symbol('lupe', '⌕'), searchInput]),
       filters,
     ]));
 
@@ -295,10 +291,13 @@
 
     var pending = [];
 
-    function section(title, games, note) {
+    function section(title, games, note, cat) {
       if (!games.length) return null;
       var head = UI.el('div.sec-head', null, [
-        UI.el('h2', { text: title }),
+        UI.el('h2', null, [
+          cat ? UI.symbol(cat.bild, cat.icon, 'sec-ico') : null,
+          document.createTextNode(title),
+        ]),
         UI.el('span.count', { text: games.length + (note ? ' · ' + note : '') }),
       ]);
       var g = UI.el('div.grid');
@@ -328,7 +327,7 @@
       }
 
       if (!list.length) {
-        gridHost.appendChild(UI.empty('🔍', 'Nichts gefunden',
+        gridHost.appendChild(UI.empty(UI.symbol('lupe', '🔍', 'leer-ico'), 'Nichts gefunden',
           'Andere Suche oder Filter probieren.'));
         return;
       }
@@ -351,7 +350,7 @@
         var oben = SG.byCategory('gehstockmon').slice().sort(function (a, b) {
           return (a.id === 'gehstockmon' ? 0 : 1) - (b.id === 'gehstockmon' ? 0 : 1);
         });
-        var gm = section(SG.catName('gehstockmon'), oben);
+        var gm = section(SG.catName('gehstockmon'), oben, null, SG.categories[0]);
         if (gm) gridHost.appendChild(gm);
 
         var ohneGm = function (id) {
@@ -359,16 +358,18 @@
         };
 
         var s1 = section('Favoriten',
-          favIds.filter(ohneGm).map(function (id) { return SG.games[id]; }));
+          favIds.filter(ohneGm).map(function (id) { return SG.games[id]; }), null,
+          { bild: 'stern', icon: '★' });
         if (s1) gridHost.appendChild(s1);
 
         var s2 = section('Zuletzt gespielt',
-          recent.filter(ohneGm).slice(0, 6).map(function (id) { return SG.games[id]; }));
+          recent.filter(ohneGm).slice(0, 6).map(function (id) { return SG.games[id]; }), null,
+          { bild: 'kalender', icon: '🕘' });
         if (s2) gridHost.appendChild(s2);
 
         SG.categories.forEach(function (cat) {
           if (cat.id === 'gehstockmon') return;
-          var s = section(cat.name, SG.byCategory(cat.id));
+          var s = section(cat.name, SG.byCategory(cat.id), null, cat);
           if (s) gridHost.appendChild(s);
         });
       }
