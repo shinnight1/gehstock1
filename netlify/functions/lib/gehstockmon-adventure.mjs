@@ -3,6 +3,7 @@ import {activeDungeon} from './gehstockmon-dungeons.mjs';
 import {stadtSettle} from './gehstockmon-stadt.mjs';
 import {anwesende} from './gehstockmon-anwesenheit.mjs';
 import {tickern} from './gehstockmon-alltag.mjs';
+import {effekt} from './gehstockmon-insel.mjs';
 const fail=(message)=>{throw new Error(message);};
 export const activeArena=p=>p.arena&&p.arena.phase!=='finished';
 export const activeDuel=p=>p.duel&&['choose','won'].includes(p.duel.phase);
@@ -35,7 +36,7 @@ export function finishEncounter(world,p,id,now){
          gegen die drei festen, und wer sich welche dazugekauft hatte, konnte
          trotzdem kein bruetendes Ei mitnehmen. */
       if(stolen&&p.eggs.length<E.BAG_LIMIT&&(stolen.startedAt===null||p.eggs.filter(e=>e.startedAt!==null).length<X.brutplaetze(world.leuchtturm,p))){
-        target.eggs=target.eggs.filter(e=>e.id!==stolen.id);p.eggs.push({...stolen,id:'stolen-'+now+'-'+(++p.eggSerial)});target.raidShield=now+2*E.HOUR;
+        target.eggs=target.eggs.filter(e=>e.id!==stolen.id);p.eggs.push({...stolen,id:'stolen-'+now+'-'+(++p.eggSerial)});target.raidShield=now+Math.round(2*E.HOUR*effekt(world,now,'raubSchutz'));
         b.message='Überfall gewonnen! Ein Ei aus '+target.name+'s Tasche gehört dir. Seine Brutzeit bleibt erhalten.';log(world,p,id,b.targetId,'erbeutet ein Ei von '+target.name+'.',now);
         /* Wer den Fuehrenden stellt, kassiert das Kopfgeld. */
         const zaehler={};for(const t2 of world.territories||[])if(t2.ownerId)zaehler[t2.ownerId]=(zaehler[t2.ownerId]||0)+1;
@@ -74,13 +75,14 @@ export function zerhacker(world,now){
       for(const [pid,wert] of Object.entries(alt))if(!bester||wert>bester.wert)bester={pid,wert};
       world.erstschlag=bester?{woche,id:bester.pid,name:world.players[bester.pid]?.name||'Unbekannt',wert:bester.wert}:null;
     }
-    const kraft=X.zerhackerKraft(aktiveSpieler(world,now));
+    /* In der Heldenwoche ist er anderthalbmal so zaeh (Inselwetter). */
+    const kraft=Math.round(X.zerhackerKraft(aktiveSpieler(world,now))*effekt(world,now,'zerhackerKraft'));
     world.zerhacker={woche,hp:kraft,maxHp:kraft,beitraege:{},besiegtAm:null,verteilt:false};
   }
   /* Wird seine Lebenskraft neu festgelegt, gilt das sofort und nicht erst am
      Montag. Was diese Woche schon an Schaden liegt, bleibt angerechnet - der
      Rest schrumpft auf das neue Mass. */
-  const kraft=X.zerhackerKraft(aktiveSpieler(world,now));
+  const kraft=Math.round(X.zerhackerKraft(aktiveSpieler(world,now))*effekt(world,now,'zerhackerKraft'));
   if(world.zerhacker.maxHp!==kraft&&!world.zerhacker.besiegtAm){
     const geschlagen=world.zerhacker.maxHp-world.zerhacker.hp;
     world.zerhacker.maxHp=kraft;world.zerhacker.hp=Math.max(0,kraft-geschlagen);
@@ -250,7 +252,9 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
     if(p.encounterClaims.includes(encounter.id))fail('Diese Begegnung hast du bereits abgeschlossen.');await nearby(encounter);
     if(op==='gather'){p.encounterClaims=p.encounterClaims.concat(encounter.id).slice(-100);p.progress.gathered++;E.buchen(p,10,'runen',now);
       /* Eine verlorene Rune ist jetzt auch eine Rune - vorher gab es nur Gold. */
-      p.runes[0]=Math.min(9999,(p.runes[0]||0)+1);fehdeSchritt(world,id,'rune',now);X.alltagSchritt(p,'rune',now);extra.message=wochenschritt(world,p,id,'runen',now)||'Rune gefunden! +1 gewöhnliche Rune und 10 Gold.';}
+      /* Im Runenregen sind es zwei. */
+      const fund=Math.max(1,Math.round(effekt(world,now,'runenFund')));
+      p.runes[0]=Math.min(9999,(p.runes[0]||0)+fund);fehdeSchritt(world,id,'rune',now);X.alltagSchritt(p,'rune',now);extra.message=wochenschritt(world,p,id,'runen',now)||'Rune gefunden! +'+fund+' gewöhnliche '+(fund===1?'Rune':'Runen')+' und 10 Gold.';}
     else {
       p.truppe=validateSquad(p,body.squad);
       const einsteiger=p.progress.trainerWins<TRAINER_EINSTIEG,welcher=Number(String(encounter.id).split(':')[1])||0;
@@ -299,8 +303,9 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
       for(const [pid,anteil] of Object.entries(z.beitraege)){
         const wer=world.players[pid];if(!wer)continue;
         const teil=anteil/gesamt;
-        E.buchen(wer,Math.max(50,Math.round(X.ZERHACKER.beuteGold*teil*Object.keys(z.beitraege).length)),'zerhacker',now);
-        const runen=Math.max(1,Math.round(X.ZERHACKER.beuteRunen*teil*Object.keys(z.beitraege).length));
+        const beute=effekt(world,now,'zerhackerBeute');
+        E.buchen(wer,Math.max(50,Math.round(X.ZERHACKER.beuteGold*beute*teil*Object.keys(z.beitraege).length)),'zerhacker',now);
+        const runen=Math.max(1,Math.round(X.ZERHACKER.beuteRunen*beute*teil*Object.keys(z.beitraege).length));
         wer.runes[5]=Math.min(9999,(wer.runes[5]||0)+runen);
       }
       log(world,p,id,null,'streckt den gehstockhassenden Zerhacker nieder.',now);
@@ -360,8 +365,9 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
     const ziel=X.streifzugZiel(body.ziel),dauer=Number(body.dauer);
     if(!ziel||!X.STREIFZUG_DAUERN.includes(dauer))fail('Wähle Ziel und Dauer des Streifzugs.');
     const gebiete=world.territories.filter(t=>t.ownerId===id).length;
-    const ergebnis=X.streifzugWuerfeln(X.streifzugVorschau(X.mon(p,mon.id),ziel.id,dauer,gebiete),E.zufallsfolge(draw));
-    const fertigAt=H.productionAt(H.openTime(now)+dauer*60000);
+    const ergebnis=X.streifzugWuerfeln(X.streifzugVorschau(X.mon(p,mon.id),ziel.id,dauer,gebiete,effekt(world,now,'streifzugRunen')),E.zufallsfolge(draw));
+    /* Rueckenwind macht den Weg kuerzer - die Dauer bleibt die gewaehlte Stufe. */
+    const fertigAt=H.productionAt(H.openTime(now)+Math.round(dauer*effekt(world,now,'streifzugDauer'))*60000);
     p.streifzuege.push({id:body.requestId,monId:mon.id,ziel:ziel.id,dauer,start:now,fertigAt,ergebnis});
     extra.message=mon.name+' zieht los: '+ziel.name+'. Zurück '+X.uhrText(fertigAt,now)+'.';
   }
@@ -401,7 +407,7 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
     if(p.raidCooldown>now||target.raidLock?.until>now||activeArena(target)||activeDuel(target)||activeDungeon(world,target))fail('Dieser Überfall ist gerade nicht möglich.');
     if(p.eggs.length>=E.BAG_LIMIT)fail('Du brauchst einen freien Platz für ein erbeutetes Ei.');
     const targetPos=await position(body.targetId);await nearby(targetPos);const plaetze=X.brutplaetze(world.leuchtturm,p),belegt=p.eggs.filter(e=>e.startedAt!==null).length;const victimEgg=(belegt<plaetze?target.eggs.find(e=>e.startedAt!==null):null)||target.eggs.find(e=>e.startedAt===null);if(!victimEgg)fail('Dieser Spieler trägt kein Ei, das in deine Brutstation passt.');
-    p.raidCooldown=now+X.UEBERFALL_PAUSE;p.duel={id:body.requestId,targetId:body.targetId,targetName:target.name,revision:0,round:1,phase:'choose',hp:100,enemyHp:100,weapon:p.weapon,enemyWeapon:target.weapon,enemySkin:target.skin,enemyPanzer:target.panzer||null,until:now+10*60000,message:'Gewinne zuerst das Waffenduell, danach den Mon-Kampf.'};target.raidLock={attackerId:id,eggId:victimEgg.id,until:p.duel.until};
+    p.raidCooldown=now+Math.round(X.UEBERFALL_PAUSE*effekt(world,now,'raubPause'));p.duel={id:body.requestId,targetId:body.targetId,targetName:target.name,revision:0,round:1,phase:'choose',hp:100,enemyHp:100,weapon:p.weapon,enemyWeapon:target.weapon,enemySkin:target.skin,enemyPanzer:target.panzer||null,until:now+10*60000,message:'Gewinne zuerst das Waffenduell, danach den Mon-Kampf.'};target.raidLock={attackerId:id,eggId:victimEgg.id,until:p.duel.until};
   }
   if(op==='raid_turn'){
     const d=p.duel;if(!d||d.phase!=='choose'||d.id!==body.duelId||d.revision!==body.revision)fail('Rufe den aktuellen Duellstand ab.');if(!['strike','heavy','guard'].includes(body.move))fail('Wähle eine Waffenaktion.');

@@ -63,8 +63,10 @@ export function morgenbericht(world, p, id, seit, now, extra = {}) {
   /* Kurierdienst: ein Paket, das noch unterwegs ist, oder ein voller Stapel. */
   if (p.kurier) zeilen.push({ art: 'info', text: '📦 Du trägst noch ' + p.kurier.ware + ' nach ' + X.kurierOrtName(p.kurier.nach) + '.' });
   else if (p.kurierGesamt && (p.kurierBrett || []).length >= X.KURIER_VORRAT) zeilen.push({ art: 'info', text: '📦 Im Kurierkontor in Stockhafen liegen ' + X.KURIER_VORRAT + ' Aufträge bereit - mehr passen nicht auf den Stapel.' });
-  /* Beim ersten Besuch einer neuen Woche: was die letzte gebracht hat. */
+  /* Beim ersten Besuch einer neuen Woche: das Wetter und was die letzte gebracht hat. */
   if (seit < X.wochenStart(now)) {
+    const w = X.wetter(now), n = X.wetterNaechste(now);
+    zeilen.push({ art: 'info', text: w.zeichen + ' Diese Woche: ' + w.name + '. ' + w.text + ' Nächste Woche: ' + n.name + '.' });
     const vorige = E.bilanzSicht(p, now).vorige;
     if (vorige) {
       const summe = (s) => Object.values(s || {}).reduce((n, v) => n + v, 0), rein = summe(vorige.rein), raus = summe(vorige.raus);

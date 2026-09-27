@@ -4,7 +4,9 @@
 (function (SG) {
   var R = SG.gehstockmon, D = R.daten, E = R.wirtschaft, X = R.abenteuer;
   R.mountHandel = function (c) {
-    var el = c.el, button = c.button, drawer = c.drawer, handel = null, karte = [], pin = null;
+    var el = c.el, button = c.button, drawer = c.drawer, handel = null, karte = [], pin = null, effekte = {};
+    /* Wetter und Erlass der Woche machen den Kurierlohn groesser oder kleiner. */
+    function kurierFaktor() { return effekte.kurier || 1; }
     function state() { return c.state(); }
     function titel(text, bild) { var h = el('h3', text), sym = R.symbol && R.symbol(bild, 'gm-titel-symbol'); if (sym) h.insertBefore(sym, h.firstChild); return h; }
     function zahl(n) { return Math.round(n || 0).toLocaleString('de-DE'); }
@@ -43,7 +45,7 @@
       if (k) {
         var paket = el('article', undefined, 'gm-quest-card gm-kurier-paket'), eil = !!(k.eilig && k.frist && jetzt <= k.frist);
         paket.appendChild(el('h3', '📦 ' + k.ware + ' → ' + X.kurierOrtName(k.nach)));
-        paket.appendChild(el('p', 'Beim Abliefern: ' + X.kurierBetrag(k, gebiete, eil) + ' Gold'
+        paket.appendChild(el('p', 'Beim Abliefern: ' + X.kurierBetrag(k, gebiete, eil, kurierFaktor()) + ' Gold'
           + (k.eilig ? (eil ? ' mit Eilzuschlag - noch ' + frist(k.frist - jetzt) : ' (die Eilfrist ist vorbei, der normale Lohn gilt)') : '') + '.'));
         var da = amOrt(k.nach);
         var ab = button(da ? 'Abliefern' : 'Zum Tor von ' + X.kurierOrtName(k.nach), function () {
@@ -64,8 +66,8 @@
         var kopf = el('h3', (a.eilig && !(R.symbol && SG.assets['gm-icon-eilbote']) ? '⚡ ' : '') + a.ware + ': ' + X.kurierOrtName(a.von) + ' → ' + X.kurierOrtName(a.nach)), eilSym = a.eilig && R.symbol && R.symbol('eilbote', 'gm-titel-symbol');
         if (eilSym) { eilSym.title = 'eilig'; kopf.insertBefore(eilSym, kopf.firstChild); }
         karte.appendChild(kopf);
-        karte.appendChild(el('p', X.kurierBetrag(a, gebiete, false) + ' Gold'
-          + (a.eilig ? ' · ' + X.kurierBetrag(a, gebiete, true) + ' in der Eilfrist (' + frist(X.kurierFrist(a)) + ')' : '')
+        karte.appendChild(el('p', X.kurierBetrag(a, gebiete, false, kurierFaktor()) + ' Gold'
+          + (a.eilig ? ' · ' + X.kurierBetrag(a, gebiete, true, kurierFaktor()) + ' in der Eilfrist (' + frist(X.kurierFrist(a)) + ')' : '')
           + ' · ' + X.kurierWeg(a.von, a.nach) + ' Schritte' + (a.von ? ' · Abholung vor dem Tor' : '')));
         var hier = amOrt(a.von);
         var b = button(k ? 'Erst das Paket abliefern' : hier ? 'Aufladen' : a.von ? 'Zum Tor von ' + X.kurierOrtName(a.von) : 'Nach ' + X.STADT.name + ' laufen', function () {
@@ -191,7 +193,7 @@
     R.kurierOeffnen = kurier;
     return {
       kurier: kurier, markthalle: markthalle, bilanz: bilanz, kacheln: kacheln, frame: frame,
-      apply: function (res) { if (res && res.handel) handel = res.handel; if (res && Array.isArray(res.territories)) karte = X.layout(res.territories); },
+      apply: function (res) { if (res && res.handel) handel = res.handel; if (res && res.insel) effekte = res.insel.effekte || {}; if (res && Array.isArray(res.territories)) karte = X.layout(res.territories); },
       handel: function () { return handel; },
       clear: function () { if (pin) { pin.node.remove(); pin = null; } }
     };

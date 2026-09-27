@@ -157,11 +157,12 @@
   X.streifzugZiel=function(id){return X.STREIFZUG_ZIELE.find(function(z){return z.id===id;})||null;};
   X.streifzugGoldAnteil=function(gebiete){return gebiete<=0?1:gebiete<=2?.5:.25;};
   /* Was ein Streifzug erwarten laesst - dieselbe Rechnung fuer Anzeige und Wurf. */
-  X.streifzugVorschau=function(mon,zielId,dauer,gebiete){
+  /* runenFaktor: das Wetter der Woche (Runenregen), sonst 1. */
+  X.streifzugVorschau=function(mon,zielId,dauer,gebiete,runenFaktor){
     var z=X.streifzugZiel(zielId),e=X.STREIFZUG_ERTRAG[dauer];if(!z||!e||!mon)return null;
-    var passt=z.rollen.indexOf(mon.typ)>=0,f=passt?X.STREIFZUG_ROLLE:1;
+    var passt=z.rollen.indexOf(mon.typ)>=0,f=passt?X.STREIFZUG_ROLLE:1,rf=Number.isFinite(runenFaktor)?runenFaktor:1;
     return {passt:passt,runenRang:mon.seltenheit,
-      runen:z.id==='runen'?Math.round(e.runen*f*(mon.seltenheit>=4?.5:1)*100)/100:0,
+      runen:z.id==='runen'?Math.round(e.runen*f*rf*(mon.seltenheit>=4?.5:1)*100)/100:0,
       gold:z.id==='waren'?Math.round(e.gold*f*X.streifzugGoldAnteil(gebiete)):0,
       ei:z.id==='nester'?Math.round(Math.min(.9,e.ei*f)*100)/100:0};
   };

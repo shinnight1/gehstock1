@@ -111,8 +111,9 @@
     return Math.max(0, H.productionAt(H.openTime(p.kurierAt) + bis) - now);
   };
   /* Was ein Auftrag jemandem mit so vielen Gebieten bringt. */
-  X.kurierBetrag = function (a, gebiete, eil) {
-    return Math.round(a.lohn * (eil ? X.KURIER_EIL : 1) * X.streifzugGoldAnteil(gebiete));
+  /* faktor: Wetter und Erlass der Woche (X.effekt 'kurier'), sonst 1. */
+  X.kurierBetrag = function (a, gebiete, eil, faktor) {
+    return Math.round(a.lohn * (eil ? X.KURIER_EIL : 1) * X.streifzugGoldAnteil(gebiete) * (Number.isFinite(faktor) ? faktor : 1));
   };
 
   /* ----------------------------------------------------------------
@@ -155,10 +156,11 @@
   X.RUNEN_ANKAUF = 0.7;
   X.RUNEN_VERKAUF_DECKEL = 500; X.RUNEN_KAUF_DECKEL = 1000;
   X.runenAnkauf = function (rang) { return Math.floor((X.RUNEN_PREISE[rang] || 0) * X.RUNEN_ANKAUF); };
-  X.runenHandelStand = function (p, now) {
-    var b = E.bilanzSicht(p, now).diese;
+  /* faktor: die Marktwoche verdoppelt beide Grenzen (X.effekt 'handelDeckel'). */
+  X.runenHandelStand = function (p, now, faktor) {
+    var b = E.bilanzSicht(p, now).diese, f = Number.isFinite(faktor) ? faktor : 1;
     return { verkauft: b.rein.handel || 0, gekauft: b.raus.handel || 0,
-      verkaufFrei: Math.max(0, X.RUNEN_VERKAUF_DECKEL - (b.rein.handel || 0)), kaufFrei: Math.max(0, X.RUNEN_KAUF_DECKEL - (b.raus.handel || 0)) };
+      verkaufFrei: Math.max(0, Math.round(X.RUNEN_VERKAUF_DECKEL * f) - (b.rein.handel || 0)), kaufFrei: Math.max(0, Math.round(X.RUNEN_KAUF_DECKEL * f) - (b.raus.handel || 0)) };
   };
 
   /* Wer am meisten austraegt, bekommt einen Titel dafuer. */

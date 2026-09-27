@@ -12,6 +12,7 @@
 import {data as D,economy as E,arena as A,hours as H,adventure as X} from './gehstockmon-rules.mjs';
 import {anwesende} from './gehstockmon-anwesenheit.mjs';
 import {tickern} from './gehstockmon-alltag.mjs';
+import {effekt} from './gehstockmon-insel.mjs';
 const activeArena=(p)=>p.arena&&p.arena.phase!=='finished';
 const fail=(message)=>{throw new Error(message);};
 
@@ -119,7 +120,7 @@ export function arenaStand(world,id,now){
     stadt:{
       ohneGebiet:!world.territories.some(t=>t.ownerId===id),
       tagwerk:X.tagwerkStand(p,now).fertig,tagwerkMax:X.TAGWERK_VORRAT,
-      tagwerkIn:X.tagwerkWartezeit(p,now),tagwerkLohn:X.TAGWERK_LOHN,
+      tagwerkIn:X.tagwerkWartezeit(p,now),tagwerkLohn:Math.round(X.TAGWERK_LOHN*effekt(world,now,'tagwerk')),
       findelei:X.findeleiStand(p,now).fertig,findeleiMax:X.FINDELEI_VORRAT,findeleiIn:X.findeleiWartezeit(p,now),
       brutplaetze:X.brutplaetze(world.leuchtturm,p),gekauft:X.gekaufteBrutplaetze(p),
       preis:X.BRUTPLATZ_PREISE[X.gekaufteBrutplaetze(p)]||null},
@@ -136,7 +137,8 @@ export function arenaStand(world,id,now){
 export function stadtSettle(world,p,id,now){
   const b=p.arena;
   if(b.kind==='rang'){
-    const sieg=b.winner==='wir',lohn=X.arenaLohn(b.einstufung);
+    /* Das Arenafest des Buergermeisters legt ein Viertel drauf. */
+    const sieg=b.winner==='wir',lohn=Math.round(X.arenaLohn(b.einstufung)*effekt(world,now,'arenaLohn'));
     p.arenaRuhm=Math.max(100,X.ruhm(p)+(sieg?X.RUHM_SIEG:-X.RUHM_NIEDERLAGE));
     E.buchen(p,sieg?lohn:X.ARENA_TROST,'arena',now);
     if(sieg){
@@ -152,7 +154,7 @@ export function stadtSettle(world,p,id,now){
     /* Waehrend des Kampfes kann ein anderer den Titel geholt haben. Dann
        zaehlt der Sieg als Ranglistensieg und nicht als Titelgewinn. */
     if(c.seit!==b.championSeit){
-      p.arenaRuhm=X.ruhm(p)+X.RUHM_SIEG;E.buchen(p,X.ARENA_LOHN,'arena',now);p.arenaSiegeGesamt=(p.arenaSiegeGesamt||0)+1;
+      p.arenaRuhm=X.ruhm(p)+X.RUHM_SIEG;E.buchen(p,Math.round(X.ARENA_LOHN*effekt(world,now,'arenaLohn')),'arena',now);p.arenaSiegeGesamt=(p.arenaSiegeGesamt||0)+1;
       b.message='Gewonnen - aber der Titel hat während des Kampfes den Besitzer gewechselt. Der Sieg zählt als Ranglistensieg.';
       return true;
     }
@@ -226,8 +228,9 @@ export async function stadtAction({world,p,id,body,now,presence}){
   if(op==='tagwerk'){
     ohneGebiet();await amTor();
     if(X.tagwerkStand(p,now).fertig<1)fail('Im Hafen gibt es gerade keine Arbeit. Komm in einer Weile wieder.');
-    X.tagwerkVerbrauchen(p,now);E.buchen(p,X.TAGWERK_LOHN,'tagwerk',now);
-    extra.message='Tagwerk erledigt: +'+X.TAGWERK_LOHN+' Gold.';
+    const lohn=Math.round(X.TAGWERK_LOHN*effekt(world,now,'tagwerk'));
+    X.tagwerkVerbrauchen(p,now);E.buchen(p,lohn,'tagwerk',now);
+    extra.message='Tagwerk erledigt: +'+lohn+' Gold.';
     return extra;
   }
   if(op==='findelei'){

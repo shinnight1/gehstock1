@@ -219,3 +219,7 @@
 @media (max-width:650px){.gm-projekte{top:124px;left:10px;right:58px}.gm-projekt{min-width:108px}}
 @media (max-width:500px){.gm-projekte{top:138px}}
 .gm-projekte{scrollbar-color:#4a6572 transparent}
+/* Inselwetter */
+.gm-wetter-karte{border-color:var(--wetter,#f0ca80);background:linear-gradient(140deg,#24363a,#122c34)}
+.gm-wetter-karte h3{color:var(--wetter,#f0ca80)}
+.gm-wirkungen{margin:6px 0 12px;padding-left:20px;color:#c8d6cf;font-size:14px;line-height:1.6}

@@ -5,7 +5,9 @@ import assert from 'node:assert/strict';
 import { data as D, economy as E, hours as H, adventure as X } from '../netlify/functions/lib/gehstockmon-rules.mjs';
 import { createHandler } from '../netlify/functions/gehstockmon.mjs';
 
-const mon = Date.parse('2026-09-21T09:00:00+02:00');
+/* Eine Woche mit klarem Himmel: Rueckenwind verkuerzte sonst jeden Weg. */
+const mon = Date.parse('2026-10-05T09:00:00+02:00');
+assert.equal(X.wetter(mon).id, 'klar');
 let checks = 0;
 async function test(name, fn) { await fn(); checks++; console.log('ok', name); }
 function store() {
@@ -75,16 +77,16 @@ await test('A Mon on a trip neither fights, defends, joins a dungeon nor hangs o
 
 await test('The clock runs on open time, the result is fixed at the start and paid exactly on return', async () => {
   /* Montag 12:30 los, 90 Minuten: 30 bis Schulschluss, 60 am Dienstag ab 7 Uhr. */
-  const w = await welt(Date.parse('2026-09-21T12:30:00+02:00'));
+  const w = await welt(Date.parse('2026-10-05T12:30:00+02:00'));
   let r = await w.call('streifzug_start', { monId: 'pilzhueter', ziel: 'nester', dauer: 90 });
   assert.equal(r.status, 200, r.error); assert.match(r.message, /morgen um 08:00/);
   const zug = w.p().streifzuege[0];
-  assert.equal(zug.fertigAt, Date.parse('2026-09-22T08:00:00+02:00'));
+  assert.equal(zug.fertigAt, Date.parse('2026-10-06T08:00:00+02:00'));
   const vorher = { gold: w.p().gold, eier: w.p().eggs.length, runen: w.p().runes.slice() }, e = zug.ergebnis;
-  w.uhr.t = Date.parse('2026-09-22T07:59:00+02:00');
+  w.uhr.t = Date.parse('2026-10-06T07:59:00+02:00');
   r = await w.call('streifzug_abholen', { streifzugId: zug.id });
   assert.equal(r.status, 400); assert.match(r.error, /Noch unterwegs/);
-  w.uhr.t = Date.parse('2026-09-22T08:00:00+02:00');
+  w.uhr.t = Date.parse('2026-10-06T08:00:00+02:00');
   r = await w.call('streifzug_abholen', { streifzugId: zug.id }); assert.equal(r.status, 200, r.error);
   assert.equal(w.p().gold - vorher.gold >= e.gold, true, 'the rolled gold arrives (plus whatever else the day brought)');
   assert.equal(w.p().eggs.filter((x) => x.art === 'streifzug').length, e.ei ? 1 : 0, 'the rolled egg arrives, marked as a trip egg');

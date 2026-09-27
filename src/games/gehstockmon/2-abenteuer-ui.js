@@ -1,6 +1,6 @@
 /* Abenteuer, Ausrüstung und das zweistufige Spielerduell. */
 (function(SG){var R=SG.gehstockmon,X=R.abenteuer,D=R.daten;
-  R.mountAdventure=function(c){var el=c.el,button=c.button,drawer=c.drawer,duel=null,pins=[],encounters=[],dungeons=R.mountDungeons(c),handel=R.mountHandel(c),projekte=null,projektLeiste=null;
+  R.mountAdventure=function(c){var el=c.el,button=c.button,drawer=c.drawer,duel=null,pins=[],encounters=[],dungeons=R.mountDungeons(c),handel=R.mountHandel(c),insel=R.mountInsel(c),projekte=null,projektLeiste=null;
     function state(){return c.state();}
     /* Die Leiste ueber der Karte zeigt, woran die Insel gerade gemeinsam
        arbeitet: die Lebenskraft des Zerhackers und die Hoehe des Leuchtturms.
@@ -44,6 +44,9 @@
           heute.truhe ? '✓ Truhe geöffnet' : heute.fertig ? '🎁 Truhe bereit!' : erledigt + '/3 Aufgaben',
           heute.fertig && !heute.truhe ? '#81d2a3' : '#f0b429', c.heute, 'truhe'));
       }
+      /* Das Wetter der Woche gleich danach - es veraendert alles andere. */
+      var inselKacheln = insel.kacheln(marke);
+      if (inselKacheln.wetter) projektLeiste.appendChild(inselKacheln.wetter);
       /* Streifzuege: zurueck geht vor, sonst die naechste Rueckkehr. */
       var zuege = (state() && state().streifzuege) || [];
       if (zuege.length) {
@@ -304,12 +307,14 @@
       monWahl.setAttribute('aria-label','Mon für den Streifzug');dauerWahl.setAttribute('aria-label','Dauer des Streifzugs');
       var ROLLEN=['Wall','Schneide','Pfleger','Störer'];
       frei.forEach(function(id){var k=D.mon(id),o=el('option',k.name+' · '+ROLLEN[k.typ]+' · '+D.SELTENHEITEN[k.seltenheit].name);o.value=id;monWahl.appendChild(o);});
-      X.STREIFZUG_DAUERN.forEach(function(d){var o=el('option',d+' Min. · zurück '+X.uhrText(R.zeiten.productionAt(R.zeiten.openTime(jetzt)+d*60000),jetzt));o.value=String(d);dauerWahl.appendChild(o);});
+      /* Das Wetter der Woche: Rueckenwind kuerzt den Weg, Runenregen fuellt die Taschen. */
+      var eff=(projekte&&projekte.insel&&projekte.insel.effekte)||{},wegFaktor=eff.streifzugDauer||1,runenFaktor=eff.streifzugRunen||1;
+      X.STREIFZUG_DAUERN.forEach(function(d){var o=el('option',d+' Min. · zurück '+X.uhrText(R.zeiten.productionAt(R.zeiten.openTime(jetzt)+Math.round(d*wegFaktor)*60000),jetzt));o.value=String(d);dauerWahl.appendChild(o);});
       monWahl.value=frei[0];dauerWahl.value='90';
       function zieleZeigen(){
         SG.ui.clear(ziele);var mon=X.mon(s,monWahl.value),dauer=Number(dauerWahl.value);
         X.STREIFZUG_ZIELE.forEach(function(ziel){
-          var v=X.streifzugVorschau(mon,ziel.id,dauer,gebiete);if(!v)return;
+          var v=X.streifzugVorschau(mon,ziel.id,dauer,gebiete,runenFaktor);if(!v)return;
           var was=ziel.id==='runen'?(v.runen>=1?'~'+String(Math.round(v.runen*10)/10).replace('.',',')+' '+D.SELTENHEITEN[v.runenRang].name+'-Runen':Math.round(v.runen*100)+' % auf eine '+D.SELTENHEITEN[v.runenRang].name+'-Rune')
             :ziel.id==='waren'?v.gold+' Gold':Math.round(v.ei*100)+' % auf ein Ei';
           var b=button((v.passt?'★ ':'')+ziel.name+' · '+was,function(){run('streifzug_start',{monId:monWahl.value,ziel:ziel.id,dauer:dauer},'adventure');},'gm-button'+(v.passt?' gm-primary':''));
@@ -364,9 +369,9 @@
       if(duel.phase==='won'){var next=button('Stufe 2: Mon-Kampf starten',function(){run('raid_arena',{squad:state().truppe});},'gm-button gm-primary');next.disabled=c.busy();panel.appendChild(next);}
       var cancel=button('Zurück zur Karte',function(){run('raid_cancel',{});},'gm-button gm-secondary');cancel.disabled=c.busy();panel.appendChild(cancel);var retry=button('Duellstand prüfen',function(){c.resume();},'gm-button');retry.disabled=c.busy();panel.appendChild(retry);box.appendChild(panel);
     }
-    return{dungeons:dungeons.menu,dungeonActive:dungeons.active,adventure:adventure,shop:shop,rival:rival,showDuel:showDuel,kurier:handel.kurier,markthalle:handel.markthalle,bilanz:handel.bilanz,active:function(){return dungeons.active()||!!duel&&duel.phase!=='arena';},clear:function(){duel=null;dungeons.clear();handel.clear();},
-      refresh:function(view){if(view==='dungeons')dungeons.menu();if(view==='shop')shop();if(view==='adventure')adventure();if(view==='kurier')handel.kurier();if(view==='markthalle')handel.markthalle();if(view==='bilanz')handel.bilanz();},
-      apply:function(res){dungeons.apply(res);handel.apply(res);duel=res.duel||null;encounters=res.encounters||[];projekte=res;if(c.world()&&c.world().setProjekte)c.world().setProjekte(res);zeigeProjekte();if(c.world()&&c.world().setEncounters)c.world().setEncounters(encounters,res.serverTime);pins.forEach(function(p){p.node.remove();});pins=encounters.map(function(e){var sym=e.kind==='rune'&&R.symbol&&R.symbol('rune','gm-pin-symbol'),node=button(sym?'':e.kind==='trainer'?'⚔':'✦',function(){encounter(e);},'gm-encounter-pin '+e.kind+(sym?' gm-mit-symbol':''));if(sym)node.appendChild(sym);node.title=e.name;node.setAttribute('aria-label',e.name);node.appendChild(el('span',e.name));c.layer.appendChild(node);return{node:node,e:e};});},
+    return{dungeons:dungeons.menu,dungeonActive:dungeons.active,adventure:adventure,shop:shop,rival:rival,showDuel:showDuel,kurier:handel.kurier,markthalle:handel.markthalle,bilanz:handel.bilanz,wetter:insel.wetter,active:function(){return dungeons.active()||!!duel&&duel.phase!=='arena';},clear:function(){duel=null;dungeons.clear();handel.clear();},
+      refresh:function(view){if(view==='dungeons')dungeons.menu();if(view==='shop')shop();if(view==='adventure')adventure();if(view==='kurier')handel.kurier();if(view==='markthalle')handel.markthalle();if(view==='bilanz')handel.bilanz();if(view==='wetter')insel.wetter();},
+      apply:function(res){dungeons.apply(res);handel.apply(res);insel.apply(res);duel=res.duel||null;encounters=res.encounters||[];projekte=res;if(c.world()&&c.world().setProjekte)c.world().setProjekte(res);zeigeProjekte();if(c.world()&&c.world().setEncounters)c.world().setEncounters(encounters,res.serverTime);pins.forEach(function(p){p.node.remove();});pins=encounters.map(function(e){var sym=e.kind==='rune'&&R.symbol&&R.symbol('rune','gm-pin-symbol'),node=button(sym?'':e.kind==='trainer'?'⚔':'✦',function(){encounter(e);},'gm-encounter-pin '+e.kind+(sym?' gm-mit-symbol':''));if(sym)node.appendChild(sym);node.title=e.name;node.setAttribute('aria-label',e.name);node.appendChild(el('span',e.name));c.layer.appendChild(node);return{node:node,e:e};});},
       frame:function(project,hidden,overview){dungeons.frame(project,hidden,overview);handel.frame(project,hidden,overview);pins.forEach(function(p){var at=X.encounterPosition(p.e,c.now()),point=project({x:at.x,z:at.z,y:p.e.kind==='trainer'?4.7:1.5});p.node.hidden=hidden||!point.visible||!point.near&&!overview;p.node.style.transform='translate('+point.x+'px,'+point.y+'px) translate(-50%,-100%)';});}
     };
   };

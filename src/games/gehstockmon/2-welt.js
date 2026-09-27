@@ -29,6 +29,14 @@
     sun.position.set(-40, 70, 28);sun.castShadow=true;sun.shadow.mapSize.set(1536,1536);sun.shadow.bias=-.00025;sun.shadow.normalBias=.035;
     sun.shadow.camera.near=1;sun.shadow.camera.far=240;scene.add(sun);scene.add(sun.target);
     var rim = new T.DirectionalLight('#91b8da', .65);
+    var WETTER_LICHT = { klar: ['#345665', '#c5dfea', '#ffe2b2', 3], duerre: ['#6b5c40', '#eadcb6', '#ffcf8a', 3.3],
+      rueckenwind: ['#3a6674', '#d2eef6', '#fff0cc', 3.1], runenregen: ['#3c3f68', '#d2c8f5', '#e9dbff', 2.7],
+      heldenwoche: ['#58323a', '#ecc6c4', '#ffb89e', 2.9], erntezeit: ['#4b5935', '#e6e6ba', '#ffe3a0', 3.2],
+      marktwoche: ['#34586a', '#c8e2ee', '#ffe7c4', 3] }, wetterJetzt = 'klar';
+    function wetterFaerben(id) {
+      var l = WETTER_LICHT[id] || WETTER_LICHT.klar; wetterJetzt = id;
+      scene.background.set(l[0]); scene.fog.color.set(l[0]); ambient.color.set(l[1]); sun.color.set(l[2]); sun.intensity = l[3];
+    }
     rim.position.set(25, 20, -35); scene.add(rim);
     var fixed = new T.Group(); scene.add(fixed);
     var materials = {}, geometries = {}, spriteTextures = {}, spriteMaterials = [], units = [], flags = [], effects = [], battle = false;
@@ -772,6 +780,9 @@ p.updatedAt=info.updatedAt;p.age=Math.max(0,(serverTime-info.updatedAt)/1000);p.
       /* Meldet, wie es um die beiden Weltprojekte steht. */
       setProjekte:function(stand){
         if (!stand) return;
+        /* Das Wetter der Woche faerbt Himmel, Nebel und Licht - leise, damit
+           die Karte lesbar bleibt. */
+        if (stand.insel && stand.insel.wetter && stand.insel.wetter.id !== wetterJetzt) wetterFaerben(stand.insel.wetter.id);
         /* Die Bahn des Zerhackers haengt an der Serveruhr. Sie kommt sonst nur
            mit den Begegnungen herein - ohne die stuende er an der falschen
            Stelle. */

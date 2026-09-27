@@ -18,6 +18,9 @@
     function nah(){var w=c.world(),p=w&&w.position&&w.position();return !!p&&X.inStadt(p);}
     function hingehen(){c.closeDrawer();var w=c.world();if(w&&w.walkToPoint)w.walkToPoint(X.STADT_TOR);c.notify('Deine Figur läuft nach '+X.STADT.name+'.');}
     function zahl(n){return Math.round(n||0).toLocaleString('de-DE');}
+    /* Das Arenafest des Buergermeisters legt auf jeden Sieg ein Viertel drauf. */
+    function arenaFaktor(){return (stand&&stand.insel&&stand.insel.effekte&&stand.insel.effekte.arenaLohn)||1;}
+    function lohn(stufe){return Math.round(X.arenaLohn(stufe)*arenaFaktor());}
     /* Nach einem Kauf bleibt das Fenster, wo es war - es ist lang, und wer
        unten beim Haendler kauft, soll nicht jedes Mal nach oben springen. */
     function run(op,data){
@@ -63,7 +66,7 @@
     }
     function rangTeil(t){
       drawer.appendChild(titel('Ranglistenkämpfe','arena'));
-      drawer.appendChild(el('p','Dein Ruhm: '+t.ruhm+' · Sieg +'+X.RUHM_SIEG+' Ruhm und Gold nach Gegner: '+X.ARENA_LOHN_STUFEN.leichter+' gegen Leichtere, '+X.ARENA_LOHN_STUFEN.ausgeglichen+' gegen Gleichstarke, '+X.ARENA_LOHN_STUFEN.schwerer+' gegen Stärkere. Niederlage -'+X.RUHM_NIEDERLAGE+' Ruhm und '+X.ARENA_TROST+' Gold Trost. Niemand verliert dabei Mons, Eier oder Gebiete.'));
+      drawer.appendChild(el('p','Dein Ruhm: '+t.ruhm+' · Sieg +'+X.RUHM_SIEG+' Ruhm und Gold nach Gegner: '+lohn('leichter')+' gegen Leichtere, '+lohn('ausgeglichen')+' gegen Gleichstarke, '+lohn('schwerer')+' gegen Stärkere'+(arenaFaktor()!==1?' (Arenafest)':'')+'. Niederlage -'+X.RUHM_NIEDERLAGE+' Ruhm und '+X.ARENA_TROST+' Gold Trost. Niemand verliert dabei Mons, Eier oder Gebiete.'));
       /* Die Bilanz bleibt ueber Titelkaempfe hinweg stehen - die Zahl oben
          dagegen zaehlt nur bis zum naechsten Titelkampf. */
       drawer.appendChild(el('p','Deine Truppe: Stärke '+(t.eigeneStaerke||0)+' · Bilanz: '+(t.siegeGesamt||0)+' Siege aus '+(t.versuche||0)+' Kämpfen'));
@@ -74,7 +77,7 @@
         var karte=el('article',undefined,'gm-quest-card');
         karte.appendChild(el('h3',(g.id===t.empfohlen?'★ ':'')+g.name+(g.haus?' · Haus':'')));
         var stufe={leichter:'leichter als du',ausgeglichen:'etwa gleich stark',schwerer:'stärker als du'}[g.einstufung];
-        karte.appendChild(el('p',(g.haus?'Gegner des Hauses':'Spieler'+(g.titel?' · 🏅 '+g.titel:''))+' · Ruhm '+g.ruhm+(g.staerke?' · Stärke '+g.staerke+(stufe?' ('+stufe+')':''):'')+(g.id===t.empfohlen?' · empfohlen':'')+' · Sieg: '+X.arenaLohn(g.einstufung)+' Gold'));
+        karte.appendChild(el('p',(g.haus?'Gegner des Hauses':'Spieler'+(g.titel?' · 🏅 '+g.titel:''))+' · Ruhm '+g.ruhm+(g.staerke?' · Stärke '+g.staerke+(stufe?' ('+stufe+')':''):'')+(g.id===t.empfohlen?' · empfohlen':'')+' · Sieg: '+lohn(g.einstufung)+' Gold'));
         karte.appendChild(truppenreihe(g.squad));
         var b=button('Herausfordern',function(){run('arena_rang',{targetId:g.id});},'gm-button');
         b.disabled=c.busy()||t.pause>0;
@@ -290,7 +293,7 @@
     }
     return {
       menu:zeigeStadt,
-      apply:function(res){if(res&&res.turnier)stand={turnier:res.turnier,stadt:res.stadt,tausch:res.tausch||[],handel:res.handel||null};},
+      apply:function(res){if(res&&res.turnier)stand={turnier:res.turnier,stadt:res.stadt,tausch:res.tausch||[],handel:res.handel||null,insel:res.insel||null};},
       champion:function(){return stand&&stand.turnier&&stand.turnier.champion;},
       refresh:function(view){if(view==='stadt')zeigeStadt();}
     };

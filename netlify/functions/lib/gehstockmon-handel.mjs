@@ -10,6 +10,7 @@
 import { data as D, economy as E, adventure as X } from './gehstockmon-rules.mjs';
 import { anwesende } from './gehstockmon-anwesenheit.mjs';
 import { tickern } from './gehstockmon-alltag.mjs';
+import { effekt } from './gehstockmon-insel.mjs';
 
 const fail = (message) => { throw new Error(message); };
 
@@ -22,9 +23,10 @@ export function bauten(world) {
   }
   return world.bauten;
 }
-/* Mit welchem Satz gerade abgegeben wird - ohne offenen Bau ruht die Abgabe. */
-export function abgabeSatz(world) {
-  return X.offenerBau(bauten(world)) ? E.ABGABE : 0;
+/* Mit welchem Satz gerade abgegeben wird - ohne offenen Bau ruht die Abgabe.
+   Der Buergermeister kann ihn per Erlass heben oder senken. */
+export function abgabeSatz(world, now) {
+  return X.offenerBau(bauten(world)) ? Math.round(E.ABGABE * effekt(world, now, 'abgabe') * 1000) / 1000 : 0;
 }
 function einzahlen(world, def, betrag, now) {
   const b = bauten(world)[def.id], gibt = Math.max(0, Math.min(Math.floor(betrag), def.ziel - b.gold));
@@ -60,9 +62,9 @@ export function handelSicht(world, p, id, now) {
       return { id: def.id, name: def.name, was: def.was, ziel: def.ziel, gold: Math.min(s.gold, def.ziel), abgabe: s.abgabe || 0,
         fertig: X.bauFertig(b, def.id), fertigAm: s.fertigAm || null, eigen: s.spender[id] || 0, tafel: tafel(s.spender, world, id) };
     }),
-    abgabe: abgabeSatz(world),
+    abgabe: abgabeSatz(world, now),
     kurier: { naechsterIn: X.kurierWartezeit(p, now), gebiete },
-    runen: X.bauFertig(b, 'markthalle') ? X.runenHandelStand(p, now) : null } };
+    runen: X.bauFertig(b, 'markthalle') ? X.runenHandelStand(p, now, effekt(world, now, 'handelDeckel')) : null } };
 }
 
 export async function handelAction({ world, p, id, body, now, presence }) {
@@ -101,7 +103,7 @@ export async function handelAction({ world, p, id, body, now, presence }) {
     const k = p.kurier;
     if (!k) fail('Du trägst gerade kein Paket.');
     await amOrt(k.nach);
-    const eil = !!(k.eilig && k.frist && now <= k.frist), lohn = X.kurierBetrag(k, gebiete, eil);
+    const eil = !!(k.eilig && k.frist && now <= k.frist), lohn = X.kurierBetrag(k, gebiete, eil, effekt(world, now, 'kurier'));
     E.buchen(p, lohn, 'kurier', now);
     p.kurier = null; p.kurierGesamt = (p.kurierGesamt || 0) + 1;
     const besitzer = world.territories[k.nach - 1]?.ownerId, wem = besitzer && besitzer !== id ? world.players[besitzer]?.name : null;
@@ -137,7 +139,7 @@ export async function handelAction({ world, p, id, body, now, presence }) {
     if (!X.bauFertig(bauten(world), 'markthalle')) fail('Runen handelt der Händler erst, wenn die Markthalle steht.');
     const rang = Number(body.rang);
     if (!Number.isInteger(rang) || rang < 0 || rang >= D.SELTENHEITEN.length) fail('Diese Rune gibt es nicht.');
-    const stand = X.runenHandelStand(p, now), name = D.SELTENHEITEN[rang].name + '-Rune';
+    const stand = X.runenHandelStand(p, now, effekt(world, now, 'handelDeckel')), name = D.SELTENHEITEN[rang].name + '-Rune';
     if (op === 'runen_kaufen') {
       const preis = X.RUNEN_PREISE[rang];
       if (preis > stand.kaufFrei) fail('Diese Woche verkauft dir der Händler nur noch Runen für ' + stand.kaufFrei + ' Gold. Am Montag wieder mehr.');

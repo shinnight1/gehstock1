@@ -9,6 +9,7 @@ import {lesen as anwesenheitLesen,schreiben as anwesenheitSchreiben} from './lib
 import {tickern,tickerSicht,alltagSicht,alltagAction,morgenbericht} from './lib/gehstockmon-alltag.mjs';
 import {duellAction,duelleAbrechnen,duellSicht,duellEinladung,imDuellKampf} from './lib/gehstockmon-duell.mjs';
 import {abgabeSatz,abgabeEinzahlen,kurierPflegen,handelSicht,handelAction} from './lib/gehstockmon-handel.mjs';
+import {effekt,inselWoche,inselSicht} from './lib/gehstockmon-insel.mjs';
 
 const KEY = 'world-v2';
 /* ------------------------------------------------------------------
@@ -127,10 +128,14 @@ function migrateAndSettle(world, now) {
     }
   }
   const anteile = E.ertragsAnteile(world.territories);
+  /* Erst die Woche der Insel (Wetter, Wahl), dann das Gold - die Duerre
+     wirkt ab dem ersten Zug der Woche. */
+  inselWoche(world, now);
+  const wetterGold = effekt(world, now, 'gebietsgold');
   for (const t of world.territories) {
     Object.assign(t, E.outpost(t, now));
     /* Ein Zehntel geht in den offenen Gemeinschaftsbau (siehe E.ABGABE). */
-    if (t.ownerId && world.players[t.ownerId]) { abgabeEinzahlen(world, E.settle(world.players[t.ownerId], t, now, anteile[t.id], abgabeSatz(world)), now); E.weekend(world.players[t.ownerId], t, t.id, now); }
+    if (t.ownerId && world.players[t.ownerId]) { abgabeEinzahlen(world, E.settle(world.players[t.ownerId], t, now, anteile[t.id] * wetterGold, abgabeSatz(world, now)), now); E.weekend(world.players[t.ownerId], t, t.id, now); }
   }
   for (const [id,p] of Object.entries(world.players)) {
     p.geschafft = world.territories.filter(t=>t.ownerId===id).map(t=>t.id);
@@ -206,7 +211,7 @@ function protectedOwner(world, t, now) {
 function publicResult(world, id, now, extra = {}) {
   const p = world.players[id];
   return { playerId: id, serverTime: now, access: accessFor(now, extra.adminOverride === true), mapVersion: world.mapVersion, dailyDelivery:extra.joining?p.dailyDelivery||0:0,profile: D.neuerStand(p, now), arena: p.arena || null,duel:p.duel||null,spawn:p.spawn,encounters:X.encounters(now,world.territories).filter(e=>!p.encounterClaims.includes(e.id)),
-    ...dungeonResult(world,p), ...duellSicht(world,p,id,extra.zuschauen), ...weltprojekte(world,id,now), ...arenaStand(world,id,now), ...handelSicht(world,p,id,now), territories: world.territories.map((t) => ({ id: t.id, ownerId: t.ownerId, ownerName: world.players[t.ownerId]?.name || t.ownerName, version: t.version, level: t.level,
+    ...dungeonResult(world,p), ...duellSicht(world,p,id,extra.zuschauen), ...weltprojekte(world,id,now), ...arenaStand(world,id,now), ...handelSicht(world,p,id,now), ...inselSicht(world,id,now), territories: world.territories.map((t) => ({ id: t.id, ownerId: t.ownerId, ownerName: world.players[t.ownerId]?.name || t.ownerName, version: t.version, level: t.level,
       /* Plan und Wesen gehoeren dazu: Aufklaeren soll zeigen, wie die Truppe
          kaempft. Frueher fehlten beide, und bei jedem Spielergebiet stand
          "kein eigener Plan", obwohl dort sehr wohl einer galt. */
