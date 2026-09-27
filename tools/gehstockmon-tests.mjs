@@ -312,6 +312,8 @@ await test('The one-time adjustment gives Mooswacht and Tauwiese to Louis and th
   assert.equal(store.data.territories[8].ownerId,null,'der Weltenschlund gehört wieder dem Computer');
   assert.deepEqual(store.data.players[b.playerId].geschafft,[],'Test B verliert Mooswacht und Weltenschlund');
   assert.ok(store.data.einmalig['2026-09-28-gebiete']);
+  assert.ok(!store.data.schenkungen.some(s=>s.quelle==='Einmalige Anpassung'),'die Anpassung steht nicht im Schenkungsbuch');
+  assert.ok(!(await call(h,ca,'admin_log')).schenkungen.some(s=>s.quelle==='Einmalige Anpassung'));
   // Nur einmal: wer den Weltenschlund danach erobert oder bekommt, behält ihn.
   await call(h,ca,'admin_grant',{zielCode:cb,gebiete:[9]});await louisRuft('world');
   assert.equal(store.data.territories[8].ownerId,b.playerId);

@@ -119,9 +119,11 @@ function migrateMap(world, now) {
   world.mapVersion = D.MAP_VERSION;
 }
 /* Einmalig (28.09.2026, auf Wunsch von Louis): Mooswacht (1) und Tauwiese (6)
-   gehen an Louis, der Weltenschlund (9) an den Computer. Laeuft genau einmal
-   und steht im Buch. Gibt es nicht genau einen Spieler namens Louis, passiert
-   noch nichts - dann beim naechsten Laden, sobald es ihn gibt. */
+   gehen an Louis, der Weltenschlund (9) an den Computer. Laeuft genau einmal.
+   Gibt es nicht genau einen Spieler namens Louis, passiert noch nichts - dann
+   beim naechsten Laden, sobald es ihn gibt. Im Schenkungsbuch soll sie nicht
+   stehen (Wunsch von Louis): Ihre beiden Eintraege fliegen bei jedem Laden
+   wieder heraus, gespeichert wird das mit dem naechsten Spielzug. */
 const ANPASSUNG = '2026-09-28-gebiete';
 function einmaligAnpassen(world, now) {
   if (world.einmalig && world.einmalig[ANPASSUNG]) return;
@@ -131,9 +133,15 @@ function einmaligAnpassen(world, now) {
   freigeben(world, { gebiete: [9], now, quelle: 'Einmalige Anpassung', id: ANPASSUNG + '-computer' });
   world.einmalig = { ...(world.einmalig || {}), [ANPASSUNG]: now };
 }
+function anpassungAusDemBuch(world) {
+  if (!world.schenkungen) return;
+  const rest = world.schenkungen.filter((s) => !String(s.id || '').startsWith(ANPASSUNG + '-'));
+  if (rest.length !== world.schenkungen.length) world.schenkungen = rest;
+}
 function migrateAndSettle(world, now) {
   migrateMap(world, now);
   einmaligAnpassen(world, now);
+  anpassungAusDemBuch(world);
   for (const p of Object.values(world.players)) {
     Object.assign(p, D.neuerStand(p, now));
     if (p.arena && p.arena.phase !== 'finished' && now - p.arena.lastActionAt > 20 * 60000) {
