@@ -1,13 +1,19 @@
 /* ------------------------------------------------------------------
    Admin-Bereich.
 
-   Sechs Reiter:
+   Reiter:
      Leute     Codes anlegen, Profile oeffnen, BND-Freigabe, sperren
      Spiele    Wartung und "nur innerer Kreis" je Spiel
      Geben     Mons, Aussenposten und Gold an eine Person vergeben
      Ansage    eine Meldung, die oben im Hub steht
      Sperren   wer gesperrt ist und wie man es wieder aufhebt
-     Sitzung   wer man ist, Werkzeuge, abmelden
+     Konto     wer man ist, Werkzeuge, abmelden
+     Sitzung   Aufsichtsrat, Owner und der Vertrag
+
+   Der Reiter 'Sitzung' ist die Leitungsebene und steht nur dem Owner
+   und dem Aufsichtsrat offen. Alles, was ein gewoehnlicher Admin
+   taeglich braucht - auch das Abmelden -, liegt deshalb in 'Konto'
+   und nicht dort.
 
    Der Reiter 'Geben' steht in core/geschenke.js: er redet als einziger
    mit dem Spielserver und nicht mit dem Relais.
@@ -35,18 +41,25 @@
     A.aufsichtUmstellen();
     reiter = reiter || 'leute';
 
+    /* Die Leitungsebene sieht nur, wer ihr angehoert. */
+    var leitung = A.binOwner() || A.binAufsicht();
+    if (reiter === 'sitzung' && !leitung) reiter = 'konto';
+
     var body = UI.el('div');
     var inhalt = UI.el('div');
     var m = null;
 
-    body.appendChild(UI.tabs([
+    var reiterListe = [
       { id: 'leute', label: '👥 Leute' },
       { id: 'spiele', label: '🎲 Spiele' },
       { id: 'geben', label: '🎁 Geben' },
       { id: 'ansage', label: '📣 Ansage' },
       { id: 'banne', label: '⛔ Sperren' },
-      { id: 'sitzung', label: '🛡 Sitzung' },
-    ], function (id) {
+      { id: 'konto', label: '🛡 Konto' },
+    ];
+    if (leitung) reiterListe.push({ id: 'sitzung', label: '⚖️ Sitzung' });
+
+    body.appendChild(UI.tabs(reiterListe, function (id) {
       reiter = id;
       UI.clear(inhalt);
       bauen(inhalt);
@@ -67,7 +80,8 @@
       else if (reiter === 'geben') SG.geschenke.reiter(ziel, neu);
       else if (reiter === 'ansage') ansage(ziel);
       else if (reiter === 'banne') banne(ziel);
-      else sitzung(ziel);
+      else if (reiter === 'sitzung' && leitung) sitzung(ziel);
+      else konto(ziel);
     }
 
     /* ---------------------------------------------------------- Leute */
@@ -938,7 +952,14 @@
       return A.rolleName(A.aktuell.rolle);
     }
 
-    function sitzung(ziel) {
+    /* --------------------------------------------------------- Konto
+
+       Wer man ist, die Werkzeuge und das Abmelden. Das braucht jeder
+       Admin taeglich und haengt deshalb nicht an der Leitungsebene -
+       sonst kaeme ein gewoehnlicher Admin nicht einmal mehr an den
+       Abmelden-Knopf. */
+
+    function konto(ziel) {
       ziel.appendChild(UI.el('div.notice', {
         html: '<b>' + (A.binAufsicht() ? '⚖️ ' : A.binOwner() ? '👑 ' : '')
           + A.rolleIcon(A.aktuell.rolle) + ' '
@@ -954,16 +975,6 @@
           : 'Kein Relais erreichbar. Alles, was du hier änderst, gilt nur auf '
             + 'diesem Gerät, bis die Verbindung wieder steht.',
       }));
-
-      ziel.appendChild(UI.el('div.sec-head', null, [
-        UI.el('h2', { text: 'Aufsichtsrat' }),
-      ]));
-      aufsichtsrat(ziel);
-
-      ziel.appendChild(UI.el('div.sec-head', null, [
-        UI.el('h2', { text: 'Owner' }),
-      ]));
-      owner(ziel);
 
       ziel.appendChild(UI.el('div.sec-head', null, [
         UI.el('h2', { text: 'Werkzeuge' }),
@@ -983,7 +994,6 @@
         SG.router.go('#/dev');
       }, 'wide ghost'));
 
-
       ziel.appendChild(UI.btn('Abmelden', function () {
         UI.confirm('Abmelden?', 'Beim nächsten Start ist wieder der Code nötig. '
           + 'Dein Spielstand bleibt erhalten.', 'Abmelden').then(function (ok) {
@@ -992,6 +1002,43 @@
             location.reload();
           });
       }, 'wide ghost'));
+    }
+
+    /* ------------------------------------------------------- Sitzung
+
+       Die Leitungsebene: wer den Stuhl darueber besetzt, wer fuehrt,
+       und der Vertrag, aus dem beides folgt. Hierher kommt nur der
+       Owner und der Aufsichtsrat. */
+
+    function sitzung(ziel) {
+      ziel.appendChild(UI.el('div.notice', {
+        html: '<b>' + (A.binAufsicht() ? '⚖️ Aufsichtsrat' : '👑 Owner') + '</b><br>'
+          + 'Diesen Reiter sehen nur der Aufsichtsrat und der Owner. Kein '
+          + 'Admin kommt hier herein.',
+      }));
+
+      ziel.appendChild(UI.el('div.sec-head', null, [
+        UI.el('h2', { text: 'Aufsichtsrat' }),
+      ]));
+      aufsichtsrat(ziel);
+
+      ziel.appendChild(UI.el('div.sec-head', null, [
+        UI.el('h2', { text: 'Owner' }),
+      ]));
+      owner(ziel);
+
+      ziel.appendChild(UI.el('div.sec-head', null, [
+        UI.el('h2', { text: 'Vertrag' }),
+      ]));
+      ziel.appendChild(UI.el('p.small.muted', {
+        text: 'GS-CEO-01 · Übertragung der Geschäftsführung von Lucas Hunke an '
+          + 'Louis Siebrecht. Daraus folgen der Aufsichtsrat, die Rangordnung '
+          + 'und die geschwärzten Codes.',
+      }));
+      ziel.appendChild(UI.el('div', { style: { height: '8px' } }));
+      ziel.appendChild(UI.btn('📜 Vertrag lesen', function () {
+        SG.vertrag.oeffnen();
+      }, 'wide primary'));
     }
   };
 })(SG);

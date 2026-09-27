@@ -76,6 +76,7 @@ const CORE_ORDER = [
   'core/credits.js',
   'core/gate.js',
   'core/geschenke.js',
+  'core/vertrag.js',
   'core/admin.js',
   'core/kreis.js',
   'core/wache.js',
