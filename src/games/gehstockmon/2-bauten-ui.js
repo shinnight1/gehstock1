@@ -23,8 +23,11 @@
        Pins laegen aufeinander. Dort steht die Arena in der Mitte und die
        Gebaeude im Kreis darum, jedes in der Richtung, in der es wirklich
        steht, aber mindestens RING Pixel weit und mit LUECKE Abstand
-       zum Nachbarn, damit jeder Pin fuer sich antippbar bleibt. */
-    var RING = 60, LUECKE = 0.72;
+       zum Nachbarn, damit jeder Pin fuer sich antippbar bleibt. Der Name
+       steht nach aussen (seite), weg von der Arena - darunter laege er auf
+       dem Nachbarn; der Arena-Name steht unter ihr in der Mitte. */
+    var RING = 74, LUECKE = 0.72;
+    function seite(w) { var x = Math.cos(w), y = Math.sin(w); return x > 0.35 ? 'rechts' : x < -0.35 ? 'links' : y < 0 ? 'oben' : 'unten'; }
     function auffaechern(mitte, punkte) {
       var liste = punkte.map(function (q) { return { q: q, w: Math.atan2(q.y - mitte.y, q.x - mitte.x) }; })
         .sort(function (a, b) { return a.w - b.w; });
@@ -38,7 +41,7 @@
       }
       liste.forEach(function (v) {
         var d = Math.max(RING, Math.hypot(v.q.x - mitte.x, v.q.y - mitte.y));
-        v.q.x = mitte.x + Math.cos(v.w) * d; v.q.y = mitte.y + Math.sin(v.w) * d;
+        v.q.x = mitte.x + Math.cos(v.w) * d; v.q.y = mitte.y + Math.sin(v.w) * d; v.q.seite = seite(v.w);
       });
     }
     return {
@@ -53,6 +56,8 @@
         if (mitte) auffaechern(mitte, ring);
         pins.forEach(function (p) {
           p.node.style.transform = 'translate(' + p.pos.x + 'px,' + p.pos.y + 'px) translate(-50%,' + (mitte ? '-50%' : '-100%') + ')';
+          var s = mitte ? p.pos.seite || 'mitte' : 'nah';
+          if (p.seite !== s) { p.seite = s; p.node.setAttribute('data-seite', s); }
         });
       }
     };

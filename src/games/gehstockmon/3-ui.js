@@ -74,7 +74,10 @@
       closeCombat:function(){arenaBox.hidden=true;root.classList.remove('gm-arena-open');if(world){world.pause(false);world.follow();}update();}});
     var stadt=R.mountStadt({el:el,button:button,drawer:drawer,state:function(){return st;},world:function(){return world;},now:now,busy:function(){return busy;},open:openDrawer,closeDrawer:closeDrawer,request:requestOnline,apply:applyOnline,error:onlineError,notify:notify,arena:showArena});
     /* Die Gebaeude am Arenaplatz: Pins ueber der Karte, ein Tipp oeffnet ihr Fenster. */
-    var bauten=R.mountBauten({el:el,button:button,layer:encounterLayer,oeffnen:{stadt:stadt.menu,hafen:stadt.hafen,haendler:stadt.haendler,tausch:stadt.tausch,schmiede:stadt.schmiede,
+    /* Eigene Ebene ueber den Gebietskarten: auf der Weltkarte laegen deren
+       grosse Schilder sonst auf den Gebaeudenamen am Arenaplatz. */
+    var bautenEbene=el('div',undefined,'gm-bauten-ebene');root.appendChild(bautenEbene);
+    var bauten=R.mountBauten({el:el,button:button,layer:bautenEbene,oeffnen:{stadt:stadt.menu,hafen:stadt.hafen,haendler:stadt.haendler,tausch:stadt.tausch,schmiede:stadt.schmiede,
       rathaus:function(){adventures.rathaus();},streifzug:function(){adventures.streifzuege();}}});
     var heute=R.mountHeute({revanche:function(id){closeDrawer();selectField(id,true);if(world&&world.distanceTo(id)>=10)world.walkTo(id);},el:el,button:button,drawer:drawer,root:root,open:openDrawer,closeDrawer:closeDrawer,request:requestOnline,apply:applyOnline,error:onlineError,notify:notify,busy:function(){return busy;},now:now,sfx:host.sfx,after:host.after,cancel:host.cancel,playerId:function(){return online&&online.playerId;}});
     /* Das Live-Duell nutzt denselben Kasten wie die Arena. */

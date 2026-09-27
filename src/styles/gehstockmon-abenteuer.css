@@ -245,3 +245,11 @@
 /* Gebaeude am Arenaplatz (2-bauten-ui.js): Goldring statt Seltenheitsfarbe, die Arena etwas groesser. */
 .gm-encounter-pin.gm-bau-pin.gm-mit-symbol{box-shadow:0 0 0 2px #e7c77c,0 0 12px #0008}
 .gm-encounter-pin.gm-bau-arena{width:46px;height:46px}
+/* Auf der Weltkarte zeigen die Gebaeude ihren Namen - nach aussen, weg von der Arena (2-bauten-ui.js). */
+.gm-overview .gm-encounter-pin.gm-bau-pin span{display:block;padding:3px 6px;font-size:10px}
+.gm-overview .gm-bau-pin[data-seite=rechts] span{top:50%;left:100%;transform:translate(5px,-50%)}
+.gm-overview .gm-bau-pin[data-seite=links] span{top:50%;left:auto;right:100%;transform:translate(-5px,-50%)}
+.gm-overview .gm-bau-pin[data-seite=oben] span{top:auto;bottom:100%;transform:translate(-50%,-4px)}
+.gm-overview .gm-bau-pin[data-seite=unten] span,.gm-overview .gm-bau-pin[data-seite=mitte] span{transform:translate(-50%,3px)}
+.gm-bauten-ebene{position:absolute;inset:0;z-index:3;pointer-events:none;overflow:hidden}
+.gm-arena-open .gm-bauten-ebene,.gm-drawer-open .gm-bauten-ebene,.gm-disconnected .gm-bauten-ebene{display:none}
