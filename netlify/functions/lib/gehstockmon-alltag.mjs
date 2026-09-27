@@ -56,8 +56,10 @@ export function morgenbericht(world, p, id, seit, now, extra = {}) {
   for (const r of raub) zeilen.push({ art: 'schlecht', text: '🥚 ' + (world.players[r.attackerId]?.name || 'Jemand') + ' hat dir ein Ei gestohlen.' });
   if (extra.tagesgold) zeilen.push({ art: 'gut', text: '💰 +' + extra.tagesgold + ' Gold Tagesgeld für deine Gebiete.' });
   if (extra.wochenende) zeilen.push({ art: 'gut', text: '🥚 ' + extra.wochenende + ' Wochenend-Eier sind in deiner Tasche.' });
-  const aussen = world.territories.filter((t) => t.ownerId === id).reduce((s, t) => s + (t.eggStock || 0), 0);
-  if (aussen) zeilen.push({ art: 'info', text: '🏕️ ' + aussen + (aussen === 1 ? ' Ei wartet' : ' Eier warten') + ' auf deinen Außenposten.' });
+  const eigene = world.territories.filter((t) => t.ownerId === id), aussen = eigene.reduce((s, t) => s + (t.eggStock || 0), 0);
+  const roh = eigene.reduce((s, t) => s + (t.rohstoffVorrat || 0), 0);
+  if (aussen || roh) zeilen.push({ art: 'info', text: '🏕️ ' + [aussen ? aussen + (aussen === 1 ? ' Ei' : ' Eier') : '', roh ? roh + ' Rohstoffe' : ''].filter(Boolean).join(' und ')
+    + ((aussen + roh) === 1 ? ' wartet' : ' warten') + ' auf deinen Außenposten.' });
   const zurueck = (p.streifzuege || []).filter((z) => z.fertigAt <= now).length;
   if (zurueck) zeilen.push({ art: 'gut', text: '🎒 ' + zurueck + (zurueck === 1 ? ' Streifzug ist' : ' Streifzüge sind') + ' zurück - die Beute wartet im Abenteuer-Fenster.' });
   /* Kurierdienst: ein Paket, das noch unterwegs ist, oder ein voller Stapel. */
