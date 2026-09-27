@@ -26,6 +26,11 @@
   /* Ein neuer Schluessel zeigt das Intro allen noch einmal. */
   var SCHLUESSEL = 'neu:umzug-2026-09';
 
+  /* Die Seite laeuft unter zwei Namen (gehstock.duckdns.org und
+     gehstock.ddnss.de). Das Intro nennt den, unter dem sie gerade offen ist. */
+  var HAUPT = 'gehstock.duckdns.org';
+  var ADRESSE = (typeof location !== 'undefined' && /^https?:$/.test(location.protocol) && location.hostname) || HAUPT;
+
   var F = {
     knoten: '#16171a',
     kante: '#2e3035',
@@ -64,7 +69,8 @@
     { ic: 'netz', t: 'Updates mit Sicherheitsnetz',
       d: 'Eine neue Version geht nur live, wenn alle Tests bestehen. Sonst bleibt der bisherige Stand.' },
     { ic: 'schloss', t: 'Verschlüsselt, eine Adresse',
-      d: 'HTTPS mit Let’s-Encrypt-Zertifikat unter gehstock.duckdns.org. Die alten Adressen leiten dorthin um.' },
+      d: 'HTTPS mit Let’s-Encrypt-Zertifikat unter ' + ADRESSE + '.'
+        + (ADRESSE === HAUPT ? ' Die alten Adressen leiten dorthin um.' : '') },
   ];
 
   var SZENEN = [
@@ -73,7 +79,7 @@
       titel: 'Das Hideout ist umgezogen.',
       satz: 'Weg von Netlify, hin zu unserem eigenen Server. In vier kurzen Schritten: was sich geändert hat und warum dir kein Kontingent mehr den Tag verdirbt.',
       terminal: [
-        ['verbinde mit gehstock.duckdns.org', 'ok'],
+        ['verbinde mit ' + ADRESSE, 'ok'],
         ['zertifikat: let’s encrypt', 'gültig'],
         ['neuer server erkannt', 'bereit'],
       ],
