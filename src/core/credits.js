@@ -30,6 +30,7 @@
       rolle: 'Aufsichtsrat',
       zusatz: 'Quality Assurance · Ehemaliger CEO',
       bild: 'ui-team-lucas',
+      gross: true,
       text: 'Hat das Hideout aufgebaut: Konzept, Kern und der allergrößte Teil des '
         + 'Codes, von den Spielen bis zu den großen Tycoons. In der Führungsebene '
         + 'ist er heute für die Qualität zuständig.',
