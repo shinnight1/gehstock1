@@ -239,3 +239,6 @@
 .gm-rute.stufe-4{border-color:#81d2a3;color:#caf5dc;animation:gm-rune-glow 1s ease-in-out infinite alternate}
 @media(prefers-reduced-motion:reduce){.gm-rute.stufe-4{animation:none}}
 .gm-drawer-open .gm-rute{display:none}
+/* Rathaus */
+.gm-kandidat.gewaehlt{border-color:#81d2a3aa}
+.gm-drawer select[aria-label="Dein Wahlversprechen"]{width:100%;margin:6px 0}

@@ -33,19 +33,70 @@
         drawer.appendChild(titel('Erlass des Bürgermeisters', 'rathaus'));
         drawer.appendChild(el('p', insel.erlass.zeichen + ' ' + insel.erlass.name + ': ' + insel.erlass.text));
       }
+      drawer.appendChild(button('Zum Rathaus', rathausFenster, 'gm-button'));
       drawer.appendChild(el('h3', 'Was das diese Woche heißt'));
       drawer.appendChild(wirkungen());
       drawer.appendChild(el('h3', 'Vorhersage'));
       drawer.appendChild(el('p', 'Nächste Woche: ' + n.zeichen + ' ' + n.name + ' - ' + n.text));
       drawer.appendChild(el('p', 'Das Wetter wechselt jeden Montag und steht eine Woche vorher fest. In sieben Wochen kommt jedes einmal. Aufs Schlüpfen wirkt keins.', 'gm-plan-hinweis'));
     }
+    /* ---------------- Rathaus ---------------- */
+    function run(op, data) {
+      c.request(op, data).then(function (res) { c.apply(res); rathausFenster(); if (res.message) c.notify(res.message); }).catch(function (error) { c.error(error); });
+    }
+    function erlassZeile(e) { return e ? e.zeichen + ' ' + e.name + ' - ' + e.text : ''; }
+    function rathausFenster() {
+      var r = insel && insel.rathaus; if (!r || !c.open('Rathaus', 'rathaus')) return;
+      drawer.appendChild(el('p', 'Jede Woche wählt die Insel einen Bürgermeister. Wer kandidiert, verspricht einen Erlass - und der gilt die ganze nächste Woche. Gewählt wird bis zum Wochenende, ausgezählt am Montag. Die Stimmen bleiben bis dahin geheim.', 'gm-beginner-tip'));
+      drawer.appendChild(titel('Diese Woche', 'rathaus'));
+      drawer.appendChild(el('p', r.amt ? '👑 ' + (r.amt.selbst ? 'Du bist' : r.amt.name + ' ist') + ' Bürgermeister dieser Woche (' + r.amt.stimmen + (r.amt.stimmen === 1 ? ' Stimme' : ' Stimmen') + '). Erlass: ' + erlassZeile(r.amt.erlass)
+        : 'Diese Woche regiert niemand - es gilt kein Erlass.'));
+      drawer.appendChild(titel('Die Wahl für nächste Woche', 'wahl'));
+      drawer.appendChild(el('p', r.kandidaten.length ? r.abgegeben + (r.abgegeben === 1 ? ' Stimme' : ' Stimmen') + ' abgegeben.' : 'Noch kandidiert niemand.', 'gm-plan-hinweis'));
+      if (!r.recht.stimme) drawer.appendChild(el('p', 'Wählen kannst du, sobald du ' + r.recht.fehlt.join(', ') + ' hast.'));
+      r.kandidaten.forEach(function (k) {
+        var karte = el('article', undefined, 'gm-quest-card gm-kandidat' + (r.meineStimme === k.id ? ' gewaehlt' : ''));
+        karte.appendChild(el('h3', k.name + (k.selbst ? ' (du)' : '')));
+        karte.appendChild(el('p', 'Verspricht: ' + erlassZeile(k.erlass)));
+        var b = button(r.meineStimme === k.id ? 'Deine Stimme ✓' : 'Wählen', function () { run('waehlen', { kandidatId: k.id }); }, 'gm-button' + (r.meineStimme === k.id ? '' : ' gm-primary'));
+        b.disabled = c.busy() || !r.recht.stimme || r.meineStimme === k.id; karte.appendChild(b);
+        drawer.appendChild(karte);
+      });
+      /* Selbst kandidieren - mit einem Versprechen aus der Liste. */
+      var ich = r.kandidaten.find(function (k) { return k.selbst; });
+      drawer.appendChild(el('h3', ich ? 'Deine Kandidatur' : 'Selbst kandidieren'));
+      if (!r.recht.kandidat) { drawer.appendChild(el('p', 'Kandidieren kannst du, sobald du ' + r.recht.kandidatFehlt.join(', ') + ' hast.')); }
+      else {
+        var wahl = el('select'); wahl.setAttribute('aria-label', 'Dein Wahlversprechen');
+        X.ERLASSE.forEach(function (e) { var o = el('option', e.zeichen + ' ' + e.name); o.value = e.id; wahl.appendChild(o); });
+        wahl.value = ich && ich.erlass ? ich.erlass.id : X.ERLASSE[0].id;
+        var text = el('p', '', 'gm-plan-hinweis');
+        function zeigen() { var e = X.erlass(wahl.value); text.textContent = e ? e.text : ''; }
+        wahl.addEventListener('change', zeigen); zeigen();
+        drawer.appendChild(wahl); drawer.appendChild(text);
+        var los = button(ich ? 'Versprechen ändern' : 'Kandidieren', function () { run('kandidieren', { erlass: wahl.value }); }, 'gm-button gm-primary');
+        los.disabled = c.busy(); drawer.appendChild(los);
+        if (ich) { var weg = button('Kandidatur zurückziehen', function () { run('kandidieren', { erlass: null }); }, 'gm-button gm-secondary'); weg.disabled = c.busy(); drawer.appendChild(weg); }
+      }
+      if (r.chronik && r.chronik.length) {
+        drawer.appendChild(el('h3', 'Die Chronik'));
+        var liste = el('ol', undefined, 'gm-tafel');
+        r.chronik.forEach(function (v) { liste.appendChild(el('li', v.name + ' · ' + v.erlass + ' · ' + v.stimmen + (v.stimmen === 1 ? ' Stimme' : ' Stimmen'))); });
+        drawer.appendChild(liste);
+      }
+    }
     function kacheln(marke) {
-      var out = { wetter: null };
+      var out = { wetter: null, rathaus: null }, r = insel && insel.rathaus;
       if (insel && insel.wetter) out.wetter = marke('Wetter', insel.wetter.zeichen + ' ' + insel.wetter.name, insel.wetter.farbe || '#f0ca80', wetterFenster, 'wetter');
+      /* Das Rathaus zeigt sich, sobald es etwas zu sehen gibt: ein Amt oder eine Wahl. */
+      if (r && r.amt) out.rathaus = marke('Bürgermeister', '👑 ' + r.amt.name, '#f0ca80', rathausFenster, 'rathaus');
+      else if (r && r.kandidaten.length) out.rathaus = marke('Wahl', r.kandidaten.length + (r.kandidaten.length === 1 ? ' Kandidat' : ' Kandidaten'), '#c9b6ff', rathausFenster, 'wahl');
       return out;
     }
+    /* Stockhafen oeffnet das Rathaus ueber diesen Weg. */
+    R.rathausOeffnen = rathausFenster;
     return {
-      wetter: wetterFenster, kacheln: kacheln,
+      wetter: wetterFenster, rathaus: rathausFenster, kacheln: kacheln,
       apply: function (res) { if (res && res.insel) insel = res.insel; },
       insel: function () { return insel; }
     };

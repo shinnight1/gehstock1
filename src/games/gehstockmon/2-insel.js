@@ -89,6 +89,48 @@
     if (e && e.effekte && e.effekte[schluessel]) m *= e.effekte[schluessel];
     return m;
   };
+  /* ----------------------------------------------------------------
+     Die Buergermeisterwahl
+
+     Jede Woche kann kandidieren, wer lange genug dabei ist, und verspricht
+     dabei einen Erlass. Gewaehlt wird die ganze Woche; beim Wochenwechsel
+     wird ausgezaehlt, und der Erlass des Siegers gilt die naechste Woche.
+     Stimmen bleiben bis zur Auszaehlung geheim.
+
+     Codex' Einwand: drei Besuchstage beweisen keine drei Menschen - ein
+     Zweitkonto kann mitwaehlen. Ganz verhindern laesst sich das nicht,
+     solange die Zugangscodes berechenbar sind. Teuer wird es trotzdem:
+     Waehlen darf nur, wer den Trainerrang Spaeher hat (60 Erfahrung, etwa
+     sechs Trainersiege), an drei verschiedenen Schultagen der letzten zwei
+     Wochen da war und dessen Konto drei Tage alt ist. Kandidieren verlangt
+     den Rang Faehrtenleser (150) und ein Konto von sieben Tagen.
+     ---------------------------------------------------------------- */
+  X.WAHL_OPS = ['kandidieren', 'waehlen'];
+  X.SPIELZUEGE.push.apply(X.SPIELZUEGE, X.WAHL_OPS);
+  X.WAHL = { stimmeErfahrung: 60, kandidatErfahrung: 150, tage: 3, stimmeAlter: 3 * 86400000, kandidatAlter: 7 * 86400000, fenster: 14 };
+  /* Schultage, an denen jemand da war - die letzten vierzehn. */
+  X.aktivMerken = function (p, now) {
+    var tag = H.day(now); p.aktivTage = Array.isArray(p.aktivTage) ? p.aktivTage : [];
+    if (p.aktivTage[p.aktivTage.length - 1] !== tag) p.aktivTage = p.aktivTage.concat(tag).slice(-X.WAHL.fenster);
+  };
+  X.aktiveTage = function (p, now) { var heute = H.day(now); return (p && p.aktivTage || []).filter(function (t) { return heute - t < X.WAHL.fenster; }).length; };
+  X.wahlRecht = function (p, now) {
+    var erf = X.erfahrung(p), tage = X.aktiveTage(p, now), alter = now - ((p && p.joinedAt) || now), W = X.WAHL, fehlt = [];
+    if (erf < W.stimmeErfahrung) fehlt.push('Trainerrang Späher (' + erf + '/' + W.stimmeErfahrung + ' Erfahrung)');
+    if (tage < W.tage) fehlt.push(W.tage + ' Schultage in zwei Wochen (' + tage + ')');
+    if (alter < W.stimmeAlter) fehlt.push('ein Konto, das drei Tage alt ist');
+    var stimme = !fehlt.length, kFehlt = fehlt.slice();
+    if (erf < W.kandidatErfahrung) kFehlt.push('Trainerrang Fährtenleser (' + erf + '/' + W.kandidatErfahrung + ' Erfahrung)');
+    if (alter < W.kandidatAlter) kFehlt.push('ein Konto, das sieben Tage alt ist');
+    return { stimme: stimme, kandidat: !kFehlt.length, fehlt: fehlt, kandidatFehlt: kFehlt.filter(function (v, i, a) { return a.indexOf(v) === i; }) };
+  };
+  var vorher = D.neuerStand;
+  D.neuerStand = function (save, now) {
+    var p = vorher(save, now), alt = save && save.aktivTage;
+    p.aktivTage = Array.isArray(alt) ? alt.filter(function (t) { return Number.isFinite(t); }).map(Math.floor).slice(-X.WAHL.fenster) : [];
+    return p;
+  };
+
   /* Alle Faktoren der Woche auf einmal - fuer die Anzeige im Browser. */
   X.EFFEKT_SCHLUESSEL = ['gebietsgold', 'tagwerk', 'kurier', 'streifzugDauer', 'runenFund', 'streifzugRunen', 'zerhackerKraft', 'zerhackerBeute',
     'rohstoffStelle', 'handelDeckel', 'arenaLohn', 'abgabe', 'raubSchutz', 'raubPause'];
