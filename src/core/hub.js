@@ -343,14 +343,26 @@
         var favIds = SG.scores.favorites();
         var recent = SG.scores.recent().filter(function (id) { return favIds.indexOf(id) < 0; });
 
-        var s1 = section('Favoriten', favIds.map(function (id) { return SG.games[id]; }));
+        /* GehstockMon traegt die Seite und steht ganz oben in einer
+           eigenen Sektion - darum taucht es in Favoriten und "Zuletzt
+           gespielt" nicht noch einmal auf. */
+        var gm = section('GehstockMon', SG.byCategory('gehstockmon'));
+        if (gm) gridHost.appendChild(gm);
+
+        var ohneGm = function (id) {
+          return SG.games[id] && SG.games[id].category !== 'gehstockmon';
+        };
+
+        var s1 = section('Favoriten',
+          favIds.filter(ohneGm).map(function (id) { return SG.games[id]; }));
         if (s1) gridHost.appendChild(s1);
 
         var s2 = section('Zuletzt gespielt',
-          recent.slice(0, 6).map(function (id) { return SG.games[id]; }));
+          recent.filter(ohneGm).slice(0, 6).map(function (id) { return SG.games[id]; }));
         if (s2) gridHost.appendChild(s2);
 
         SG.categories.forEach(function (cat) {
+          if (cat.id === 'gehstockmon') return;
           var s = section(cat.name, SG.byCategory(cat.id));
           if (s) gridHost.appendChild(s);
         });

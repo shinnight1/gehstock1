@@ -8,6 +8,7 @@ import {schenken,schenkungen} from './lib/gehstockmon-schenken.mjs';
 import {lesen as anwesenheitLesen,schreiben as anwesenheitSchreiben} from './lib/gehstockmon-anwesenheit.mjs';
 import {tickern,tickerSicht,alltagSicht,alltagAction,morgenbericht} from './lib/gehstockmon-alltag.mjs';
 import {duellAction,duelleAbrechnen,duellSicht,duellEinladung,imDuellKampf} from './lib/gehstockmon-duell.mjs';
+import {abgabeSatz,abgabeEinzahlen,kurierPflegen,handelSicht,handelAction} from './lib/gehstockmon-handel.mjs';
 
 const KEY = 'world-v2';
 /* ------------------------------------------------------------------
@@ -128,7 +129,8 @@ function migrateAndSettle(world, now) {
   const anteile = E.ertragsAnteile(world.territories);
   for (const t of world.territories) {
     Object.assign(t, E.outpost(t, now));
-    if (t.ownerId && world.players[t.ownerId]) { E.settle(world.players[t.ownerId], t, now, anteile[t.id]); E.weekend(world.players[t.ownerId], t, t.id, now); }
+    /* Ein Zehntel geht in den offenen Gemeinschaftsbau (siehe E.ABGABE). */
+    if (t.ownerId && world.players[t.ownerId]) { abgabeEinzahlen(world, E.settle(world.players[t.ownerId], t, now, anteile[t.id], abgabeSatz(world)), now); E.weekend(world.players[t.ownerId], t, t.id, now); }
   }
   for (const [id,p] of Object.entries(world.players)) {
     p.geschafft = world.territories.filter(t=>t.ownerId===id).map(t=>t.id);
@@ -204,7 +206,7 @@ function protectedOwner(world, t, now) {
 function publicResult(world, id, now, extra = {}) {
   const p = world.players[id];
   return { playerId: id, serverTime: now, access: accessFor(now, extra.adminOverride === true), mapVersion: world.mapVersion, dailyDelivery:extra.joining?p.dailyDelivery||0:0,profile: D.neuerStand(p, now), arena: p.arena || null,duel:p.duel||null,spawn:p.spawn,encounters:X.encounters(now,world.territories).filter(e=>!p.encounterClaims.includes(e.id)),
-    ...dungeonResult(world,p), ...duellSicht(world,p,id,extra.zuschauen), ...weltprojekte(world,id,now), ...arenaStand(world,id,now), territories: world.territories.map((t) => ({ id: t.id, ownerId: t.ownerId, ownerName: world.players[t.ownerId]?.name || t.ownerName, version: t.version, level: t.level,
+    ...dungeonResult(world,p), ...duellSicht(world,p,id,extra.zuschauen), ...weltprojekte(world,id,now), ...arenaStand(world,id,now), ...handelSicht(world,p,id,now), territories: world.territories.map((t) => ({ id: t.id, ownerId: t.ownerId, ownerName: world.players[t.ownerId]?.name || t.ownerName, version: t.version, level: t.level,
       /* Plan und Wesen gehoeren dazu: Aufklaeren soll zeigen, wie die Truppe
          kaempft. Frueher fehlten beide, und bei jedem Spielergebiet stand
          "kein eigener Plan", obwohl dort sehr wohl einer galt. */
@@ -304,8 +306,12 @@ const pause = (attempt) => new Promise((ok) => setTimeout(ok, 10 + Math.random()
    gespeichert; der Abwesenheitsschutz rechnet in Stunden.
    ------------------------------------------------------------------ */
 const ZULETZT_GESEHEN_MS = 3 * 60 * 1000;
+/* Die Wochenbilanz zaehlt das Gebietsgold und die Abgabe mit, und die Abgabe
+   fliesst in den offenen Gemeinschaftsbau - beides laeuft wie das Gold
+   selbst mit jeder Abfrage weiter und ergibt sich beim naechsten Mal genauso. */
 const NUR_UHR = [/^version$/, /^champion\.soldAt$/, /^territories\.\d+\.incomeAt$/,
-  /^players\.[^.]+\.(gold|goldRemainder|clockAt)$/, /^players\.[^.]+\.outposts\.\d+\.incomeAt$/];
+  /^players\.[^.]+\.(gold|goldRemainder|clockAt|abgabeRest)$/, /^players\.[^.]+\.outposts\.\d+\.incomeAt$/,
+  /^players\.[^.]+\.bilanz\.(rein\.gebiete|raus\.abgabe)$/, /^bauten\.[a-z]+\.(gold|abgabe)$/];
 function unterschiede(a, b, pfad, aus) {
   if (a === b) return true;
   if (!a || !b || typeof a !== 'object' || typeof b !== 'object' || Array.isArray(a) !== Array.isArray(b)
@@ -481,12 +487,17 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
            wurde jedes Mal neu gesetzt und nie abgelegt, der Beutel blieb auf
            null, und der Wochenboss war schlicht unerreichbar. */
         X.zerhackerUhrStellen(p, timestamp);
-        if(body.op==='join'){p.dailyDelivery=E.deliverDaily(p);p.lastJoinAt=timestamp;p.spawn=startpunkt(zuletzt,world,id,timestamp);}
+        if(body.op==='join'){p.dailyDelivery=E.deliverDaily(p,timestamp);p.lastJoinAt=timestamp;p.spawn=startpunkt(zuletzt,world,id,timestamp);}
         const receipts = p.actionReceipts || [], receipt = receipts.find((r) => r.id === body.requestId && r.op === body.op);
         if (receipt) return json(publicResult(world, id, timestamp, { ...receipt.extra, duplicate: true, adminOverride: bypass }));
         let extra = {joining:body.op==='join',zuschauen:typeof body.zuschauen==='string'?body.zuschauen.slice(0,120):null};
         /* Welche Titel schon erreicht waren - danach wird verglichen. */
         const titelVorher = X.titelErreicht(p);
+        /* Faellige Kurierauftraege aufs Brett - vor dem Zug, damit ein eben
+           faellig gewordener gleich angenommen werden kann. */
+        /* Eine eigene Ziehung aus 'draw' abgeleitet: ein weiterer Aufruf von
+           random() verschoebe jede feste Zufallsfolge in den Tests. */
+        kurierPflegen(world, p, id, timestamp, (draw * 7919 + 0.5) % 1);
         try {
           if(activeArena(p)&&mutations.includes(body.op)&&!['arena_turn','arena_flee'].includes(body.op))throw new GameError('Beende zuerst deinen Mon-Kampf.',409);
           if(activeDuel(p)&&mutations.includes(body.op)&&!['raid_turn','raid_arena','raid_cancel'].includes(body.op))throw new GameError('Beende zuerst deinen Überfall.',409);
@@ -496,6 +507,7 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
           if(X.DUNGEON_OPS.includes(body.op)||body.op==='mon_upgrade')Object.assign(extra,await dungeonAction({world,p,id,body,now:timestamp,presence:presenceStore||speicher('hgh-gehstockmon-presence')}));
           else if(X.STADT_OPS.includes(body.op))Object.assign(extra,await stadtAction({world,p,id,body,now:timestamp,presence:presenceStore||speicher('hgh-gehstockmon-presence')}));
           else if(X.ALLTAG_OPS.includes(body.op))Object.assign(extra,alltagAction({world,p,id,body,now:timestamp}));
+          else if(X.HANDEL_OPS.includes(body.op))Object.assign(extra,await handelAction({world,p,id,body,now:timestamp,presence:presenceStore||speicher('hgh-gehstockmon-presence')}));
           else if(X.DUELL_OPS.includes(body.op))Object.assign(extra,await duellAction({world,p,id,body,now:timestamp,presence:presenceStore||speicher('hgh-gehstockmon-presence')}));
           else if(X.OPS.includes(body.op))Object.assign(extra,await adventureAction({world,p,id,body,now:timestamp,draw,presence:presenceStore||speicher('hgh-gehstockmon-presence'),validateSquad}));
           if (body.op === 'arena_start' || body.op === 'defend') {
@@ -579,7 +591,7 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
             if (p.gold < preis) throw new GameError('Ein neues Wesen kostet für ' + mon.name + ' ' + preis + ' Gold.');
             const bisher = p.wesen && p.wesen[mon.id], auswahl = X.WESEN.filter((w) => w.id !== bisher);
             const neu = auswahl[Math.min(auswahl.length - 1, Math.floor(random() * auswahl.length))];
-            p.gold -= preis; p.wesen = p.wesen || {}; p.wesen[mon.id] = neu.id;
+            E.buchen(p, -preis, 'wesen', timestamp); p.wesen = p.wesen || {}; p.wesen[mon.id] = neu.id;
             verteidigungenAuffrischen(world, p, id);
             extra.monId = mon.id;
             extra.message = mon.name + ' hat jetzt ein ' + neu.name + 'es Wesen (' + X.wesenText(neu) + '). −' + preis + ' Gold.';

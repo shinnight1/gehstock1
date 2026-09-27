@@ -7,7 +7,7 @@
    darauf. Der Zug des Gegners bleibt verborgen, bis die Runde gerechnet
    ist - sonst liesse sich einfach abwarten und kontern.
    ------------------------------------------------------------------ */
-import { data as D, arena as A, hours as H, adventure as X } from './gehstockmon-rules.mjs';
+import { data as D, economy as E, arena as A, hours as H, adventure as X } from './gehstockmon-rules.mjs';
 import { anwesende } from './gehstockmon-anwesenheit.mjs';
 import { tickern } from './gehstockmon-alltag.mjs';
 
@@ -37,12 +37,12 @@ function beenden(world, d, sieger, grund, now) {
   if (!lohnFrei(world, d, now)) { d.ohneLohn = true; return; }
   const pa = world.players[d.a], pb = world.players[d.b], L = X.DUELL.lohn;
   if (sieger === 'patt') {
-    for (const p of [pa, pb]) if (p) p.gold += L.patt;
+    for (const p of [pa, pb]) if (p) E.buchen(p, L.patt, 'duell', now);
     tickern(world, '⚔️ Live-Duell: ' + d.namen[0] + ' und ' + d.namen[1] + ' trennen sich unentschieden', 'duell', now);
   } else {
     const gewinner = sieger === 0 ? pa : pb, verlierer = sieger === 0 ? pb : pa;
-    if (gewinner) { gewinner.gold += L.sieg; gewinner.arenaRuhm = X.ruhm(gewinner) + X.DUELL.ruhm; gewinner.duellSiege = (gewinner.duellSiege || 0) + 1; }
-    if (verlierer) verlierer.gold += L.trost;
+    if (gewinner) { E.buchen(gewinner, L.sieg, 'duell', now); gewinner.arenaRuhm = X.ruhm(gewinner) + X.DUELL.ruhm; gewinner.duellSiege = (gewinner.duellSiege || 0) + 1; }
+    if (verlierer) E.buchen(verlierer, L.trost, 'duell', now);
     tickern(world, '⚔️ Live-Duell: ' + d.namen[sieger] + ' besiegt ' + d.namen[1 - sieger] + (grund === 'aufgabe' ? ' (Aufgabe)' : grund === 'zeit' ? ' (Zeit)' : ''), 'duell', now);
   }
   for (const [p, pid] of [[pa, d.a], [pb, d.b]]) if (p) X.alltagSchritt(p, 'duell', now);

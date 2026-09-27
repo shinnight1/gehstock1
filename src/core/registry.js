@@ -9,6 +9,7 @@
   var U = SG.util;
 
   SG.categories = [
+    { id: 'gehstockmon', name: 'GehstockMon', icon: '🐉' },
     { id: 'arcade', name: 'Arcade', icon: '👾' },
     { id: 'casual', name: 'Schnell & locker', icon: '⚡' },
     { id: 'puzzle', name: 'Rätsel', icon: '🧩' },

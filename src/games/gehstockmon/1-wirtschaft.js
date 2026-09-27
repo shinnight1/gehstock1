@@ -10,6 +10,65 @@
     { name: 'Festung', income: 55, bonus: 0.25, cost: null }
   ];
   function number(v, fallback) { return Number.isFinite(v) && v >= 0 ? v : fallback; }
+  /* ------------------------------------------------------------------
+     Wochenbilanz (27.09.2026)
+
+     Jeder sieht fuer die laufende Woche, woher sein Gold kam und wofuer es
+     ging, getrennt nach Quelle. Gebucht wird dort, wo sich das Gold bewegt
+     (E.buchen). Was nur vermerkt wird, weil es nie auf dem eigenen Konto
+     ankommt - die Gebietsabgabe -, geht ueber E.vermerken. Die Vorwoche
+     bleibt stehen, damit man montags vergleichen kann. Die Woche springt
+     montags um, wie beim Zerhacker.
+     ------------------------------------------------------------------ */
+  E.BILANZ_REIN = { gebiete: 'Gebiete', tagesgeld: 'Tagesgeld', sold: 'Champion-Sold', eroberung: 'Eroberungen', arena: 'Große Arena',
+    trainer: 'Wandertrainer', runen: 'Verlorene Runen', tagwerk: 'Tagwerk', truhe: 'Tagestruhe', streifzug: 'Streifzüge', kurier: 'Kurierdienst',
+    quest: 'Quests', woche: 'Wochenaufgabe', zerhacker: 'Zerhacker', fehde: 'Fehde', duell: 'Live-Duelle', kopfgeld: 'Kopfgeld',
+    handel: 'Runenverkauf', geschenk: 'Geschenke' };
+  E.BILANZ_RAUS = { abgabe: 'Gebietsabgabe', ausbau: 'Ausbau', ausruestung: 'Skins & Waffen', brutplatz: 'Brutplätze', eier: 'Eierhändler',
+    schmiede: 'Runenschmiede', perle: 'Schimmerperle', wesen: 'Wesen prägen', spende: 'Spenden', handel: 'Runenkauf' };
+  E.woche = function (now) { return Math.floor((now + 3 * 86400000) / (7 * 86400000)); };
+  function bilanzSeite(v, namen) {
+    var out = {};
+    Object.keys(namen).forEach(function (k) { var n = Math.floor(Number(v && v[k])); if (Number.isFinite(n) && n > 0) out[k] = Math.min(100000000, n); });
+    return out;
+  }
+  E.bilanzSauber = function (b) {
+    if (!b || !Number.isFinite(b.woche)) return null;
+    var vor = b.vorwoche && Number.isFinite(b.vorwoche.woche) ? b.vorwoche : null;
+    return { woche: Math.floor(b.woche), rein: bilanzSeite(b.rein, E.BILANZ_REIN), raus: bilanzSeite(b.raus, E.BILANZ_RAUS),
+      vorwoche: vor ? { woche: Math.floor(vor.woche), rein: bilanzSeite(vor.rein, E.BILANZ_REIN), raus: bilanzSeite(vor.raus, E.BILANZ_RAUS) } : null };
+  };
+  /* Die Bilanz der laufenden Woche - beim Wechsel wird die alte zur Vorwoche. */
+  E.bilanz = function (st, now) {
+    var w = E.woche(now), b = st.bilanz;
+    if (!b || b.woche !== w) st.bilanz = b = { woche: w, rein: {}, raus: {}, vorwoche: b && b.woche === w - 1 ? { woche: b.woche, rein: b.rein, raus: b.raus } : null };
+    return b;
+  };
+  /* Nur lesen: diese und die vorige Woche, ohne den Stand anzufassen. */
+  E.bilanzSicht = function (st, now) {
+    var w = E.woche(now), b = st && st.bilanz, leer = { rein: {}, raus: {} };
+    if (!b) return { diese: leer, vorige: null };
+    if (b.woche === w) return { diese: { rein: b.rein, raus: b.raus }, vorige: b.vorwoche && b.vorwoche.woche === w - 1 ? b.vorwoche : null };
+    return { diese: leer, vorige: b.woche === w - 1 ? { rein: b.rein, raus: b.raus } : null };
+  };
+  E.vermerken = function (st, art, quelle, betrag, now) {
+    betrag = Math.round(Number(betrag) || 0);
+    if (!st || !(betrag > 0)) return;
+    var b = E.bilanz(st, number(now, Date.now())), seite = art === 'raus' ? b.raus : b.rein;
+    seite[quelle] = (seite[quelle] || 0) + betrag;
+  };
+  /* Gold aufs Konto oder herunter, mit Quelle fuer die Wochenbilanz. */
+  E.buchen = function (st, betrag, quelle, now) {
+    betrag = Math.round(Number(betrag) || 0);
+    if (!st || !betrag) return 0;
+    st.gold += betrag; E.vermerken(st, betrag > 0 ? 'rein' : 'raus', quelle, Math.abs(betrag), now);
+    return betrag;
+  };
+  /* Die Gebietsabgabe: ein Zehntel von allem Gebietsgold - Stundenertrag und
+     Tagesgeld - geht in den Gemeinschaftsbau, an dem die Insel gerade baut.
+     Gebucht wird beim Verdienen, nicht am Wochenende: wer ein Gebiet vorher
+     abgibt, entgeht ihr nicht. Ruht, solange kein Bau offen ist. */
+  E.ABGABE = 0.1;
   E.outpost = function (value, now) {
     var t = value || {}, captured = number(t.capturedAt, now);
     return { level: Math.max(1, Math.min(3, Math.floor(number(t.level, 1)))), capturedAt: captured,
@@ -22,8 +81,14 @@
   D.neuerStand = function (save, now) {
     now = number(now, Date.now()); var st = previous(save), old = save || {};
     st.economyVersion = 2; st.dailyGoldPending = Math.floor(number(old.dailyGoldPending, 0));
+    /* Wie viel vom wartenden Tagesgeld Champion-Sold ist - nur fuer die Bilanz. */
+    st.soldPending = Math.min(st.dailyGoldPending, Math.floor(number(old.soldPending, 0)));
     st.gold = Math.floor(number(old.gold, st.essenz + 120));
     st.goldRemainder = Math.min(0.999999999, number(old.goldRemainder, 0));
+    st.abgabeRest = Math.min(0.999999999, number(old.abgabeRest, 0));
+    /* Gleich auf die laufende Woche gestellt: sonst legte erst die erste
+       Buchung die Bilanz an, und eine blosse Abfrage muesste schreiben. */
+    st.bilanz = E.bilanzSauber(old.bilanz); E.bilanz(st, now);
     st.clockAt = number(old.clockAt, now); st.eggSerial = Math.floor(number(old.eggSerial, 0));
     st.weekendEggs = {};
     D.FELDER.forEach(function (f) { var n = Math.floor(number(old.weekendEggs && old.weekendEggs[f.id], 0)); if (n) st.weekendEggs[f.id] = n; });
@@ -61,22 +126,41 @@
     });
     return anteil;
   };
-  E.settle = function (st, post, now, anteil) {
+  /* Rechnet einen Aussenposten bis jetzt ab. 'abgabe' ist der Anteil fuer den
+     Gemeinschaftsbau (0 ohne offenen Bau und im Einzelspiel); zurueck kommt,
+     was davon an ganzem Gold faellig ist - der Aufrufer zahlt es ein. */
+  E.settle = function (st, post, now, anteil, abgabe) {
     now = Math.max(st.clockAt || 0, now); st.clockAt = now;
     anteil = Number.isFinite(anteil) ? anteil : 1;
-    var end = Math.max(post.incomeAt, now), earned = st.goldRemainder + (SG.gehstockmon.zeiten.openTime(end) - SG.gehstockmon.zeiten.openTime(post.incomeAt)) / E.HOUR * E.LEVELS[post.level].income * anteil;
-    var whole = Math.floor(earned + 1e-8); st.gold += whole; st.goldRemainder = Math.max(0, earned - whole); post.incomeAt = end;
-    var H = SG.gehstockmon.zeiten;
+    abgabe = Number.isFinite(abgabe) ? Math.max(0, Math.min(1, abgabe)) : 0;
+    var H = SG.gehstockmon.zeiten, end = Math.max(post.incomeAt, now);
+    var brutto = (H.openTime(end) - H.openTime(post.incomeAt)) / E.HOUR * E.LEVELS[post.level].income * anteil;
+    var earned = st.goldRemainder + brutto * (1 - abgabe), whole = Math.floor(earned + 1e-8);
+    st.gold += whole; st.goldRemainder = Math.max(0, earned - whole); post.incomeAt = end;
+    var offen = (st.abgabeRest || 0) + brutto * abgabe, kasse = Math.floor(offen + 1e-8);
+    st.abgabeRest = Math.max(0, offen - kasse);
+    E.vermerken(st, 'rein', 'gebiete', whole + kasse, now); E.vermerken(st, 'raus', 'abgabe', kasse, now);
     var days=Math.max(0,H.day(now)-H.day(post.dailyAt));
     /* Das Tagesgeld folgt demselben Anteil wie das Stundengold: ab dem dritten
        Gebiet die Haelfte. Vorher blieb es voll - und bei einem Lager ist es
        mehr als der Stundenertrag (1050 gegen 660 Gold die Woche), die Bremse
-       griff also kaum. */
-    if(days){st.dailyGoldPending=(st.dailyGoldPending||0)+Math.round(days*E.DAILY_GOLD*anteil);post.dailyAt=now;}
+       griff also kaum. Die Abgabe geht davon ab, bevor es wartet. */
+    if(days){
+      var tag=Math.round(days*E.DAILY_GOLD*anteil),tagKasse=Math.round(tag*abgabe);
+      st.dailyGoldPending=(st.dailyGoldPending||0)+tag-tagKasse;post.dailyAt=now;kasse+=tagKasse;
+      E.vermerken(st,'rein','tagesgeld',tagKasse,now);E.vermerken(st,'raus','abgabe',tagKasse,now);
+    }
     var produced = H.productionTime(post.eggAt), cycles = Math.max(0, Math.floor((H.productionTime(now) - produced) / E.EGG_TIME));
     if (cycles) { post.eggStock = Math.min(E.STOCK_LIMIT, post.eggStock + cycles); post.eggAt = H.productionAt(produced + cycles * E.EGG_TIME); }
+    return kasse;
   };
-  E.deliverDaily = function(st){var n=st.dailyGoldPending||0;st.gold+=n;st.dailyGoldPending=0;return n;};
+  /* Zahlt das wartende Tagesgeld aus - Champion-Sold getrennt verbucht. */
+  E.deliverDaily = function (st, now) {
+    var n = st.dailyGoldPending || 0, sold = Math.min(n, st.soldPending || 0);
+    st.dailyGoldPending = 0; st.soldPending = 0;
+    E.buchen(st, n - sold, 'tagesgeld', now); E.buchen(st, sold, 'sold', now);
+    return n;
+  };
   E.nextEggAt = function (post) { var H = SG.gehstockmon.zeiten; return H.productionAt(H.productionTime(post.eggAt) + E.EGG_TIME); };
   E.weekend = function (st, post, id, now) {
     var reward = SG.gehstockmon.zeiten.weekends(Math.max(post.capturedAt, post.weekendAt), now);
@@ -94,7 +178,7 @@
   E.tick = function (st, now) { Object.keys(st.outposts).forEach(function (id) { E.settle(st, st.outposts[id], now); }); };
   E.capture = function (st, id, now) {
     if (st.geschafft.indexOf(id) < 0) st.geschafft.push(id);
-    st.outposts[id] = E.outpost(null, now); st.siege++; st.gold += 40;
+    st.outposts[id] = E.outpost(null, now); st.siege++; E.buchen(st, 40, 'eroberung', now);
   };
   E.collect = function (st, post, id, now) {
     E.settle(st, post, now);
@@ -190,6 +274,6 @@
     E.settle(st, post, now); var price = E.LEVELS[post.level].cost;
     if (!price) throw new Error('Deine Festung ist vollständig ausgebaut.');
     if (st.gold < price) throw new Error('Für den Ausbau brauchst du ' + price + ' Gold.');
-    st.gold -= price; post.level++; return post.level;
+    E.buchen(st, -price, 'ausbau', now); post.level++; return post.level;
   };
 })(SG);

@@ -81,9 +81,12 @@ await test('The daily gold follows the income share: half from the third territo
   db.data.players[a.playerId].dailyGoldPending = 0;
   uhr = mon + 86400000;
   await call('world');
-  assert.equal(db.data.players[a.playerId].dailyGoldPending, 2 * E.DAILY_GOLD + E.DAILY_GOLD / 2, 'two full, the third half');
+  /* Je Gebiet geht ein Zehntel als Abgabe in die Markthalle (E.ABGABE). */
+  const netto = [E.DAILY_GOLD, E.DAILY_GOLD, E.DAILY_GOLD / 2].reduce((s, v) => s + v - Math.round(v * E.ABGABE), 0);
+  assert.equal(netto, 337);
+  assert.equal(db.data.players[a.playerId].dailyGoldPending, netto, 'two full, the third half, each less the levy');
   const r = await call('join');
-  assert.equal(r.dailyDelivery, 375, 'and that is what arrives');
+  assert.equal(r.dailyDelivery, netto, 'and that is what arrives');
 });
 
 await test('The AI uses Blendstoss only when the other side has a charge to lose', () => {

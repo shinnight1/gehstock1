@@ -17,11 +17,15 @@
     function wartetext(ms){return ms>90*60000?'wenn die Insel wieder öffnet':'in '+dauer(ms);}
     function nah(){var w=c.world(),p=w&&w.position&&w.position();return !!p&&X.inStadt(p);}
     function hingehen(){c.closeDrawer();var w=c.world();if(w&&w.walkToPoint)w.walkToPoint(X.STADT_TOR);c.notify('Deine Figur läuft nach '+X.STADT.name+'.');}
+    function zahl(n){return Math.round(n||0).toLocaleString('de-DE');}
+    /* Nach einem Kauf bleibt das Fenster, wo es war - es ist lang, und wer
+       unten beim Haendler kauft, soll nicht jedes Mal nach oben springen. */
     function run(op,data){
+      var oben=drawer.scrollTop;
       c.request(op,data).then(function(res){
         c.apply(res);
         if(res.arena&&res.arena.phase!=='finished')c.arena(res.arena,true);
-        else zeigeStadt();
+        else{zeigeStadt();drawer.scrollTop=oben;}
         if(res.message)c.notify(res.message);
       }).catch(function(error){c.error(error);});
     }
@@ -103,6 +107,17 @@
       fb.disabled=c.busy()||(nah()&&!s.findelei);
       findel.appendChild(fb);drawer.appendChild(findel);
     }
+    /* Das Kurierkontor steht allen offen - mit Land zahlt es weniger. Die
+       Auftraege selbst stehen im eigenen Fenster (2-handel-ui.js). */
+    function kontorTeil(){
+      var s=state(),k=s.kurier,brett=s.kurierBrett||[];
+      var karte=el('article',undefined,'gm-quest-card');
+      karte.appendChild(titel('Kurierkontor','kurier'));
+      karte.appendChild(el('p',k?'Du trägst '+k.ware+' nach '+X.kurierOrtName(k.nach)+'.'
+        :brett.length+'/'+X.KURIER_VORRAT+(brett.length===1?' Auftrag liegt':' Aufträge liegen')+' bereit: Pakete zu den Außenposten tragen, 12 bis 35 Gold je Weg.'));
+      var b=button(k?'Zum Paket':'Aufträge ansehen',function(){if(R.kurierOeffnen)R.kurierOeffnen();},'gm-button gm-primary');
+      b.disabled=c.busy();karte.appendChild(b);drawer.appendChild(karte);
+    }
     function brutTeil(s){
       drawer.appendChild(titel('Brutplätze','brutplatz'));
       drawer.appendChild(el('p','Du hast '+s.brutplaetze+' Plätze'+(s.gekauft?' ('+s.gekauft+' gekauft)':'')+'. Jeder weitere lässt dich ein Ei mehr gleichzeitig ausbrüten.'));
@@ -132,6 +147,30 @@
       perleKaufen.disabled=c.busy()||!!s.schimmerperle||s.gold<X.SCHIMMERPERLE_PREIS;
       perle.appendChild(perleKaufen);raster.appendChild(perle);
       drawer.appendChild(raster);
+    }
+    /* Runenhandel: feste Preise, 70 % Ankauf, je Woche gedeckelt (2-handel.js).
+       Offen erst, wenn die Markthalle steht. */
+    function runenhandelTeil(){
+      var h=stand&&stand.handel,r=h&&h.runen,s=state(),runen=s.runes||[];
+      drawer.appendChild(titel('Runenhandel','runenhandel'));
+      if(!r){
+        var bau=((h&&h.bauten)||[]).find(function(b){return b.id==='markthalle';});
+        drawer.appendChild(el('p','Runen handelt der Händler erst, wenn die Markthalle steht'+(bau?' ('+zahl(bau.gold)+' von '+zahl(bau.ziel)+' Gold)':'')+'. Jeder kann dafür spenden, und wer Gebiete hält, zahlt ein Zehntel seines Gebietsgolds hinein.'));
+        return;
+      }
+      drawer.appendChild(el('p','Feste Preise; der Händler kauft zu '+Math.round(X.RUNEN_ANKAUF*100)+' % zurück. Diese Woche noch offen: kaufen für '+zahl(r.kaufFrei)+' Gold, verkaufen für '+zahl(r.verkaufFrei)+' Gold. Am Montag geht es von vorn los.'));
+      var liste=el('div',undefined,'gm-schmiede');
+      D.SELTENHEITEN.forEach(function(sel,i){
+        var n=runen[i]||0,zeile=el('div',undefined,'gm-schmiede-zeile'),preis=X.RUNEN_PREISE[i],ankauf=X.runenAnkauf(i);
+        zeile.style.setProperty('--rarity',sel.farbe);
+        zeile.appendChild(el('strong',sel.name+': '+n));
+        var k=button('Kaufen · '+preis+' G',function(){run('runen_kaufen',{rang:i});},'gm-button');
+        k.disabled=c.busy()||s.gold<preis||preis>r.kaufFrei;zeile.appendChild(k);
+        var v=button('Verkaufen · '+ankauf+' G',function(){run('runen_verkaufen',{rang:i});},'gm-button');
+        v.disabled=c.busy()||n<1||ankauf>r.verkaufFrei;zeile.appendChild(v);
+        liste.appendChild(zeile);
+      });
+      drawer.appendChild(liste);
     }
     function schmiedeTeil(){
       var s=state(),runen=s.runes||[],letzte=D.SELTENHEITEN.length-1;
@@ -226,18 +265,32 @@
       if(!stand||!c.open(X.STADT.name,'stadt'))return;
       drawer.appendChild(el('p','Eine freie Stadt: sie gehört niemandem und kann nicht erobert werden. In ihrer Mitte steht die Große Arena - massives Gemäuer, man geht außen herum.','gm-beginner-tip'));
       if(!nah())drawer.appendChild(el('p','Du stehst noch außerhalb. Für alles hier musst du in der Stadt sein.'));
+      /* Das Fenster ist lang geworden. Oben eine Sprungleiste zu den vier
+         Bereichen - die Anker setzt jeder Bereich, bevor er sich zeichnet. */
+      var leiste=el('div',undefined,'gm-sprungleiste'),anker={};
+      [['arena','Arena'],['hafen','Hafen & Kontor'],['handel','Händler & Runen'],['tausch','Tausch']].forEach(function(v){
+        leiste.appendChild(button(v[1],function(){if(anker[v[0]])anker[v[0]].scrollIntoView({behavior:'smooth',block:'start'});},'gm-button gm-secondary'));
+      });
+      drawer.appendChild(leiste);
+      function setze(name){anker[name]=el('span',undefined,'gm-anker');drawer.appendChild(anker[name]);}
+      setze('arena');
       championTeil(stand.turnier);
       rangTeil(stand.turnier);
+      setze('hafen');
       hafenTeil(stand.stadt);
+      kontorTeil();
       brutTeil(stand.stadt);
+      setze('handel');
       haendlerTeil();
+      runenhandelTeil();
       schmiedeTeil();
+      setze('tausch');
       tauschTeil(stand.tausch);
       chronikTeil(stand.turnier);
     }
     return {
       menu:zeigeStadt,
-      apply:function(res){if(res&&res.turnier)stand={turnier:res.turnier,stadt:res.stadt,tausch:res.tausch||[]};},
+      apply:function(res){if(res&&res.turnier)stand={turnier:res.turnier,stadt:res.stadt,tausch:res.tausch||[],handel:res.handel||null};},
       champion:function(){return stand&&stand.turnier&&stand.turnier.champion;},
       refresh:function(view){if(view==='stadt')zeigeStadt();}
     };

@@ -175,3 +175,25 @@
 .gm-streifzug-ziele{display:grid;gap:6px;margin-top:8px}
 .gm-streifzug-ziele .gm-button{text-align:left}
 .gm-streifzug .gm-plan-row select{min-width:0}
+/* Kurierkontor, Markthalle und Wochenbilanz (27.09.2026) */
+.gm-kurier-auftrag.eilig{border-color:#f0b42988}
+.gm-kurier-auftrag .gm-button,.gm-kurier-paket .gm-button{margin:4px 6px 0 0}
+.gm-kurier-paket{border-color:#f0b429aa;background:linear-gradient(140deg,#3a3420,#1d2c30)}
+.gm-encounter-pin.gm-kurier-pin{border-color:#f0b429;color:#f0b429;box-shadow:0 0 0 2px #f0b42966,0 0 14px #f0b42955}
+.gm-encounter-pin.gm-kurier-pin.gm-kurier-da{animation:gm-rune-glow 1.2s ease-in-out infinite alternate}
+@media(prefers-reduced-motion:reduce){.gm-encounter-pin.gm-kurier-pin.gm-kurier-da{animation:none}}
+.gm-bau-spur{height:9px;margin:8px 0 10px}
+.gm-bau-knoepfe{display:flex;flex-wrap:wrap;gap:8px}
+.gm-bilanz{display:grid;gap:5px;margin:6px 0 12px}
+.gm-bilanz-kopf{margin:12px 0 4px;font-size:13px;color:#b9d3d8;letter-spacing:.02em}
+.gm-bilanz-zeile{display:grid;grid-template-columns:minmax(96px,34%) 1fr auto;align-items:center;gap:10px;font-size:13px}
+.gm-bilanz-zeile strong{font-variant-numeric:tabular-nums;color:#e7ebd6;min-width:44px;text-align:right}
+.gm-bilanz-spur{display:block;height:8px;border-radius:4px;background:#20303a;overflow:hidden}
+.gm-bilanz-spur i{display:block;height:100%;border-radius:4px}
+/* Stockhafen: Sprungleiste zu den Bereichen des langen Fensters. */
+.gm-sprungleiste{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 6px}
+.gm-sprungleiste .gm-button{min-height:34px;padding:5px 10px;font-size:12px!important}
+/* Der Fensterkopf klebt oben - der Sprung haelt Abstand, sonst verdeckt er die Ueberschrift. */
+.gm-anker{display:block;scroll-margin-top:70px}
+.gm-gold-knopf{cursor:pointer;border-radius:8px;padding:1px 4px;margin:-1px -4px}
+.gm-gold-knopf:hover,.gm-gold-knopf:focus-visible{background:#ffffff18;outline:none}

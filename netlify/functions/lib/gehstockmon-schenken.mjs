@@ -72,7 +72,7 @@ export function schenken(welt, { code, name = '', mons = [], gebiete = [], gold 
     bericht.gebiete.push(gebietId);
   }
 
-  if (gabe) { p.gold = Math.min(10000000, (p.gold || 0) + gabe); bericht.gold = gabe; }
+  if (gabe) { E.buchen(p, Math.min(10000000, (p.gold || 0) + gabe) - (p.gold || 0), 'geschenk', now); bericht.gold = gabe; }
 
   /* Eier kommen roh in die Tasche, genau wie am eigenen Aussenposten
      abgeholte: Ausbrueten muss der Beschenkte selbst, sonst waere ein

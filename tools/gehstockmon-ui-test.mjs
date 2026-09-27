@@ -25,7 +25,7 @@ export async function checkUi(D,E,A,handler,code,clock,otherCode){
     const response=await handler(new Request('http://localhost'+url,opts));if(response.ok){const data=await response.clone().json();if(data.profile)latest=data;}
     if(loseResponse){loseResponse=false;throw new TypeError('Antwort verloren');}if(delayReply){delayReply=false;await new Promise(resolve=>releaseReply=resolve);}return response;
   }});
-  for(const file of['src/core/ui.js','src/games/gehstockmon/1-zeiten.js','src/games/gehstockmon/1-zusatz.js','src/games/gehstockmon/2-figuren.js','src/games/gehstockmon/2-online.js','src/games/gehstockmon/2-abenteuer-ui.js','src/games/gehstockmon/2-dungeon-ui.js','src/games/gehstockmon/2-stadt-ui.js','src/games/gehstockmon/2-alltag.js','src/games/gehstockmon/2-heute-ui.js','src/games/gehstockmon/2-schlupf-ui.js','src/games/gehstockmon/2-duell.js','src/games/gehstockmon/2-duell-ui.js','src/games/gehstockmon/3-ui.js'])vm.runInContext(fs.readFileSync(file,'utf8'),context);
+  for(const file of['src/core/ui.js','src/games/gehstockmon/1-zeiten.js','src/games/gehstockmon/1-zusatz.js','src/games/gehstockmon/2-figuren.js','src/games/gehstockmon/2-online.js','src/games/gehstockmon/2-abenteuer-ui.js','src/games/gehstockmon/2-dungeon-ui.js','src/games/gehstockmon/2-stadt-ui.js','src/games/gehstockmon/2-alltag.js','src/games/gehstockmon/2-heute-ui.js','src/games/gehstockmon/2-schlupf-ui.js','src/games/gehstockmon/2-duell.js','src/games/gehstockmon/2-duell-ui.js','src/games/gehstockmon/2-handel.js','src/games/gehstockmon/2-handel-ui.js','src/games/gehstockmon/3-ui.js'])vm.runInContext(fs.readFileSync(file,'utf8'),context);
   const mount=()=>definition.mount({stage,root,store:storage,onLeave(){},sfx(){},after:(fn,ms)=>{timers.set(++timerId,{fn,at:clock.value+ms});return timerId;},cancel:id=>timers.delete(id)});
   let game=mount();
   const find=fn=>{const e=root.all().find(e=>e.visible&&fn(e));assert.ok(e,'control exists');return e;};
@@ -142,6 +142,16 @@ export async function checkUi(D,E,A,handler,code,clock,otherCode){
   assert.ok(root.textContent.includes('Der Händler')&&root.textContent.includes('Die Runenschmiede'),'the gold wares render');
   assert.equal(root.querySelectorAll('.gm-schmiede-zeile').length,D.SELTENHEITEN.length,'one forge row per rarity');
   assert.ok(root.textContent.includes('Der Gehstock-Champion'));
+  /* Kurierkontor, Runenhandel und die Sprungleiste im selben Fenster. */
+  assert.ok(root.textContent.includes('Kurierkontor')&&root.textContent.includes('Runenhandel'),'office and rune trade render');
+  assert.equal(root.querySelector('.gm-sprungleiste').children.length,4,'four jumps through the long window');
+  click('Aufträge ansehen');await flush();
+  assert.equal(root.querySelectorAll('.gm-kurier-auftrag').length,SG.gehstockmon.abenteuer.KURIER_VORRAT,'a newcomer finds a full board');
+  /* Die Wochenbilanz liegt hinter dem Gold, die Markthalle hinter ihrem Balken. */
+  root.querySelector('.gm-gold-knopf').fire('click');await flush();
+  assert.ok(root.textContent.includes('Wochenbilanz')&&root.textContent.includes('Diese Woche'),'the ledger opens from the gold');
+  find(e=>e.classList.contains('gm-projekt')&&e.textContent.startsWith('Markthalle')).fire('click');await flush();
+  assert.ok(root.textContent.includes('Die Tafel am Eingang'),'the market hall opens from the bar');
   click('⚒ Ausrüstung');await flush();
   assert.equal(root.querySelectorAll('.gm-titel-zeile').length,SG.gehstockmon.abenteuer.TITEL.length,'every title is listed with its progress');
   click('✦ Abenteuer');await flush();

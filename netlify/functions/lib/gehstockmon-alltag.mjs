@@ -60,6 +60,19 @@ export function morgenbericht(world, p, id, seit, now, extra = {}) {
   if (aussen) zeilen.push({ art: 'info', text: '🏕️ ' + aussen + (aussen === 1 ? ' Ei wartet' : ' Eier warten') + ' auf deinen Außenposten.' });
   const zurueck = (p.streifzuege || []).filter((z) => z.fertigAt <= now).length;
   if (zurueck) zeilen.push({ art: 'gut', text: '🎒 ' + zurueck + (zurueck === 1 ? ' Streifzug ist' : ' Streifzüge sind') + ' zurück - die Beute wartet im Abenteuer-Fenster.' });
+  /* Kurierdienst: ein Paket, das noch unterwegs ist, oder ein voller Stapel. */
+  if (p.kurier) zeilen.push({ art: 'info', text: '📦 Du trägst noch ' + p.kurier.ware + ' nach ' + X.kurierOrtName(p.kurier.nach) + '.' });
+  else if ((p.kurierBrett || []).length >= X.KURIER_VORRAT) zeilen.push({ art: 'info', text: '📦 Im Kurierkontor in Stockhafen liegen ' + X.KURIER_VORRAT + ' Aufträge bereit - mehr passen nicht auf den Stapel.' });
+  /* Beim ersten Besuch einer neuen Woche: was die letzte gebracht hat. */
+  if (seit < X.wochenStart(now)) {
+    const vorige = E.bilanzSicht(p, now).vorige;
+    if (vorige) {
+      const summe = (s) => Object.values(s || {}).reduce((n, v) => n + v, 0), rein = summe(vorige.rein), raus = summe(vorige.raus);
+      const beste = Object.entries(vorige.rein || {}).sort((a, b) => b[1] - a[1])[0];
+      if (rein || raus) zeilen.push({ art: 'info', text: '📒 Letzte Woche: +' + rein.toLocaleString('de-DE') + ' Gold eingenommen, −' + raus.toLocaleString('de-DE') + ' ausgegeben'
+        + (beste ? ' · das meiste aus ' + (E.BILANZ_REIN[beste[0]] || beste[0]) : '') + '. Tippe oben auf dein Gold für die ganze Bilanz.' });
+    }
+  }
   const fertig = p.eggs.filter((e) => e.readyAt !== null && e.readyAt <= now).length;
   if (fertig) zeilen.push({ art: 'gut', text: '🐣 ' + fertig + (fertig === 1 ? ' Ei ist' : ' Eier sind') + ' fertig ausgebrütet.' });
   if (!world.territories.some((t) => t.ownerId === id)) {
@@ -83,7 +96,7 @@ export function alltagAction({ world, p, id, body, now }) {
   if (a.truhe) fail('Die Truhe für heute hast du schon geöffnet. Morgen gibt es eine neue.');
   const serie = X.serieNachTruhe(p, now), lohn = X.truhenLohn(serie);
   a.truhe = true; p.alltag = a; p.serie = { zahl: serie, tag: H.day(now) };
-  p.gold += lohn.gold;
+  E.buchen(p, lohn.gold, 'truhe', now);
   const ei = { id: 'truhe-' + now + '-' + (++p.eggSerial), territoryId: X.FINDELEI_FELD, producedAt: now, startedAt: null, readyAt: null,
     art: lohn.eiMindestens ? 'serie' : 'truhe', ...(lohn.eiMindestens ? { mindestens: lohn.eiMindestens } : {}) };
   let wartet = false;

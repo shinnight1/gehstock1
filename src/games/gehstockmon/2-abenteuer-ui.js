@@ -1,6 +1,6 @@
 /* Abenteuer, Ausrüstung und das zweistufige Spielerduell. */
 (function(SG){var R=SG.gehstockmon,X=R.abenteuer,D=R.daten;
-  R.mountAdventure=function(c){var el=c.el,button=c.button,drawer=c.drawer,duel=null,pins=[],encounters=[],dungeons=R.mountDungeons(c),projekte=null,projektLeiste=null;
+  R.mountAdventure=function(c){var el=c.el,button=c.button,drawer=c.drawer,duel=null,pins=[],encounters=[],dungeons=R.mountDungeons(c),handel=R.mountHandel(c),projekte=null,projektLeiste=null;
     function state(){return c.state();}
     /* Die Leiste ueber der Karte zeigt, woran die Insel gerade gemeinsam
        arbeitet: die Lebenskraft des Zerhackers und die Hoehe des Leuchtturms.
@@ -50,12 +50,16 @@
         var jetzt = c.now(), da = zuege.filter(function (z) { return z.fertigAt <= jetzt; }).length;
         var naechster = zuege.reduce(function (m, z) { return Math.min(m, z.fertigAt); }, Infinity);
         projektLeiste.appendChild(marke('Streifzüge', da ? '🎒 ' + da + ' zurück!' : 'bis ' + X.uhrText(naechster, jetzt).replace(/^um /, ''),
-          da ? '#81d2a3' : '#89cce5', adventure, 'abenteuer'));
+          da ? '#81d2a3' : '#89cce5', adventure, 'streifzug'));
       }
+      /* Kurierkontor und Gemeinschaftsbau kommen aus 2-handel-ui.js. */
+      var handelKacheln = handel.kacheln(marke, balken);
+      if (handelKacheln.kurier) projektLeiste.appendChild(handelKacheln.kurier);
       var z = projekte && projekte.zerhacker, l = projekte && projekte.leuchtturm;
       if (z && z.hp > 0) projektLeiste.appendChild(balken('Zerhacker', z.hp, z.maxHp, '#f2705a', zeigeZerhacker, 'zerhacker'));
       else if (z) projektLeiste.appendChild(balken('Zerhacker erlegt', 1, 1, '#81d2a3', zeigeZerhacker, 'zerhacker'));
       if (l && !l.fertig) projektLeiste.appendChild(balken('Leuchtturm', l.gold, l.ziel, '#f0b429', zeigeLeuchtturm, 'leuchtturm'));
+      if (handelKacheln.bau) projektLeiste.appendChild(handelKacheln.bau);
       var a = projekte && projekte.wochenaufgabe;
       if (a) projektLeiste.appendChild(balken(a.name, a.stand, a.ziel, a.erfuellt ? '#81d2a3' : '#89cce5', zeigeWoche, 'woche'));
       /* Das Kopfgeld stand bisher nur im Ausruestungsfenster und fiel damit
@@ -216,7 +220,9 @@
     function player(skin,weapon){var p=el('div',undefined,'gm-skin-preview');p.style.setProperty('--skin',X.skin(skin).color);var canvas=el('canvas');canvas.width=canvas.height=128;canvas.setAttribute('aria-label',X.skin(skin).name);p.appendChild(canvas);R.drawAtlas(canvas,'skins',R.skinIndex(skin));p.appendChild(el('b',{gehstock:'⌁',eisenspeer:'♜',runenklinge:'⚔',sturmhammer:'⚒',titanenlanze:'↟',weltenbrecher:'✹'}[weapon]||'✦','gm-weapon-icon'));return p;}
     /* Titel: alle mit Fortschritt, der erreichte laesst sich tragen. */
     function titelTeil(s) {
-      drawer.appendChild(el('h3', 'Titel'));
+      var kopf = el('h3', 'Titel'), sym = R.symbol && R.symbol('titel', 'gm-titel-symbol');
+      if (sym) kopf.insertBefore(sym, kopf.firstChild);
+      drawer.appendChild(kopf);
       drawer.appendChild(el('p', 'Der Titel steht unter deinem Namen - auf der Insel und in der Arena-Liste. Er bringt nur Ehre.'));
       var liste = el('div', undefined, 'gm-titel-liste');
       X.TITEL.forEach(function (t) {
@@ -267,7 +273,7 @@
     /* Streifzuege: was unterwegs ist, was zurueck ist, und ein neuer Auftrag. */
     function streifzugTeil(){
       var s=state(),zuege=s.streifzuege||[],jetzt=c.now(),gebiete=(s.geschafft||[]).length;
-      var kopf=el('h3','Streifzüge'),sym=R.symbol&&R.symbol('abenteuer','gm-titel-symbol');if(sym)kopf.insertBefore(sym,kopf.firstChild);drawer.appendChild(kopf);
+      var kopf=el('h3','Streifzüge'),sym=R.symbol&&R.symbol('streifzug','gm-titel-symbol');if(sym)kopf.insertBefore(sym,kopf.firstChild);drawer.appendChild(kopf);
       drawer.appendChild(el('p','Mons, die nirgends Dienst tun, ziehen für dich los - die Zeit läuft nur, während die Insel offen ist. Die passende Rolle bringt die Hälfte mehr.','gm-plan-hinweis'));
       zuege.forEach(function(z){
         var mon=D.mon(z.monId),ziel=X.streifzugZiel(z.ziel),da=z.fertigAt<=jetzt,karte=el('article',undefined,'gm-quest-card gm-streifzug');
@@ -346,10 +352,10 @@
       if(duel.phase==='won'){var next=button('Stufe 2: Mon-Kampf starten',function(){run('raid_arena',{squad:state().truppe});},'gm-button gm-primary');next.disabled=c.busy();panel.appendChild(next);}
       var cancel=button('Zurück zur Karte',function(){run('raid_cancel',{});},'gm-button gm-secondary');cancel.disabled=c.busy();panel.appendChild(cancel);var retry=button('Duellstand prüfen',function(){c.resume();},'gm-button');retry.disabled=c.busy();panel.appendChild(retry);box.appendChild(panel);
     }
-    return{dungeons:dungeons.menu,dungeonActive:dungeons.active,adventure:adventure,shop:shop,rival:rival,showDuel:showDuel,active:function(){return dungeons.active()||!!duel&&duel.phase!=='arena';},clear:function(){duel=null;dungeons.clear();},
-      refresh:function(view){if(view==='dungeons')dungeons.menu();if(view==='shop')shop();if(view==='adventure')adventure();},
-      apply:function(res){dungeons.apply(res);duel=res.duel||null;encounters=res.encounters||[];projekte=res;if(c.world()&&c.world().setProjekte)c.world().setProjekte(res);zeigeProjekte();if(c.world()&&c.world().setEncounters)c.world().setEncounters(encounters,res.serverTime);pins.forEach(function(p){p.node.remove();});pins=encounters.map(function(e){var sym=e.kind==='rune'&&R.symbol&&R.symbol('rune','gm-pin-symbol'),node=button(sym?'':e.kind==='trainer'?'⚔':'✦',function(){encounter(e);},'gm-encounter-pin '+e.kind+(sym?' gm-mit-symbol':''));if(sym)node.appendChild(sym);node.title=e.name;node.setAttribute('aria-label',e.name);node.appendChild(el('span',e.name));c.layer.appendChild(node);return{node:node,e:e};});},
-      frame:function(project,hidden,overview){dungeons.frame(project,hidden,overview);pins.forEach(function(p){var at=X.encounterPosition(p.e,c.now()),point=project({x:at.x,z:at.z,y:p.e.kind==='trainer'?4.7:1.5});p.node.hidden=hidden||!point.visible||!point.near&&!overview;p.node.style.transform='translate('+point.x+'px,'+point.y+'px) translate(-50%,-100%)';});}
+    return{dungeons:dungeons.menu,dungeonActive:dungeons.active,adventure:adventure,shop:shop,rival:rival,showDuel:showDuel,kurier:handel.kurier,markthalle:handel.markthalle,bilanz:handel.bilanz,active:function(){return dungeons.active()||!!duel&&duel.phase!=='arena';},clear:function(){duel=null;dungeons.clear();handel.clear();},
+      refresh:function(view){if(view==='dungeons')dungeons.menu();if(view==='shop')shop();if(view==='adventure')adventure();if(view==='kurier')handel.kurier();if(view==='markthalle')handel.markthalle();if(view==='bilanz')handel.bilanz();},
+      apply:function(res){dungeons.apply(res);handel.apply(res);duel=res.duel||null;encounters=res.encounters||[];projekte=res;if(c.world()&&c.world().setProjekte)c.world().setProjekte(res);zeigeProjekte();if(c.world()&&c.world().setEncounters)c.world().setEncounters(encounters,res.serverTime);pins.forEach(function(p){p.node.remove();});pins=encounters.map(function(e){var sym=e.kind==='rune'&&R.symbol&&R.symbol('rune','gm-pin-symbol'),node=button(sym?'':e.kind==='trainer'?'⚔':'✦',function(){encounter(e);},'gm-encounter-pin '+e.kind+(sym?' gm-mit-symbol':''));if(sym)node.appendChild(sym);node.title=e.name;node.setAttribute('aria-label',e.name);node.appendChild(el('span',e.name));c.layer.appendChild(node);return{node:node,e:e};});},
+      frame:function(project,hidden,overview){dungeons.frame(project,hidden,overview);handel.frame(project,hidden,overview);pins.forEach(function(p){var at=X.encounterPosition(p.e,c.now()),point=project({x:at.x,z:at.z,y:p.e.kind==='trainer'?4.7:1.5});p.node.hidden=hidden||!point.visible||!point.near&&!overview;p.node.style.transform='translate('+point.x+'px,'+point.y+'px) translate(-50%,-100%)';});}
     };
   };
 })(SG);

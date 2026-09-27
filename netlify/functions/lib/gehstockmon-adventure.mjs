@@ -21,7 +21,7 @@ export function finishEncounter(world,p,id,now){
   if(b.kind==='rang'||b.kind==='champion')return stadtSettle(world,p,id,now);
   if(b.kind==='trainer'){
     if(b.winner==='wir'&&!p.encounterClaims.includes(b.encounterId)){
-      p.encounterClaims=p.encounterClaims.concat(b.encounterId).slice(-100);p.progress.trainerWins++;p.gold+=25;wochenschritt(world,p,id,'trainer',now);fehdeSchritt(world,id,'trainer',now);X.alltagSchritt(p,'trainer',now);
+      p.encounterClaims=p.encounterClaims.concat(b.encounterId).slice(-100);p.progress.trainerWins++;E.buchen(p,25,'trainer',now);wochenschritt(world,p,id,'trainer',now);fehdeSchritt(world,id,'trainer',now);X.alltagSchritt(p,'trainer',now);
       if(p.eggs.length<E.BAG_LIMIT){egg(p,b.territoryId,now);b.message='Training gewonnen! Ein Ei und 25 Gold gehören dir.';}
       else {p.rewardEggs=p.rewardEggs||{};p.rewardEggs[b.territoryId]=(p.rewardEggs[b.territoryId]||0)+1;b.message='Training gewonnen! 25 Gold; dein Ei wartet auf Platz in der Tasche.';}
     }else b.message='Das Training ist beendet. Du verlierst weder Gold noch Eier. Probiere andere Attacken.';
@@ -40,7 +40,7 @@ export function finishEncounter(world,p,id,now){
         /* Wer den Fuehrenden stellt, kassiert das Kopfgeld. */
         const zaehler={};for(const t2 of world.territories||[])if(t2.ownerId)zaehler[t2.ownerId]=(zaehler[t2.ownerId]||0)+1;
         const kopf=X.kopfgeld(zaehler);
-        if(kopf&&kopf.id===b.targetId){p.gold+=kopf.gold;b.message+=' Und '+kopf.gold+' Gold Kopfgeld - er hielt die meisten Gebiete.';
+        if(kopf&&kopf.id===b.targetId){E.buchen(p,kopf.gold,'kopfgeld',now);b.message+=' Und '+kopf.gold+' Gold Kopfgeld - er hielt die meisten Gebiete.';
           log(world,p,id,b.targetId,'kassiert das Kopfgeld auf '+target.name+'.',now);}
       }else b.message='Gewonnen, aber das Ei kann nicht übertragen werden. Kein Ei geht verloren.';
     }else b.message=b.winner==='wir'?'Der Überfall ist abgelaufen. Kein Ei wird übertragen.':'Die Verteidigung hält. Es wurde kein Ei gestohlen.';
@@ -112,7 +112,7 @@ export function fehdenAbrechnen(world,alt,now){
     const gleich=pa===pb,siegerId=gleich?null:(pa>pb?paar.a:paar.b);
     for(const [pid,wer,eigen,fremd] of [[paar.a,a,pa,pb],[paar.b,b,pb,pa]]){
       const gewonnen=siegerId===pid;
-      wer.gold+=gleich?X.FEHDE_LOHN:gewonnen?X.FEHDE_LOHN:X.FEHDE_TROST;
+      E.buchen(wer,gleich?X.FEHDE_LOHN:gewonnen?X.FEHDE_LOHN:X.FEHDE_TROST,'fehde',now);
       const gegner=(pid===paar.a?b:a).name;
       world.reports.push({id:'fehde-'+pid+'-'+alt.woche,time:now,attackerId:pid,defenderId:null,territoryId:1,
         text:'Fehde gegen '+gegner+' beendet: '+eigen+' zu '+fremd+' Punkten · '
@@ -153,7 +153,7 @@ export function wochenschritt(world,p,id,art,now,anzahl=1){
   tickern(world,'🏆 Wochenaufgabe "'+ziel.name+'" geschafft - alle, die mitgeholfen haben, bekommen ihren Lohn.','woche',now);
   for(const [pid,anteil] of Object.entries(a.beitraege)){
     const wer=world.players[pid];if(!wer)continue;
-    wer.gold+=ziel.lohn+Math.round(ziel.lohn*anteil/Math.max(1,a.stand));
+    E.buchen(wer,ziel.lohn+Math.round(ziel.lohn*anteil/Math.max(1,a.stand)),'woche',now);
   }
   return 'Die Wochenaufgabe "'+ziel.name+'" ist geschafft! Alle Beteiligten haben ihren Lohn erhalten.';
 }
@@ -248,7 +248,7 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
   if(op==='gather'||op==='trainer_start'){
     const encounter=X.encounters(now,world.territories).find(e=>e.id===body.encounterId);if(!encounter||encounter.kind!==(op==='gather'?'rune':'trainer'))fail('Diese Begegnung ist weitergezogen. Aktualisiere die Karte.');
     if(p.encounterClaims.includes(encounter.id))fail('Diese Begegnung hast du bereits abgeschlossen.');await nearby(encounter);
-    if(op==='gather'){p.encounterClaims=p.encounterClaims.concat(encounter.id).slice(-100);p.progress.gathered++;p.gold+=10;
+    if(op==='gather'){p.encounterClaims=p.encounterClaims.concat(encounter.id).slice(-100);p.progress.gathered++;E.buchen(p,10,'runen',now);
       /* Eine verlorene Rune ist jetzt auch eine Rune - vorher gab es nur Gold. */
       p.runes[0]=Math.min(9999,(p.runes[0]||0)+1);fehdeSchritt(world,id,'rune',now);X.alltagSchritt(p,'rune',now);extra.message=wochenschritt(world,p,id,'runen',now)||'Rune gefunden! +1 gewöhnliche Rune und 10 Gold.';}
     else {
@@ -266,7 +266,7 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
     if(!Number.isFinite(betrag)||betrag<X.LEUCHTTURM.mindestens)fail('Mindestens '+X.LEUCHTTURM.mindestens+' Gold.');
     if(betrag>p.gold)fail('So viel Gold hast du nicht.');
     const rest=X.LEUCHTTURM.ziel-bau.gold,gibt=Math.min(betrag,rest);
-    p.gold-=gibt;bau.gold+=gibt;bau.spender[id]=(bau.spender[id]||0)+gibt;
+    E.buchen(p,-gibt,'spende',now);bau.gold+=gibt;bau.spender[id]=(bau.spender[id]||0)+gibt;
     if(X.leuchtturmFertig(bau)&&!bau.fertigAm){
       bau.fertigAm=now;
       log(world,p,id,null,'vollendet den Leuchtturm. Er wacht jetzt über die ganze Insel.',now);
@@ -299,7 +299,7 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
       for(const [pid,anteil] of Object.entries(z.beitraege)){
         const wer=world.players[pid];if(!wer)continue;
         const teil=anteil/gesamt;
-        wer.gold+=Math.max(50,Math.round(X.ZERHACKER.beuteGold*teil*Object.keys(z.beitraege).length));
+        E.buchen(wer,Math.max(50,Math.round(X.ZERHACKER.beuteGold*teil*Object.keys(z.beitraege).length)),'zerhacker',now);
         const runen=Math.max(1,Math.round(X.ZERHACKER.beuteRunen*teil*Object.keys(z.beitraege).length));
         wer.runes[5]=Math.min(9999,(wer.runes[5]||0)+runen);
       }
@@ -372,7 +372,7 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
     if(now<z.fertigAt)fail('Noch unterwegs - zurück '+X.uhrText(z.fertigAt,now)+'.');
     const e=z.ergebnis,mon=D.mon(z.monId),teile=[];
     if(e.runen){p.runes[e.rang]=Math.min(9999,(p.runes[e.rang]||0)+e.runen);teile.push(e.runen+' '+D.SELTENHEITEN[e.rang].name+'-'+(e.runen===1?'Rune':'Runen'));}
-    if(e.gold){p.gold+=e.gold;teile.push(e.gold+' Gold');}
+    if(e.gold){E.buchen(p,e.gold,'streifzug',now);teile.push(e.gold+' Gold');}
     if(e.ei){const ei={id:'streifzug-'+now+'-'+(++p.eggSerial),territoryId:X.FINDELEI_FELD,producedAt:now,startedAt:null,readyAt:null,art:'streifzug'};
       if(p.eggs.length<E.BAG_LIMIT)p.eggs.push(ei);else p.sonderEier=(p.sonderEier||[]).concat(ei);teile.push('ein Ei');}
     p.streifzuege.splice(at,1);p.streifzuegeGesamt=(p.streifzuegeGesamt||0)+1;
@@ -388,11 +388,11 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
       p.titel=t.id;extra.message='Du trägst jetzt den Titel '+t.name+'. Alle sehen ihn unter deinem Namen.';
     }
   }
-  if(op==='quest_claim'){const quest=X.QUESTS.find(q=>q.id===body.questId);if(!quest||p.claimedQuests.includes(quest.id)||X.progress(p,quest)<quest.goal)fail('Diese Questbelohnung ist noch nicht verfügbar.');p.claimedQuests.push(quest.id);if(quest.gold)p.gold+=quest.gold;if(quest.skin&&!p.skins.includes(quest.skin))p.skins.push(quest.skin);extra.message=quest.skin?X.skin(quest.skin).name+' freigeschaltet!':'Quest geschafft! +'+quest.gold+' Gold.';}
+  if(op==='quest_claim'){const quest=X.QUESTS.find(q=>q.id===body.questId);if(!quest||p.claimedQuests.includes(quest.id)||X.progress(p,quest)<quest.goal)fail('Diese Questbelohnung ist noch nicht verfügbar.');p.claimedQuests.push(quest.id);if(quest.gold)E.buchen(p,quest.gold,'quest',now);if(quest.skin&&!p.skins.includes(quest.skin))p.skins.push(quest.skin);extra.message=quest.skin?X.skin(quest.skin).name+' freigeschaltet!':'Quest geschafft! +'+quest.gold+' Gold.';}
   if(op==='shop_buy'||op==='equip'){
     if(p.raidLock?.until>now)fail('Während eines Überfalls bleibt deine Ausrüstung fest.');
     const skin=body.kind==='skin',list=skin?X.SKINS:body.kind==='weapon'?X.WEAPONS:[],item=list.find(v=>v.id===body.itemId),owned=skin?p.skins:p.weapons;if(!item)fail('Diese Ausrüstung gibt es nicht.');
-    if(op==='shop_buy'){if(owned.includes(item.id))fail('Das besitzt du bereits.');if(!item.price||item.price>p.gold)fail(item.quest?'Erfülle zuerst die zugehörige Quest.':'Du hast noch nicht genug Gold.');p.gold-=item.price;owned.push(item.id);}
+    if(op==='shop_buy'){if(owned.includes(item.id))fail('Das besitzt du bereits.');if(!item.price||item.price>p.gold)fail(item.quest?'Erfülle zuerst die zugehörige Quest.':'Du hast noch nicht genug Gold.');E.buchen(p,-item.price,'ausruestung',now);owned.push(item.id);}
     else if(!owned.includes(item.id))fail('Schalte diese Ausrüstung zuerst frei.');p[skin?'skin':'weapon']=item.id;extra.message=item.name+' ausgerüstet.';
   }
   if(op==='raid_start'){

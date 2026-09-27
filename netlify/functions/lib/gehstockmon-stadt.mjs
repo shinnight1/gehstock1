@@ -33,7 +33,8 @@ export function championSold(world,now){
   if(!tage)return;
   c.soldAt=now;
   const wer=world.players[c.id];
-  if(wer)wer.dailyGoldPending=(wer.dailyGoldPending||0)+X.championSold(tage);
+  /* soldPending trennt den Sold in der Wochenbilanz vom Tagesgeld. */
+  if(wer){wer.dailyGoldPending=(wer.dailyGoldPending||0)+X.championSold(tage);wer.soldPending=(wer.soldPending||0)+X.championSold(tage);}
 }
 function chronik(world){
   if(!Array.isArray(world.championChronik))world.championChronik=[];
@@ -137,7 +138,7 @@ export function stadtSettle(world,p,id,now){
   if(b.kind==='rang'){
     const sieg=b.winner==='wir',lohn=X.arenaLohn(b.einstufung);
     p.arenaRuhm=Math.max(100,X.ruhm(p)+(sieg?X.RUHM_SIEG:-X.RUHM_NIEDERLAGE));
-    p.gold+=sieg?lohn:X.ARENA_TROST;
+    E.buchen(p,sieg?lohn:X.ARENA_TROST,'arena',now);
     if(sieg){
       p.arenaSiege=X.arenaSiege(p)+1;p.arenaSiegeGesamt=(p.arenaSiegeGesamt||0)+1;X.alltagSchritt(p,'arena',now);
       b.message='Ranglistensieg gegen '+b.gegnerName+'! +'+lohn+' Gold, +'+X.RUHM_SIEG+' Ruhm · '
@@ -151,7 +152,7 @@ export function stadtSettle(world,p,id,now){
     /* Waehrend des Kampfes kann ein anderer den Titel geholt haben. Dann
        zaehlt der Sieg als Ranglistensieg und nicht als Titelgewinn. */
     if(c.seit!==b.championSeit){
-      p.arenaRuhm=X.ruhm(p)+X.RUHM_SIEG;p.gold+=X.ARENA_LOHN;p.arenaSiegeGesamt=(p.arenaSiegeGesamt||0)+1;
+      p.arenaRuhm=X.ruhm(p)+X.RUHM_SIEG;E.buchen(p,X.ARENA_LOHN,'arena',now);p.arenaSiegeGesamt=(p.arenaSiegeGesamt||0)+1;
       b.message='Gewonnen - aber der Titel hat während des Kampfes den Besitzer gewechselt. Der Sieg zählt als Ranglistensieg.';
       return true;
     }
@@ -166,7 +167,7 @@ export function stadtSettle(world,p,id,now){
     const vorgaenger=(world.championChronik[world.championChronik.length-1]||{}).name||'dem Haus';
     tickern(world,'♛ '+p.name+' entreißt '+vorgaenger+' den Titel und ist neuer Gehstock-Champion!','champion',now,id);
   }else{
-    p.arenaRuhm=Math.max(100,X.ruhm(p)-X.RUHM_NIEDERLAGE);p.arenaSiege=0;p.gold+=X.ARENA_TROST;
+    p.arenaRuhm=Math.max(100,X.ruhm(p)-X.RUHM_NIEDERLAGE);p.arenaSiege=0;E.buchen(p,X.ARENA_TROST,'arena',now);
     if(c.seit===b.championSeit)c.verteidigt=(c.verteidigt||0)+1;
     b.message='Der Titel bleibt bei '+c.name+'. Sammle drei neue Ranglistensiege und komm wieder.';
   }
@@ -189,7 +190,7 @@ export async function stadtAction({world,p,id,body,now,presence}){
     const gekauft=X.gekaufteBrutplaetze(p),preis=X.BRUTPLATZ_PREISE[gekauft];
     if(!preis)fail('Mehr Brutplätze gibt es nicht.');
     if(p.gold<preis)fail('Dafür brauchst du '+preis+' Gold.');
-    p.gold-=preis;p.brutplaetze=gekauft+1;
+    E.buchen(p,-preis,'brutplatz',now);p.brutplaetze=gekauft+1;
     extra.message='Brutplatz gekauft: '+X.brutplaetze(world.leuchtturm,p)+' Plätze. Du kannst jetzt so viele Eier gleichzeitig ausbrüten.';
     return extra;
   }
@@ -200,7 +201,7 @@ export async function stadtAction({world,p,id,body,now,presence}){
     if(p.haendlerTag===tag)fail('Der Händler hat dir heute schon ein Ei verkauft. Morgen hat er ein neues.');
     if(p.gold<X.HAENDLER_EI_PREIS)fail('Ein Ei kostet '+X.HAENDLER_EI_PREIS+' Gold.');
     if(p.eggs.length>=E.BAG_LIMIT)fail('Deine Bruttasche ist voll.');
-    p.gold-=X.HAENDLER_EI_PREIS;p.haendlerTag=tag;
+    E.buchen(p,-X.HAENDLER_EI_PREIS,'eier',now);p.haendlerTag=tag;
     p.eggs.push({id:'handel-'+now+'-'+(++p.eggSerial),territoryId:X.FINDELEI_FELD,producedAt:now,startedAt:null,readyAt:null,art:'handel'});
     extra.message='Der Händler gibt dir ein Ei. −'+X.HAENDLER_EI_PREIS+' Gold.';
     return extra;
@@ -211,21 +212,21 @@ export async function stadtAction({world,p,id,body,now,presence}){
     const nimmt=zerlegen?1:3,gibt=zerlegen?2:1,ziel=zerlegen?rang-1:rang+1,kosten=X.schmiedeKosten(zerlegen?'zerlegen':'verschmelzen',rang);
     if((p.runes[rang]||0)<nimmt)fail('Dafür brauchst du '+nimmt+' '+D.SELTENHEITEN[rang].name+'-'+(nimmt===1?'Rune':'Runen')+'.');
     if(p.gold<kosten)fail('Die Schmiede verlangt '+kosten+' Gold.');
-    p.gold-=kosten;p.runes[rang]-=nimmt;p.runes[ziel]=Math.min(9999,(p.runes[ziel]||0)+gibt);
+    E.buchen(p,-kosten,'schmiede',now);p.runes[rang]-=nimmt;p.runes[ziel]=Math.min(9999,(p.runes[ziel]||0)+gibt);
     extra.message=(zerlegen?'Zerlegt':'Verschmolzen')+': '+nimmt+' '+D.SELTENHEITEN[rang].name+' → '+gibt+' '+D.SELTENHEITEN[ziel].name+'. −'+kosten+' Gold.';
     return extra;
   }
   if(op==='schimmerperle_kaufen'){
     if(p.schimmerperle)fail('Du hast schon eine Schimmerperle. Sie wirkt beim nächsten Schlüpfen.');
     if(p.gold<X.SCHIMMERPERLE_PREIS)fail('Eine Schimmerperle kostet '+X.SCHIMMERPERLE_PREIS+' Gold.');
-    p.gold-=X.SCHIMMERPERLE_PREIS;p.schimmerperle=true;
+    E.buchen(p,-X.SCHIMMERPERLE_PREIS,'perle',now);p.schimmerperle=true;
     extra.message='Schimmerperle gekauft: Das nächste Mon, das du ausbrütest und das noch nicht schimmert, schlüpft schimmernd.';
     return extra;
   }
   if(op==='tagwerk'){
     ohneGebiet();await amTor();
     if(X.tagwerkStand(p,now).fertig<1)fail('Im Hafen gibt es gerade keine Arbeit. Komm in einer Weile wieder.');
-    X.tagwerkVerbrauchen(p,now);p.gold+=X.TAGWERK_LOHN;
+    X.tagwerkVerbrauchen(p,now);E.buchen(p,X.TAGWERK_LOHN,'tagwerk',now);
     extra.message='Tagwerk erledigt: +'+X.TAGWERK_LOHN+' Gold.';
     return extra;
   }

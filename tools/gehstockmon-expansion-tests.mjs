@@ -20,9 +20,11 @@ await test('Midnight gold belongs to the owner at midnight and is delivered once
   async function call(code,op){const r=await handler(new Request('http://localhost/api/gehstockmon',{method:'POST',body:JSON.stringify({code,op,name:code,requestId:'daily-test-'+(++serial)})}));assert.equal(r.status,200);return r.json();}
   const a=await call('0141','join'),b=await call('0321','join');
   Object.assign(db.data.territories[0],{ownerId:a.playerId,...E.outpost(null,time)});
-  time=mon;await call('0321','world');assert.equal(db.data.players[a.playerId].dailyGoldPending,450);assert.equal(db.data.players[a.playerId].gold,200);
+  /* Drei Tage Tagesgeld und eine geoeffnete Stunde Lager-Ertrag, von beidem
+     geht ein Zehntel als Gebietsabgabe in die Markthalle: 450 - 45 und 20 - 2. */
+  time=mon;await call('0321','world');assert.equal(db.data.players[a.playerId].dailyGoldPending,405);assert.equal(db.data.players[a.playerId].gold,198);
   Object.assign(db.data.territories[0],{ownerId:b.playerId,...E.outpost(null,time)});
-  const results=await Promise.all([call('0141','join'),call('0141','join')]);assert.equal(results.reduce((n,r)=>n+r.dailyDelivery,0),450);assert.equal((await call('0141','join')).profile.gold,650);assert.equal((await call('0321','join')).dailyDelivery,0);
+  const results=await Promise.all([call('0141','join'),call('0141','join')]);assert.equal(results.reduce((n,r)=>n+r.dailyDelivery,0),405);assert.equal((await call('0141','join')).profile.gold,603);assert.equal((await call('0321','join')).dailyDelivery,0);
 });
 await test('Legacy outposts start the new daily schedule without retroactive awards',()=>{
   const old={capturedAt:at('2026-01-01T00:00:00+01:00'),incomeAt:fri,eggAt:fri},p=D.neuerStand(null,fri),post=E.outpost(old,fri);E.settle(p,post,fri);assert.equal(p.dailyGoldPending,0);E.settle(p,post,mon);assert.equal(p.dailyGoldPending,450);
