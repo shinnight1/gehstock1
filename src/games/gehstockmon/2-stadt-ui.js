@@ -11,6 +11,8 @@
   R.mountStadt=function(c){
     var el=c.el,button=c.button,drawer=c.drawer,stand=null;
     function state(){return c.state();}
+    /* Ueberschrift mit Medaillon (R.symbol aus 3-ui.js); ohne Bild nur Text. */
+    function titel(text,bild){var h=el('h3',text),sym=R.symbol&&R.symbol(bild,'gm-titel-symbol');if(sym)h.insertBefore(sym,h.firstChild);return h;}
     function dauer(ms){var m=Math.max(0,Math.ceil(ms/60000));return m>=60?Math.floor(m/60)+' Std. '+m%60+' Min.':m+' Min.';}
     function wartetext(ms){return ms>90*60000?'wenn die Insel wieder öffnet':'in '+dauer(ms);}
     function nah(){var w=c.world(),p=w&&w.position&&w.position();return !!p&&X.inStadt(p);}
@@ -40,7 +42,7 @@
        ueberhaupt Ranglistenkaempfe sammelt. */
     function championTeil(t){
       var ch=t.champion;
-      drawer.appendChild(el('h3','Der Gehstock-Champion'));
+      drawer.appendChild(titel('Der Gehstock-Champion','champion'));
       drawer.appendChild(el('p',ch.selbst?'Du hältst den Titel seit '+dauer(c.now()-ch.seit)+'. '+ch.verteidigt+' Herausforderung(en) abgewehrt. Solange er dir gehört, bekommst du '+X.CHAMPION_SOLD+' Gold Sold je Tag.'
         :ch.name+(ch.haus?' hält den Titel für das Haus, bis ihn jemand holt.':' trägt den Titel seit '+dauer(c.now()-ch.seit)+' und hat '+ch.verteidigt+' Herausforderung(en) abgewehrt.'),ch.selbst?'gm-selbst':undefined));
       drawer.appendChild(el('p','Er verteidigt mit der Aufstellung, die beim Titelgewinn eingefroren wurde - und mit einem Zehntel Heimvorteil.'));
@@ -56,7 +58,7 @@
       drawer.appendChild(b);
     }
     function rangTeil(t){
-      drawer.appendChild(el('h3','Ranglistenkämpfe'));
+      drawer.appendChild(titel('Ranglistenkämpfe','arena'));
       drawer.appendChild(el('p','Dein Ruhm: '+t.ruhm+' · Sieg +'+X.RUHM_SIEG+' Ruhm und Gold nach Gegner: '+X.ARENA_LOHN_STUFEN.leichter+' gegen Leichtere, '+X.ARENA_LOHN_STUFEN.ausgeglichen+' gegen Gleichstarke, '+X.ARENA_LOHN_STUFEN.schwerer+' gegen Stärkere. Niederlage -'+X.RUHM_NIEDERLAGE+' Ruhm und '+X.ARENA_TROST+' Gold Trost. Niemand verliert dabei Mons, Eier oder Gebiete.'));
       /* Die Bilanz bleibt ueber Titelkaempfe hinweg stehen - die Zahl oben
          dagegen zaehlt nur bis zum naechsten Titelkampf. */
@@ -83,7 +85,7 @@
       }
       drawer.appendChild(el('p','Du hältst gerade kein Gebiet. Im Hafen gibt es trotzdem Arbeit und Nachwuchs: du bleibst im Spiel, auch ohne einen Fußbreit Land.'));
       var arbeit=el('article',undefined,'gm-quest-card');
-      arbeit.appendChild(el('h3','Tagwerk · '+s.tagwerkLohn+' Gold'));
+      arbeit.appendChild(titel('Tagwerk · '+s.tagwerkLohn+' Gold','tagwerk'));
       arbeit.appendChild(el('p',s.tagwerk+'/'+s.tagwerkMax+' Aufträge liegen bereit'+(s.tagwerk<s.tagwerkMax?' · der nächste '+wartetext(s.tagwerkIn):' · Vorrat voll')));
       var ab=button(nah()?'Tagwerk annehmen ('+s.tagwerk+')':'Nach '+X.STADT.name+' laufen',function(){
         if(!nah()){hingehen();return;}run('tagwerk',{});
@@ -91,7 +93,7 @@
       ab.disabled=c.busy()||(nah()&&!s.tagwerk);
       arbeit.appendChild(ab);drawer.appendChild(arbeit);
       var findel=el('article',undefined,'gm-quest-card');
-      findel.appendChild(el('h3','Das Findelhaus'));
+      findel.appendChild(titel('Das Findelhaus','findelhaus'));
       /* Jede geoeffnete Stunde ein Ei, bis zu zwei liegen bereit. */
       var bereit=Number(s.findelei)||0,max=s.findeleiMax||1;
       findel.appendChild(el('p',bereit+'/'+max+(bereit===1?' Ei liegt':' Eier liegen')+' bereit'+(bereit<max?' · das nächste '+wartetext(s.findeleiIn):' · Vorrat voll')+'. Jede geöffnete Stunde kommt eins dazu.'));
@@ -102,7 +104,7 @@
       findel.appendChild(fb);drawer.appendChild(findel);
     }
     function brutTeil(s){
-      drawer.appendChild(el('h3','Brutplätze'));
+      drawer.appendChild(titel('Brutplätze','brutplatz'));
       drawer.appendChild(el('p','Du hast '+s.brutplaetze+' Plätze'+(s.gekauft?' ('+s.gekauft+' gekauft)':'')+'. Jeder weitere lässt dich ein Ei mehr gleichzeitig ausbrüten.'));
       if(!s.preis){drawer.appendChild(el('p','Mehr gibt es nicht zu kaufen.'));return;}
       var b=button('Brutplatz kaufen · '+s.preis+' Gold',function(){run('brutplatz_kaufen',{});},'gm-button gm-primary');
@@ -153,7 +155,7 @@
     /* Das Tauschbrett. Nur gleiche Seltenheit gegen gleiche Seltenheit - das
        ist die Regel, die verhindert, dass ein zweites Konto das erste hochzieht. */
     function tauschTeil(liste){
-      drawer.appendChild(el('h3','Das Tauschbrett'));
+      drawer.appendChild(titel('Das Tauschbrett','tausch'));
       drawer.appendChild(el('p','Mon gegen Mon, immer innerhalb derselben Seltenheit. Was du weggibst, ist weg - samt Runenstufe und Wesen. Was in deiner Truppe steht, kannst du nicht anbieten.'));
       var s=state(),eigene=(liste||[]).filter(function(v){return v.selbst;});
       (liste||[]).forEach(function(v){

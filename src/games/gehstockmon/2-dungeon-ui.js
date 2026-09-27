@@ -50,7 +50,7 @@
       var leave=button(room.phase==='finished'?'Zurück zur Karte':'Expedition verlassen',function(){if(room.phase==='finished'){dismissed=room.id;c.closeCombat();}else run('dungeon_leave',{roomId:room.id});},'gm-button gm-secondary');leave.disabled=c.busy();panel.appendChild(leave);
       var retry=button('Expedition prüfen',function(){c.request(R.online.pending()?'resume':'world').then(function(res){c.apply(res);if(active())show();}).catch(c.error);});retry.disabled=c.busy();panel.appendChild(retry);box.appendChild(panel);
     }
-    X.DUNGEONS.forEach(function(d){var node=button('◆',function(){entrance(d);},'gm-encounter-pin gm-dungeon-pin');node.title=d.name;node.setAttribute('aria-label',d.name);node.style.setProperty('--rarity',D.SELTENHEITEN[d.rarity].farbe);node.appendChild(el('span',d.name));c.layer.appendChild(node);pins.push({node:node,d:d});});
+    X.DUNGEONS.forEach(function(d){var sym=R.symbol&&R.symbol('dungeons','gm-pin-symbol'),node=button(sym?'':'◆',function(){entrance(d);},'gm-encounter-pin gm-dungeon-pin'+(sym?' gm-mit-symbol':''));if(sym)node.appendChild(sym);node.title=d.name;node.setAttribute('aria-label',d.name);node.style.setProperty('--rarity',D.SELTENHEITEN[d.rarity].farbe);node.appendChild(el('span',d.name));c.layer.appendChild(node);pins.push({node:node,d:d});});
     return {menu:menu,show:show,active:active,apply:function(res){room=res.dungeon||null;lobbies=res.dungeonLobbies||[];},clear:function(){room=null;},frame:function(project,hidden,overview){pins.forEach(function(p){var pt=project({x:p.d.x,z:p.d.z,y:5});p.node.hidden=hidden||!pt.visible||!pt.near&&!overview;p.node.style.transform='translate('+pt.x+'px,'+pt.y+'px) translate(-50%,-100%)';});}};
   };
 })(SG);
