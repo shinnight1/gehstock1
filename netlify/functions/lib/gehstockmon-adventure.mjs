@@ -248,7 +248,9 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
   if(op==='gather'||op==='trainer_start'){
     const encounter=X.encounters(now,world.territories).find(e=>e.id===body.encounterId);if(!encounter||encounter.kind!==(op==='gather'?'rune':'trainer'))fail('Diese Begegnung ist weitergezogen. Aktualisiere die Karte.');
     if(p.encounterClaims.includes(encounter.id))fail('Diese Begegnung hast du bereits abgeschlossen.');await nearby(encounter);
-    if(op==='gather'){p.encounterClaims=p.encounterClaims.concat(encounter.id).slice(-100);p.progress.gathered++;p.gold+=10;fehdeSchritt(world,id,'rune',now);X.alltagSchritt(p,'rune',now);extra.message=wochenschritt(world,p,id,'runen',now)||'Rune gefunden! +10 Gold und Fortschritt für deine Quest.';}
+    if(op==='gather'){p.encounterClaims=p.encounterClaims.concat(encounter.id).slice(-100);p.progress.gathered++;p.gold+=10;
+      /* Eine verlorene Rune ist jetzt auch eine Rune - vorher gab es nur Gold. */
+      p.runes[0]=Math.min(9999,(p.runes[0]||0)+1);fehdeSchritt(world,id,'rune',now);X.alltagSchritt(p,'rune',now);extra.message=wochenschritt(world,p,id,'runen',now)||'Rune gefunden! +1 gewöhnliche Rune und 10 Gold.';}
     else {
       p.truppe=validateSquad(p,body.squad);
       const einsteiger=p.progress.trainerWins<TRAINER_EINSTIEG,welcher=Number(String(encounter.id).split(':')[1])||0;

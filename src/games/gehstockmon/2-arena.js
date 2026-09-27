@@ -24,7 +24,7 @@
       { id:'sammelruf',   name:'Sammelruf',    text:'Heilt 18 % und gibt ein Schild',             faktor:0 },
       { id:'laeuterung',  name:'Läuterung',    text:'Heilt 22 % und schärft deinen nächsten Treffer', faktor:0 } ],
     [ { id:'runenstoerung',name:'Runenstörung',text:'Schwächt den nächsten Treffer des Gegners',  faktor:.8 },
-      { id:'blendstoss',  name:'Blendstoß',    text:'Nimmt dem Gegner eine Fähigkeitsladung',     faktor:.6 },
+      { id:'blendstoss',  name:'Blendstoß',    text:'Nimmt dem Gegner eine Fähigkeitsladung',     faktor:.75 },
       { id:'windschnitt', name:'Windschnitt',  text:'Geht durch Deckung und Schilde hindurch',    faktor:1.15 } ]
   ];
   /* ------------------------------------------------------------------
@@ -159,7 +159,14 @@
   };
   A.defenders = function (fieldId, saved) {
     if (saved && saved.length) return saved.map(function (e) { return A.ausSpeicher(e); });
-    var roster = [['moosling','rostknirps'], ['sumpfschnapper','nebelmolch','klinge'], ['kieselkrabb','glutfuchs','donnerwidder'], ['dornenwolf','pilzhueter','nachtflatter'], ['runengolem','frostklaue','seelenqualle','obsidianrabe']];
+    var roster = [['moosling','rostknirps'], ['sumpfschnapper','nebelmolch','klinge'], ['kieselkrabb','glutfuchs','donnerwidder'], ['bernsteinkaefer','dornenwolf','nebelkrake','kristallspinne'], ['runengolem','frostklaue','seelenqualle','obsidianrabe']];
+    /* Der Nebelwald hiess "Schwer", war mit einem Aussergewoehnlichen und zwei
+       Gewoehnlichen aber schwaecher als beide "Mittel"-Gebiete - die
+       Startertruppe gewann dort. Jetzt stehen drei Aussergewoehnliche und eine
+       Epische, der Wall vorn (27.09.2026). Mit der Arena-KI auf beiden Seiten
+       gewinnt die Startertruppe noch 13 %, zwei Seltene und zwei Gewoehnliche
+       78 %, ab zwei Aussergewoehnlichen jede Truppe - die Frostkrone bleibt
+       deutlich haerter. */
     /* Das Sonnengrab war ein Abklatsch des Horsts und damit die leichteste
        Stufe unter "Sehr schwer", die es je gab. Jetzt stehen dort vier
        Legendaere in allen vier Rollen - Wall, Schneide, Pfleger, Stoerung -,
@@ -421,7 +428,11 @@
        folgen weiter der Faustregel ihrer Rolle. */
     var neu = kiNeu(A.faehigkeit(me), me, other, s);
     if (neu !== null) { if (neu && erlaubt('special')) return 'special'; }
-    else if(me.charges>0 && ((me.role===2 && me.hp<me.maxHp*0.65)||(me.role===1 && other.hp<other.maxHp*0.35)||(me.role===3 && !other.weakened)||(me.role===0 && s.round%3===1)))return 'special';
+    /* Blendstoss nimmt eine Ladung - ohne Ladung beim Gegner verpufft genau
+       das. Frueher setzte die KI ihn trotzdem ein, sobald der Gegner nicht
+       geschwaecht war, und er gewann nur 38 % gegen die anderen Stoerer. Mit
+       dieser Regel und 75 % statt 60 % Schaden sind es 48 % (27.09.2026). */
+    else if(me.charges>0 && ((me.role===2 && me.hp<me.maxHp*0.65)||(me.role===1 && other.hp<other.maxHp*0.35)||(me.role===3 && (A.faehigkeit(me).id==='blendstoss'?other.charges>0:!other.weakened))||(me.role===0 && s.round%3===1)))return 'special';
     return s.round>=me.powerReady&&erlaubt('power')?'power':'strike';
   };
   A.turn = function (original, action) {

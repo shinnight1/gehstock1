@@ -138,3 +138,21 @@
 .gm-schmiede-zeile{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:6px 8px;border:1px solid #2f5560;border-left:4px solid var(--rarity,#2f5560);border-radius:10px;background:#0f2831}
 .gm-schmiede-zeile strong{flex:1 1 120px;font-size:13px;color:#e7ebd6}
 .gm-schmiede-zeile .gm-button{min-height:36px;padding:6px 9px;font-size:12px!important}
+
+/* Gemalte Medaillons (27.09.2026): Menue, Fensterkoepfe, Projektleiste,
+   Goldanzeige und Waren. Die Bilder sind rund freigestellt; der Schatten hebt
+   sie vom Knopf ab. */
+.gm-knopf-symbol{width:26px;height:26px;flex:none;pointer-events:none;filter:drop-shadow(0 2px 2px #0007)}
+.gm-dock button{display:inline-flex;align-items:center;justify-content:center;gap:7px}
+.gm-fenster-symbol{width:40px;height:40px;flex:none;margin-right:10px;filter:drop-shadow(0 2px 3px #0008)}
+.gm-drawer-head h2{display:flex;align-items:center;min-width:0}
+.gm-projekt{display:flex;flex-direction:row;align-items:center;gap:7px;text-align:left}
+.gm-projekt-text{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1 1 auto}
+.gm-projekt-symbol{width:26px;height:26px;flex:none;pointer-events:none;filter:drop-shadow(0 1px 2px #0008)}
+.gm-resource-symbol{width:18px;height:18px;vertical-align:-4px;margin-right:5px}
+.gm-waren-bild{display:block;width:72px;height:72px;margin:2px auto 8px;filter:drop-shadow(0 4px 6px #0009)}
+.gm-titel-symbol{width:30px;height:30px;vertical-align:middle;margin-right:8px}
+/* Auf Tablets ist die Projektleiste schmal - dort bleibt es beim Text. */
+@media (pointer:coarse){.gm-dock button{gap:5px}.gm-dock button .gm-knopf-symbol{width:22px;height:22px}.gm-projekt-symbol{display:none}}
+@media(max-width:760px){.gm-dock button{gap:5px}.gm-dock button .gm-knopf-symbol{width:20px;height:20px}.gm-fenster-symbol{width:32px;height:32px;margin-right:8px}}
+@media(max-width:560px){.gm-projekt-symbol{display:none}}

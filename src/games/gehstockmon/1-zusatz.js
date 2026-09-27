@@ -338,6 +338,14 @@
      geschlagen hat, haelt ihn ein Meister des Hauses: es gibt also vom ersten
      Tag an einen Titeltraeger und nie eine leere Tafel. */
   X.ARENA_PAUSE=8*60000;X.ARENA_LOHN=45;X.ARENA_TROST=10;
+  /* Der Lohn richtet sich nach dem Gegner (27.09.2026). Vorher brachte jeder
+     Sieg 45 Gold - auch gegen Stocklehrling Pim mit vier Gewoehnlichen, und
+     den konnte man alle acht Minuten schlagen: bis zu 330 Gold die Stunde,
+     sechsmal so viel wie eine Festung. Die Stufen sind dieselben, die die
+     Arena neben jedem Gegner anzeigt (unter 85 % bzw. ueber 115 % der eigenen
+     Staerke). */
+  X.ARENA_LOHN_STUFEN={leichter:15,ausgeglichen:45,schwerer:70};
+  X.arenaLohn=function(stufe){return X.ARENA_LOHN_STUFEN[stufe]||X.ARENA_LOHN;};
   X.RUHM_START=1000;X.RUHM_SIEG=25;X.RUHM_NIEDERLAGE=12;X.RUHM_TITEL=60;
   X.TITEL_PAUSE=40*60000;X.TITEL_SIEGE=3;
   X.CHAMPION_SOLD=400;

@@ -68,7 +68,11 @@
     var whole = Math.floor(earned + 1e-8); st.gold += whole; st.goldRemainder = Math.max(0, earned - whole); post.incomeAt = end;
     var H = SG.gehstockmon.zeiten;
     var days=Math.max(0,H.day(now)-H.day(post.dailyAt));
-    if(days){st.dailyGoldPending=(st.dailyGoldPending||0)+days*E.DAILY_GOLD;post.dailyAt=now;}
+    /* Das Tagesgeld folgt demselben Anteil wie das Stundengold: ab dem dritten
+       Gebiet die Haelfte. Vorher blieb es voll - und bei einem Lager ist es
+       mehr als der Stundenertrag (1050 gegen 660 Gold die Woche), die Bremse
+       griff also kaum. */
+    if(days){st.dailyGoldPending=(st.dailyGoldPending||0)+Math.round(days*E.DAILY_GOLD*anteil);post.dailyAt=now;}
     var produced = H.productionTime(post.eggAt), cycles = Math.max(0, Math.floor((H.productionTime(now) - produced) / E.EGG_TIME));
     if (cycles) { post.eggStock = Math.min(E.STOCK_LIMIT, post.eggStock + cycles); post.eggAt = H.productionAt(produced + cycles * E.EGG_TIME); }
   };

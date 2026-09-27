@@ -391,7 +391,11 @@ const SG = { rules: {} };
     var whole = Math.floor(earned + 1e-8); st.gold += whole; st.goldRemainder = Math.max(0, earned - whole); post.incomeAt = end;
     var H = SG.gehstockmon.zeiten;
     var days=Math.max(0,H.day(now)-H.day(post.dailyAt));
-    if(days){st.dailyGoldPending=(st.dailyGoldPending||0)+days*E.DAILY_GOLD;post.dailyAt=now;}
+    /* Das Tagesgeld folgt demselben Anteil wie das Stundengold: ab dem dritten
+       Gebiet die Haelfte. Vorher blieb es voll - und bei einem Lager ist es
+       mehr als der Stundenertrag (1050 gegen 660 Gold die Woche), die Bremse
+       griff also kaum. */
+    if(days){st.dailyGoldPending=(st.dailyGoldPending||0)+Math.round(days*E.DAILY_GOLD*anteil);post.dailyAt=now;}
     var produced = H.productionTime(post.eggAt), cycles = Math.max(0, Math.floor((H.productionTime(now) - produced) / E.EGG_TIME));
     if (cycles) { post.eggStock = Math.min(E.STOCK_LIMIT, post.eggStock + cycles); post.eggAt = H.productionAt(produced + cycles * E.EGG_TIME); }
   };
@@ -900,6 +904,14 @@ const SG = { rules: {} };
      geschlagen hat, haelt ihn ein Meister des Hauses: es gibt also vom ersten
      Tag an einen Titeltraeger und nie eine leere Tafel. */
   X.ARENA_PAUSE=8*60000;X.ARENA_LOHN=45;X.ARENA_TROST=10;
+  /* Der Lohn richtet sich nach dem Gegner (27.09.2026). Vorher brachte jeder
+     Sieg 45 Gold - auch gegen Stocklehrling Pim mit vier Gewoehnlichen, und
+     den konnte man alle acht Minuten schlagen: bis zu 330 Gold die Stunde,
+     sechsmal so viel wie eine Festung. Die Stufen sind dieselben, die die
+     Arena neben jedem Gegner anzeigt (unter 85 % bzw. ueber 115 % der eigenen
+     Staerke). */
+  X.ARENA_LOHN_STUFEN={leichter:15,ausgeglichen:45,schwerer:70};
+  X.arenaLohn=function(stufe){return X.ARENA_LOHN_STUFEN[stufe]||X.ARENA_LOHN;};
   X.RUHM_START=1000;X.RUHM_SIEG=25;X.RUHM_NIEDERLAGE=12;X.RUHM_TITEL=60;
   X.TITEL_PAUSE=40*60000;X.TITEL_SIEGE=3;
   X.CHAMPION_SOLD=400;
@@ -1201,7 +1213,7 @@ const SG = { rules: {} };
       { id:'sammelruf',   name:'Sammelruf',    text:'Heilt 18 % und gibt ein Schild',             faktor:0 },
       { id:'laeuterung',  name:'Läuterung',    text:'Heilt 22 % und schärft deinen nächsten Treffer', faktor:0 } ],
     [ { id:'runenstoerung',name:'Runenstörung',text:'Schwächt den nächsten Treffer des Gegners',  faktor:.8 },
-      { id:'blendstoss',  name:'Blendstoß',    text:'Nimmt dem Gegner eine Fähigkeitsladung',     faktor:.6 },
+      { id:'blendstoss',  name:'Blendstoß',    text:'Nimmt dem Gegner eine Fähigkeitsladung',     faktor:.75 },
       { id:'windschnitt', name:'Windschnitt',  text:'Geht durch Deckung und Schilde hindurch',    faktor:1.15 } ]
   ];
   /* ------------------------------------------------------------------
@@ -1336,7 +1348,14 @@ const SG = { rules: {} };
   };
   A.defenders = function (fieldId, saved) {
     if (saved && saved.length) return saved.map(function (e) { return A.ausSpeicher(e); });
-    var roster = [['moosling','rostknirps'], ['sumpfschnapper','nebelmolch','klinge'], ['kieselkrabb','glutfuchs','donnerwidder'], ['dornenwolf','pilzhueter','nachtflatter'], ['runengolem','frostklaue','seelenqualle','obsidianrabe']];
+    var roster = [['moosling','rostknirps'], ['sumpfschnapper','nebelmolch','klinge'], ['kieselkrabb','glutfuchs','donnerwidder'], ['bernsteinkaefer','dornenwolf','nebelkrake','kristallspinne'], ['runengolem','frostklaue','seelenqualle','obsidianrabe']];
+    /* Der Nebelwald hiess "Schwer", war mit einem Aussergewoehnlichen und zwei
+       Gewoehnlichen aber schwaecher als beide "Mittel"-Gebiete - die
+       Startertruppe gewann dort. Jetzt stehen drei Aussergewoehnliche und eine
+       Epische, der Wall vorn (27.09.2026). Mit der Arena-KI auf beiden Seiten
+       gewinnt die Startertruppe noch 13 %, zwei Seltene und zwei Gewoehnliche
+       78 %, ab zwei Aussergewoehnlichen jede Truppe - die Frostkrone bleibt
+       deutlich haerter. */
     /* Das Sonnengrab war ein Abklatsch des Horsts und damit die leichteste
        Stufe unter "Sehr schwer", die es je gab. Jetzt stehen dort vier
        Legendaere in allen vier Rollen - Wall, Schneide, Pfleger, Stoerung -,
@@ -1598,7 +1617,11 @@ const SG = { rules: {} };
        folgen weiter der Faustregel ihrer Rolle. */
     var neu = kiNeu(A.faehigkeit(me), me, other, s);
     if (neu !== null) { if (neu && erlaubt('special')) return 'special'; }
-    else if(me.charges>0 && ((me.role===2 && me.hp<me.maxHp*0.65)||(me.role===1 && other.hp<other.maxHp*0.35)||(me.role===3 && !other.weakened)||(me.role===0 && s.round%3===1)))return 'special';
+    /* Blendstoss nimmt eine Ladung - ohne Ladung beim Gegner verpufft genau
+       das. Frueher setzte die KI ihn trotzdem ein, sobald der Gegner nicht
+       geschwaecht war, und er gewann nur 38 % gegen die anderen Stoerer. Mit
+       dieser Regel und 75 % statt 60 % Schaden sind es 48 % (27.09.2026). */
+    else if(me.charges>0 && ((me.role===2 && me.hp<me.maxHp*0.65)||(me.role===1 && other.hp<other.maxHp*0.35)||(me.role===3 && (A.faehigkeit(me).id==='blendstoss'?other.charges>0:!other.weakened))||(me.role===0 && s.round%3===1)))return 'special';
     return s.round>=me.powerReady&&erlaubt('power')?'power':'strike';
   };
   A.turn = function (original, action) {

@@ -57,7 +57,7 @@
     }
     function rangTeil(t){
       drawer.appendChild(el('h3','Ranglistenkämpfe'));
-      drawer.appendChild(el('p','Dein Ruhm: '+t.ruhm+' · Sieg +'+X.RUHM_SIEG+' Ruhm und '+X.ARENA_LOHN+' Gold, Niederlage -'+X.RUHM_NIEDERLAGE+' Ruhm und '+X.ARENA_TROST+' Gold Trost. Niemand verliert dabei Mons, Eier oder Gebiete.'));
+      drawer.appendChild(el('p','Dein Ruhm: '+t.ruhm+' · Sieg +'+X.RUHM_SIEG+' Ruhm und Gold nach Gegner: '+X.ARENA_LOHN_STUFEN.leichter+' gegen Leichtere, '+X.ARENA_LOHN_STUFEN.ausgeglichen+' gegen Gleichstarke, '+X.ARENA_LOHN_STUFEN.schwerer+' gegen Stärkere. Niederlage -'+X.RUHM_NIEDERLAGE+' Ruhm und '+X.ARENA_TROST+' Gold Trost. Niemand verliert dabei Mons, Eier oder Gebiete.'));
       /* Die Bilanz bleibt ueber Titelkaempfe hinweg stehen - die Zahl oben
          dagegen zaehlt nur bis zum naechsten Titelkampf. */
       drawer.appendChild(el('p','Deine Truppe: Stärke '+(t.eigeneStaerke||0)+' · Bilanz: '+(t.siegeGesamt||0)+' Siege aus '+(t.versuche||0)+' Kämpfen'));
@@ -68,7 +68,7 @@
         var karte=el('article',undefined,'gm-quest-card');
         karte.appendChild(el('h3',(g.id===t.empfohlen?'★ ':'')+g.name+(g.haus?' · Haus':'')));
         var stufe={leichter:'leichter als du',ausgeglichen:'etwa gleich stark',schwerer:'stärker als du'}[g.einstufung];
-        karte.appendChild(el('p',(g.haus?'Gegner des Hauses':'Spieler')+' · Ruhm '+g.ruhm+(g.staerke?' · Stärke '+g.staerke+(stufe?' ('+stufe+')':''):'')+(g.id===t.empfohlen?' · empfohlen':'')));
+        karte.appendChild(el('p',(g.haus?'Gegner des Hauses':'Spieler')+' · Ruhm '+g.ruhm+(g.staerke?' · Stärke '+g.staerke+(stufe?' ('+stufe+')':''):'')+(g.id===t.empfohlen?' · empfohlen':'')+' · Sieg: '+X.arenaLohn(g.einstufung)+' Gold'));
         karte.appendChild(truppenreihe(g.squad));
         var b=button('Herausfordern',function(){run('arena_rang',{targetId:g.id});},'gm-button');
         b.disabled=c.busy()||t.pause>0;
@@ -115,13 +115,15 @@
       var s=state(),heute=R.zeiten.day(c.now()),gekauft=s.haendlerTag===heute,voll=s.eggs.length>=R.wirtschaft.BAG_LIMIT;
       drawer.appendChild(el('h3','Der Händler'));
       var raster=el('div',undefined,'gm-shop-grid');
-      var ei=el('article',undefined,'gm-shop-card');
+      var ei=el('article',undefined,'gm-shop-card'),eiBild=R.symbol&&R.symbol('haendler','gm-waren-bild');
+      if(eiBild)ei.appendChild(eiBild);
       ei.appendChild(el('h3','Ein Ei'));
       ei.appendChild(el('p','Ein Ei wie jedes andere, mit denselben Chancen. Der Händler verkauft dir eins pro Tag.'));
       var kaufen=button(gekauft?'Heute schon gekauft':voll?'Bruttasche voll':'Kaufen · '+X.HAENDLER_EI_PREIS+' Gold',function(){run('ei_kaufen',{});},'gm-button gm-primary');
       kaufen.disabled=c.busy()||gekauft||voll||s.gold<X.HAENDLER_EI_PREIS;
       ei.appendChild(kaufen);raster.appendChild(ei);
-      var perle=el('article',undefined,'gm-shop-card');
+      var perle=el('article',undefined,'gm-shop-card'),perleBild=R.symbol&&R.symbol('perle','gm-waren-bild');
+      if(perleBild)perle.appendChild(perleBild);
       perle.appendChild(el('h3','Schimmerperle'));
       perle.appendChild(el('p','Das nächste Mon, das du ausbrütest und das noch nicht schimmert, schlüpft schimmernd. Nur zum Ansehen - stärker wird es davon nicht.'));
       var perleKaufen=button(s.schimmerperle?'Liegt bereit':'Kaufen · '+X.SCHIMMERPERLE_PREIS+' Gold',function(){run('schimmerperle_kaufen',{});},'gm-button gm-primary');
@@ -131,7 +133,9 @@
     }
     function schmiedeTeil(){
       var s=state(),runen=s.runes||[],letzte=D.SELTENHEITEN.length-1;
-      drawer.appendChild(el('h3','Die Runenschmiede'));
+      var schmiedeTitel=el('h3','Die Runenschmiede'),amboss=R.symbol&&R.symbol('schmiede','gm-titel-symbol');
+      if(amboss)schmiedeTitel.insertBefore(amboss,schmiedeTitel.firstChild);
+      drawer.appendChild(schmiedeTitel);
       drawer.appendChild(el('p','Eine Rune zerfällt hier in zwei der nächstniedrigeren Seltenheit, drei verschmelzen zu einer der nächsthöheren. So werden auch Runen nützlich, zu denen dir das Mon fehlt - etwa die Mythisch-Runen vom Zerhacker.'));
       var liste=el('div',undefined,'gm-schmiede');
       D.SELTENHEITEN.forEach(function(r,i){

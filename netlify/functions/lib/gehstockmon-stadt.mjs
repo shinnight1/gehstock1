@@ -135,12 +135,12 @@ export function arenaStand(world,id,now){
 export function stadtSettle(world,p,id,now){
   const b=p.arena;
   if(b.kind==='rang'){
-    const sieg=b.winner==='wir';
+    const sieg=b.winner==='wir',lohn=X.arenaLohn(b.einstufung);
     p.arenaRuhm=Math.max(100,X.ruhm(p)+(sieg?X.RUHM_SIEG:-X.RUHM_NIEDERLAGE));
-    p.gold+=sieg?X.ARENA_LOHN:X.ARENA_TROST;
+    p.gold+=sieg?lohn:X.ARENA_TROST;
     if(sieg){
       p.arenaSiege=X.arenaSiege(p)+1;p.arenaSiegeGesamt=(p.arenaSiegeGesamt||0)+1;X.alltagSchritt(p,'arena',now);
-      b.message='Ranglistensieg gegen '+b.gegnerName+'! +'+X.ARENA_LOHN+' Gold, +'+X.RUHM_SIEG+' Ruhm · '
+      b.message='Ranglistensieg gegen '+b.gegnerName+'! +'+lohn+' Gold, +'+X.RUHM_SIEG+' Ruhm · '
         +Math.min(p.arenaSiege,X.TITEL_SIEGE)+'/'+X.TITEL_SIEGE+' bis zum Titelkampf.';
     }else b.message='Niederlage gegen '+b.gegnerName+'. −'+X.RUHM_NIEDERLAGE+' Ruhm, '+X.ARENA_TROST+' Gold Trost. Deine Mons bleiben dir.';
     return true;
@@ -306,8 +306,10 @@ export async function stadtAction({world,p,id,body,now,presence}){
     const gegner=gegnerliste(world,id,now).find(v=>v.id===body.targetId);
     if(!gegner)fail('Dieser Gegner steht nicht mehr auf der Liste. Aktualisiere die Arena.');
     p.arenaCooldown=now+X.ARENA_PAUSE;p.arenaVersuche=(p.arenaVersuche||0)+1;
+    /* Die Stufe wird beim Start festgehalten - sie bestimmt den Lohn. */
+    const eigene=A.staerke(p.truppe.map(mid=>X.mon(p,mid))),einstufung=arenaEinstufung(eigene,A.staerke(truppe(gegner.squad)));
     p.arena=A.create(p.truppe.map(mid=>X.mon(p,mid)),truppe(gegner.squad),{id:body.requestId,territoryId:1,now});
-    Object.assign(p.arena,{kind:'rang',title:'GROSSE ARENA · '+gegner.name,gegnerName:gegner.name});
+    Object.assign(p.arena,{kind:'rang',title:'GROSSE ARENA · '+gegner.name,gegnerName:gegner.name,einstufung});
     extra.message='Ranglistenkampf gegen '+gegner.name+'. Er muss dafür nicht anwesend sein.';
   }
   return extra;

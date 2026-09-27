@@ -5,8 +5,15 @@
     /* Die Leiste ueber der Karte zeigt, woran die Insel gerade gemeinsam
        arbeitet: die Lebenskraft des Zerhackers und die Hoehe des Leuchtturms.
        Beide Balken sind anklickbar und fuehren zum jeweiligen Fenster. */
-    function balken(titel, wert, ziel, farbe, beim_klick) {
-      var kasten = button('', beim_klick, 'gm-projekt');
+    /* Links das Medaillon, rechts Titel und Stand. */
+    function kachel(beim_klick, bild, cls) {
+      var kasten = button('', beim_klick, cls), sym = R.symbol && R.symbol(bild, 'gm-projekt-symbol');
+      if (sym) kasten.appendChild(sym);
+      var text = el('span', undefined, 'gm-projekt-text'); kasten.appendChild(text);
+      return { kasten: kasten, text: text };
+    }
+    function balken(titel, wert, ziel, farbe, beim_klick, bild) {
+      var k = kachel(beim_klick, bild, 'gm-projekt'), kasten = k.text;
       var anteil = Math.max(0, Math.min(1, ziel ? wert / ziel : 0));
       kasten.appendChild(el('b', titel));
       var spur = el('span', undefined, 'gm-projekt-spur'), fuellung = el('i');
@@ -14,17 +21,17 @@
       fuellung.style.background = farbe;
       spur.appendChild(fuellung); kasten.appendChild(spur);
       kasten.appendChild(el('small', Math.round(anteil * 100) + ' %'));
-      return kasten;
+      return k.kasten;
     }
     /* Dasselbe Format wie ein Balken, nur ohne Fortschritt: fuer Dinge, die
        keine Zahl von hundert haben, aber trotzdem jeder sehen soll. */
-    function marke(titel, text, farbe, beim_klick) {
-      var kasten = button('', beim_klick, 'gm-projekt gm-marke');
+    function marke(titel, text, farbe, beim_klick, bild) {
+      var k = kachel(beim_klick, bild, 'gm-projekt gm-marke'), kasten = k.text;
       kasten.appendChild(el('b', titel));
       var zeile = el('strong', text, 'gm-marke-wert');
       zeile.style.color = farbe;
       kasten.appendChild(zeile);
-      return kasten;
+      return k.kasten;
     }
     function zeigeProjekte() {
       if (!projektLeiste) { projektLeiste = el('div', undefined, 'gm-projekte'); c.layer.appendChild(projektLeiste); }
@@ -35,21 +42,21 @@
         var erledigt = heute.aufgaben.filter(function (a) { return a.stand >= a.ziel; }).length;
         projektLeiste.appendChild(marke('Heute' + (heute.serie ? ' · 🔥' + heute.serie : ''),
           heute.truhe ? '✓ Truhe geöffnet' : heute.fertig ? '🎁 Truhe bereit!' : erledigt + '/3 Aufgaben',
-          heute.fertig && !heute.truhe ? '#81d2a3' : '#f0b429', c.heute));
+          heute.fertig && !heute.truhe ? '#81d2a3' : '#f0b429', c.heute, 'truhe'));
       }
       var z = projekte && projekte.zerhacker, l = projekte && projekte.leuchtturm;
-      if (z && z.hp > 0) projektLeiste.appendChild(balken('Zerhacker', z.hp, z.maxHp, '#f2705a', zeigeZerhacker));
-      else if (z) projektLeiste.appendChild(balken('Zerhacker erlegt', 1, 1, '#81d2a3', zeigeZerhacker));
-      if (l && !l.fertig) projektLeiste.appendChild(balken('Leuchtturm', l.gold, l.ziel, '#f0b429', zeigeLeuchtturm));
+      if (z && z.hp > 0) projektLeiste.appendChild(balken('Zerhacker', z.hp, z.maxHp, '#f2705a', zeigeZerhacker, 'zerhacker'));
+      else if (z) projektLeiste.appendChild(balken('Zerhacker erlegt', 1, 1, '#81d2a3', zeigeZerhacker, 'zerhacker'));
+      if (l && !l.fertig) projektLeiste.appendChild(balken('Leuchtturm', l.gold, l.ziel, '#f0b429', zeigeLeuchtturm, 'leuchtturm'));
       var a = projekte && projekte.wochenaufgabe;
-      if (a) projektLeiste.appendChild(balken(a.name, a.stand, a.ziel, a.erfuellt ? '#81d2a3' : '#89cce5', zeigeWoche));
+      if (a) projektLeiste.appendChild(balken(a.name, a.stand, a.ziel, a.erfuellt ? '#81d2a3' : '#89cce5', zeigeWoche, 'woche'));
       /* Das Kopfgeld stand bisher nur im Ausruestungsfenster und fiel damit
          niemandem auf, obwohl es das ganze Spielfeld betrifft. Hier steht es
          neben den anderen Weltzustaenden: eine Zeile, kein Banner. */
       var kopf = projekte && projekte.kopfgeld;
       if (kopf) projektLeiste.appendChild(marke(kopf.selbst ? 'Kopfgeld auf dich' : 'Kopfgeld',
         kopf.gold.toLocaleString('de-DE') + ' G · ' + (kopf.selbst ? 'du führst' : kopf.name),
-        kopf.selbst ? '#f2705a' : '#f0b429', zeigeKopfgeld));
+        kopf.selbst ? '#f2705a' : '#f0b429', zeigeKopfgeld, 'kopfgeld'));
       projektLeiste.hidden = !projektLeiste.childNodes.length;
     }
     function tafel(eintraege, einheit) {
@@ -223,7 +230,7 @@
     function approach(e){e=Object.assign({},e,X.encounterPosition(e,c.now()));c.closeDrawer();var w=c.world();if(w&&w.walkToPoint)w.walkToPoint(e);c.notify('Du läufst zu '+e.name+'. Tippe dort erneut auf die Begegnung.');}
     function encounter(e){var live=X.encounterPosition(e,c.now());e=Object.assign({},e,live);if(!c.open(e.name,'encounter'))return;var s=state(),at=c.world().position(),near=Math.hypot(at.x-e.x,at.z-e.z)<8;
       if(e.kind==='trainer'){drawer.appendChild(player('trainermeister','gehstock'));drawer.appendChild(el('p',(c.state().progress&&c.state().progress.trainerWins>=3?(e.id.split(':')[1]==='1'?'Wandertrainer Bo stellt sich auf deine Truppe ein und tritt gleich stark an.':'Trainerin Mira stellt sich auf deine Truppe ein und bleibt etwas darunter.'):'Ein freundliches Training gegen einfache Mons.')+' Ein Sieg bringt 1 Ei und 25 Gold. Du verlierst bei einer Niederlage nichts.'));}
-      else drawer.appendChild(el('p','Diese Rune bringt 10 Gold und zählt für die Quest Runensuche. Nach sechs gesammelten Runen schaltet sie den Runensucher-Skin frei.'));
+      else drawer.appendChild(el('p','Diese Rune bringt eine gewöhnliche Rune und 10 Gold und zählt für die Quest Runensuche. Nach sechs gesammelten schaltet sie den Runensucher-Skin frei.'));
       drawer.appendChild(el('p','Ort: '+D.FELDER[e.territoryId-1].biom+' · Zwei Wandertrainer ziehen stündlich weiter.'));
       drawer.appendChild(button(near?(e.kind==='trainer'?'Training starten':'Rune einsammeln'):'Hingehen',function(){if(!near){approach(e);return;}run(e.kind==='trainer'?'trainer_start':'gather',{encounterId:e.id,squad:s.truppe},'adventure');},'gm-button gm-primary'));
     }
