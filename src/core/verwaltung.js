@@ -46,6 +46,8 @@
       geraeteBanne: {},  // geraet -> { von, grund, t }
       geraete: {},       // code -> [ { id, art, ersteSicht, letzteSicht } ]
       geklaert: {},      // code -> { von, t, notiz, geraete } - vom BND abgehakt
+      owner: '',         // Code des Owners - siehe core/auth.js
+      aufsicht: '',      // Code des Aufsichtsrats - steht ueber dem Owner
       meetings: [],      // Besprechungen
       stundenplan: {},   // "tag:stunde" -> { fach, raum }
     };

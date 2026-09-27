@@ -715,4 +715,134 @@ export function extraTests(SG, U, test) {
     A.bannLoesen(ADMIN2);
     A.abmelden();
   });
+
+  /* --- Der Aufsichtsrat ---
+
+     Er steht ueber dem Owner: er besetzt dessen Stuhl, und an ihn
+     selbst kommt niemand heran. Geht das kaputt, kann der Owner den
+     Aufsichtsrat aussperren - und danach steht keiner mehr ueber ihm. */
+
+  const AUFSICHT = adminCodes[2];
+
+  function stuehleLeeren() {
+    SG.verwaltung.schreiben((d) => {
+      delete d.owner;
+      delete d.aufsicht;
+      delete d.aufsichtUmstellung;
+    });
+    A.abmelden();
+  }
+
+  test('Aufsichtsrat: der erste Admin kann die freie Rolle nehmen', () => {
+    stuehleLeeren();
+    A.anmelden(AUFSICHT, 'Aufsicht');
+    if (!A.aufsichtFrei()) throw new Error('Rolle war nicht frei');
+    if (!A.aufsichtSetzen(AUFSICHT)) throw new Error('Uebernehmen ging nicht');
+    if (!A.binAufsicht()) throw new Error('bin nicht Aufsichtsrat');
+  });
+
+  test('Aufsichtsrat: ein Spieler bekommt die Rolle nicht', () => {
+    if (A.aufsichtSetzen(SPIELER)) throw new Error('Spieler wurde Aufsichtsrat');
+    if (A.aufsicht() !== AUFSICHT) throw new Error('Aufsichtsrat hat gewechselt');
+  });
+
+  test('Aufsichtsrat: er bestimmt den Owner und kann ihn absetzen', () => {
+    if (!A.ownerSetzen(OWNER)) throw new Error('Owner bestimmen ging nicht');
+    if (A.owner() !== OWNER) throw new Error('Owner steht nicht');
+    /* Austauschen, obwohl der Stuhl besetzt ist - genau dafuer gibt
+       es die Aufsicht. */
+    if (!A.ownerSetzen(ADMIN2)) throw new Error('Austauschen ging nicht');
+    if (A.owner() !== ADMIN2) throw new Error('Owner wurde nicht getauscht');
+    if (!A.ownerAbsetzen()) throw new Error('Absetzen ging nicht');
+    if (!A.ownerFrei()) throw new Error('Stuhl ist nicht frei');
+    A.ownerSetzen(OWNER);
+  });
+
+  test('Aufsichtsrat: beide Stuehle in einer Hand gibt es nicht', () => {
+    if (A.ownerSetzen(AUFSICHT)) throw new Error('Aufsichtsrat wurde auch Owner');
+    if (A.owner() !== OWNER) throw new Error('Owner hat gewechselt');
+  });
+
+  test('Aufsichtsrat: sein Code steht fuer andere geschwaerzt', () => {
+    if (A.codeAnzeige(AUFSICHT) !== A.schoen(AUFSICHT)) {
+      throw new Error('Er sieht seinen eigenen Code nicht');
+    }
+    A.anmelden(OWNER, 'Owner');
+    if (A.codeAnzeige(AUFSICHT).indexOf(A.schoen(AUFSICHT)) >= 0) {
+      throw new Error('Der Owner sieht den Code des Aufsichtsrats');
+    }
+    if (A.codeAnzeige(ADMIN2) !== A.schoen(ADMIN2)) {
+      throw new Error('Ein gewoehnlicher Code wurde geschwaerzt');
+    }
+  });
+
+  test('Aufsichtsrat: der Owner kommt an ihn nicht heran', () => {
+    /* Angemeldet ist hier der Owner - aus dem Test davor. */
+    if (!A.binOwner()) throw new Error('Aufbau stimmt nicht: nicht Owner');
+    if (A.darfGegen(AUFSICHT)) throw new Error('darfGegen sagt ja');
+    if (A.darfSperren(AUFSICHT)) throw new Error('darfSperren sagt ja');
+    if (A.darfLoeschen(AUFSICHT)) throw new Error('darfLoeschen sagt ja');
+    if (A.bannSetzen(AUFSICHT, 'Putsch')) throw new Error('Bann ging durch');
+    if (A.gebannt(AUFSICHT)) throw new Error('Aufsichtsrat ist gebannt');
+    A.merken(AUFSICHT, 'Aufsicht', A.ADMIN);
+    A.vergessen(AUFSICHT);
+    if (!A.liste().some((e) => e.code === AUFSICHT)) throw new Error('Profil wurde geloescht');
+    A.nameSetzen(AUFSICHT, 'Umbenannt');
+    if (A.nameVon(AUFSICHT) === 'Umbenannt') throw new Error('Umbenennen ging durch');
+    /* Und die Rolle kann der Owner ihm auch nicht wegnehmen. */
+    if (A.aufsichtSetzen(OWNER)) throw new Error('Owner hat sich die Rolle genommen');
+    if (A.aufsicht() !== AUFSICHT) throw new Error('Aufsichtsrat hat gewechselt');
+  });
+
+  test('Aufsichtsrat: ein freier Owner-Stuhl gehoert ihm allein', () => {
+    A.anmelden(AUFSICHT, 'Aufsicht');
+    A.ownerAbsetzen();
+    A.anmelden(ADMIN2, 'Zweiter');
+    if (A.ownerSetzen(ADMIN2)) throw new Error('Admin hat sich den Stuhl genommen');
+    if (!A.ownerFrei()) throw new Error('Stuhl wurde besetzt');
+  });
+
+  test('Aufsichtsrat: gegen Spieler und Admins darf er alles', () => {
+    A.anmelden(AUFSICHT, 'Aufsicht');
+    if (!A.darfGegen(SPIELER)) throw new Error('nicht gegen Spieler');
+    if (!A.darfGegen(ADMIN2)) throw new Error('nicht gegen Admin');
+    if (!A.darfGegen(OWNER)) throw new Error('nicht gegen Owner');
+    /* Gegen sich selbst gilt dieselbe Grenze wie beim Owner. */
+    if (A.darfSperren(AUFSICHT)) throw new Error('Selbstbann waere moeglich');
+    if (A.darfLoeschen(AUFSICHT)) throw new Error('Selbstloeschen waere moeglich');
+  });
+
+  test('Aufsichtsrat: die Umstellung rueckt den alten Owner auf - einmal', () => {
+    stuehleLeeren();
+    SG.verwaltung.schreiben((d) => { d.owner = OWNER; });
+    const vorher = SG.verwaltung.online;
+    SG.verwaltung.online = true;
+    try {
+      if (!A.aufsichtUmstellen()) throw new Error('Umstellung lief nicht');
+      if (A.aufsicht() !== OWNER) throw new Error('Der alte Owner rueckte nicht auf');
+      if (!A.ownerFrei()) throw new Error('Der Owner-Stuhl blieb besetzt');
+      /* Ein zweites Geraet darf sie nicht noch einmal anstossen. */
+      SG.verwaltung.schreiben((d) => { d.owner = ADMIN2; });
+      if (A.aufsichtUmstellen()) throw new Error('Umstellung lief ein zweites Mal');
+      if (A.owner() !== ADMIN2) throw new Error('Der neue Owner wurde geraeumt');
+      if (A.aufsicht() !== OWNER) throw new Error('Der Aufsichtsrat wechselte');
+    } finally {
+      SG.verwaltung.online = vorher;
+      stuehleLeeren();
+    }
+  });
+
+  test('Aufsichtsrat: ohne Stand vom Relais stellt nichts um', () => {
+    SG.verwaltung.schreiben((d) => { d.owner = OWNER; });
+    const vorher = SG.verwaltung.online;
+    SG.verwaltung.online = false;
+    try {
+      if (A.aufsichtUmstellen()) throw new Error('Umstellung lief offline');
+      if (A.owner() !== OWNER) throw new Error('Owner wurde offline geraeumt');
+      if (!A.aufsichtFrei()) throw new Error('Aufsichtsrat wurde offline gesetzt');
+    } finally {
+      SG.verwaltung.online = vorher;
+      stuehleLeeren();
+    }
+  });
 }

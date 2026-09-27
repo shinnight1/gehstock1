@@ -29,6 +29,10 @@
 
   Adm.oeffnen = function (reiter) {
     if (!A.istAdmin()) return;
+    /* Die einmalige Umstellung auf den Aufsichtsrat nachholen, falls
+       sie beim Anmelden noch nicht laufen konnte - etwa weil das
+       Relais gerade nicht erreichbar war. */
+    A.aufsichtUmstellen();
     reiter = reiter || 'leute';
 
     var body = UI.el('div');
@@ -68,6 +72,21 @@
 
     /* ---------------------------------------------------------- Leute */
 
+    /* Aufsichtsrat und Owner stehen nicht im Code, sondern in der
+       Verwaltung - deshalb tragen sie hier ihr eigenes Wappen und
+       ihren eigenen Namen statt der Code-Rolle. */
+    function rangIcon(e) {
+      if (A.istAufsicht(e.code)) return '⚖️';
+      if (A.istOwner(e.code)) return '👑';
+      return A.rolleIcon(e.rolle);
+    }
+
+    function rangName(e) {
+      if (A.istAufsicht(e.code)) return 'Aufsichtsrat';
+      if (A.istOwner(e.code)) return 'Owner';
+      return A.rolleName(e.rolle);
+    }
+
     function leute(ziel) {
       ziel.appendChild(UI.el('div.row.wrap', { style: { gap: '8px' } }, [
         UI.btn('+ Neuer Code', function () { codeErstellen(); }, 'primary'),
@@ -92,12 +111,11 @@
         ziel.appendChild(UI.el('div.item.tap', {
           on: { click: function () { profil(e); } },
         }, [
-          UI.el('div.thumb', { text: A.istOwner(e.code) ? '👑' : A.rolleIcon(e.rolle) }),
+          UI.el('div.thumb', { text: rangIcon(e) }),
           UI.el('div.main', null, [
             UI.el('div.t', { text: e.name || 'ohne Namen' }),
             UI.el('div.d', {
-              text: A.schoen(e.code) + ' · '
-                + (A.istOwner(e.code) ? 'Owner' : A.rolleName(e.rolle))
+              text: A.codeAnzeige(e.code) + ' · ' + rangName(e)
                 + (gesperrt.length ? ' · ' + gesperrt.length + ' gesperrt' : ''),
             }),
           ]),
@@ -218,12 +236,13 @@
       var bann = A.gebannt(e.code);
       var darf = A.darfGegen(e.code);
       var owner = A.istOwner(e.code);
+      var aufsicht = A.istAufsicht(e.code);
 
       body2.appendChild(UI.el('div.notice', {
-        html: '<b>' + (owner ? '👑 ' : '') + A.rolleIcon(e.rolle) + ' '
+        html: '<b>' + (aufsicht ? '⚖️ ' : owner ? '👑 ' : '') + A.rolleIcon(e.rolle) + ' '
           + U.esc(e.name || 'ohne Namen') + '</b><br>'
-          + A.schoen(e.code) + ' · ' + A.rolleName(e.rolle)
-          + (owner ? ' · Owner' : ''),
+          + A.codeAnzeige(e.code) + ' · ' + A.rolleName(e.rolle)
+          + (aufsicht ? ' · Aufsichtsrat' : owner ? ' · Owner' : ''),
       }));
 
       /* Umbenennen darf, wer auch sonst an diesen Code heranreicht.
@@ -384,7 +403,7 @@
                 try { nf.focus(); } catch (er) { /* egal */ }
                 return;
               }
-              var alt = e.name || A.schoen(e.code);
+              var alt = e.name || A.codeAnzeige(e.code);
               if (name === alt) { dlg.close(); return; }
               if (!A.nameSetzen(e.code, name)) {
                 hinweis.textContent = A.schutzGrund(e.code);
@@ -408,7 +427,7 @@
         rows: 3, maxLength: 300, className: 'feld hoch',
       });
       var dlg = UI.modal({
-        title: '⛔ ' + (e.name || A.schoen(e.code)) + ' sperren',
+        title: '⛔ ' + (e.name || A.codeAnzeige(e.code)) + ' sperren',
         body: [
           UI.el('p.small.muted', {
             text: 'Der Zugang ist danach sofort dicht — auch bei jemandem, '
@@ -496,7 +515,7 @@
 
       codes.forEach(function (c) {
         var b = alle[c];
-        var name = A.nameVon(c) || A.schoen(c);
+        var name = A.nameVon(c) || A.codeAnzeige(c);
         ziel.appendChild(UI.el('div.item', null, [
           UI.el('div.thumb.rot', { text: '⛔' }),
           UI.el('div.main', null, [
@@ -635,18 +654,122 @@
 
     /* ---------------------------------------------------------- Sitzung */
 
+    /* ------------------------------------------------- Aufsichtsrat
+
+       Ueber dem Owner sitzt der Aufsichtsrat. Er fuehrt nicht - er
+       bestimmt, wer fuehrt: er setzt den Owner ein und kann ihn wieder
+       absetzen. An ihn selbst kommt niemand heran, auch der Owner
+       nicht, und sein Code steht in den Listen geschwaerzt.
+
+       Solange ueberhaupt niemand eingetragen ist, nimmt sich der erste
+       Admin die Rolle - genau wie frueher beim Owner. Danach gibt nur
+       er selbst sie weiter. */
+
+    function aufsichtsrat(ziel) {
+      if (A.aufsichtFrei()) {
+        ziel.appendChild(UI.el('div.notice.warn', {
+          html: '<b>Kein Aufsichtsrat.</b><br>Der Aufsichtsrat steht über dem '
+            + 'Owner: er bestimmt, wer Owner ist, und kann ihn auch wieder '
+            + 'absetzen. Ihm selbst kann niemand etwas anhaben — auch der '
+            + 'Owner nicht. Solange die Rolle frei ist, kann jeder Admin sie '
+            + 'sich nehmen.',
+        }));
+        ziel.appendChild(UI.el('div', { style: { height: '8px' } }));
+        ziel.appendChild(UI.btn('⚖️ Aufsichtsrat werden', function () {
+          UI.confirm('Aufsichtsrat werden?',
+            'Danach kann dir niemand mehr etwas anhaben — auch der Owner '
+            + 'nicht — und dein Code steht für alle anderen geschwärzt. '
+            + 'Weitergeben kannst nur du selbst.', 'Aufsichtsrat werden')
+            .then(function (ok) {
+              if (!ok) return;
+              if (!A.aufsichtSetzen(A.aktuell.code)) {
+                UI.toast('Ging nicht — als Owner geht es nicht, und einen '
+                  + 'Aufsichtsrat gibt es vielleicht schon.', 'bad');
+                return;
+              }
+              SG.protokoll.schreiben('aufsicht',
+                (A.aktuell.name || A.aktuell.code) + ' ist jetzt Aufsichtsrat',
+                '', A.aktuell.code);
+              UI.toast('Du bist jetzt Aufsichtsrat.', 'good');
+              neu();
+            });
+        }, 'wide primary'));
+        return;
+      }
+
+      var name = A.nameVon(A.aufsicht()) || A.codeAnzeige(A.aufsicht());
+
+      if (!A.binAufsicht()) {
+        ziel.appendChild(UI.el('div.notice', {
+          html: '<b>⚖️ ' + U.esc(name) + '</b><br>An den Aufsichtsrat kommt '
+            + 'niemand heran — auch der Owner nicht. Sein Code ist geschwärzt, '
+            + 'und weitergeben kann die Rolle nur er selbst.',
+        }));
+        return;
+      }
+
+      ziel.appendChild(UI.el('div.notice', {
+        html: '<b>⚖️ Du bist Aufsichtsrat.</b><br>Niemand kann dich sperren, '
+          + 'löschen oder umbenennen — du selbst auch nicht: wer dich wieder '
+          + 'hereinließe, gäbe es nicht. Dein Code steht für alle anderen '
+          + 'geschwärzt. Du bestimmst, wer Owner ist.',
+      }));
+      ziel.appendChild(UI.el('div', { style: { height: '8px' } }));
+      ziel.appendChild(UI.btn('Aufsichtsrat übergeben', function () {
+        adminWaehlen({
+          titel: 'Aufsichtsrat übergeben',
+          hinweis: 'Danach bist du ein Admin wie jeder andere — und der Neue '
+            + 'kann auch gegen dich vorgehen. Rückgängig macht das nur er.',
+          icon: '⚖️',
+          /* Der Owner steht hier nicht zur Wahl: beide Stühle in einer
+             Hand wären keine Aufsicht mehr. */
+          filter: function (e) { return !A.istOwner(e.code); },
+          leer: 'Es gibt sonst keinen Admin, der nicht Owner ist.',
+          frage: function (wen) { return 'An ' + wen + ' übergeben?'; },
+          text: 'Du gibst die Rolle ab und kannst sie nicht zurückholen.',
+          knopf: 'Übergeben',
+          tun: function (e) {
+            if (!A.aufsichtSetzen(e.code)) return false;
+            SG.protokoll.schreiben('aufsicht',
+              'Aufsichtsrat übergeben an ' + (e.name || e.code), '', e.code);
+            return true;
+          },
+        });
+      }, 'wide ghost'));
+    }
+
     /* ---------------------------------------------------------- Owner
 
-       Ueber allen Admins steht einer, an den keiner herankommt. Solange
-       niemand eingetragen ist, nimmt sich der erste Admin die Rolle;
-       danach gibt nur der Owner selbst sie weiter. */
+       Der Owner fuehrt das Hideout: kein Admin kann ihm etwas anhaben.
+       Eingesetzt und abgesetzt wird er vom Aufsichtsrat. Gibt es noch
+       keinen Aufsichtsrat, gilt der alte Anfang - dann nimmt sich der
+       erste Admin die Rolle selbst. */
 
     function owner(ziel) {
       if (A.ownerFrei()) {
+        if (A.binAufsicht()) {
+          ziel.appendChild(UI.el('div.notice.warn', {
+            html: '<b>Kein Owner.</b><br>Der Stuhl ist frei. Besetzen kannst '
+              + 'ihn nur du.',
+          }));
+          ziel.appendChild(UI.el('div', { style: { height: '8px' } }));
+          ziel.appendChild(UI.btn('👑 Owner bestimmen', function () {
+            ownerBestimmen();
+          }, 'wide primary'));
+          return;
+        }
+        if (!A.aufsichtFrei()) {
+          ziel.appendChild(UI.el('div.notice.warn', {
+            html: '<b>Kein Owner.</b><br>Der Stuhl ist frei. Besetzen kann ihn '
+              + 'nur der Aufsichtsrat.',
+          }));
+          return;
+        }
         ziel.appendChild(UI.el('div.notice.warn', {
           html: '<b>Noch kein Owner.</b><br>Ein Owner steht über allen Admins: '
-            + 'niemand kann ihn sperren, löschen oder umbenennen. Solange die '
-            + 'Rolle frei ist, kann jeder Admin sie sich nehmen.',
+            + 'niemand kann ihn sperren, löschen oder umbenennen. Solange es '
+            + 'keinen Aufsichtsrat gibt und die Rolle frei ist, kann jeder '
+            + 'Admin sie sich nehmen.',
         }));
         ziel.appendChild(UI.el('div', { style: { height: '8px' } }));
         ziel.appendChild(UI.btn('👑 Owner werden', function () {
@@ -671,10 +794,42 @@
 
       var name = A.nameVon(A.owner()) || A.schoen(A.owner());
 
+      /* Der Aufsichtsrat sieht hier seine beiden Knoepfe. */
+      if (A.binAufsicht()) {
+        ziel.appendChild(UI.el('div.notice', {
+          html: '<b>👑 ' + U.esc(name) + '</b><br>Du hast ihn eingesetzt und '
+            + 'kannst ihn jederzeit austauschen oder absetzen.',
+        }));
+        ziel.appendChild(UI.el('div', { style: { height: '8px' } }));
+        ziel.appendChild(UI.btn('👑 Neuen Owner bestimmen', function () {
+          ownerBestimmen();
+        }, 'wide primary'));
+        ziel.appendChild(UI.el('div', { style: { height: '8px' } }));
+        ziel.appendChild(UI.btn('Owner absetzen', function () {
+          UI.confirm('Owner absetzen?',
+            U.esc(name) + ' ist danach ein Admin wie jeder andere, und der '
+            + 'Stuhl steht leer, bis du ihn neu besetzt.', 'Absetzen', true)
+            .then(function (ok) {
+              if (!ok) return;
+              if (!A.ownerAbsetzen()) {
+                UI.toast('Ging nicht.', 'bad');
+                return;
+              }
+              SG.protokoll.schreiben('owner',
+                'Owner abgesetzt: ' + name, '', A.aktuell.code);
+              UI.toast('Abgesetzt.', 'good');
+              neu();
+            });
+        }, 'wide bad'));
+        return;
+      }
+
       if (!A.binOwner()) {
         ziel.appendChild(UI.el('div.notice', {
           html: '<b>👑 ' + U.esc(name) + '</b><br>An den Owner kommt kein Admin heran. '
-            + 'Weitergeben kann die Rolle nur er selbst.',
+            + (A.aufsichtFrei()
+              ? 'Weitergeben kann die Rolle nur er selbst.'
+              : 'Austauschen kann ihn nur der Aufsichtsrat.'),
         }));
         return;
       }
@@ -683,66 +838,112 @@
         html: '<b>👑 Du bist Owner.</b><br>Kein Admin kann dich sperren, löschen '
           + 'oder umbenennen — und du selbst auch nicht: Wer dich wieder '
           + 'hereinlässt, gäbe es nicht. Umgekehrt bist du der Einzige, der '
-          + 'gegen andere Admins vorgehen darf.',
+          + 'gegen andere Admins vorgehen darf.'
+          + (A.aufsichtFrei() ? ''
+            : '<br>Über dir steht der Aufsichtsrat: an den kommst auch du '
+              + 'nicht heran, und er kann dich absetzen.'),
       }));
       ziel.appendChild(UI.el('div', { style: { height: '8px' } }));
       ziel.appendChild(UI.btn('Owner übergeben', function () {
-        ownerUebergeben();
+        adminWaehlen({
+          titel: 'Owner übergeben',
+          hinweis: 'Danach bist du ein Admin wie jeder andere — und der Neue '
+            + 'kann auch gegen dich vorgehen. Rückgängig macht das nur er.',
+          icon: '👑',
+          leer: 'Es gibt sonst keinen Admin.',
+          frage: function (wen) { return 'An ' + wen + ' übergeben?'; },
+          text: 'Du gibst die Rolle ab und kannst sie nicht zurückholen.',
+          knopf: 'Übergeben',
+          tun: function (e) {
+            if (!A.ownerSetzen(e.code)) return false;
+            SG.protokoll.schreiben('owner',
+              'Owner übergeben an ' + (e.name || e.code), '', e.code);
+            return true;
+          },
+        });
       }, 'wide ghost'));
     }
 
-    /* Weitergeben geht nur an einen Admin - ein Spieler koennte mit der
+    /* Der Aufsichtsrat setzt den Owner ein - sich selbst nicht, beide
+       Stuehle in einer Hand waeren keine Aufsicht mehr. */
+    function ownerBestimmen() {
+      adminWaehlen({
+        titel: 'Owner bestimmen',
+        hinweis: 'Der Neue führt das Hideout und kann gegen jeden Admin '
+          + 'vorgehen — nur nicht gegen dich. Austauschen kannst du ihn '
+          + 'jederzeit wieder.',
+        icon: '👑',
+        leer: 'Es gibt keinen anderen Admin.',
+        frage: function (wen) { return wen + ' zum Owner machen?'; },
+        text: 'Ein amtierender Owner gibt den Stuhl dabei ab.',
+        knopf: 'Bestimmen',
+        tun: function (e) {
+          if (!A.ownerSetzen(e.code)) return false;
+          SG.protokoll.schreiben('owner',
+            (e.name || e.code) + ' ist jetzt Owner', '', e.code);
+          return true;
+        },
+      });
+    }
+
+    /* Einen Admin aus einer Liste waehlen. Beide Stuehle werden so
+       besetzt - ein Spieler steht nie zur Wahl: er koennte mit der
        Rolle nichts anfangen und waere bloss unangreifbar. */
-    function ownerUebergeben() {
+    function adminWaehlen(o) {
       var admins = A.liste().filter(function (e) {
-        return e.rolle === A.ADMIN && e.code !== A.aktuell.code;
+        if (e.rolle !== A.ADMIN) return false;
+        if (e.code === A.aktuell.code) return false;
+        if (A.istAufsicht(e.code)) return false;
+        return o.filter ? o.filter(e) : true;
       });
       if (!admins.length) {
-        UI.toast('Es gibt sonst keinen Admin.', 'bad');
+        UI.toast(o.leer, 'bad');
         return;
       }
       var body2 = UI.el('div');
-      body2.appendChild(UI.el('p.small.muted', {
-        text: 'Danach bist du ein Admin wie jeder andere — und der Neue kann '
-          + 'auch gegen dich vorgehen. Rückgängig macht das nur er.',
-      }));
-      var dlg = UI.modal({ title: 'Owner übergeben', body: body2 });
+      body2.appendChild(UI.el('p.small.muted', { text: o.hinweis }));
+      var dlg = UI.modal({ title: o.titel, body: body2 });
       admins.forEach(function (e) {
         body2.appendChild(UI.el('div.item.tap', {
           on: {
             click: function () {
               dlg.close();
-              UI.confirm('An ' + (e.name || A.schoen(e.code)) + ' übergeben?',
-                'Du gibst die Rolle ab und kannst sie nicht zurückholen.',
-                'Übergeben', true).then(function (ok) {
-                  if (!ok) return;
-                  if (!A.ownerSetzen(e.code)) {
-                    UI.toast('Ging nicht.', 'bad');
-                    return;
-                  }
-                  SG.protokoll.schreiben('owner',
-                    'Owner übergeben an ' + (e.name || e.code), '', e.code);
-                  UI.toast('Übergeben.', 'good');
-                  neu();
-                });
+              var wen = e.name || A.codeAnzeige(e.code);
+              UI.confirm(o.frage(wen), o.text, o.knopf, true).then(function (ok) {
+                if (!ok) return;
+                if (!o.tun(e)) {
+                  UI.toast('Ging nicht.', 'bad');
+                  return;
+                }
+                UI.toast('Erledigt.', 'good');
+                neu();
+              });
             },
           },
         }, [
-          UI.el('div.thumb', { text: '🛡' }),
+          UI.el('div.thumb', { text: o.icon }),
           UI.el('div.main', null, [
             UI.el('div.t', { text: e.name || 'ohne Namen' }),
-            UI.el('div.d', { text: A.schoen(e.code) }),
+            UI.el('div.d', { text: A.codeAnzeige(e.code) }),
           ]),
           UI.el('div.side', null, [UI.el('div.s', { text: '›' })]),
         ]));
       });
     }
 
+    /* Wie der eigene Rang im Kopf der Sitzung steht */
+    function eigenerRang() {
+      if (A.binAufsicht()) return 'Aufsichtsrat';
+      if (A.binOwner()) return 'Owner';
+      return A.rolleName(A.aktuell.rolle);
+    }
+
     function sitzung(ziel) {
       ziel.appendChild(UI.el('div.notice', {
-        html: '<b>' + A.rolleIcon(A.aktuell.rolle) + ' '
+        html: '<b>' + (A.binAufsicht() ? '⚖️ ' : A.binOwner() ? '👑 ' : '')
+          + A.rolleIcon(A.aktuell.rolle) + ' '
           + U.esc(A.aktuell.name || 'Admin') + '</b><br>'
-          + A.schoen(A.aktuell.code) + ' · ' + A.rolleName(A.aktuell.rolle),
+          + A.codeAnzeige(A.aktuell.code) + ' · ' + eigenerRang(),
       }));
       ziel.appendChild(UI.el('p.small.muted', {
         style: { marginTop: '12px' },
@@ -753,6 +954,11 @@
           : 'Kein Relais erreichbar. Alles, was du hier änderst, gilt nur auf '
             + 'diesem Gerät, bis die Verbindung wieder steht.',
       }));
+
+      ziel.appendChild(UI.el('div.sec-head', null, [
+        UI.el('h2', { text: 'Aufsichtsrat' }),
+      ]));
+      aufsichtsrat(ziel);
 
       ziel.appendChild(UI.el('div.sec-head', null, [
         UI.el('h2', { text: 'Owner' }),

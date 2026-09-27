@@ -220,7 +220,7 @@
         },
       }, [
         UI.el('span.mp-ic', { text: A.rolleIcon(p.rolle) }),
-        UI.el('span.mp-n', { text: p.name || A.schoen(p.code) }),
+        UI.el('span.mp-n', { text: p.name || A.codeAnzeige(p.code) }),
       ]);
       wahl.appendChild(b);
     });
@@ -411,7 +411,7 @@
           var px = mx + Math.cos(a) * ringX;
           var py = my + Math.sin(a) * ringY;
           var p = da[code];
-          var name = A.nameVon(code) || A.schoen(code);
+          var name = A.nameVon(code) || A.codeAnzeige(code);
           var rolle = (p && p.rolle) || (A.liste().filter(function (e) {
             return e.code === code;
           })[0] || {}).rolle || 'S';

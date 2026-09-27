@@ -186,6 +186,10 @@
        aufs Neue danach. */
     if (eintrag.name) A.merken(geprueft.code, eintrag.name, geprueft.rolle);
     A.geraetMelden(geprueft.code);
+    /* Einmalige Umstellung: der bisherige Owner rueckt in den
+       Aufsichtsrat auf. Nur ein Admin stoesst sie an - ein Spieler
+       hat mit der Verwaltung nichts zu schaffen. */
+    if (eintrag.rolle === A.ADMIN) A.aufsichtUmstellen();
     if (SG.router && SG.router.invalidate) SG.router.invalidate();
     if (SG.fortschritt) SG.fortschritt.neuLaden();
     return eintrag;
@@ -450,6 +454,90 @@
      Rolle uebernehmen; danach gibt nur der Owner selbst sie weiter.
      ------------------------------------------------------------------ */
 
+  /* ------------------------------------------------------------------
+     Der Aufsichtsrat
+
+     Ueber dem Owner steht noch einer. Er fuehrt das Hideout nicht - er
+     besetzt nur den Stuhl darueber: er bestimmt, wer Owner ist, und
+     kann einen amtierenden ablOesen. Umgekehrt kommt an ihn niemand
+     heran, auch der Owner nicht. Sein Code ist im Admin-Menue
+     geschwaerzt; sehen kann ihn nur er selbst.
+
+     Warum das keine vierte Code-Rolle ist: die Rolle steckt im
+     Streuwert des Codes (siehe A.pruefen, `% 3`). Aus drei Rollen vier
+     zu machen wuerde die Rolle JEDES bereits vergebenen Codes neu
+     wuerfeln - aus Admins wuerden Spieler. Der Aufsichtsrat haengt
+     deshalb wie der Owner an einem Eintrag in der Verwaltung und gilt
+     damit trotzdem auf jedem Geraet.
+     ------------------------------------------------------------------ */
+
+  A.aufsicht = function () { return A.normieren(V().aufsicht || ''); };
+
+  A.istAufsicht = function (code) {
+    var a = A.aufsicht();
+    return !!a && a === A.normieren(code);
+  };
+
+  A.binAufsicht = function () { return !!(A.aktuell && A.istAufsicht(A.aktuell.code)); };
+
+  A.aufsichtFrei = function () { return !A.aufsicht(); };
+
+  /* Aufsichtsrat werden oder die Rolle weitergeben. Wie beim Owner nur
+     an einen Admin - und danach nur noch durch ihn selbst. Auch der
+     Owner kann hier nichts bestellen. */
+  A.aufsichtSetzen = function (code) {
+    var k = A.normieren(code);
+    var g = A.pruefen(k);
+    if (!g || g.rolle !== A.ADMIN) return false;
+    if (!A.aufsichtFrei() && !A.binAufsicht()) return false;
+    if (A.istOwner(k)) return false;      // beide Stuehle gleichzeitig: nein
+    SG.verwaltung.schreiben(function (d) { d.aufsicht = k; });
+    return true;
+  };
+
+  /* Der Code des Aufsichtsrats steht im Admin-Menue geschwaerzt. Das
+     ist keine Sicherheit - wer den Quelltext liest, kommt an alles
+     heran (siehe ganz oben). Es haelt nur den Code aus den Listen
+     heraus, in die jeder Admin taeglich sieht.
+
+     UEberall dort, wo ein FREMDER Code angezeigt wird, steht deshalb
+     A.codeAnzeige statt A.schoen. */
+  A.codeAnzeige = function (code) {
+    var k = A.normieren(code);
+    if (!A.istAufsicht(k)) return A.schoen(k);
+    if (A.aktuell && A.aktuell.code === k) return A.schoen(k);
+    return '••••';
+  };
+
+  /* ------------------------------------------------------------------
+     Die Umstellung auf den Aufsichtsrat
+
+     Vorher war der Owner die oberste Stelle. Wer sie zu diesem
+     Zeitpunkt innehatte, rueckt einmalig in den Aufsichtsrat auf; der
+     Owner-Stuhl wird dabei frei und wird von dort aus neu besetzt.
+
+     Nur einmal, und nur mit einem echten Stand vom Relais: ein Geraet
+     ohne Verbindung haette womoeglich einen veralteten Owner im
+     Geraetespeicher und wuerde den falschen Mann aufruecken lassen.
+     Der Merker liegt im selben Dokument, damit die Umstellung nicht
+     auf jedem Geraet ein zweites Mal laeuft.
+     ------------------------------------------------------------------ */
+
+  A.aufsichtUmstellen = function () {
+    if (!SG.verwaltung.online) return false;
+    var d = V();
+    if (d.aufsichtUmstellung) return false;
+    var alt = A.normieren(d.owner || '');
+    SG.verwaltung.schreiben(function (x) {
+      x.aufsichtUmstellung = 1;
+      if (alt && !A.normieren(x.aufsicht || '')) {
+        x.aufsicht = alt;
+        x.owner = '';
+      }
+    });
+    return !!alt;
+  };
+
   A.owner = function () { return A.normieren(V().owner || ''); };
 
   A.istOwner = function (code) {
@@ -468,8 +556,32 @@
     var k = A.normieren(code);
     var g = A.pruefen(k);
     if (!g || g.rolle !== A.ADMIN) return false;
-    if (!A.ownerFrei() && !A.binOwner()) return false;
+    /* Wer den Owner bestimmen darf:
+
+         Aufsichtsrat   immer - auch einen amtierenden Owner abloesen
+         Owner          seinen eigenen Stuhl weitergeben, wie bisher
+         Admin          nur solange es ueberhaupt keinen Aufsichtsrat
+                        gibt und der Stuhl leer ist (der alte Anfang)
+
+       Ein freier Owner-Stuhl gehoert also dem Aufsichtsrat, sobald es
+       einen gibt - sonst nimmt sich nach der Umstellung der erste
+       Admin, der das Menue oeffnet, die Rolle. */
+    if (!A.binAufsicht()) {
+      if (A.ownerFrei() && !A.aufsichtFrei()) return false;
+      if (!A.ownerFrei() && !A.binOwner()) return false;
+    }
+    if (A.istAufsicht(k)) return false;   // beide Stuehle gleichzeitig: nein
     SG.verwaltung.schreiben(function (d) { d.owner = k; });
+    return true;
+  };
+
+  /* Den Owner-Stuhl leeren. Das darf nur der Aufsichtsrat - und der
+     Owner selbst nicht: er wuerde das Hideout ohne Spitze
+     zuruecklassen, und niemand koennte sie mehr besetzen. */
+  A.ownerAbsetzen = function () {
+    if (!A.binAufsicht()) return false;
+    if (A.ownerFrei()) return false;
+    SG.verwaltung.schreiben(function (d) { d.owner = ''; });
     return true;
   };
 
@@ -481,6 +593,8 @@
     if (!A.aktuell) return false;
     if (A.aktuell.code === k) return true;        // gegen sich selbst immer
     if (!A.istAdmin()) return false;
+    if (A.istAufsicht(k)) return false;           // an den Aufsichtsrat kommt keiner
+    if (A.binAufsicht()) return true;             // der Aufsichtsrat an jeden anderen
     if (A.istOwner(k)) return false;              // an den Owner kommt niemand
     if (A.binOwner()) return true;                // der Owner an jeden anderen
     var g = A.pruefen(k);
@@ -498,26 +612,37 @@
      Liste, waehrend die Rolle an seinem Code haengen bleibt. Beides endet
      damit, dass sich das Hideout selbst zugesperrt hat. */
   A.darfSperren = function (code) {
-    return A.darfGegen(code) && !A.istOwner(code);
+    return A.darfGegen(code) && !A.istOwner(code) && !A.istAufsicht(code);
   };
   A.darfLoeschen = function (code) {
-    return A.darfGegen(code) && !A.istOwner(code);
+    return A.darfGegen(code) && !A.istOwner(code) && !A.istAufsicht(code);
   };
 
   /* Ein Satz, den die Oberflaeche anzeigen kann, wenn es nicht geht. */
   A.schutzGrund = function (code) {
     var k = A.normieren(code);
     if (A.darfGegen(k)) {
+      if (A.istAufsicht(k)) {
+        return 'Als Aufsichtsrat kannst du dich weder sperren noch löschen — '
+          + 'dich wieder hereinlassen dürfte niemand. Gib die Rolle erst weiter.';
+      }
       if (A.istOwner(k)) {
         return 'Als Owner kannst du dich weder sperren noch löschen — dich '
           + 'wieder hereinlassen dürfte niemand. Gib die Rolle erst weiter.';
       }
       return '';
     }
-    if (A.istOwner(k)) return 'Das ist der Owner. An den kommt niemand heran.';
+    if (A.istAufsicht(k)) {
+      return 'Das ist der Aufsichtsrat. An den kommt niemand heran — auch der '
+        + 'Owner nicht.';
+    }
+    if (A.istOwner(k)) {
+      return 'Das ist der Owner. An den kommt nur der Aufsichtsrat heran.';
+    }
     var g = A.pruefen(k);
     if (g && g.rolle === A.ADMIN) {
-      return 'Admins können einander nichts anhaben. Nur der Owner darf das.';
+      return 'Admins können einander nichts anhaben. Nur der Owner darf das — '
+        + 'und über ihm der Aufsichtsrat.';
     }
     return 'Dafür fehlen dir die Rechte.';
   };

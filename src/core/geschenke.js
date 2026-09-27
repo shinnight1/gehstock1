@@ -95,7 +95,7 @@
         UI.el('div.main', null, [
           UI.el('div.t', { text: e.name || 'ohne Namen' }),
           UI.el('div.d', {
-            text: A.schoen(e.code)
+            text: A.codeAnzeige(e.code)
               + (A.aktuell && A.aktuell.code === e.code ? ' · du selbst' : ''),
           }),
         ]),
@@ -231,7 +231,7 @@
       wide: true,
       body: [
         UI.el('div.notice', {
-          html: '<b>' + U.esc(person.name || 'ohne Namen') + '</b><br>' + A.schoen(person.code)
+          html: '<b>' + U.esc(person.name || 'ohne Namen') + '</b><br>' + A.codeAnzeige(person.code)
             + '<br><span class="small">Wer noch nie gespielt hat, bekommt das '
             + 'Konto gleich mit angelegt.</span>',
         }),

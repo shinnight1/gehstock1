@@ -15,13 +15,13 @@
   C.team = [
     {
       name: 'Lucas',
-      rolle: 'Haupt-Developer',
+      rolle: 'Head Developer & Aufsichtsrat',
       text: 'Konzept, Aufbau und der allergrößte Teil des Codes — vom Kern über '
         + 'die Spiele bis zu beiden großen Tycoons.',
     },
     {
       name: 'Louis',
-      rolle: 'Head Developer & Quality Assurance',
+      rolle: 'CEO & Head Developer',
       text: 'GehstockMon ist seins — handgemacht entwickelt, von der gemeinsamen '
         + 'Spielerwelt über die Insel bis zum letzten der 57 Mons. Die Arena hat '
         + 'er ebenfalls gebaut. Und was hier erscheint, hat er vorher geprüft.',
