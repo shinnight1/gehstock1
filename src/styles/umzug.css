@@ -17,6 +17,7 @@
     linear-gradient(90deg, rgba(255, 255, 255, .028) 1px, transparent 1px);
   background-size: auto, 32px 32px, 32px 32px;
   color: var(--text);
+  font-family: var(--ui);
   overflow-x: hidden; overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   animation: umz-an .35s ease both;
@@ -252,6 +253,18 @@
   .umz *, .umz *::before, .umz *::after, .umz { animation: none !important; }
 }
 
+/* ---------------------------------------------------------- Eingebettet */
+
+/* Auf "Über uns" steht die Präsentation in einem Rahmen statt über allem. */
+.umz.umz-einbett {
+  position: relative; inset: auto; z-index: auto;
+  height: clamp(560px, 74vh, 720px);
+  padding: 14px 18px 16px;
+  border-radius: 10px;
+  animation: none;
+}
+.umz.umz-einbett .umz-text { margin-top: 12px; }
+
 /* ---------------------------------------------------------- Schmal */
 
 @media (max-width: 560px) {
@@ -262,4 +275,5 @@
   .umz-pip-bild { width: 44px; height: 44px; }
   .umz-zitat { font-size: 13px; }
   .umz-weiter { min-width: 0; }
+  .umz.umz-einbett { padding: 12px 12px 14px; height: clamp(600px, 82vh, 720px); }
 }

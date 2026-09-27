@@ -38,6 +38,7 @@ const CSS_ORDER = [
   'styles/gehstockmon-dungeons.css',
   'styles/gehstockmon-alltag.css',
   'styles/umzug.css',
+  'styles/ueber.css',
   'styles/kroenung.css',
 ];
 

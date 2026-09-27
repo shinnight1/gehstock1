@@ -680,29 +680,36 @@
     else window.addEventListener('hashchange', aufAdresse);
   };
 
-  U.zeigen = function () {
-    if (offen || SG.offline || !SG.assets || !SG.assets['ui-louis']) return;
+  /* Baut das Intro einmal auf. Eingebettet steht es auf "Über uns" in
+     einem Rahmen: ohne Überspringen, am Ende wieder von vorn, und in
+     Bewegung nur, solange es zu sehen ist. Sonst liegt es als Vorhang
+     über allem, und beiEnde wird beim letzten "Weiter" gerufen. */
+  var laufendeNummer = 0;
+
+  function aufbauen(eingebettet, beiEnde) {
     var bild = SG.assets['ui-louis'];
-    var st = { i: 0, t0: 0, raf: 0, tipp: 0, w: 1, h: 1, ruhig: ruhigGewuenscht() };
-    offen = st;
+    var st = {
+      i: 0, t0: 0, raf: 0, tipp: 0, w: 1, h: 1,
+      ruhig: ruhigGewuenscht(), aktiv: false, sichtbar: true,
+    };
 
     /* ---------------------------------------------------- Aufbau */
 
     var live = UI.el('span.umz-live');
     var punkte = SZENEN.map(function () { return UI.el('i'); });
-    var skip = UI.el('button.umz-skip', { type: 'button', text: 'Überspringen' });
+    var skip = eingebettet ? null : UI.el('button.umz-skip', { type: 'button', text: 'Überspringen' });
 
     var term = UI.el('div.umz-term', { 'aria-hidden': 'true' });
-    var titel = UI.el('h2#umz-titel.umz-titel');
+    var titel = UI.el('h2.umz-titel');
+    titel.id = 'umz-titel-' + (++laufendeNummer);
     var satz = UI.el('p.umz-satz');
 
     var cv = UI.el('canvas.umz-cv', { 'aria-hidden': 'true' });
     var cx = cv.getContext('2d');
 
-    var foto = UI.el('img', { src: bild, alt: 'Louis vor einem Regenbogen im Park' });
     var hero = UI.el('div.umz-hero', null, [
       UI.el('div.umz-foto', null, [
-        foto,
+        UI.el('img', { src: bild, alt: 'Louis vor einem Regenbogen im Park' }),
         UI.el('span.umz-badge', { text: 'Live' }),
         UI.el('span.umz-schild', { text: 'Louis · erklärt kurz' }),
       ]),
@@ -734,20 +741,22 @@
     ]);
     var weiter = UI.el('button.btn.primary.umz-weiter', { type: 'button', text: 'Weiter' });
 
-    var el = UI.el('div.umz' + (st.ruhig ? '.ruhig' : ''), {
-      role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'umz-titel',
-    }, [
-      UI.el('header.umz-kopf', null, [live, UI.el('div.umz-punkte', null, punkte), skip]),
-      UI.el('div.umz-text', null, [term, titel, satz]),
-      UI.el('div.umz-buehne', null, [
-        cv,
-        UI.el('div.umz-ecken', { 'aria-hidden': 'true' },
-          [UI.el('span'), UI.el('span'), UI.el('span'), UI.el('span')]),
-        hero,
-        liste,
-      ]),
-      UI.el('footer.umz-fuss', null, [pip, weiter]),
-    ]);
+    var el = UI.el('div.umz' + (eingebettet ? '.umz-einbett' : '') + (st.ruhig ? '.ruhig' : ''),
+      eingebettet
+        ? { role: 'region', 'aria-label': 'Präsentation: der Umzug auf den eigenen Server' }
+        : { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': titel.id },
+      [
+        UI.el('header.umz-kopf', null, [live, UI.el('div.umz-punkte', null, punkte), skip]),
+        UI.el('div.umz-text', null, [term, titel, satz]),
+        UI.el('div.umz-buehne', null, [
+          cv,
+          UI.el('div.umz-ecken', { 'aria-hidden': 'true' },
+            [UI.el('span'), UI.el('span'), UI.el('span'), UI.el('span')]),
+          hero,
+          liste,
+        ]),
+        UI.el('footer.umz-fuss', null, [pip, weiter]),
+      ]);
 
     /* ---------------------------------------------------- Leinwand */
 
@@ -770,14 +779,30 @@
     }
 
     function schleife() {
-      if (offen !== st) return;
+      st.raf = 0;
+      if (!st.aktiv || !st.sichtbar) return;
       zeichnen((performance.now() - st.t0) / 1000);
       st.raf = requestAnimationFrame(schleife);
+    }
+
+    function antreiben() {
+      if (st.aktiv && st.sichtbar && !st.ruhig && !st.raf) st.raf = requestAnimationFrame(schleife);
     }
 
     function aufGroesse() {
       groesse();
       if (st.ruhig) zeichnen(SZENEN[st.i].ruhe);
+    }
+
+    /* Eingebettet laeuft die Leinwand nur, solange man sie sieht. */
+    var beobachter = null;
+    if (eingebettet && typeof IntersectionObserver === 'function') {
+      beobachter = new IntersectionObserver(function (eintraege) {
+        st.sichtbar = eintraege[eintraege.length - 1].isIntersecting;
+        if (!st.sichtbar) return;
+        aufGroesse();
+        antreiben();
+      });
     }
 
     /* ---------------------------------------------------- Terminal */
@@ -820,7 +845,7 @@
 
     /* ---------------------------------------------------- Szenen */
 
-    function szene(i) {
+    function szene(i, fokus) {
       st.i = i;
       st.t0 = performance.now();
       var s = SZENEN[i];
@@ -844,22 +869,55 @@
         void pip.offsetWidth;
         pip.classList.add('rein');
       }
-      weiter.textContent = s.weiter || 'Weiter';
+      var letzte = i === SZENEN.length - 1;
+      weiter.textContent = letzte ? (eingebettet ? 'Von vorn' : s.weiter) : 'Weiter';
       groesse();
       if (st.ruhig) zeichnen(s.ruhe);
-      try { weiter.focus({ preventScroll: true }); } catch (e) { /* egal */ }
+      if (fokus) {
+        try { weiter.focus({ preventScroll: true }); } catch (e) { /* egal */ }
+      }
     }
 
-    function schliessen(fertig) {
-      if (offen !== st) return;
-      offen = null;
-      if (fertig) merken();
-      cancelAnimationFrame(st.raf);
+    weiter.addEventListener('click', function () {
+      if (SG.audio) SG.audio.play('click');
+      if (st.i < SZENEN.length - 1) szene(st.i + 1, true);
+      else if (beiEnde) beiEnde();
+      else szene(0, true);
+    });
+
+    function starten() {
+      st.aktiv = true;
+      window.addEventListener('resize', aufGroesse);
+      if (beobachter) beobachter.observe(el);
+      szene(0, !eingebettet);
+      antreiben();
+    }
+
+    function stoppen() {
+      st.aktiv = false;
+      if (st.raf) cancelAnimationFrame(st.raf);
+      st.raf = 0;
       st.tipp++;
       window.removeEventListener('resize', aufGroesse);
+      if (beobachter) beobachter.disconnect();
+    }
+
+    return { el: el, skip: skip, starten: starten, stoppen: stoppen };
+  }
+
+  U.zeigen = function () {
+    if (offen || SG.offline || !SG.assets || !SG.assets['ui-louis']) return;
+    var ctl = aufbauen(false, function () { schliessen(true); });
+    offen = ctl;
+
+    function schliessen(fertig) {
+      if (offen !== ctl) return;
+      offen = null;
+      if (fertig) merken();
+      ctl.stoppen();
       window.removeEventListener('hashchange', aufWeg);
-      el.classList.add('zu');
-      setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 320);
+      ctl.el.classList.add('zu');
+      setTimeout(function () { if (ctl.el.parentNode) ctl.el.parentNode.removeChild(ctl.el); }, 320);
       if (SG.kulisse && SG.kulisse.ruhen) SG.kulisse.ruhen(SG.router.parse().kind === 'game');
     }
 
@@ -869,18 +927,20 @@
       if (SG.router.parse().kind !== 'hub') schliessen(false);
     }
 
-    skip.addEventListener('click', function () { schliessen(true); });
-    weiter.addEventListener('click', function () {
-      if (SG.audio) SG.audio.play('click');
-      if (st.i < SZENEN.length - 1) szene(st.i + 1);
-      else schliessen(true);
-    });
-
-    document.body.appendChild(el);
+    ctl.skip.addEventListener('click', function () { schliessen(true); });
+    document.body.appendChild(ctl.el);
     if (SG.kulisse && SG.kulisse.ruhen) SG.kulisse.ruhen(true);
-    window.addEventListener('resize', aufGroesse);
     window.addEventListener('hashchange', aufWeg);
-    szene(0);
-    if (!st.ruhig) st.raf = requestAnimationFrame(schleife);
+    ctl.starten();
+  };
+
+  /* Fuer "Über uns": dasselbe Intro in einem Rahmen. Liefert ein Objekt mit
+     destroy() fuer den Router; offline gibt es nichts einzubetten. */
+  U.einbetten = function (host) {
+    if (SG.offline || !SG.assets || !SG.assets['ui-louis']) return null;
+    var ctl = aufbauen(true, null);
+    host.appendChild(ctl.el);
+    ctl.starten();
+    return { destroy: ctl.stoppen };
   };
 })(SG);
