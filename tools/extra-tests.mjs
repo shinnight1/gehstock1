@@ -763,35 +763,36 @@ export function extraTests(SG, U, test) {
     if (A.owner() !== OWNER) throw new Error('Owner hat gewechselt');
   });
 
-  test('Aufsichtsrat: sein Code steht fuer andere geschwaerzt', () => {
+  test('Aufsichtsrat: sein Code steht fuer Admins geschwaerzt, nicht fuer den CEO', () => {
     if (A.codeAnzeige(AUFSICHT) !== A.schoen(AUFSICHT)) {
       throw new Error('Er sieht seinen eigenen Code nicht');
     }
-    A.anmelden(OWNER, 'Owner');
+    A.anmelden(ADMIN2, 'Admin');
     if (A.codeAnzeige(AUFSICHT).indexOf(A.schoen(AUFSICHT)) >= 0) {
-      throw new Error('Der Owner sieht den Code des Aufsichtsrats');
+      throw new Error('Ein Admin sieht den Code des Aufsichtsrats');
+    }
+    A.anmelden(OWNER, 'Owner');
+    if (A.codeAnzeige(AUFSICHT) !== A.schoen(AUFSICHT)) {
+      throw new Error('Der CEO sieht den Code des Aufsichtsrats nicht');
     }
     if (A.codeAnzeige(ADMIN2) !== A.schoen(ADMIN2)) {
       throw new Error('Ein gewoehnlicher Code wurde geschwaerzt');
     }
   });
 
-  test('Aufsichtsrat: der Owner kommt an ihn nicht heran', () => {
+  test('Aufsichtsrat: nur der CEO kommt an ihn heran, die Rolle bleibt seine', () => {
     /* Angemeldet ist hier der Owner - aus dem Test davor. */
     if (!A.binOwner()) throw new Error('Aufbau stimmt nicht: nicht Owner');
-    if (A.darfGegen(AUFSICHT)) throw new Error('darfGegen sagt ja');
-    if (A.darfSperren(AUFSICHT)) throw new Error('darfSperren sagt ja');
-    if (A.darfLoeschen(AUFSICHT)) throw new Error('darfLoeschen sagt ja');
-    if (A.bannSetzen(AUFSICHT, 'Putsch')) throw new Error('Bann ging durch');
-    if (A.gebannt(AUFSICHT)) throw new Error('Aufsichtsrat ist gebannt');
-    A.merken(AUFSICHT, 'Aufsicht', A.ADMIN);
-    A.vergessen(AUFSICHT);
-    if (!A.liste().some((e) => e.code === AUFSICHT)) throw new Error('Profil wurde geloescht');
-    A.nameSetzen(AUFSICHT, 'Umbenannt');
-    if (A.nameVon(AUFSICHT) === 'Umbenannt') throw new Error('Umbenennen ging durch');
-    /* Und die Rolle kann der Owner ihm auch nicht wegnehmen. */
+    if (!A.darfGegen(AUFSICHT)) throw new Error('darfGegen sagt nein');
+    if (!A.darfSperren(AUFSICHT)) throw new Error('darfSperren sagt nein');
+    if (!A.darfLoeschen(AUFSICHT)) throw new Error('darfLoeschen sagt nein');
+    /* Die Rolle selbst nimmt ihm auch der CEO nicht weg. */
     if (A.aufsichtSetzen(OWNER)) throw new Error('Owner hat sich die Rolle genommen');
     if (A.aufsicht() !== AUFSICHT) throw new Error('Aufsichtsrat hat gewechselt');
+    A.anmelden(ADMIN2, 'Admin');
+    if (A.darfGegen(AUFSICHT)) throw new Error('Ein Admin kommt an den Aufsichtsrat heran');
+    if (A.bannSetzen(AUFSICHT, 'Putsch')) throw new Error('Bann eines Admins ging durch');
+    A.anmelden(OWNER, 'Owner');
   });
 
   test('Owner: sein Code ist fuer Admins verdeckt, nicht fuer die Leitung', () => {

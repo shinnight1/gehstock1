@@ -717,17 +717,16 @@
       if (!A.binAufsicht()) {
         ziel.appendChild(UI.el('div.notice', {
           html: '<b>⚖️ ' + U.esc(name) + '</b><br>An den Aufsichtsrat kommt '
-            + 'niemand heran — auch der CEO nicht. Sein Code ist geschwärzt, '
+            + 'nur der CEO heran. Für alle anderen ist sein Code geschwärzt, '
             + 'und weitergeben kann die Rolle nur er selbst.',
         }));
         return;
       }
 
       ziel.appendChild(UI.el('div.notice', {
-        html: '<b>⚖️ Du bist Aufsichtsrat.</b><br>Niemand kann dich sperren, '
-          + 'löschen oder umbenennen — du selbst auch nicht: wer dich wieder '
-          + 'hereinließe, gäbe es nicht. Dein Code steht für alle anderen '
-          + 'geschwärzt. Du bestimmst, wer CEO ist.',
+        html: '<b>⚖️ Du bist Aufsichtsrat.</b><br>Außer dem CEO kann dich niemand '
+          + 'sperren, löschen oder umbenennen, du selbst auch nicht. Dein Code steht '
+          + 'für alle außer dem CEO geschwärzt. Du bestimmst, wer CEO ist.',
       }));
       ziel.appendChild(UI.el('div', { style: { height: '8px' } }));
       ziel.appendChild(UI.btn('Aufsichtsrat übergeben', function () {

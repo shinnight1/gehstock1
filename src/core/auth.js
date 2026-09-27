@@ -524,7 +524,7 @@
   A.codeAnzeige = function (code) {
     var k = A.normieren(code);
     if (A.aktuell && A.aktuell.code === k) return A.schoen(k);
-    if (A.istAufsicht(k)) return VERDECKT;
+    if (A.istAufsicht(k)) return A.binOwner() ? A.schoen(k) : VERDECKT;
     if (A.istOwner(k)) return A.binAufsicht() ? A.schoen(k) : VERDECKT;
     return A.schoen(k);
   };
@@ -613,7 +613,7 @@
     if (!A.aktuell) return false;
     if (A.aktuell.code === k) return true;        // gegen sich selbst immer
     if (!A.istAdmin()) return false;
-    if (A.istAufsicht(k)) return false;           // an den Aufsichtsrat kommt keiner
+    if (A.istAufsicht(k)) return A.binOwner();    // an den Aufsichtsrat kommt nur der CEO
     if (A.binAufsicht()) return true;             // der Aufsichtsrat an jeden anderen
     if (A.istOwner(k)) return false;              // an den Owner kommt niemand
     if (A.binOwner()) return true;                // der Owner an jeden anderen
@@ -632,17 +632,17 @@
      Liste, waehrend die Rolle an seinem Code haengen bleibt. Beides endet
      damit, dass sich das Hideout selbst zugesperrt hat. */
   A.darfSperren = function (code) {
-    return A.darfGegen(code) && !A.istOwner(code) && !A.istAufsicht(code);
+    return A.darfGegen(code) && !A.istOwner(code) && !(A.istAufsicht(code) && !A.binOwner());
   };
   A.darfLoeschen = function (code) {
-    return A.darfGegen(code) && !A.istOwner(code) && !A.istAufsicht(code);
+    return A.darfGegen(code) && !A.istOwner(code) && !(A.istAufsicht(code) && !A.binOwner());
   };
 
   /* Ein Satz, den die Oberflaeche anzeigen kann, wenn es nicht geht. */
   A.schutzGrund = function (code) {
     var k = A.normieren(code);
     if (A.darfGegen(k)) {
-      if (A.istAufsicht(k)) {
+      if (A.istAufsicht(k) && !A.binOwner()) {
         return 'Als Aufsichtsrat kannst du dich weder sperren noch löschen — '
           + 'dich wieder hereinlassen dürfte niemand. Gib die Rolle erst weiter.';
       }
@@ -653,8 +653,7 @@
       return '';
     }
     if (A.istAufsicht(k)) {
-      return 'Das ist der Aufsichtsrat. An den kommt niemand heran — auch der '
-        + 'CEO nicht.';
+      return 'Das ist der Aufsichtsrat. An den kommt nur der CEO heran.';
     }
     if (A.istOwner(k)) {
       return 'Das ist der CEO. An den kommt nur der Aufsichtsrat heran.';
