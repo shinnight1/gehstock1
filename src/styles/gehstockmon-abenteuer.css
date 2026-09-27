@@ -171,3 +171,7 @@
 .gm-titel-zeile .gm-button{flex:none;min-height:36px;padding:6px 12px;font-size:13px!important}
 .gm-peer-titel{display:block;font-size:10px;font-weight:600;color:#f0ca80;margin-top:1px}
 .gm-peer-titel-zeile{color:#f0ca80;font-weight:600}
+/* Streifzuege im Abenteuer-Fenster */
+.gm-streifzug-ziele{display:grid;gap:6px;margin-top:8px}
+.gm-streifzug-ziele .gm-button{text-align:left}
+.gm-streifzug .gm-plan-row select{min-width:0}

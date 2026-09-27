@@ -20,9 +20,13 @@
   X.besatzung=function(p,id){return X.posten(p,id)||((p&&p.truppe)||[]).slice();};
   X.notbesatzung=function(p,id){return !X.posten(p,id);};
   /* Wo dieses Mon gerade steht: 'kampfteam', eine Gebietsnummer, oder nichts. */
+  /* Ein Mon auf Streifzug ist unterwegs: es kaempft nicht, haelt keinen Posten
+     und haengt nicht am Tauschbrett, bis es zurueck ist. */
+  X.aufStreifzug=function(p,monId){return !!(p&&Array.isArray(p.streifzuege)&&p.streifzuege.some(function(z){return z&&z.monId===monId;}));};
   X.einsatzOrt=function(p,monId,ausser){
     if(!p)return null;
     if(ausser!=='kampfteam'&&(p.truppe||[]).indexOf(monId)>=0)return 'kampfteam';
+    if(X.aufStreifzug(p,monId))return 'streifzug';
     var gefunden=null;
     Object.keys(p.posten||{}).forEach(function(id){
       if(String(id)===String(ausser)||gefunden)return;
@@ -34,15 +38,17 @@
   X.einsatzOrte=function(p,monId){
     if(!p)return [];
     var orte=(p.truppe||[]).indexOf(monId)>=0?['kampfteam']:[];
+    if(X.aufStreifzug(p,monId))orte.push('streifzug');
     Object.keys(p.posten||{}).forEach(function(id){if((p.posten[id]||[]).indexOf(monId)>=0)orte.push(Number(id));});
     return orte;
   };
   X.einsatzText=function(ort){
     if(ort==='kampfteam')return 'im Kampfteam';
+    if(ort==='streifzug')return 'auf Streifzug';
     return Number.isFinite(ort)?'auf '+(D.FELDER[ort-1]?D.FELDER[ort-1].name:'Gebiet '+ort):'';
   };
   X.einsatzListe=function(orte){
-    var namen=(orte||[]).map(function(o){return o==='kampfteam'?'Kampfteam':(D.FELDER[o-1]?D.FELDER[o-1].name:'Gebiet '+o);});
+    var namen=(orte||[]).map(function(o){return o==='kampfteam'?'Kampfteam':o==='streifzug'?'Streifzug':(D.FELDER[o-1]?D.FELDER[o-1].name:'Gebiet '+o);});
     return namen.length>1?namen.slice(0,-1).join(', ')+' und '+namen[namen.length-1]:namen.join('');
   };
   /* Prueft eine Aufstellung: vier verschiedene Mons aus der eigenen Sammlung.
@@ -53,6 +59,7 @@
     for(var i=0;i<squad.length;i++){
       var id=squad[i];
       if(typeof id!=='string'||!D.mon(id)||(p.besitz||[]).indexOf(id)<0)return 'Wähle vier Mons aus deiner Sammlung.';
+      if(X.aufStreifzug(p,id))return D.mon(id).name+' ist gerade auf Streifzug.';
     }
     return null;
   };
@@ -68,7 +75,7 @@
      staerkste - ein Wall haelt, ein Pfleger heilt, eine Schneide trifft, ein
      Stoerer bricht die Deckung -, dann mit den naechststaerksten auffuellen. */
   X.staerksteTruppe=function(p){
-    var alle=(p.besitz||[]).filter(function(id){return !!D.mon(id);})
+    var alle=(p.besitz||[]).filter(function(id){return !!D.mon(id)&&!X.aufStreifzug(p,id);})
       .sort(function(a,b){return X.kampfwert(p,b)-X.kampfwert(p,a);});
     var gewaehlt=[],rollen={};
     alle.forEach(function(id){
@@ -91,7 +98,7 @@
       .map(function(g){return {id:g.id,squad:truppe.slice()};});
   };
   X.STADT_OPS=['arena_rang','champion_fordern','tagwerk','findelei','brutplatz_kaufen','tausch_anbieten','tausch_annehmen','tausch_zuruecknehmen','ei_kaufen','runen_zerlegen','runen_verschmelzen','schimmerperle_kaufen'];
-  X.OPS=['survey','gather','trainer_start','quest_claim','shop_buy','equip','raid_start','raid_turn','raid_arena','raid_cancel','mon_upgrade','leuchtturm_spenden','zerhacker_schlagen','waffe_schleifen','panzer_anlegen','fehde_fordern','fehde_annehmen','titel_waehlen'].concat(X.STADT_OPS).concat(X.DUNGEON_OPS);
+  X.OPS=['survey','gather','trainer_start','quest_claim','shop_buy','equip','raid_start','raid_turn','raid_arena','raid_cancel','mon_upgrade','leuchtturm_spenden','zerhacker_schlagen','waffe_schleifen','panzer_anlegen','fehde_fordern','fehde_annehmen','titel_waehlen','streifzug_start','streifzug_abholen'].concat(X.STADT_OPS).concat(X.DUNGEON_OPS);
   /* Jeder Spielzug, der den Spielstand aendert - eine Liste fuer Browser und
      Server. Der Browser haengt nur an diese Zuege eine Kennung, und der
      Server verlangt sie genau dafuer. Frueher fuehrte jede Seite ihre eigene
@@ -114,6 +121,60 @@
   X.gekaufteBrutplaetze=function(p){var n=p&&p.brutplaetze;
     return Number.isFinite(n)?Math.max(0,Math.min(X.BRUTPLATZ_PREISE.length,Math.floor(n))):0;};
   X.brutplaetze=function(bau,p){return E.INCUBATORS+(X.leuchtturmFertig(bau)?1:0)+X.gekaufteBrutplaetze(p);};
+
+  /* ------------------------------------------------------------------
+     Streifzuege (27.09.2026)
+
+     Ein Mon, das gerade nirgends Dienst tut, zieht fuer 45, 90 oder 180
+     geoeffnete Minuten los - die Uhr laeuft wie bei den Eiern nur, waehrend
+     die Insel offen ist. Drei Ziele, je eine Rolle im Vorteil (+50 %):
+       Runen suchen   Stoerer und Schneiden   Runen der Seltenheit des Mons
+       Waren tragen   Waelle                  Gold
+       Nester suchen  Pfleger                 mit Glueck ein Ei
+     Codex hatte drei Einwaende, die hier eingebaut sind:
+     - Neues Gold vergroessert den Abstand zwischen Gebietsbesitzern und
+       allen anderen nicht: volles Gold gibt es nur ohne Gebiet, mit ein
+       oder zwei Gebieten die Haelfte, ab drei ein Viertel.
+     - Seltene Mons bringen keine groessere Menge, nur ihre Runensorte; ab
+       Legendaer die Haelfte, weil diese Runen viel mehr wert sind.
+     - Laengere Zuege sind je Stunde etwas ergiebiger - niemand muss jede
+       Pause abholen, und wer es tut, bekommt kaum mehr.
+     Die Mengen: je Platz mit passender Rolle etwa 0,5 Runen, 20 Gold oder
+     0,12 Eier je geoeffneter Stunde (Lager: 20 Gold, Tagwerk: 40). Zwei
+     Waelle ohne Gebiet bringen so etwa so viel wie das Tagwerk. Das
+     Ergebnis wird beim Start ausgewuerfelt. Leer geht niemand aus: wer nichts
+     findet, bringt ein paar Muenzen Kleingeld mit.
+     ------------------------------------------------------------------ */
+  X.STREIFZUG_PLAETZE=2;
+  X.STREIFZUG_DAUERN=[45,90,180];
+  X.STREIFZUG_ZIELE=[
+    {id:'runen', name:'Runen suchen', rollen:[3,1], was:'Runen seiner Seltenheit'},
+    {id:'waren', name:'Waren tragen', rollen:[0],   was:'Gold'},
+    {id:'nester',name:'Nester suchen',rollen:[2],   was:'mit Glück ein Ei'}
+  ];
+  X.STREIFZUG_ERTRAG={45:{runen:.2,gold:8,ei:.05},90:{runen:.45,gold:18,ei:.1},180:{runen:1,gold:40,ei:.24}};
+  X.STREIFZUG_ROLLE=1.5;X.STREIFZUG_KLEINGELD=5;
+  X.streifzugZiel=function(id){return X.STREIFZUG_ZIELE.find(function(z){return z.id===id;})||null;};
+  X.streifzugGoldAnteil=function(gebiete){return gebiete<=0?1:gebiete<=2?.5:.25;};
+  /* Was ein Streifzug erwarten laesst - dieselbe Rechnung fuer Anzeige und Wurf. */
+  X.streifzugVorschau=function(mon,zielId,dauer,gebiete){
+    var z=X.streifzugZiel(zielId),e=X.STREIFZUG_ERTRAG[dauer];if(!z||!e||!mon)return null;
+    var passt=z.rollen.indexOf(mon.typ)>=0,f=passt?X.STREIFZUG_ROLLE:1;
+    return {passt:passt,runenRang:mon.seltenheit,
+      runen:z.id==='runen'?Math.round(e.runen*f*(mon.seltenheit>=4?.5:1)*100)/100:0,
+      gold:z.id==='waren'?Math.round(e.gold*f*X.streifzugGoldAnteil(gebiete)):0,
+      ei:z.id==='nester'?Math.round(Math.min(.9,e.ei*f)*100)/100:0};
+  };
+  X.streifzugWuerfeln=function(vorschau,zufall){
+    var r=vorschau.runen,n=Math.floor(r)+(zufall()<r-Math.floor(r)?1:0),ei=vorschau.ei>0&&zufall()<vorschau.ei;
+    var gold=vorschau.gold;if(!n&&!ei&&!gold)gold=X.STREIFZUG_KLEINGELD;
+    return {runen:n,rang:vorschau.runenRang,gold:gold,ei:ei};
+  };
+  /* Wann etwas zurueck ist, in Worten: "um 11:05", "morgen um 7:45". */
+  X.uhrText=function(t,now){
+    var tag=H.day(t)-H.day(now),zeit=new Intl.DateTimeFormat('de-DE',{timeZone:H.ZONE,hour:'2-digit',minute:'2-digit'}).format(new Date(t));
+    return (tag<=0?'':tag===1?'morgen ':new Intl.DateTimeFormat('de-DE',{timeZone:H.ZONE,weekday:'long'}).format(new Date(t))+' ')+'um '+zeit;
+  };
 
   /* Goldwaren (27.09.2026). Gold sammelte sich an: ausser Ausbau, Brutplaetzen
      und Ausruestung gab es nichts, wofuer es sich lohnte. Vier Dinge setzen es
@@ -267,7 +328,8 @@
     {id:'trainerschreck',name:'Trainerschreck',was:'Wandertrainer besiegt',       ziel:60,   wert:function(p){return (p.progress&&p.progress.trainerWins)||0;}},
     {id:'arenaheld',     name:'Arenaheld',     was:'Siege in der Großen Arena',   ziel:25,   wert:function(p){return p.arenaSiegeGesamt||0;}},
     {id:'eroberer',      name:'Eroberer',      was:'Gebiete erobert',             ziel:5,    wert:function(p){return p.siege||0;}},
-    {id:'zerhackerschreck',name:'Zerhacker-Schreck',was:'Schaden am Zerhacker',   ziel:8000, wert:function(p){return p.zerhackerGesamt||0;}}
+    {id:'zerhackerschreck',name:'Zerhacker-Schreck',was:'Schaden am Zerhacker',   ziel:8000, wert:function(p){return p.zerhackerGesamt||0;}},
+    {id:'streifzuegler', name:'Streifzügler',  was:'Streifzüge beendet',          ziel:25,   wert:function(p){return p.streifzuegeGesamt||0;}}
   ];
   X.titelErreicht=function(p){return X.TITEL.filter(function(t){return t.wert(p||{})>=t.ziel;}).map(function(t){return t.id;});};
   /* Der Titel, den man traegt - nur, wenn er noch gilt. */
@@ -571,6 +633,13 @@
        Schimmerperle auf das naechste Schluepfen wartet. */
     p.haendlerTag=Number.isFinite(old.haendlerTag)?Math.floor(old.haendlerTag):null;
     p.titel=X.TITEL.some(function(t){return t.id===old.titel;})?old.titel:null;
+    /* Streifzuege: nur vollstaendige, fuer eigene Mons, hoechstens zwei. */
+    p.streifzuege=(Array.isArray(old.streifzuege)?old.streifzuege:[]).filter(function(z){
+      return z&&typeof z.id==='string'&&p.besitz.indexOf(z.monId)>=0&&!!X.streifzugZiel(z.ziel)&&X.STREIFZUG_DAUERN.indexOf(z.dauer)>=0
+        &&Number.isFinite(z.start)&&Number.isFinite(z.fertigAt)&&!!z.ergebnis&&typeof z.ergebnis==='object';
+    }).slice(0,X.STREIFZUG_PLAETZE).map(function(z){var e=z.ergebnis;return {id:z.id.slice(0,80),monId:z.monId,ziel:z.ziel,dauer:z.dauer,start:z.start,fertigAt:z.fertigAt,
+      ergebnis:{runen:Math.max(0,Math.min(20,Math.floor(Number(e.runen)||0))),rang:Math.max(0,Math.min(D.SELTENHEITEN.length-1,Math.floor(Number(e.rang)||0))),gold:Math.max(0,Math.min(1000,Math.floor(Number(e.gold)||0))),ei:e.ei===true}};});
+    p.streifzuegeGesamt=Math.max(0,Math.floor(Number(old.streifzuegeGesamt)||0));
     p.schimmerperle=old.schimmerperle===true;return p;
   };
   X.progress=function(p,q){return q.stat==='visited'?p.visited.length:p.progress[q.stat]||0;};

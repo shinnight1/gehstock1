@@ -58,6 +58,8 @@ export function morgenbericht(world, p, id, seit, now, extra = {}) {
   if (extra.wochenende) zeilen.push({ art: 'gut', text: '🥚 ' + extra.wochenende + ' Wochenend-Eier sind in deiner Tasche.' });
   const aussen = world.territories.filter((t) => t.ownerId === id).reduce((s, t) => s + (t.eggStock || 0), 0);
   if (aussen) zeilen.push({ art: 'info', text: '🏕️ ' + aussen + (aussen === 1 ? ' Ei wartet' : ' Eier warten') + ' auf deinen Außenposten.' });
+  const zurueck = (p.streifzuege || []).filter((z) => z.fertigAt <= now).length;
+  if (zurueck) zeilen.push({ art: 'gut', text: '🎒 ' + zurueck + (zurueck === 1 ? ' Streifzug ist' : ' Streifzüge sind') + ' zurück - die Beute wartet im Abenteuer-Fenster.' });
   const fertig = p.eggs.filter((e) => e.readyAt !== null && e.readyAt <= now).length;
   if (fertig) zeilen.push({ art: 'gut', text: '🐣 ' + fertig + (fertig === 1 ? ' Ei ist' : ' Eier sind') + ' fertig ausgebrütet.' });
   if (!world.territories.some((t) => t.ownerId === id)) {

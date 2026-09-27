@@ -189,6 +189,8 @@ function verteidigungenAuffrischen(world, p, id) {
 }
 function validateSquad(p, squad) {
   if (!Array.isArray(squad) || squad.length !== 4 || new Set(squad).size !== 4 || squad.some((id) => typeof id !== 'string' || !p.besitz.includes(id) || !D.mon(id))) throw new GameError('Wähle vier verschiedene Mons aus deiner Sammlung.');
+  const unterwegs = squad.find((id) => X.aufStreifzug(p, id));
+  if (unterwegs) throw new GameError(D.mon(unterwegs).name + ' ist gerade auf Streifzug.');
   return squad.slice();
 }
 function target(world, id) {

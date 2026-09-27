@@ -1,4 +1,4 @@
-import {data as D,economy as E,arena as A,adventure as X} from './gehstockmon-rules.mjs';
+import {data as D,economy as E,arena as A,hours as H,adventure as X} from './gehstockmon-rules.mjs';
 import {activeDungeon} from './gehstockmon-dungeons.mjs';
 import {stadtSettle} from './gehstockmon-stadt.mjs';
 import {anwesende} from './gehstockmon-anwesenheit.mjs';
@@ -349,6 +349,35 @@ export async function adventureAction({world,p,id,body,now,draw,presence,validat
       if(!teil||!(p.ruestungen||[]).includes(teil.id))fail('Dieses Rüstungsteil hast du nicht.');
       p.panzer=teil.id;extra.message=teil.name+' angelegt: '+teil.schutz+' % weniger Schaden durch Gehstöcke.';
     }
+  }
+  if(op==='streifzug_start'){
+    const mon=D.mon(body.monId);
+    if(!mon||!p.besitz.includes(mon.id))fail('Wähle ein Mon aus deiner Sammlung.');
+    if(p.streifzuege.length>=X.STREIFZUG_PLAETZE)fail('Es sind schon '+X.STREIFZUG_PLAETZE+' Mons auf Streifzug.');
+    const orte=X.einsatzOrte(p,mon.id);
+    if(orte.length)fail(mon.name+' ist gerade '+X.einsatzText(orte[0])+'. Auf Streifzug gehen nur Mons ohne Dienst.');
+    if((world.tausch||[]).some(v=>v&&v.vonId===id&&v.gebe===mon.id))fail(mon.name+' hängt am Tauschbrett. Nimm das Angebot erst zurück.');
+    const ziel=X.streifzugZiel(body.ziel),dauer=Number(body.dauer);
+    if(!ziel||!X.STREIFZUG_DAUERN.includes(dauer))fail('Wähle Ziel und Dauer des Streifzugs.');
+    const gebiete=world.territories.filter(t=>t.ownerId===id).length;
+    const ergebnis=X.streifzugWuerfeln(X.streifzugVorschau(X.mon(p,mon.id),ziel.id,dauer,gebiete),E.zufallsfolge(draw));
+    const fertigAt=H.productionAt(H.openTime(now)+dauer*60000);
+    p.streifzuege.push({id:body.requestId,monId:mon.id,ziel:ziel.id,dauer,start:now,fertigAt,ergebnis});
+    extra.message=mon.name+' zieht los: '+ziel.name+'. Zurück '+X.uhrText(fertigAt,now)+'.';
+  }
+  if(op==='streifzug_abholen'){
+    const at=p.streifzuege.findIndex(z=>z.id===body.streifzugId);
+    if(at<0)fail('Diesen Streifzug gibt es nicht mehr.');
+    const z=p.streifzuege[at];
+    if(now<z.fertigAt)fail('Noch unterwegs - zurück '+X.uhrText(z.fertigAt,now)+'.');
+    const e=z.ergebnis,mon=D.mon(z.monId),teile=[];
+    if(e.runen){p.runes[e.rang]=Math.min(9999,(p.runes[e.rang]||0)+e.runen);teile.push(e.runen+' '+D.SELTENHEITEN[e.rang].name+'-'+(e.runen===1?'Rune':'Runen'));}
+    if(e.gold){p.gold+=e.gold;teile.push(e.gold+' Gold');}
+    if(e.ei){const ei={id:'streifzug-'+now+'-'+(++p.eggSerial),territoryId:X.FINDELEI_FELD,producedAt:now,startedAt:null,readyAt:null,art:'streifzug'};
+      if(p.eggs.length<E.BAG_LIMIT)p.eggs.push(ei);else p.sonderEier=(p.sonderEier||[]).concat(ei);teile.push('ein Ei');}
+    p.streifzuege.splice(at,1);p.streifzuegeGesamt=(p.streifzuegeGesamt||0)+1;
+    extra.monId=z.monId;extra.streifzug={runen:e.runen,rang:e.rang,gold:e.gold,ei:e.ei};
+    extra.message=mon.name+' ist zurück: '+teile.join(', ')+'.';
   }
   if(op==='titel_waehlen'){
     if(body.titel===null||body.titel===''){p.titel=null;extra.message='Du trägst keinen Titel mehr.';}

@@ -216,6 +216,7 @@ export async function dungeonAction({world, p, id, body, now, presence}) {
   }
   function member(monId) {
     if (!p.besitz.includes(monId) || !D.mon(monId)) fail('Wähle ein eigenes Mon für die Expedition.');
+    if (X.aufStreifzug(p, monId)) fail(D.mon(monId).name + ' ist gerade auf Streifzug.');
     const mon = X.mon(p,monId), stats = A.stats(mon);
     /* Rolle, Faehigkeit und Runenwerte kommen aus derselben Quelle wie in der
        Arena - sonst kaempft dasselbe Mon hier anders als dort. */

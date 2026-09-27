@@ -44,6 +44,14 @@
           heute.truhe ? '✓ Truhe geöffnet' : heute.fertig ? '🎁 Truhe bereit!' : erledigt + '/3 Aufgaben',
           heute.fertig && !heute.truhe ? '#81d2a3' : '#f0b429', c.heute, 'truhe'));
       }
+      /* Streifzuege: zurueck geht vor, sonst die naechste Rueckkehr. */
+      var zuege = (state() && state().streifzuege) || [];
+      if (zuege.length) {
+        var jetzt = c.now(), da = zuege.filter(function (z) { return z.fertigAt <= jetzt; }).length;
+        var naechster = zuege.reduce(function (m, z) { return Math.min(m, z.fertigAt); }, Infinity);
+        projektLeiste.appendChild(marke('Streifzüge', da ? '🎒 ' + da + ' zurück!' : 'bis ' + X.uhrText(naechster, jetzt).replace(/^um /, ''),
+          da ? '#81d2a3' : '#89cce5', adventure, 'abenteuer'));
+      }
       var z = projekte && projekte.zerhacker, l = projekte && projekte.leuchtturm;
       if (z && z.hp > 0) projektLeiste.appendChild(balken('Zerhacker', z.hp, z.maxHp, '#f2705a', zeigeZerhacker, 'zerhacker'));
       else if (z) projektLeiste.appendChild(balken('Zerhacker erlegt', 1, 1, '#81d2a3', zeigeZerhacker, 'zerhacker'));
@@ -256,7 +264,48 @@
       drawer.appendChild(el('p','Ort: '+D.FELDER[e.territoryId-1].biom+' · Zwei Wandertrainer ziehen stündlich weiter.'));
       drawer.appendChild(button(near?(e.kind==='trainer'?'Training starten':'Rune einsammeln'):'Hingehen',function(){if(!near){approach(e);return;}run(e.kind==='trainer'?'trainer_start':'gather',{encounterId:e.id,squad:s.truppe},'adventure');},'gm-button gm-primary'));
     }
+    /* Streifzuege: was unterwegs ist, was zurueck ist, und ein neuer Auftrag. */
+    function streifzugTeil(){
+      var s=state(),zuege=s.streifzuege||[],jetzt=c.now(),gebiete=(s.geschafft||[]).length;
+      var kopf=el('h3','Streifzüge'),sym=R.symbol&&R.symbol('abenteuer','gm-titel-symbol');if(sym)kopf.insertBefore(sym,kopf.firstChild);drawer.appendChild(kopf);
+      drawer.appendChild(el('p','Mons, die nirgends Dienst tun, ziehen für dich los - die Zeit läuft nur, während die Insel offen ist. Die passende Rolle bringt die Hälfte mehr.','gm-plan-hinweis'));
+      zuege.forEach(function(z){
+        var mon=D.mon(z.monId),ziel=X.streifzugZiel(z.ziel),da=z.fertigAt<=jetzt,karte=el('article',undefined,'gm-quest-card gm-streifzug');
+        karte.appendChild(el('h3',(mon?mon.name:'?')+' · '+(ziel?ziel.name:'')));
+        karte.appendChild(el('p',da?'Zurück - die Beute wartet.':'Unterwegs, zurück '+X.uhrText(z.fertigAt,jetzt)+'.'));
+        var b=button(da?'Beute abholen':'Unterwegs',function(){run('streifzug_abholen',{streifzugId:z.id},'adventure');},'gm-button gm-primary');
+        b.disabled=!da||c.busy();karte.appendChild(b);drawer.appendChild(karte);
+      });
+      if(zuege.length>=X.STREIFZUG_PLAETZE)return;
+      var frei=s.besitz.filter(function(id){return !!D.mon(id)&&!X.einsatzOrte(s,id).length;})
+        .sort(function(a,b){var x=D.mon(a),y=D.mon(b);return x.typ-y.typ||y.seltenheit-x.seltenheit||x.name.localeCompare(y.name,'de');});
+      if(!frei.length){drawer.appendChild(el('p','Gerade tun alle deine Mons Dienst. Wer weder im Kampfteam noch auf einem Posten steht, kann losziehen.'));return;}
+      var neu=el('article',undefined,'gm-quest-card gm-streifzug');
+      neu.appendChild(el('h3','Neuer Streifzug · '+(X.STREIFZUG_PLAETZE-zuege.length)+' frei'));
+      var monWahl=el('select'),dauerWahl=el('select'),ziele=el('div',undefined,'gm-streifzug-ziele');
+      monWahl.setAttribute('aria-label','Mon für den Streifzug');dauerWahl.setAttribute('aria-label','Dauer des Streifzugs');
+      var ROLLEN=['Wall','Schneide','Pfleger','Störer'];
+      frei.forEach(function(id){var k=D.mon(id),o=el('option',k.name+' · '+ROLLEN[k.typ]+' · '+D.SELTENHEITEN[k.seltenheit].name);o.value=id;monWahl.appendChild(o);});
+      X.STREIFZUG_DAUERN.forEach(function(d){var o=el('option',d+' Min. · zurück '+X.uhrText(R.zeiten.productionAt(R.zeiten.openTime(jetzt)+d*60000),jetzt));o.value=String(d);dauerWahl.appendChild(o);});
+      monWahl.value=frei[0];dauerWahl.value='90';
+      function zieleZeigen(){
+        SG.ui.clear(ziele);var mon=X.mon(s,monWahl.value),dauer=Number(dauerWahl.value);
+        X.STREIFZUG_ZIELE.forEach(function(ziel){
+          var v=X.streifzugVorschau(mon,ziel.id,dauer,gebiete);if(!v)return;
+          var was=ziel.id==='runen'?(v.runen>=1?'~'+String(Math.round(v.runen*10)/10).replace('.',',')+' '+D.SELTENHEITEN[v.runenRang].name+'-Runen':Math.round(v.runen*100)+' % auf eine '+D.SELTENHEITEN[v.runenRang].name+'-Rune')
+            :ziel.id==='waren'?v.gold+' Gold':Math.round(v.ei*100)+' % auf ein Ei';
+          var b=button((v.passt?'★ ':'')+ziel.name+' · '+was,function(){run('streifzug_start',{monId:monWahl.value,ziel:ziel.id,dauer:dauer},'adventure');},'gm-button'+(v.passt?' gm-primary':''));
+          b.disabled=c.busy();ziele.appendChild(b);
+        });
+      }
+      monWahl.addEventListener('change',zieleZeigen);dauerWahl.addEventListener('change',zieleZeigen);
+      var zeile=el('div',undefined,'gm-plan-row');zeile.appendChild(monWahl);zeile.appendChild(dauerWahl);
+      neu.appendChild(zeile);neu.appendChild(ziele);zieleZeigen();
+      if(gebiete)neu.appendChild(el('p','Mit '+gebiete+(gebiete===1?' Gebiet':' Gebieten')+' bringt Waren tragen '+(gebiete<=2?'die Hälfte':'ein Viertel')+' - wer kein Land hat, braucht das Gold dringender.','gm-plan-hinweis'));
+      drawer.appendChild(neu);
+    }
     function adventure(){if(!c.open('Abenteuer & Quests','adventure'))return;var s=state();drawer.appendChild(el('p','Starte mit Trainerkämpfen und der Tauwiese in den Blütenauen. Trainer schenken dir Eier; stärkere Mons helfen beim Erobern.','gm-beginner-tip'));
+      streifzugTeil();
       drawer.appendChild(button('Aktuelles Biom erkunden',function(){run('survey',{},'adventure');},'gm-button gm-primary'));
       drawer.appendChild(el('h3','In deiner Nähe'));var at=c.world().position();encounters.slice().sort(function(a,b){return Math.hypot(a.x-at.x,a.z-at.z)-Math.hypot(b.x-at.x,b.z-at.z);}).forEach(function(e){var sym=R.symbol&&R.symbol(e.kind==='trainer'?'trainer':'rune'),b=button((sym?'':e.kind==='trainer'?'⚔ ':'✦ ')+e.name+' · '+Math.round(Math.hypot(e.x-at.x,e.z-at.z))+' m',function(){encounter(e);},'gm-button gm-mit-symbol');if(sym)b.insertBefore(sym,b.firstChild);drawer.appendChild(b);});
       drawer.appendChild(el('h3','Deine Quests'));X.QUESTS.forEach(function(q){var done=s.claimedQuests.indexOf(q.id)>=0,n=Math.min(q.goal,X.progress(s,q)),card=el('article',undefined,'gm-quest-card');card.appendChild(el('h3',q.name));card.appendChild(el('p',({trainerWins:'Trainingssiege',visited:'Biome erkundet',gathered:'Runen gesammelt',hatched:'Eier ausgebrütet',upgrades:'Außenposten ausgebaut'}[q.stat])+' · '+n+'/'+q.goal));card.appendChild(SG.ui.el('progress',{value:n,max:q.goal,'aria-label':q.name}));card.appendChild(el('p',q.skin?'Skin: '+X.skin(q.skin).name:q.gold+' Gold'));var claim=button(done?'Erhalten':'Belohnung abholen',function(){run('quest_claim',{questId:q.id},'adventure');},'gm-button gm-primary');claim.disabled=done||n<q.goal;card.appendChild(claim);drawer.appendChild(card);});

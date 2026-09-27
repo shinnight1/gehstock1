@@ -144,6 +144,10 @@ export async function checkUi(D,E,A,handler,code,clock,otherCode){
   assert.ok(root.textContent.includes('Der Gehstock-Champion'));
   click('⚒ Ausrüstung');await flush();
   assert.equal(root.querySelectorAll('.gm-titel-zeile').length,SG.gehstockmon.abenteuer.TITEL.length,'every title is listed with its progress');
+  click('✦ Abenteuer');await flush();
+  assert.ok(root.textContent.includes('Streifzüge'),'the adventure window lists the trips');
+  const zielKnoepfe=root.all().filter(e=>e.tagName==='button'&&/Runen suchen|Waren tragen|Nester suchen/.test(e.textContent)).length;
+  assert.ok(zielKnoepfe===3||root.textContent.includes('tun alle deine Mons Dienst'),'with three goals to pick, or the reason why not');
   /* Heute: oben in der Leiste, drei Aufgaben und die Truhe. */
   find(e=>e.classList.contains('gm-projekt')&&e.textContent.startsWith('Heute')).fire('click');await flush();
   assert.ok(root.textContent.includes('Heute auf der Insel'),'the daily window opens');
