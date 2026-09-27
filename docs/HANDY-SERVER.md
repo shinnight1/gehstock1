@@ -80,6 +80,24 @@ Neustart laeuft Node im Hintergrund und schreibt nach
 Port waere belegt. Termux und Termux:Boot brauchen in Android die Akku-Einstellung
 "Nicht eingeschraenkt".
 
+### Zweitadresse gehstock.dedyn.io
+
+Manche Filter (etwa die Toulouse-Liste UT1, Kategorie `dynamic-dns`) sperren
+duckdns.org komplett. dedyn.io von deSEC steht dort nicht. Einmalig auf
+https://desec.io ein Konto mit dem Namen `gehstock.dedyn.io` anlegen, einen Token
+erstellen und auf dem Handy im Heim-WLAN:
+
+```sh
+bash tools/handy-zweitadresse.sh gehstock
+```
+
+Das fragt den Token verdeckt ab, speichert ihn unter
+`~/.config/gehstock1/desec.env`, schreibt den Namen mit in die Adresszeile des
+Caddyfiles und wartet, bis Caddy das Zertifikat hat. `tools/handy-desec.sh` meldet
+danach alle fuenf Minuten die IPv4 (Protokoll `desec.log`) und haelt AAAA leer,
+aus demselben Grund wie bei DuckDNS. Beide Adressen fuehren auf denselben Server;
+eingeloggt ist man pro Adresse getrennt.
+
 ## Redis auf dem Handy statt Upstash
 
 Upstash zaehlt jeden Befehl (500 000 im Monat gratis). Ohne Limit laeuft es mit

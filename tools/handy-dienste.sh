@@ -1,5 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# Startet DuckDNS-Aktualisierung und Caddy im Hintergrund, falls sie noch nicht
+# Startet DuckDNS- und deSEC-Aktualisierung und Caddy im Hintergrund, falls sie noch nicht
 # laufen. Mehrfaches Aufrufen schadet nicht.
 set -u
 umask 077
@@ -15,6 +15,16 @@ if [[ -f "$config_dir/duckdns.env" ]]; then
     nohup bash "$repo/tools/handy-duckdns.sh" >/dev/null 2>&1 &
     echo $! > "$config_dir/duckdns.pid"
     echo 'DuckDNS-Aktualisierung gestartet.'
+  fi
+fi
+
+# Zweitadresse bei deSEC, eingerichtet von tools/handy-zweitadresse.sh.
+if [[ -f "$config_dir/desec.env" ]]; then
+  pid="$(cat "$config_dir/desec.pid" 2>/dev/null || true)"
+  if [[ -z "$pid" ]] || ! kill -0 "$pid" 2>/dev/null; then
+    nohup bash "$repo/tools/handy-desec.sh" >/dev/null 2>&1 &
+    echo $! > "$config_dir/desec.pid"
+    echo 'deSEC-Aktualisierung gestartet.'
   fi
 fi
 
