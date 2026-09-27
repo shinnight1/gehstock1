@@ -62,7 +62,7 @@ export function morgenbericht(world, p, id, seit, now, extra = {}) {
   if (zurueck) zeilen.push({ art: 'gut', text: '🎒 ' + zurueck + (zurueck === 1 ? ' Streifzug ist' : ' Streifzüge sind') + ' zurück - die Beute wartet im Abenteuer-Fenster.' });
   /* Kurierdienst: ein Paket, das noch unterwegs ist, oder ein voller Stapel. */
   if (p.kurier) zeilen.push({ art: 'info', text: '📦 Du trägst noch ' + p.kurier.ware + ' nach ' + X.kurierOrtName(p.kurier.nach) + '.' });
-  else if ((p.kurierBrett || []).length >= X.KURIER_VORRAT) zeilen.push({ art: 'info', text: '📦 Im Kurierkontor in Stockhafen liegen ' + X.KURIER_VORRAT + ' Aufträge bereit - mehr passen nicht auf den Stapel.' });
+  else if (p.kurierGesamt && (p.kurierBrett || []).length >= X.KURIER_VORRAT) zeilen.push({ art: 'info', text: '📦 Im Kurierkontor in Stockhafen liegen ' + X.KURIER_VORRAT + ' Aufträge bereit - mehr passen nicht auf den Stapel.' });
   /* Beim ersten Besuch einer neuen Woche: was die letzte gebracht hat. */
   if (seit < X.wochenStart(now)) {
     const vorige = E.bilanzSicht(p, now).vorige;

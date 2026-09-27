@@ -4,13 +4,14 @@
 (function (SG) {
   var R = SG.gehstockmon, D = R.daten, E = R.wirtschaft, X = R.abenteuer;
   R.mountHandel = function (c) {
-    var el = c.el, button = c.button, drawer = c.drawer, handel = null, territories = [], pin = null;
+    var el = c.el, button = c.button, drawer = c.drawer, handel = null, karte = [], pin = null;
     function state() { return c.state(); }
     function titel(text, bild) { var h = el('h3', text), sym = R.symbol && R.symbol(bild, 'gm-titel-symbol'); if (sym) h.insertBefore(sym, h.firstChild); return h; }
     function zahl(n) { return Math.round(n || 0).toLocaleString('de-DE'); }
     function wartetext(ms) { var m = Math.ceil((ms || 0) / 60000); return m <= 90 ? 'in ' + Math.max(1, m) + ' Minuten' : 'wenn die Insel wieder öffnet'; }
     function frist(ms) { var s = Math.max(0, Math.ceil(ms / 1000)); return s >= 60 ? Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') + ' Min.' : s + ' Sek.'; }
-    function ort(o) { return X.kurierOrt(X.layout(territories), o); }
+    /* Die Mauern der Insel - neu berechnet, wenn eine Antwort kommt, nicht in jedem Bild. */
+    function ort(o) { return X.kurierOrt(karte, o); }
     function position() { var w = c.world(); return w && w.position ? w.position() : null; }
     /* Etwas enger als der Server (14): die gemeldete Position hinkt ein wenig hinterher. */
     function amOrt(o) {
@@ -190,7 +191,7 @@
     R.kurierOeffnen = kurier;
     return {
       kurier: kurier, markthalle: markthalle, bilanz: bilanz, kacheln: kacheln, frame: frame,
-      apply: function (res) { if (res && res.handel) handel = res.handel; if (res && Array.isArray(res.territories)) territories = res.territories; },
+      apply: function (res) { if (res && res.handel) handel = res.handel; if (res && Array.isArray(res.territories)) karte = X.layout(res.territories); },
       handel: function () { return handel; },
       clear: function () { if (pin) { pin.node.remove(); pin = null; } }
     };

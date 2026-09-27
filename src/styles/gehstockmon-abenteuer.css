@@ -197,3 +197,25 @@
 .gm-anker{display:block;scroll-margin-top:70px}
 .gm-gold-knopf{cursor:pointer;border-radius:8px;padding:1px 4px;margin:-1px -4px}
 .gm-gold-knopf:hover,.gm-gold-knopf:focus-visible{background:#ffffff18;outline:none}
+/* Projektleiste (27.09.2026). Mit Kurier und Markthalle sind es bis zu acht
+   Kacheln. In die Luecke zwischen Kopfzeile und Knoepfen gequetscht, waren
+   sie auf Tablets unlesbar schmal und lagen auf dem Handy ueber der
+   Goldanzeige. Jede Kachel behaelt jetzt ihre Breite: am breiten Bildschirm
+   bricht die Leiste in eine zweite Zeile um, auf Touch-Geraeten und schmalen
+   Bildschirmen steht sie unter der Kopfzeile und laesst sich seitlich
+   schieben. Die ersten und letzten Raender halten sie mittig, solange sie
+   passt, ohne beim Schieben den Anfang abzuschneiden. */
+.gm-projekte{flex-wrap:wrap;justify-content:center;max-width:calc(100% - 640px)}
+.gm-projekt{flex:0 0 auto}
+@media (pointer:coarse),(max-width:1049px){
+  .gm-projekte{top:96px;left:14px;right:72px;transform:none;max-width:none;flex-wrap:nowrap;justify-content:flex-start;
+    overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;padding:2px 0 5px;pointer-events:auto}
+  .gm-projekt{flex:0 0 auto;min-width:118px;max-width:170px;padding:5px 9px}
+  .gm-projekt:first-child{margin-left:auto}
+  .gm-projekt:last-child{margin-right:auto}
+}
+/* Mit der Maus ist die Kopfzeile hoeher (mehr Innenabstand) - die Leiste ruht darunter. */
+@media (pointer:fine) and (max-width:1049px){.gm-projekte{top:118px}}
+@media (max-width:650px){.gm-projekte{top:124px;left:10px;right:58px}.gm-projekt{min-width:108px}}
+@media (max-width:500px){.gm-projekte{top:138px}}
+.gm-projekte{scrollbar-color:#4a6572 transparent}

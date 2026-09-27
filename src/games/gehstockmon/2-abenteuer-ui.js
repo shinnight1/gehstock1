@@ -70,6 +70,18 @@
         kopf.gold.toLocaleString('de-DE') + ' G · ' + (kopf.selbst ? 'du führst' : kopf.name),
         kopf.selbst ? '#f2705a' : '#f0b429', zeigeKopfgeld, 'kopfgeld'));
       projektLeiste.hidden = !projektLeiste.childNodes.length;
+      leisteAusrichten();
+    }
+    /* Auf Touch-Geraeten und schmalen Bildschirmen steht die Leiste unter der
+       Kopfzeile (siehe gehstockmon-abenteuer.css). Wie hoch die ist, haengt am
+       Namen und daran, ob die Goldzeile umbricht - darum wird gemessen statt
+       geschaetzt. Ohne Messmoeglichkeit gilt der Wert aus dem CSS. */
+    function leisteAusrichten() {
+      if (!projektLeiste || typeof window === 'undefined' || !window.matchMedia || !projektLeiste.getBoundingClientRect) return;
+      var kopf = c.layer.parentNode && c.layer.parentNode.querySelector && c.layer.parentNode.querySelector('.gm-brand');
+      if (!window.matchMedia('(pointer:coarse),(max-width:1049px)').matches || !kopf) { projektLeiste.style.top = ''; return; }
+      var unten = kopf.getBoundingClientRect().bottom, oben = c.layer.getBoundingClientRect().top;
+      if (unten > oben) projektLeiste.style.top = Math.round(unten - oben + 8) + 'px';
     }
     function tafel(eintraege, einheit) {
       var liste = el('ol', undefined, 'gm-tafel');
