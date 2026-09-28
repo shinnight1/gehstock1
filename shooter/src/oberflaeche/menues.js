@@ -277,7 +277,7 @@ export class Menues {
           el('h3', '', null, 'Grafik'),
           auswahl('Qualität', 'qualitaet', QUALITAET_REIHE.map((q) => [q, QUALITAET[q].name])),
           schalter('Dynamische Auflösung', 'dynamisch', 'Senkt die Auflösung, wenn es ruckelt'),
-          regler('Sichtfeld', 'sichtfeld', 60, 95, 1, (v) => Math.round(v) + '°'),
+          regler('Sichtfeld (senkrecht)', 'sichtfeld', 55, 80, 1, (v) => Math.round(v) + '°'),
           schalter('Bildrate anzeigen', 'fps'),
           el('h3', '', null, 'Ton'),
           regler('Lautstärke', 'lautstaerke', 0, 1, 0.05, prozent),

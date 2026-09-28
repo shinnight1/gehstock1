@@ -57,7 +57,7 @@
       cont(w * 0.34, h * 0.42, w * 0.2, h * 0.16, '#5e6c74', '#4a565c');
 
       // Gegner als Silhouette mit roter Weste
-      var gx = w * 0.56, gy = h * 0.6, s = h * 0.0042;
+      var gx = w * 0.58, gy = h * 0.66, s = h * 0.0095;
       c.fillStyle = '#20241f';
       c.fillRect(gx - 7 * s, gy - 34 * s, 14 * s, 16 * s);
       c.fillRect(gx - 6 * s, gy - 18 * s, 5 * s, 18 * s);
@@ -72,7 +72,7 @@
       c.fillRect(gx - 16 * s, gy - 29 * s, 14 * s, 3 * s);
 
       // Fadenkreuz um den Gegner
-      var cx = gx, cy = gy - 30 * s, r = h * 0.12;
+      var cx = gx, cy = gy - 34 * s, r = h * 0.17;
       c.strokeStyle = 'rgba(255,255,255,0.9)';
       c.lineWidth = Math.max(1.5, h * 0.012);
       c.beginPath();

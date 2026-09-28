@@ -35,14 +35,14 @@ export function standard() {
     qualitaet: touch ? 'mittel' : 'hoch',
     dynamisch: true,
     fps: false,
-    sichtfeld: 74,
+    sichtfeld: 66,           // senkrecht; auf dem iPad quer rund 85° waagerecht
     schwierigkeit: 'normal',
     waffe: 'sturmgewehr',
     hilfeGesehen: false,
   };
 }
 
-const ZAHLEN = { empfTouch: [0.3, 3], empfMaus: [0.2, 4], empfVisier: [0.3, 1.5], lautstaerke: [0, 1], sichtfeld: [60, 95], knopfGroesse: [0.75, 1.35] };
+const ZAHLEN = { empfTouch: [0.3, 3], empfMaus: [0.2, 4], empfVisier: [0.3, 1.5], lautstaerke: [0, 1], sichtfeld: [55, 80], knopfGroesse: [0.75, 1.35] };
 
 export function einstellungenLaden() {
   const s = standard();

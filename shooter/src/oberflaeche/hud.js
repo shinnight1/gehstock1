@@ -332,7 +332,7 @@ export function tabelleBauen(sim) {
     zeile(['Name', 'Abschüsse', 'Tode', 'Hilfen', 'Waffe'], 'tab-titel');
     const liste = sim.akteure.filter((a) => a.team === team).sort((a, b) => b.abschuesse - a.abschuesse || a.tode - b.tode);
     for (const a of liste) {
-      zeile([a.name + (a.bot ? '' : ' (du)'), String(a.abschuesse), String(a.tode), String(a.assists), a.waffe.def.name], a.bot ? '' : 'ich');
+      zeile([a.name, String(a.abschuesse), String(a.tode), String(a.assists), a.waffe.def.name], a.bot ? '' : 'ich');
     }
     tab.appendChild(block);
   }

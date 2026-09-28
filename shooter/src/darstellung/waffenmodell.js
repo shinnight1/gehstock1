@@ -29,9 +29,9 @@ export class Waffenmodell {
   constructor() {
     this.szene = new Scene();
     this.kamera = new PerspectiveCamera(54, 1, 0.01, 10);
-    this.szene.add(new HemisphereLight('#e8eef5', '#4a4034', 1.6));
-    const sonne = new DirectionalLight('#fff1dc', 2.2);
-    sonne.position.set(-0.6, 1, 0.4);
+    this.szene.add(new HemisphereLight('#eef3f8', '#5a4d3e', 2.3));
+    const sonne = new DirectionalLight('#fff1dc', 2.6);
+    sonne.position.set(-0.6, 1, 0.5);
     this.szene.add(sonne);
 
     this.geos = [];
@@ -43,13 +43,13 @@ export class Waffenmodell {
       return m;
     };
     this.M = {
-      stahl: mat('#2a2e33'),
-      stahlHell: mat('#474d54'),
-      polymer: mat('#1d1f22'),
-      oliv: mat('#5a6441'),
-      holz: mat('#7a5230'),
-      aermel: mat('#56603f'),
-      handschuh: mat('#262a2e'),
+      stahl: mat('#3d434a'),
+      stahlHell: mat('#5c646d'),
+      polymer: mat('#2e3136'),
+      oliv: mat('#6b7550'),
+      holz: mat('#8a5d34'),
+      aermel: mat('#5f6a45'),
+      handschuh: mat('#33373c'),
       messing: mat('#c9a23f'),
       glas: new MeshBasicMaterial({ color: '#9fd0ff', transparent: true, opacity: 0.12, depthWrite: false }),
       punkt: new MeshBasicMaterial({ color: '#ff3030' }),
@@ -132,12 +132,12 @@ export class Waffenmodell {
   }
 
   rotpunkt(g, y, z) {
-    // Gehaeuse als Rahmen, damit man hindurchsieht
-    this.teil(g, 0.036, 0.012, 0.07, 0, y - 0.03, z, this.M.polymer);
-    this.teil(g, 0.006, 0.05, 0.06, -0.022, y, z, this.M.polymer);
-    this.teil(g, 0.006, 0.05, 0.06, 0.022, y, z, this.M.polymer);
-    this.teil(g, 0.05, 0.006, 0.06, 0, y + 0.027, z, this.M.polymer);
-    const glas = new Mesh(this.geo(new PlaneGeometry(0.04, 0.046)), this.M.glas);
+    // Gehaeuse als duenner Rahmen, damit man hindurchsieht
+    this.teil(g, 0.03, 0.02, 0.05, 0, y - 0.03, z, this.M.polymer);
+    this.teil(g, 0.004, 0.04, 0.045, -0.018, y, z, this.M.polymer);
+    this.teil(g, 0.004, 0.04, 0.045, 0.018, y, z, this.M.polymer);
+    this.teil(g, 0.04, 0.004, 0.045, 0, y + 0.022, z, this.M.polymer);
+    const glas = new Mesh(this.geo(new PlaneGeometry(0.032, 0.04)), this.M.glas);
     glas.position.set(0, y, z - 0.02);
     g.add(glas);
     const punkt = new Mesh(this.geo(new SphereGeometry(0.0011, 8, 6)), this.M.punkt);
@@ -148,41 +148,44 @@ export class Waffenmodell {
   sturmgewehr() {
     const g = new Group();
     const M = this.M;
-    this.teil(g, 0.052, 0.07, 0.36, 0, 0, 0, M.stahl);
-    this.teil(g, 0.056, 0.064, 0.26, 0, -0.004, -0.29, M.oliv);
-    this.teil(g, 0.02, 0.02, 0.2, 0, 0.004, -0.5, M.stahlHell);
-    this.teil(g, 0.03, 0.012, 0.3, 0, 0.041, -0.08, M.stahlHell);
-    const griff = this.teil(g, 0.036, 0.1, 0.045, 0, -0.075, 0.09, M.polymer);
+    this.teil(g, 0.044, 0.062, 0.34, 0, 0, 0, M.stahl);
+    this.teil(g, 0.05, 0.056, 0.26, 0, -0.004, -0.29, M.oliv);
+    this.teil(g, 0.018, 0.018, 0.18, 0, 0.004, -0.5, M.stahlHell);
+    this.teil(g, 0.03, 0.026, 0.05, 0, 0.004, -0.61, M.stahl);
+    this.teil(g, 0.026, 0.01, 0.34, 0, 0.037, -0.22, M.stahlHell);
+    this.teil(g, 0.012, 0.012, 0.04, 0.026, 0.012, 0.05, M.stahlHell);
+    const griff = this.teil(g, 0.032, 0.095, 0.042, 0, -0.07, 0.09, M.polymer);
     griff.rotation.x = -0.35;
-    const magazin = this.teil(g, 0.036, 0.15, 0.065, 0, -0.105, -0.07, M.polymer);
+    const magazin = this.teil(g, 0.032, 0.15, 0.06, 0, -0.1, -0.07, M.polymer);
     magazin.rotation.x = 0.18;
-    this.teil(g, 0.046, 0.075, 0.2, 0, -0.012, 0.27, M.polymer);
-    this.teil(g, 0.02, 0.05, 0.02, 0, 0.04, -0.39, M.stahl);
-    this.rotpunkt(g, 0.085, -0.03);
+    this.teil(g, 0.04, 0.07, 0.2, 0, -0.012, 0.27, M.polymer);
+    this.rotpunkt(g, 0.08, -0.03);
     const rechts = this.arm(g, [0.012, -0.085, 0.1], [0.16, -0.26, 0.42]);
     const links = this.arm(g, [-0.004, -0.045, -0.3], [-0.2, -0.24, -0.02]);
-    return { gruppe: g, visier: [0, 0.085, -0.05], muendung: [0, 0.004, -0.62], magazin, magazinY: magazin.position.y, links, linksPos: links.position.clone(), rechts, auswurf: true, typ: 'magazin', abstand: 0.19 };
+    return { gruppe: g, visier: [0, 0.08, -0.05], muendung: [0, 0.004, -0.64], magazin, magazinY: magazin.position.y, links, linksPos: links.position.clone(), rechts, auswurf: true, typ: 'magazin', abstand: 0.27, huefte: [0.2, -0.2, -0.43] };
   }
 
   mp() {
     const g = new Group();
     const M = this.M;
-    this.teil(g, 0.05, 0.075, 0.28, 0, 0, 0, M.stahl);
-    this.teil(g, 0.022, 0.022, 0.12, 0, 0.008, -0.2, M.stahlHell);
-    const magazin = this.teil(g, 0.03, 0.19, 0.045, 0, -0.13, -0.03, M.polymer);
-    const griff = this.teil(g, 0.034, 0.095, 0.042, 0, -0.07, 0.08, M.polymer);
+    this.teil(g, 0.042, 0.064, 0.28, 0, 0, 0, M.stahl);
+    this.teil(g, 0.02, 0.02, 0.12, 0, 0.008, -0.2, M.stahlHell);
+    const magazin = this.teil(g, 0.028, 0.19, 0.042, 0, -0.125, -0.03, M.polymer);
+    const griff = this.teil(g, 0.032, 0.09, 0.04, 0, -0.068, 0.08, M.polymer);
     griff.rotation.x = -0.3;
-    this.teil(g, 0.012, 0.012, 0.2, -0.018, 0.0, 0.22, M.stahlHell);
-    this.teil(g, 0.012, 0.012, 0.2, 0.018, 0.0, 0.22, M.stahlHell);
-    this.teil(g, 0.05, 0.05, 0.012, 0, -0.01, 0.32, M.polymer);
-    // Kimme (zwei Backen) und Korn
-    this.teil(g, 0.008, 0.02, 0.012, -0.009, 0.052, 0.09, M.stahl);
-    this.teil(g, 0.008, 0.02, 0.012, 0.009, 0.052, 0.09, M.stahl);
-    this.teil(g, 0.004, 0.022, 0.006, 0, 0.05, -0.12, M.stahl);
-    this.teil(g, 0.004, 0.004, 0.004, 0, 0.061, -0.12, M.punkt);
-    const rechts = this.arm(g, [0.012, -0.08, 0.09], [0.16, -0.26, 0.4]);
+    this.teil(g, 0.01, 0.01, 0.2, -0.016, 0.0, 0.22, M.stahlHell);
+    this.teil(g, 0.01, 0.01, 0.2, 0.016, 0.0, 0.22, M.stahlHell);
+    this.teil(g, 0.046, 0.046, 0.012, 0, -0.01, 0.32, M.polymer);
+    // Kimme (zwei Backen auf einem Sockel) und Korn auf einem Turm
+    this.teil(g, 0.026, 0.02, 0.02, 0, 0.042, 0.09, M.stahl);
+    this.teil(g, 0.007, 0.022, 0.01, -0.009, 0.062, 0.09, M.stahl);
+    this.teil(g, 0.007, 0.022, 0.01, 0.009, 0.062, 0.09, M.stahl);
+    this.teil(g, 0.012, 0.03, 0.012, 0, 0.046, -0.12, M.stahl);
+    this.teil(g, 0.003, 0.016, 0.004, 0, 0.068, -0.12, M.stahl);
+    this.teil(g, 0.004, 0.004, 0.004, 0, 0.075, -0.12, M.punkt);
+    const rechts = this.arm(g, [0.012, -0.078, 0.09], [0.16, -0.26, 0.4]);
     const links = this.arm(g, [-0.006, -0.12, -0.03], [-0.19, -0.26, 0.1]);
-    return { gruppe: g, visier: [0, 0.061, 0.09], muendung: [0, 0.008, -0.28], magazin, magazinY: magazin.position.y, links, linksPos: links.position.clone(), rechts, auswurf: true, typ: 'magazin', abstand: 0.26 };
+    return { gruppe: g, visier: [0, 0.075, 0.09], muendung: [0, 0.008, -0.28], magazin, magazinY: magazin.position.y, links, linksPos: links.position.clone(), rechts, auswurf: true, typ: 'magazin', abstand: 0.3, huefte: [0.165, -0.165, -0.35] };
   }
 
   schrotflinte() {
@@ -198,18 +201,27 @@ export class Waffenmodell {
     rohr.position.set(0, -0.012, -0.33);
     g.add(rohr);
     const pumpe = this.teil(g, 0.052, 0.046, 0.16, 0, -0.016, -0.3, M.holz);
-    this.teil(g, 0.046, 0.085, 0.26, 0, -0.022, 0.28, M.holz);
+    const kolben = this.teil(g, 0.044, 0.085, 0.26, 0, -0.05, 0.28, M.holz);
+    kolben.rotation.x = 0.12;
     const griff = this.teil(g, 0.034, 0.09, 0.04, 0, -0.07, 0.12, M.holz);
     griff.rotation.x = -0.3;
-    const korn = new Mesh(this.geo(new SphereGeometry(0.004, 8, 6)), M.messing);
-    korn.position.set(0, 0.036, -0.64);
+    // Ringvisier hinten, Korn mit Perle vorn: die Visierlinie liegt ueber
+    // dem Gehaeuse, das Gehaeuse bleibt beim Zielen unten im Bild.
+    this.teil(g, 0.03, 0.02, 0.03, 0, 0.047, 0.08, M.stahl);
+    this.teil(g, 0.006, 0.028, 0.01, -0.011, 0.07, 0.08, M.stahl);
+    this.teil(g, 0.006, 0.028, 0.01, 0.011, 0.07, 0.08, M.stahl);
+    this.teil(g, 0.028, 0.006, 0.01, 0, 0.083, 0.08, M.stahl);
+    this.teil(g, 0.028, 0.006, 0.01, 0, 0.058, 0.08, M.stahl);
+    this.teil(g, 0.018, 0.018, 0.02, 0, 0.038, -0.62, M.stahl);
+    this.teil(g, 0.004, 0.024, 0.004, 0, 0.058, -0.62, M.stahl);
+    const korn = new Mesh(this.geo(new SphereGeometry(0.0035, 8, 6)), M.messing);
+    korn.position.set(0, 0.071, -0.62);
     g.add(korn);
-    this.teil(g, 0.02, 0.01, 0.3, 0, 0.032, -0.1, M.stahl);
     const rechts = this.arm(g, [0.012, -0.075, 0.13], [0.16, -0.26, 0.44]);
     const links = this.arm(g, [0, -0.045, -0.3], [-0.2, -0.24, -0.05]);
     const patrone = this.teil(g, 0.018, 0.018, 0.06, 0, -0.08, -0.02, M.messing);
     patrone.visible = false;
-    return { gruppe: g, visier: [0, 0.04, -0.64], muendung: [0, 0.018, -0.68], pumpe, pumpeZ: pumpe.position.z, links, linksPos: links.position.clone(), rechts, patrone, auswurf: false, typ: 'einzeln', abstand: 0.34 };
+    return { gruppe: g, visier: [0, 0.07, 0.08], muendung: [0, 0.018, -0.68], pumpe, pumpeZ: pumpe.position.z, links, linksPos: links.position.clone(), rechts, patrone, auswurf: false, typ: 'einzeln', abstand: 0.14, huefte: [0.2, -0.215, -0.44] };
   }
 
   waehlen(id) {
@@ -251,8 +263,8 @@ export class Waffenmodell {
       this.rueck = Math.min(2.5, this.rueck + staerke * (1 - 0.45 * z.visier));
       this.rueckDreh = Math.min(2.5, this.rueckDreh + staerke);
       this.feuerBis = this.zeit + 0.045;
-      const s = 0.12 + Math.random() * 0.08;
-      this.feuer.scale.set(s * (z.waffe === 'schrotflinte' ? 1.8 : 1.2), s * (z.waffe === 'schrotflinte' ? 1.8 : 1.2), 1);
+      const s = (0.07 + Math.random() * 0.05) * (z.waffe === 'schrotflinte' ? 1.6 : z.waffe === 'mp' ? 0.9 : 1.1);
+      this.feuer.scale.set(s, s, 1);
       if (m.auswurf) this.huelseAuswerfen(m);
       if (m.pumpe) this.pumpe = 0;
     }
@@ -284,7 +296,7 @@ export class Waffenmodell {
 
     // Grundhaltung: Huefte -> Visier, dazu Sprint
     const v = glatt(this.visier);
-    const hx = 0.2, hy = -0.2, hz = -0.43;
+    const hx = m.huefte[0], hy = m.huefte[1], hz = m.huefte[2];
     const ax = -m.visier[0], ay = -m.visier[1], az = -m.abstand - m.visier[2];
     let px = hx + (ax - hx) * v;
     let py = hy + (ay - hy) * v;

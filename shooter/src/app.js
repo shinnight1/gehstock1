@@ -405,7 +405,12 @@ export class App {
 
     const quer = !this.hochkant();
     this.wurzel.classList.toggle('hochkant', !quer);
-    if (!quer && this.zustand === 'spiel') this.pausieren();
+    if (!quer) {
+      // Hochformat: Hinweis liegt ueber allem, Zeichnen spart nur Akku.
+      if (this.zustand === 'spiel') this.pausieren();
+      this.neuZeichnen = true;
+      return;
+    }
 
     const sim = this.sim;
     let alpha = 1;
@@ -649,9 +654,17 @@ export class App {
         let bx = s.x - zx, bz = s.z - zz;
         const bl = Math.hypot(bx, bz) || 1;
         bx /= bl; bz /= bl;
-        a.x = s.x + bx * 1.6 * e;
-        a.y = s.y + 1.4 + 1.5 * e;
-        a.z = s.z + bz * 1.6 * e;
+        // Nicht in eine Wand hinein: Weg vom Koerper zur Kamera pruefen
+        const hx = bx * 1.6 * e, hy = 1.5 * e, hz = bz * 1.6 * e;
+        const hl = Math.hypot(hx, hy, hz);
+        let f = 1;
+        if (hl > 0.01) {
+          const t = this.welt.strahl(s.x, s.y + 1.4, s.z, hx / hl, hy / hl, hz / hl, hl + 0.3);
+          if (t < hl + 0.3) f = Math.max(0, (t - 0.3) / hl);
+        }
+        a.x = s.x + hx * f;
+        a.y = s.y + 1.4 + hy * f;
+        a.z = s.z + hz * f;
         const soll = yawZu(zx - a.x, zz - a.z);
         const sollP = Math.atan2(zy - a.y, Math.hypot(zx - a.x, zz - a.z));
         kam.todYaw = t < 0.05 ? this.eingabe.yaw : kam.todYaw + winkelDiff(kam.todYaw, soll) * Math.min(1, dt * 5);

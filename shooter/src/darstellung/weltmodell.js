@@ -169,7 +169,7 @@ function quaderEintragen(bau, q, def) {
     } else if (F.seite) {
       teil(0, LV, 0.92, 1);
     } else {
-      teil(0, LV, F.oben ? 1 : 0.55, F.oben ? 1 : 0.55);
+      teil(0, LV, F.oben ? 1 : 0.8, F.oben ? 1 : 0.8);
     }
   }
 }

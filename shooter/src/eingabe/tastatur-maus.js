@@ -88,10 +88,7 @@ export class TastaturMaus {
         if (!e.repeat) this.app.escape();
         return;
       }
-      if (!imSpiel) {
-        if (code === 'Tab') e.preventDefault();
-        return;
-      }
+      if (!imSpiel) return;
       if (SPIELTASTEN.has(code)) e.preventDefault();
       if (e.repeat) return;
       this.eingabe.tasten.add(code);

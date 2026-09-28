@@ -57,9 +57,9 @@ export class Darstellung {
     this.kamera = new PerspectiveCamera(72, 1, 0.05, 900);
     this.kamera.rotation.order = 'YXZ';
 
-    this.himmelLicht = new HemisphereLight('#e2ecf6', '#6f604c', 1.5);
+    this.himmelLicht = new HemisphereLight('#dfe9f4', '#86765f', 2.15);
     this.szene.add(this.himmelLicht);
-    this.sonne = new DirectionalLight('#fff0da', 2.4);
+    this.sonne = new DirectionalLight('#fff0da', 2.3);
     this.sonne.position.set(-26, 46, 20);
     this.sonne.target.position.set(0, 0, 0);
     this.szene.add(this.sonne, this.sonne.target);
