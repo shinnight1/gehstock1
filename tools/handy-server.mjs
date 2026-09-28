@@ -96,7 +96,7 @@ export async function serverErstellen({ dist, room, gehstockmon, bodyLimit = 8 *
       const headers = {
         'Content-Type': MIME[path.extname(datei).toLowerCase()] || 'application/octet-stream',
         'Content-Length': info.size,
-        'Cache-Control': /^\/(assets\/|games\/arena\/bundle\/)/.test(pfad)
+        'Cache-Control': /^\/(assets\/|games\/(arena|shooter)\/bundle\/)/.test(pfad)
           ? 'public, max-age=31536000, immutable' : 'public, max-age=0, must-revalidate',
       };
       if (pfad.startsWith('/offline/')) headers['Content-Disposition'] = 'attachment';

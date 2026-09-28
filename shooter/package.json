@@ -1,0 +1,5 @@
+{
+  "private": true,
+  "type": "module",
+  "description": "Gehstock Ops - wird mit den Paketen der Hideout-Seite gebaut (siehe bauen.mjs), hat keine eigenen Abhaengigkeiten."
+}

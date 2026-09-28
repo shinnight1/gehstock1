@@ -5,6 +5,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { extraTests } from './extra-tests.mjs';
+import { shooterTests } from './shooter-tests.mjs';
 
 globalThis.window = globalThis;
 globalThis.SG_BUILD = { offline: true, version: 'test' };
@@ -157,6 +158,10 @@ test('Wörtle: Listen sauber', () => {
 });
 
 extraTests(SG, U, test);
+
+/* Gehstock Ops (shooter/): Simulation, Kollision, Waffen, Bots */
+console.log('\nGehstock Ops');
+shooterTests(test);
 
 console.log('\n' + pass + ' bestanden, ' + fail + ' durchgefallen\n');
 process.exit(fail ? 1 : 0);

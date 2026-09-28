@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { buildNoJs, NOJS_ANZAHL } from './tools/nojs.mjs';
 import { abziehen, pruefen } from './tools/kleiner.mjs';
 import { buildSync, transformSync } from 'esbuild';
+import { shooterBauen } from './shooter/bauen.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const SRC = path.join(ROOT, 'src');
@@ -171,6 +172,13 @@ const BILD_TYP = {
    und werden im Spiel bei Bedarf geholt. Wer die Einzeldatei offline
    oeffnet, sieht weiterhin die gewohnten Bilder. */
 const MODELL_PRAEFIX = 'gm-modell-';
+
+/* Kacheln von Spielen, die nur online als eigene Seite danebenliegen und
+   erst beim Oeffnen geladen werden. In der Offline-Einzeldatei blendet
+   SG.list() sie ohnehin aus - eingebettet waeren sie totes Gewicht, und
+   die Datei soll durch sie nicht wachsen. */
+const NUR_ONLINE_JS = ['games/shooter.js'];
+const offlineTauglich = (f) => NUR_ONLINE_JS.indexOf(path.relative(SRC, f).replace(/\\/g, '/')) < 0;
 
 function bundleAssets() {
   const dir = path.join(SRC, 'assets');
@@ -458,7 +466,7 @@ function build() {
      gut ein Zehntel beim Laden und Parsen auf dem iPad. Die Offline-Datei
      bleibt beim bewaehrten Kommentar-Abzug. */
   const js = transformSync(three + '\n' + jsPaket.code, { minifyWhitespace: true, minifySyntax: true, target: 'safari15', legalComments: 'inline' }).code;
-  const jsOffline = three + '\n' + bundleJs(jsFiles, assets, assets.offline).code;
+  const jsOffline = three + '\n' + bundleJs(jsFiles.filter(offlineTauglich), assets, assets.offline).code;
   const gespart = jsPaket.gespart + cssPaket.gespart;
   const tmpl = read(path.join(SRC, 'index.html'));
   const version = hash(js + css);
@@ -555,6 +563,9 @@ function build() {
      Kopiert statt zweimal gepflegt - zwei Fassungen liefen auseinander. */
   const schultest = path.join(ROOT, 'docs', 'schul-test.html');
   if (exists(schultest)) fs.copyFileSync(schultest, path.join(DIST, 'schul-test.html'));
+
+  // ---- Gehstock Ops: eigene Seite unter games/shooter/, nur online
+  const ops = shooterBauen(path.join(DIST, 'games', 'shooter'));
 
   // ---- Icons
   const icons = [32, 180, 192, 512];
@@ -667,6 +678,7 @@ function build() {
   log('  Kommentare raus    : ' + kb(gespart) + ' gespart');
   log('  Offline-Einzeldatei: ' + kb(offSize) + '  (Budget 2048.0 kB)');
   if (externCount) log('  Eigene Seiten      : ' + externCount + ' (nicht in der Offline-Datei)');
+  log('  Gehstock Ops       : ' + kb(ops.bytes) + ' unter games/shooter/ (nicht in der Offline-Datei)');
   if (assets.count) log('  Bilder online       : ' + assets.count + ' (' + kb(assets.bytes) + '), offline eingebettet: ' + assets.countOffline + ' (' + kb(assets.bytesOffline) + ')');
   if (skins.count) log('  Modelle daneben     : ' + skins.count + ' (' + kb(skins.bytes) + ')');
   log('');

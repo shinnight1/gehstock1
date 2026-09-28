@@ -94,6 +94,9 @@ test('HTTP-Auslieferung: echte Adapter-Schnittstelle, Dateien und geschuetzte Pf
   await mkdir(path.join(dist, 'offline'));
   await writeFile(path.join(dist, 'index.html'), '<h1>Hideout</h1>');
   await writeFile(path.join(dist, 'games', 'arena', 'index.html'), 'Arena');
+  await mkdir(path.join(dist, 'games', 'shooter', 'bundle'), { recursive: true });
+  await writeFile(path.join(dist, 'games', 'shooter', 'index.html'), 'Ops');
+  await writeFile(path.join(dist, 'games', 'shooter', 'bundle', 'ops.hash.js'), '/* ops */');
   await writeFile(path.join(dist, 'assets', 'app.hash.js'), '/* bundle */');
   await writeFile(path.join(dist, 'offline', 'spiel.html'), 'Offline');
   await writeFile(path.join(dir, 'server.env'), 'geheim');
@@ -123,6 +126,14 @@ test('HTTP-Auslieferung: echte Adapter-Schnittstelle, Dateien und geschuetzte Pf
   assert.equal(res.status, 200);
   assert.equal(await res.text(), '');
   assert.match(res.headers.get('cache-control'), /immutable/);
+  // Der Shooter: Seite immer frisch, gehashte Dateien dauerhaft.
+  res = await fetch(base + '/games/shooter/');
+  assert.equal(await res.text(), 'Ops');
+  assert.match(res.headers.get('cache-control'), /must-revalidate/);
+  res = await fetch(base + '/games/shooter/bundle/ops.hash.js');
+  assert.equal(res.headers.get('content-type'), 'text/javascript; charset=utf-8');
+  assert.match(res.headers.get('cache-control'), /immutable/);
+  await res.text();
   res = await fetch(base + '/offline/spiel.html');
   assert.equal(res.headers.get('content-disposition'), 'attachment');
   await res.text();

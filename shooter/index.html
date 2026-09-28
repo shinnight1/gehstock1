@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, maximum-scale=1">
+<meta name="theme-color" content="#0b0f14">
+<meta name="color-scheme" content="dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Gehstock Ops">
+<meta name="format-detection" content="telephone=no">
+<title>Gehstock Ops</title>
+<link rel="icon" type="image/png" sizes="32x32" href="../../icons/icon-32.png">
+<link rel="apple-touch-icon" href="../../icons/icon-180.png">
+<!-- Nur das Noetigste fuer den Ladebildschirm steht hier; alles andere
+     kommt mit dem Bundle. So erscheint sofort etwas, und ein Ladefehler
+     laesst sich auch ohne Stylesheet verstaendlich anzeigen. -->
+<style>
+html,body{margin:0;height:100%;background:#0b0f14;color:#e7edf3;overflow:hidden;
+  font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  -webkit-text-size-adjust:100%;touch-action:none;overscroll-behavior:none}
+#ops-laden{position:fixed;inset:0;display:grid;place-items:center;text-align:center;padding:24px;z-index:50;
+  background:radial-gradient(ellipse at 50% 40%,#1b2632 0%,#0b0f14 70%)}
+#ops-laden h1{margin:0 0 6px;font-size:30px;letter-spacing:.18em;font-weight:800}
+#ops-laden p{margin:6px 0;color:#9fb0c0}
+#ops-laden .balken{width:220px;height:4px;margin:18px auto 0;border-radius:2px;background:#1f2a36;overflow:hidden}
+#ops-laden .balken i{display:block;height:100%;width:35%;background:#e5b94c;animation:ops-lauf 1.1s ease-in-out infinite}
+@keyframes ops-lauf{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}
+#ops-laden .knoepfe{display:none;margin-top:18px;gap:10px;justify-content:center;flex-wrap:wrap}
+#ops-laden.fehler .knoepfe{display:flex}
+#ops-laden.fehler .balken{display:none}
+#ops-laden a,#ops-laden button{font:inherit;font-weight:700;color:#0b0f14;background:#e5b94c;border:0;border-radius:10px;
+  padding:12px 18px;text-decoration:none;cursor:pointer}
+#ops-laden a.zweit{background:#243140;color:#e7edf3}
+</style>
+<!--OPS-CSS-->
+</head>
+<body>
+<div id="ops-laden" role="status" aria-live="polite">
+  <div>
+    <h1>GEHSTOCK OPS</h1>
+    <p id="ops-laden-text">Lädt …</p>
+    <div class="balken"><i></i></div>
+    <div class="knoepfe">
+      <button type="button" onclick="location.reload()">Erneut versuchen</button>
+      <a class="zweit" href="../../">Zurück zum Hideout</a>
+    </div>
+  </div>
+</div>
+<div id="ops" class="ops"></div>
+<noscript><p style="padding:24px">Gehstock Ops braucht JavaScript.</p></noscript>
+<script>
+/* Ladewaechter: Kommt das Spiel nicht hoch (Netz weg, Datei fehlt,
+   zu alter Browser), steht hier eine Erklaerung statt eines schwarzen
+   Bildschirms. main.js setzt __opsGestartet, sobald es laeuft. */
+(function () {
+  function fehler(text) {
+    if (window.__opsGestartet) return;
+    var box = document.getElementById('ops-laden');
+    if (!box) return;
+    box.className = 'fehler';
+    document.getElementById('ops-laden-text').textContent = text;
+  }
+  window.__opsLadefehler = function () {
+    fehler('Das Spiel konnte nicht geladen werden. Bitte die Verbindung prüfen und erneut versuchen.');
+  };
+  window.__opsFehlerAnzeigen = fehler;
+  setTimeout(function () {
+    fehler('Das Laden dauert ungewöhnlich lange. Bitte die Verbindung prüfen und erneut versuchen.');
+  }, 30000);
+})();
+</script>
+<!--OPS-JS-->
+</body>
+</html>
