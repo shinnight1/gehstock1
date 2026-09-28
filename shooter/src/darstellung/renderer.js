@@ -16,7 +16,7 @@
    ------------------------------------------------------------------ */
 
 import {
-  ACESFilmicToneMapping, Color, DirectionalLight, Fog, HemisphereLight, PCFSoftShadowMap,
+  ACESFilmicToneMapping, Color, DirectionalLight, Fog, HemisphereLight, PCFShadowMap, PCFSoftShadowMap,
   PerspectiveCamera, Scene, SRGBColorSpace, Vector3, WebGLRenderer,
 } from 'three';
 import { QUALITAET } from '../konfig.js';
@@ -102,7 +102,8 @@ export class Darstellung {
     renderer.toneMapping = ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.0;
     renderer.shadowMap.enabled = q.schatten > 0;
-    renderer.shadowMap.type = PCFSoftShadowMap;
+    // Weiche Schattenkanten nur auf Hoch - auf Mittel reicht die guenstigere Filterung.
+    renderer.shadowMap.type = q.kantenglaettung ? PCFSoftShadowMap : PCFShadowMap;
     renderer.shadowMap.autoUpdate = false;
     renderer.shadowMap.needsUpdate = true;
     this.sonne.castShadow = q.schatten > 0;

@@ -628,7 +628,8 @@ export function shooterTests(test) {
     const t1 = performance.now();
     for (let i = 0; i < 40; i++) nav.pfad(-28, -16 + i * 0.5, 0, 28, 16 - i * 0.5, aus, 80);
     const proPfad = (performance.now() - t1) / 40;
-    pruefe(proPfad < 8, 'Pfadsuche ' + proPfad.toFixed(2) + ' ms');
+    // Grenzen grosszuegig: die Tests laufen auch vor jedem Update auf dem langsameren Handy
+    pruefe(proPfad < 25, 'Pfadsuche ' + proPfad.toFixed(2) + ' ms');
   });
 }
 
