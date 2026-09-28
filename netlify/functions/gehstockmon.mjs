@@ -91,7 +91,7 @@ function roleForCode(value) {
 function initialWorld(now) {
   /* Eine neue Welt hat die einmaligen Anpassungen nicht noetig - sie gelten
      der Welt, die es am Tag der Anpassung schon gab. */
-  return { version: 1, mapVersion: D.MAP_VERSION, einmalig: { [EIER]: now }, players: {}, reports: [], territories: D.FELDER.map((f) => ({ id: f.id, ownerId: null,
+  return { version: 1, mapVersion: D.MAP_VERSION, einmalig: { [EIER]: now, [ZUM_START]: now }, players: {}, reports: [], territories: D.FELDER.map((f) => ({ id: f.id, ownerId: null,
     ownerName: computerClan(f.id),
     defense: A.defenders(f.id).map((k) => ({ id: k.id })), version: 1, ...E.outpost(null, now) })) };
 }
@@ -157,11 +157,25 @@ function eierVerteilen(world, now) {
   }
   world.einmalig = { ...(world.einmalig || {}), [EIER]: now };
 }
+/* Einmalig (28.09.2026, auf Wunsch von Louis): Nach Dungeons kamen einige nicht
+   mehr vom Fleck. Alle stehen einmal wieder am Startplatz. Dazu gilt ein vorher
+   gemeldeter Ort nicht mehr (siehe letzterStand): die Wegpruefung rechnet vom
+   Start aus und stellt jede Figur dorthin, bis sie sich von dort neu meldet. */
+const ZUM_START = '2026-09-28-alle-zum-start';
+function alleZumStart(world, now) {
+  if (world.einmalig && world.einmalig[ZUM_START]) return;
+  const start = X.outside(X.SPAWN, X.layout(world.territories));
+  for (const p of Object.values(world.players)) p.spawn = { x: start.x, z: start.z };
+  world.einmalig = { ...(world.einmalig || {}), [ZUM_START]: now };
+}
+/* Vor dem Zurueckstellen gemeldet? Dann zaehlt der Ort nicht mehr. */
+const vorDemZurueckstellen = (eintrag, world) => !!eintrag && eintrag.updatedAt < ((world && world.einmalig && world.einmalig[ZUM_START]) || 0);
 function migrateAndSettle(world, now) {
   migrateMap(world, now);
   einmaligAnpassen(world, now);
   buchBereinigen(world);
   eierVerteilen(world, now);
+  alleZumStart(world, now);
   for (const p of Object.values(world.players)) {
     Object.assign(p, D.neuerStand(p, now));
     if (p.arena && p.arena.phase !== 'finished' && now - p.arena.lastActionAt > 20 * 60000) {
@@ -283,15 +297,15 @@ const SICHTBAR_MS = 15000, ORT_BEHALTEN_MS = 30 * 24 * 60 * 60 * 1000;
 /* Der zuletzt gemeldete Ort, wenn man dort noch stehen darf. Nach einer
    Kartenaenderung kann er im Wasser oder im Arenarund liegen - dann zaehlt
    er nicht, sonst saesse die Figur dort fest. */
-function letzterStand(eintrag, timestamp) {
+function letzterStand(eintrag, timestamp, world) {
   return eintrag && Number.isFinite(eintrag.x) && Number.isFinite(eintrag.z)
-    && timestamp - eintrag.updatedAt < ORT_BEHALTEN_MS && X.walkable(eintrag) ? eintrag : null;
+    && timestamp - eintrag.updatedAt < ORT_BEHALTEN_MS && X.walkable(eintrag) && !vorDemZurueckstellen(eintrag, world) ? eintrag : null;
 }
 /* Wo man beim Betreten der Welt steht: am zuletzt gemeldeten Ort. Liegt er
    inzwischen hinter fremden Mauern, geht es vor deren Tor - genau wie die
    Wegpruefung es auch taete. Wer noch nie gemeldet war, beginnt am Start. */
 function startpunkt(eintrag, world, id, timestamp) {
-  const layout = X.layout(world.territories), ort = letzterStand(eintrag, timestamp);
+  const layout = X.layout(world.territories), ort = letzterStand(eintrag, timestamp, world);
   if (!ort) return X.outside(X.SPAWN, layout);
   const punkt = { x: ort.x, z: ort.z };
   return layout.some((g) => g.ownerId !== id && X.inside(punkt, g)) ? X.outside(punkt, layout) : punkt;
@@ -336,11 +350,15 @@ async function updatePresence(db, world, id, position, timestamp, clock, bypass 
     const peers=()=>Object.values(players).filter(v=>v.id!==id&&timestamp-v.updatedAt<SICHTBAR_MS).map(({credit,spawnAt,...peer})=>peer);
     /* Weiter geht es immer vom zuletzt gemeldeten Ort - auch nach 'join',
        denn der setzt den Startpunkt auf genau diesen Ort. */
-    const layout=X.layout(world.territories),previous=letzterStand(players[id],timestamp);
+    /* Vor dem Zurueckstellen aller gemeldet (alleZumStart): dann geht es vom Start
+       aus weiter, und jeder andere Ort wird auf den Start korrigiert - auch einer
+       in Laufweite, sonst blieben alle in der Naehe des Starts stehen, wo sie waren. */
+    const zurueckgestellt=vorDemZurueckstellen(players[id],world);
+    const layout=X.layout(world.territories),previous=letzterStand(players[id],timestamp,world);
     let from=previous||p.spawn||X.outside(X.SPAWN,layout);
     if(layout.some(g=>g.ownerId!==id&&X.inside(from,g)))from=X.outside(from,layout);
     const credit=previous?Math.min(LAUF_VORRAT,(previous.credit||0)+Math.max(0,timestamp-previous.updatedAt)/1000*LAUF_TEMPO):LAUF_VORRAT,distance=Math.hypot(position.x-from.x,position.z-from.z);
-    const route=distance<=credit+.05?X.route(layout,from,position,id,credit+.05):null;
+    const route=distance<=credit+.05&&!(zurueckgestellt&&distance>0.5)?X.route(layout,from,position,id,credit+.05):null;
     if(!route)return json({serverTime:timestamp,access:accessFor(timestamp,bypass),position:{x:from.x,z:from.z,heading:from.heading||0},positionCorrected:true,peers:peers()});
     let traveled=0,cursor=from;for(const point of route){traveled+=Math.hypot(point.x-cursor.x,point.z-cursor.z);cursor=point;}
     const eintrag=!players[id]||players[id].updatedAt<=timestamp?{ id, name:p.name, x:Math.round(position.x*100)/100, z:Math.round(position.z*100)/100,

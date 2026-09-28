@@ -72,8 +72,8 @@
     host.onLeave(joyEnd);
     var encounterLayer=el('div',undefined,'gm-encounters');root.appendChild(encounterLayer);
     var adventures=R.mountAdventure({heute:function(){if(heute)heute.zeigen();},duell:function(peer){if(duellUi)duellUi.fordern(peer);},el:el,button:button,drawer:drawer,arenaBox:arenaBox,layer:encounterLayer,playerId:function(){return online&&online.playerId;},state:function(){return st;},world:function(){return world;},now:now,busy:function(){return busy;},open:openDrawer,closeDrawer:closeDrawer,request:requestOnline,apply:applyOnline,error:onlineError,notify:notify,arena:showArena,resume:resumeOnline,
-      openCombat:function(){closeDrawer();battle=null;visual=null;root.classList.add('gm-arena-open');root.classList.remove('gm-overview');arenaBox.hidden=false;syncInput();if(world)world.pause(true);},
-      closeCombat:function(){arenaBox.hidden=true;root.classList.remove('gm-arena-open');if(world){world.pause(false);world.follow();}update();}});
+      openCombat:function(){joyEnd();closeDrawer();battle=null;visual=null;root.classList.add('gm-arena-open');root.classList.remove('gm-overview');arenaBox.hidden=false;syncInput();if(world)world.pause(true);},
+      closeCombat:function(){joyEnd();arenaBox.hidden=true;root.classList.remove('gm-arena-open');if(world){world.pause(false);world.follow();}update();}});
     var stadt=R.mountStadt({el:el,button:button,drawer:drawer,state:function(){return st;},world:function(){return world;},now:now,busy:function(){return busy;},open:openDrawer,closeDrawer:closeDrawer,request:requestOnline,apply:applyOnline,error:onlineError,notify:notify,arena:showArena});
     /* Die Gebaeude am Arenaplatz: Pins ueber der Karte, ein Tipp oeffnet ihr Fenster. */
     /* Eigene Ebene ueber den Gebietskarten: auf der Weltkarte laegen deren
@@ -83,8 +83,10 @@
       rathaus:function(){adventures.rathaus();},streifzug:function(){adventures.streifzuege();}}});
     var heute=R.mountHeute({revanche:function(id){closeDrawer();selectField(id,true);if(world&&world.distanceTo(id)>=10)world.walkTo(id);},el:el,button:button,drawer:drawer,root:root,open:openDrawer,closeDrawer:closeDrawer,request:requestOnline,apply:applyOnline,error:onlineError,notify:notify,busy:function(){return busy;},now:now,sfx:host.sfx,after:host.after,cancel:host.cancel,playerId:function(){return online&&online.playerId;}});
     /* Das Live-Duell nutzt denselben Kasten wie die Arena. */
-    function kampfOeffnen(){closeDrawer();battle=null;visual=null;root.classList.add('gm-arena-open');root.classList.remove('gm-overview');arenaBox.hidden=false;syncInput();if(world)world.pause(true);}
-    function kampfSchliessen(){arenaBox.hidden=true;root.classList.remove('gm-arena-open');if(world){world.pause(false);world.follow();}update();}
+    /* Der Joystick wird dabei jedes Mal losgelassen: ging ein Fenster auf, waehrend man ihn hielt,
+       merkte er sich den alten Finger und nahm danach keinen neuen mehr an. */
+    function kampfOeffnen(){joyEnd();closeDrawer();battle=null;visual=null;root.classList.add('gm-arena-open');root.classList.remove('gm-overview');arenaBox.hidden=false;syncInput();if(world)world.pause(true);}
+    function kampfSchliessen(){joyEnd();arenaBox.hidden=true;root.classList.remove('gm-arena-open');if(world){world.pause(false);world.follow();}update();}
     var duellUi=R.mountDuell({el:el,button:button,arenaBox:arenaBox,openCombat:kampfOeffnen,closeCombat:kampfSchliessen,request:requestOnline,apply:applyOnline,error:onlineError,notify:notify,busy:function(){return busy;},now:now,after:host.after,cancel:host.cancel,sofort:function(){lastPoll=0;}});
     function dueling(){return !!(adventures&&adventures.active())||!!(duellUi&&duellUi.aktiv());}
     function syncInput(){if(world)world.blockInput(!connected||busy||!!battle||dueling()||!drawer.hidden);root.setAttribute('aria-busy',String(busy));}

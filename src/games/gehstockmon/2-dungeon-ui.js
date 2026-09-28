@@ -2,10 +2,21 @@
 (function(SG){
   var R=SG.gehstockmon,D=R.daten,A=R.arena,X=R.abenteuer;
   R.mountDungeons=function(c){
-    var el=c.el,button=c.button,room=null,lobbies=[],dismissed=null,pins=[],choice=null;
-    function active(){return !!room&&(room.phase!=='finished'||dismissed!==room.id);}
+    var el=c.el,button=c.button,room=null,lobbies=[],pins=[],choice=null,offen=false;
+    /* Weggeklickte, beendete Expeditionen bleiben weg - auch nach dem Neuladen.
+       Frueher stand das nur im Arbeitsspeicher, und nach jedem Neuladen lag der
+       Endbildschirm eine Stunde lang wieder ueber der Karte. */
+    var SPEICHER='g:gehstockmon:dungeons-gesehen',gesehen={};
+    try{(SG.storage.get(SPEICHER,[])||[]).forEach(function(id){gesehen[id]=true;});}catch(e){}
+    function wegklicken(id){gesehen[id]=true;try{SG.storage.set(SPEICHER,Object.keys(gesehen).slice(-20));}catch(e){}}
+    function active(){return !!room&&(room.phase!=='finished'||!gesehen[room.id]);}
+    /* Zurueck zur Karte. Auch wenn der Server die Expedition inzwischen ganz
+       aufgeraeumt hat (eine Stunde nach dem Ende): dann gibt es kein room mehr,
+       und der Knopf brach frueher mit einem Fehler ab - Fenster und Joystick
+       blieben verdeckt, und man kam nicht mehr vom Fleck. */
+    function schliessen(){if(room&&room.phase==='finished')wegklicken(room.id);offen=false;c.closeCombat();}
     function art(id){var mon=D.mon(id);return SG.ui.el('img.gm-portrait',{src:SG.assets[mon.bild],alt:mon.name,draggable:false});}
-    function run(op,data){c.request(op,data).then(function(res){c.apply(res);if(active())show();else c.closeCombat();if(res.message)c.notify(res.message);}).catch(function(error){c.error(error);if(active())show();});}
+    function run(op,data){c.request(op,data).then(function(res){c.apply(res);if(active())show();else schliessen();if(res.message)c.notify(res.message);}).catch(function(error){c.error(error);if(active())show();});}
     function picker(parent,selected,change){var label=el('label','Dein Mon für diese Expedition','gm-dungeon-picker'),select=el('select');select.setAttribute('aria-label','Dungeon-Mon wählen');c.state().besitz.forEach(function(id){var m=X.mon(c.state(),id),o=el('option',m.name+' · '+D.SELTENHEITEN[m.seltenheit].name+' · Rune '+m.upgrade+'/5');o.value=id;select.appendChild(o);});select.value=selected;select.disabled=c.busy();select.addEventListener('change',function(){change(select.value);});label.appendChild(select);parent.appendChild(label);}
     function approach(d){c.closeDrawer();c.world().walkToPoint(d);c.notify('Du läufst zu '+d.name+'. Öffne den Dungeon dort erneut.');}
     function entrance(d){
@@ -28,7 +39,7 @@
       drawer.appendChild(el('h3','Deine Runen'));D.SELTENHEITEN.forEach(function(r,i){drawer.appendChild(el('p',r.name+': '+c.state().runes[i]));});drawer.appendChild(el('p','Runen der passenden Seltenheit heben ein Mon bis Stufe '+X.UPGRADE_LIMIT+' (+'+Math.round(X.UPGRADE_LIMIT*A.UPGRADE_BONUS*100)+' % KP und Angriff); die Stufen kosten 1 bis 5 Runen. Ab Stufe '+A.SCHNELL_AB+' lädt der Kraftschlag schneller, ab Stufe '+A.LADUNG_AB+' gibt es eine dritte Ladung.'));
     }
     function show(){
-      if(!active())return;c.openCombat();var box=c.arenaBox;SG.ui.clear(box);box.className='gm-arena gm-dungeon';
+      if(!active())return;c.openCombat();offen=true;var box=c.arenaBox;SG.ui.clear(box);box.className='gm-arena gm-dungeon';
       var d=X.DUNGEONS.find(function(d){return d.id===room.dungeonId;}),me=room.players.find(function(m){return m.id===c.playerId();}),head=el('header',undefined,'gm-arena-header');
       head.appendChild(el('div','KOOP-DUNGEON · '+d.difficulty.toUpperCase(),'gm-eyebrow'));head.appendChild(el('strong',d.name+(room.phase==='battle'?' · Runde '+room.round:'')));box.appendChild(head);
       var panel=el('div',undefined,'gm-arena-panel gm-dungeon-panel');panel.appendChild(el('p',room.message,'gm-arena-line'));
@@ -47,10 +58,12 @@
         var f=A.faehigkeit(me),voll=me.maxHeals||A.LADUNGEN,pause=(me.powerPause||A.POWER_PAUSE)-1;
         var moves=el('div',undefined,'gm-moves');[['strike','Angreifen','Zuverlässiger Treffer'],['power','Kraftschlag','155 % Schaden · '+pause+(pause===1?' Runde Pause':' Runden Pause')],['guard','Deckung','60 % weniger Schaden'],['heal',f.name,A.faehigkeitText(me)+' · '+me.heals+'/'+voll+' übrig']].forEach(function(v){var b=button('',function(){run('dungeon_turn',{roomId:room.id,round:room.round,move:v[0]});},'gm-move');b.appendChild(el('strong',v[1]));b.appendChild(el('span',v[2]));b.disabled=c.busy()||me.hp<=0||!!room.actions[me.id]||v[0]==='power'&&room.round<me.powerReady||v[0]==='heal'&&(me.heals<=0||A.nurBeiSchaden(me)&&me.hp>=me.maxHp);moves.appendChild(b);});panel.appendChild(moves);(room.log||[]).forEach(function(line){panel.appendChild(el('small',line,'gm-dungeon-log'));});
       }
-      var leave=button(room.phase==='finished'?'Zurück zur Karte':'Expedition verlassen',function(){if(room.phase==='finished'){dismissed=room.id;c.closeCombat();}else run('dungeon_leave',{roomId:room.id});},'gm-button gm-secondary');leave.disabled=c.busy();panel.appendChild(leave);
-      var retry=button('Expedition prüfen',function(){c.request(R.online.pending()?'resume':'world').then(function(res){c.apply(res);if(active())show();}).catch(c.error);});retry.disabled=c.busy();panel.appendChild(retry);box.appendChild(panel);
+      var leave=button(room.phase==='finished'?'Zurück zur Karte':'Expedition verlassen',function(){if(!room||room.phase==='finished')schliessen();else run('dungeon_leave',{roomId:room.id});},'gm-button gm-secondary');leave.disabled=c.busy()&&room.phase!=='finished';panel.appendChild(leave);
+      var retry=button('Expedition prüfen',function(){c.request(R.online.pending()?'resume':'world').then(function(res){c.apply(res);if(active())show();else schliessen();}).catch(c.error);});retry.disabled=c.busy();panel.appendChild(retry);box.appendChild(panel);
     }
     X.DUNGEONS.forEach(function(d){var sym=R.symbol&&R.symbol('dungeons','gm-pin-symbol'),node=button(sym?'':'◆',function(){entrance(d);},'gm-encounter-pin gm-dungeon-pin'+(sym?' gm-mit-symbol':''));if(sym)node.appendChild(sym);node.title=d.name;node.setAttribute('aria-label',d.name);node.style.setProperty('--rarity',D.SELTENHEITEN[d.rarity].farbe);node.appendChild(el('span',d.name));c.layer.appendChild(node);pins.push({node:node,d:d});});
-    return {menu:menu,show:show,active:active,apply:function(res){room=res.dungeon||null;lobbies=res.dungeonLobbies||[];},clear:function(){room=null;},frame:function(project,hidden,overview){pins.forEach(function(p){var pt=project({x:p.d.x,z:p.d.z,y:5});p.node.hidden=hidden||!pt.visible||!pt.near&&!overview;p.node.style.transform='translate('+pt.x+'px,'+pt.y+'px) translate(-50%,-100%)';});}};
+    /* Liegt das Dungeon-Fenster offen, die Expedition gilt aber nicht mehr
+       (aufgeraeumt, anderswo weggeklickt), geht es von selbst zu. */
+    return {menu:menu,show:show,active:active,apply:function(res){room=res.dungeon||null;lobbies=res.dungeonLobbies||[];if(offen&&!active())schliessen();},clear:function(){room=null;offen=false;},frame:function(project,hidden,overview){pins.forEach(function(p){var pt=project({x:p.d.x,z:p.d.z,y:5});p.node.hidden=hidden||!pt.visible||!pt.near&&!overview;p.node.style.transform='translate('+pt.x+'px,'+pt.y+'px) translate(-50%,-100%)';});}};
   };
 })(SG);
