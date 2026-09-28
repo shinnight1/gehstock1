@@ -34,7 +34,16 @@
       return k.kasten;
     }
     function zeigeProjekte() {
-      if (!projektLeiste) { projektLeiste = el('div', undefined, 'gm-projekte'); c.layer.appendChild(projektLeiste); }
+      if (!projektLeiste) {
+        projektLeiste = el('div', undefined, 'gm-projekte'); c.layer.appendChild(projektLeiste);
+        /* Kopfzeile und Knoepfe bekommen ihre endgueltige Breite oft erst
+           nach dem ersten Messen (Schrift, Name, Drehen des iPads). */
+        if (typeof ResizeObserver !== 'undefined' && c.layer.parentNode && c.layer.parentNode.querySelector) {
+          var beobachter = new ResizeObserver(function () { leisteAusrichten(); });
+          beobachter.observe(c.layer);
+          ['.gm-brand', '.gm-top-actions'].forEach(function (wahl) { var n = c.layer.parentNode.querySelector(wahl); if (n) beobachter.observe(n); });
+        }
+      }
       projektLeiste.textContent = '';
       /* Ganz vorn: was heute zu tun ist - mit Serie und Truhe. */
       var heute = projekte && projekte.alltag;
@@ -85,9 +94,22 @@
     function leisteAusrichten() {
       if (!projektLeiste || typeof window === 'undefined' || !window.matchMedia || !projektLeiste.getBoundingClientRect) return;
       var kopf = c.layer.parentNode && c.layer.parentNode.querySelector && c.layer.parentNode.querySelector('.gm-brand');
-      if (!window.matchMedia('(pointer:coarse),(max-width:1049px)').matches || !kopf) { projektLeiste.style.top = ''; return; }
-      var unten = kopf.getBoundingClientRect().bottom, oben = c.layer.getBoundingClientRect().top;
-      if (unten > oben) projektLeiste.style.top = Math.round(unten - oben + 8) + 'px';
+      projektLeiste.style.top = projektLeiste.style.left = projektLeiste.style.right = '';
+      if (!window.matchMedia('(pointer:coarse),(max-width:1049px)').matches || !kopf) return;
+      /* Auf dem iPad ist zwischen Kopfzeile und den Knoepfen oben rechts
+         reichlich Platz. Unter der Kopfzeile lag die Leiste dagegen quer
+         ueber der Karte, fast in der Bildmitte. Wo die Luecke fuer drei
+         Kacheln reicht, steht sie darum oben in der Zeile; auf dem Handy
+         reicht sie nicht, dort bleibt sie unter der Kopfzeile. */
+      var k = kopf.getBoundingClientRect(), feld = c.layer.getBoundingClientRect();
+      var knoepfe = c.layer.parentNode.querySelector('.gm-top-actions'), rechts = knoepfe && knoepfe.getBoundingClientRect();
+      if (rechts && rechts.width && rechts.left - k.right >= 400) {
+        projektLeiste.style.top = Math.round(k.top - feld.top) + 'px';
+        projektLeiste.style.left = Math.round(k.right - feld.left + 10) + 'px';
+        projektLeiste.style.right = Math.round(feld.right - rechts.left + 10) + 'px';
+        return;
+      }
+      if (k.bottom > feld.top) projektLeiste.style.top = Math.round(k.bottom - feld.top + 8) + 'px';
     }
     function tafel(eintraege, einheit) {
       var liste = el('ol', undefined, 'gm-tafel');
