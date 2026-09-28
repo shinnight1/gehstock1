@@ -82,7 +82,9 @@ tools/
   handy-server.mjs     der Server der Seite; mit --dev zum Entwickeln
   handy-*.sh           Einrichtung, Update und Dienste auf dem Handy
   test.mjs             Regel-Engines ohne Browser prüfen
+  shooter-tests.mjs    Simulation von Gehstock Ops (läuft in test.mjs mit)
   nojs.mjs             erzeugt den Dateien-Modus (Spiele ohne JavaScript)
+shooter/               Gehstock Ops: 3D-Shooter als eigene Seite (shooter/README.md)
 dist/                  Ergebnis des Builds (nicht ins Git nötig)
 ```
 
@@ -338,7 +340,7 @@ Statik-Server. Zum lokalen Testen deshalb `npm run dev` benutzen.
 
 **Rätsel** — 2048 · Sudoku · Minensucher · Schiebepuzzle · Nonogramm · Rohre verbinden
 
-**Arcade** — Tetris · Snake · Blockbrecher · Space Invaders · Asteroids · Labyrinth-Fresser
+**Arcade** — Tetris · Snake · Blockbrecher · Space Invaders · Asteroids · Labyrinth-Fresser · Gehstock Ops†
 
 **Schnell & locker** — Flatterflug · Springer · Hüpf-Straße · Turmstapler · Bubble Shooter
 
@@ -385,6 +387,19 @@ Tailwind von CDNs mit; die Offline-Einzeldatei duldet aber keinen einzigen
 externen Verweis. Es läuft deshalb als eigene Seite, erscheint im Hub mit dem
 Abzeichen *Eigene Seite* und wird in der Offline-Datei ausgeblendet
 (`SG.list()` filtert Einträge mit `external`, sobald `SG.offline` gilt).
+
+---
+
+## Gehstock Ops — der 3D-Shooter
+
+Team-Deathmatch drei gegen drei (du plus zwei Bots gegen drei Bots) auf einem
+eigenen Übungsgelände, mit three.js gebaut und fürs iPad quer ausgelegt:
+Touch-Stick, freie Blickfläche, Feuer-, Visier-, Nachlade-, Sprung- und
+Duckknöpfe; am Rechner WASD und Maus. Das Spiel ist ein kleines Teilprojekt
+unter `shooter/`, `build.mjs` baut es mit nach `dist/games/shooter/`. Geladen
+wird es erst beim Öffnen der Kachel; die Offline-Einzeldatei enthält es nicht
+und wird durch es nicht größer. Aufbau, Steuerung, Leistung und was für einen
+echten Mehrspieler-Modus nötig wäre: `shooter/README.md`.
 
 ---
 

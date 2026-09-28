@@ -1,7 +1,8 @@
 # Hideout auf einem Android-Handy
 
 Termux mit Node.js 22 oder neuer, npm und Git wird benoetigt. Die komplette
-Website einschliesslich Arena wird auf dem Handy gebaut. Der Server verwendet
+Website einschliesslich Arena und Gehstock Ops (`shooter/`, baut `build.mjs`
+mit, keine eigenen Pakete) wird auf dem Handy gebaut. Der Server verwendet
 dieselben Produktionsfunktionen wie Netlify und dieselbe Upstash-Spielerwelt.
 Zum Entwickeln am PC startet `npm run dev` denselben Server mit einer leeren Testwelt.
 

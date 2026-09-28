@@ -33,6 +33,20 @@ node tools/test.mjs            # zusammen mit allen Hideout-Tests
 `tools/test.mjs` bindet die Shooter-Tests ein - sie laufen damit auch auf dem
 Handy vor jedem Update mit (siehe AGENTS.md).
 
+Im echten Browser (optional, braucht Playwright, gehört nicht zu den Tests,
+die ein Update freigeben):
+
+```sh
+npm run build
+node tools/shooter-browsertest.mjs
+```
+
+Prüft Touch mit mehreren Fingern (Laufen, Umsehen und Feuern gleichzeitig,
+pointercancel, Fokusverlust, alle Knöpfe, Hochformat), Maus und Tastatur
+(Pointer Lock, Pause, Escape, Tabelle), Matchende und Neustart, dass der
+GPU-Speicher über viele Matches nicht wächst und dass beim Verlassen alle
+Listener, der Ton und die Grafik abgebaut werden.
+
 ## Steuerung
 
 | iPad / Touch | Tastatur & Maus |

@@ -235,6 +235,37 @@ export class Darstellung {
     this.effekte.leeren();
   }
 
+  /* Alle Shader vorab uebersetzen: sonst ruckelt es beim ersten
+     Muendungsfeuer, beim ersten Treffer oder bei der ersten Schrotflinte.
+     compile() sieht nur sichtbare Objekte - darum kurz alles zeigen. */
+  vorwaermen() {
+    if (!this.renderer || this.kontextWeg) return;
+    const versteckt = [];
+    const zeigen = (o) => {
+      if (o && !o.visible) {
+        o.visible = true;
+        versteckt.push(o);
+      }
+    };
+    for (const f of this.figuren.liste) {
+      if (!f) continue;
+      zeigen(f.wurzel);
+      zeigen(f.feuer);
+      for (const k of Object.keys(f.waffen)) zeigen(f.waffen[k]);
+    }
+    for (const s of this.effekte.spuren) zeigen(s.m);
+    for (const k of this.effekte.kleckse) zeigen(k);
+    for (const w of this.effekte.wolken) zeigen(w.s);
+    for (const k of Object.keys(this.waffenmodell.modelle)) zeigen(this.waffenmodell.modelle[k].gruppe);
+    zeigen(this.waffenmodell.feuer);
+    try {
+      this.renderer.compile(this.szene, this.kamera);
+      this.renderer.compile(this.waffenmodell.szene, this.waffenmodell.kamera);
+    } finally {
+      for (const o of versteckt) o.visible = false;
+    }
+  }
+
   /* Meldungen der Simulation in Effekte uebersetzen. */
   meldung(m, sim, spielerId, kamera) {
     const a = m.a >= 0 ? sim.akteure[m.a] : null;

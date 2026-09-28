@@ -228,6 +228,10 @@ export class App {
       schwierigkeit: this.einst.schwierigkeit, spielerWaffe: this.einst.waffe,
     });
     this.darstellung.figurenVerbinden(this.sim);
+    if (!this.vorgewaermt) {
+      this.vorgewaermt = true;
+      this.darstellung.vorwaermen();
+    }
     this.allesLoslassen();
     this.eingabe.neuesLeben(this.sim.spieler.yaw);
     this.darstellung.waffenmodell.hochnehmen();
