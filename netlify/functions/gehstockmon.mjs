@@ -89,7 +89,9 @@ function roleForCode(value) {
   return ['S', 'K', 'A'][Math.floor(h / 97) % 3];
 }
 function initialWorld(now) {
-  return { version: 1, mapVersion: D.MAP_VERSION, players: {}, reports: [], territories: D.FELDER.map((f) => ({ id: f.id, ownerId: null,
+  /* Eine neue Welt hat die einmaligen Anpassungen nicht noetig - sie gelten
+     der Welt, die es am Tag der Anpassung schon gab. */
+  return { version: 1, mapVersion: D.MAP_VERSION, einmalig: { [EIER]: now }, players: {}, reports: [], territories: D.FELDER.map((f) => ({ id: f.id, ownerId: null,
     ownerName: computerClan(f.id),
     defense: A.defenders(f.id).map((k) => ({ id: k.id })), version: 1, ...E.outpost(null, now) })) };
 }
@@ -138,10 +140,28 @@ function buchBereinigen(world) {
   const weg = ANPASSUNG + '-louis';
   if (world.schenkungen && world.schenkungen.some((e) => e.id === weg)) world.schenkungen = world.schenkungen.filter((e) => e.id !== weg);
 }
+/* Einmalig (28.09.2026, auf Wunsch von Louis): Jeder, der schon spielt,
+   bekommt fuenf fertig ausgebruetete Eier - ausser Dennis und Jamie. Was
+   nicht mehr in die Tasche passt, wartet und rutscht nach, sobald Platz ist. */
+const EIER = '2026-09-28-eier', EIER_ANZAHL = 5, OHNE_EIER = /^(dennis|jamie)\b/i;
+function eierVerteilen(world, now) {
+  if (world.einmalig && world.einmalig[EIER]) return;
+  for (const [pid, p] of Object.entries(world.players)) {
+    if (OHNE_EIER.test(String(p.name || '').trim())) continue;
+    p.eggs = Array.isArray(p.eggs) ? p.eggs : [];
+    const herkunft = (p.geschafft && p.geschafft[0]) || D.FELDER[0].id;
+    for (let i = 0; i < EIER_ANZAHL; i++) {
+      const ei = { id: 'geschenk-' + EIER + '-' + pid + '-' + i, territoryId: herkunft, producedAt: now, startedAt: now - E.HATCH_TIME, readyAt: now, art: 'geschenk' };
+      if (p.eggs.length < E.BAG_LIMIT) p.eggs.push(ei); else p.sonderEier = (p.sonderEier || []).concat({ ...ei, fertig: true });
+    }
+  }
+  world.einmalig = { ...(world.einmalig || {}), [EIER]: now };
+}
 function migrateAndSettle(world, now) {
   migrateMap(world, now);
   einmaligAnpassen(world, now);
   buchBereinigen(world);
+  eierVerteilen(world, now);
   for (const p of Object.values(world.players)) {
     Object.assign(p, D.neuerStand(p, now));
     if (p.arena && p.arena.phase !== 'finished' && now - p.arena.lastActionAt > 20 * 60000) {

@@ -251,7 +251,10 @@
      jedes Mon gleich wahrscheinlich. Frueher zog ein Mon, das man schon
      hatte, nur ein Drittel des Gewichts auf sich: die Quoten verschoben sich
      mit jeder Sammlung, und niemand wusste, was ein Ei eigentlich wert ist. */
-  E.SCHLUPF_QUOTEN = [40, 25, 17, 11, 5, 1.6, 0.4];
+  /* 28.09.2026: Mythisch 1,6 -> 1 %, Apokalyptisch 0,4 -> 0,1 %. Die frei
+     gewordenen 0,9 % gehen an Gewoehnlich, damit die Summe 100 bleibt und
+     alle anderen Stufen genau so wahrscheinlich sind wie vorher. */
+  E.SCHLUPF_QUOTEN = [40.9, 25, 17, 11, 5, 1, 0.1];
   /* Der Garantie-Zaehler: spaetestens das zehnte Ei ohne Episches bringt ein
      Episches, spaetestens das vierzigste ohne Legendaeres ein Legendaeres.
      Damit ist auch ein schlechtes Ei ein Schritt nach vorn. */

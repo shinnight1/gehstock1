@@ -167,7 +167,7 @@
        ['Arenakämpfe','Ein Mon pro Seite: Stockhieb, Kraftschlag, Spezialattacke oder Deckung. Schnellere Mons greifen zuerst an. Ein freiwilliger Wechsel kostet den Zug, nach einem K. o. ist er frei.'],
        ['Gold und Ausbau','Ein Lager bringt 20 Gold pro Stunde, ein Wachtposten 35, eine Festung 55 - ab dem dritten Gebiet nur die Hälfte. Ausbauen kostet 120 Gold und 6 Holz bzw. 300 Gold, 6 Erz und 4 Kristall. Die Verteidiger bekommen dafür +12 % bzw. +25 % KP und +6 % bzw. +12,5 % Angriff.'],
        ['Eier und Brut','Jeder Außenposten legt alle 2 offenen Stunden ein Ei, höchstens 3 lagern dort. Du hast 3 Brutplätze und Platz für 12 Eier; weitere Brutplätze kaufst du in der Brutstation. Eier bleiben bei dir, auch wenn du das Gebiet verlierst.'],
-       ['Eier-Quoten','Für alle gleich: 40 % Gewöhnlich, 25 % Selten, 17 % Außergewöhnlich, 11 % Episch, 5 % Legendär, 1,6 % Mythisch, 0,4 % Apokalyptisch. Spätestens jedes zehnte Ei ist Episch oder besser, jedes vierzigste Legendär oder besser. Eins von 64 Mons schlüpft schimmernd.'],
+       ['Eier-Quoten','Für alle gleich: 40,9 % Gewöhnlich, 25 % Selten, 17 % Außergewöhnlich, 11 % Episch, 5 % Legendär, 1 % Mythisch, 0,1 % Apokalyptisch. Spätestens jedes zehnte Ei ist Episch oder besser, jedes vierzigste Legendär oder besser. Eins von 64 Mons schlüpft schimmernd.'],
        ['Zwillinge und Runenstufen','Ein doppeltes Mon verschmilzt mit deinem und hebt die Runenstufe um eins, auf 5/5 zerfällt es zu fünf Runen. Jede Stufe gibt +3 % KP und Angriff. Ab Stufe 3 lädt der Kraftschlag schneller, ab Stufe 4 gibt es eine dritte Ladung der Fähigkeit.'],
        ['Kampfteam und Besatzungen','Jeder Außenposten kann eine eigene Besatzung aus vier Mons haben, und ein Mon darf an mehreren Stellen zugleich stehen. Ohne eigene Besatzung springt dein Kampfteam ein. Besatzungen setzt du unter ⚑ Außenposten.'],
        ['Kämpfe planen','Jedes Mon hat drei Wenn-Dann-Regeln für Kämpfe ohne dich, etwa beim Verteidigen oder in der Arena. Es gilt die erste Regel, die passt. Beim Aufklären siehst du den Plan des Gegners genauso offen.'],
@@ -376,6 +376,7 @@
       if(egg.art==='findel')return 'Ei aus dem Findelhaus'+mindestens;
       if(egg.art==='handel')return 'Ei vom Händler'+mindestens;
       if(egg.art==='streifzug')return 'Ei vom Streifzug';
+      if(egg.art==='geschenk')return 'Geschenk-Ei';
       if(id.indexOf('weekend-')===0)return 'Wochenend-Ei aus '+gebiet;
       if(id.indexOf('reward-')===0)return 'Trainer-Ei aus '+gebiet;
       if(id.indexOf('stolen-')===0)return 'Erbeutetes Ei'+mindestens;
