@@ -428,6 +428,12 @@
     function perform(op,data,view){if(!connected||busy||battle||dueling())return;view=view||drawerView;
       requestOnline(op,data).then(function(res){if(dead)return;applyOnline(res);refreshDrawer(view);if(res.schlupf&&R.schlupfSzene){R.schlupfSzene({root:root,el:el,after:host.after,sfx:host.sfx},res,function(){if(!dead)showMon(res.monId);});}else if(res.monId){showMon(res.monId);host.sfx('win');}notify(res.message||(R.adminOverride?'In der Testzone angewendet · ungespeichert.':'Gespeichert.'));}).catch(onlineError);
     }
+    /* Zurueck zum Start. Eine Positionsmeldung, die gerade unterwegs ist, wird
+       erst abgewartet - kaeme sie nach dem Sprung an, stuende die Figur wieder am alten Ort. */
+    function zumStart(){if(!connected||busy||battle||dueling())return;var versuche=0;
+      (function los(){if(dead)return;if(presenceBusy&&versuche++<50){host.after(los,100);return;}
+        requestOnline('zum_start',{}).then(function(res){if(dead)return;applyOnline(res);if(res.startSprung&&world&&world.setPosition){world.setPosition(res.startSprung);lastPresencePos=res.startSprung;if(world.follow)world.follow();}host.sfx('select');notify(res.message||'Du stehst wieder am Start.');}).catch(onlineError);})();
+    }
     function startBattle(){if(!connected||busy||battle||dueling())return;var t=current();if(own(t))return;closeDrawer();joyEnd();
       requestOnline('arena_start',{territoryId:t.id,version:t.version,squad:st.truppe}).then(function(res){applyOnline(res);showArena(res.arena,true);}).catch(onlineError);
     }
@@ -547,6 +553,9 @@
     function showOnline(){if(!openDrawer('Die Spielerwelt','online'))return;drawer.appendChild(el('p','Du teilst diese Welt mit allen Hideout-Spielern. Erobere Gebiete von Spielern und Computergegnern. Deine gespeicherten Mons verteidigen auch, wenn du offline bist.'));
       if(R.adminOverride){drawer.appendChild(el('p','GEMEINSAME TESTZONE · Andere Tester sind sichtbar und können mit dir spielen. Alles bleibt flüchtig: Kein Gold, kein Kauf und kein Kampf verändert die echte Spielerwelt.'));drawer.appendChild(button('Testzone verlassen',function(){R.adminOverride=false;saveAdmin(false);R.online.resetTest();online=null;battle=null;connectWorld();}));}/* Live-Duelle: wer gerade kämpft, und wer zusehen will. */
       var duelle=duellUi.laufend();if(duelle.length){drawer.appendChild(el('h3','Live-Duelle'));duelle.forEach(function(x){drawer.appendChild(button('👀 Zuschauen: '+x.namen[0]+' gegen '+x.namen[1]+' · Runde '+x.runde,function(){closeDrawer();duellUi.zuschauen(x.id);}));});}
+      /* Zurueck zum Start (2-startsprung.js): einmal alle dreissig Minuten. */
+      var sprungAb=X.startSprungAb(st),sprungWarten=sprungAb>now(),sprung=button(sprungWarten?'⌂ Wieder in '+Math.ceil((sprungAb-now())/60000)+' Min. möglich':'⌂ Zurück zum Start',zumStart,sprungWarten?'gm-button':'gm-button gm-primary');sprung.disabled=sprungWarten||busy||!!battle||dueling();
+      drawer.appendChild(el('h3','Zurück zum Start'));drawer.appendChild(el('p','Bringt dich sofort zum Startplatz in der Inselmitte. Geht alle 30 Minuten einmal.'));drawer.appendChild(sprung);
       drawer.appendChild(el('h3','Auf der Insel'));drawer.appendChild(el('p',peerList.length?peerList.map(function(p){return p.name+(p.activity==='arena'?' (in der Arena)':'');}).join(' · '):'Gerade sind keine anderen Spieler sichtbar.'));
       peerList.forEach(function(p){drawer.appendChild(button(p.name+' · '+(p.protected?'geschützt':X.weapon(p.weapon).name),function(){adventures.rival(p);}));});
       if(R.online.pending())drawer.appendChild(button('Offene Aktion prüfen',resumeOnline,'gm-button gm-primary'));

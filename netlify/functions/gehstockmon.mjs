@@ -301,6 +301,29 @@ function startpunkt(eintrag, world, id, timestamp) {
 async function eigenerEintrag(db, id) {
   try { return (await anwesenheitLesen(db)).eintraege[id] || null; } catch (err) { return null; }
 }
+/* Zug 'zum_start' (unter Spielerwelt): alle dreissig Minuten zurueck an den
+   Startplatz. Die Wegpruefung in updatePresence rechnet vom zuletzt
+   gemeldeten Ort aus - deshalb traegt der Zug den neuen Ort selbst in die
+   Anwesenheit ein. Das geschieht vor dem Schreiben der Welt: scheitert
+   dieses, steht man eben am Start, ohne dass die Wartezeit verbraucht ist,
+   und ein neuer Versuch schadet nicht. Wer sich noch nie gemeldet hat,
+   beginnt ohnehin bei p.spawn. */
+async function zumStart({ world, p, id, now, presence }) {
+  const ab = X.startSprungAb(p);
+  if (ab > now) throw new GameError('Zurück zum Start geht es erst wieder in ' + Math.ceil((ab - now) / 60000) + ' Minuten.', 409);
+  const ziel = X.outside(X.SPAWN, X.layout(world.territories)), ort = { x: Math.round(ziel.x * 100) / 100, z: Math.round(ziel.z * 100) / 100 };
+  for (let attempt = 0; ; attempt++) {
+    const stand = await anwesenheitLesen(presence, now);
+    const alt = stand.eintraege[id];
+    if (!alt) break;
+    if (await anwesenheitSchreiben(presence, stand, id, { ...alt, ...ort, updatedAt: now, credit: LAUF_VORRAT }, [])) break;
+    if (attempt >= 7) throw new GameError('Die Mitspieler werden gerade aktualisiert. Bitte gleich noch einmal.', 409);
+    await pause(attempt);
+  }
+  p.spawn = { ...ort };
+  p.startSprungAt = now;
+  return { startSprung: { ...ort }, message: 'Du stehst wieder am Start. Das nächste Mal geht es in 30 Minuten.' };
+}
 async function updatePresence(db, world, id, position, timestamp, clock, bypass = false, bild = 0) {
   const p = world.players[id];
   if (!p) throw new GameError('Betritt zuerst die Spielerwelt.',409);
@@ -576,6 +599,7 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
           else if(X.HANDEL_OPS.includes(body.op))Object.assign(extra,await handelAction({world,p,id,body,now:timestamp,presence:presenceStore||speicher('hgh-gehstockmon-presence')}));
           else if(X.DUELL_OPS.includes(body.op))Object.assign(extra,await duellAction({world,p,id,body,now:timestamp,presence:presenceStore||speicher('hgh-gehstockmon-presence')}));
           else if(X.OPS.includes(body.op))Object.assign(extra,await adventureAction({world,p,id,body,now:timestamp,draw,presence:presenceStore||speicher('hgh-gehstockmon-presence'),validateSquad}));
+          else if(body.op==='zum_start')Object.assign(extra,await zumStart({world,p,id,now:timestamp,presence:presenceStore||speicher('hgh-gehstockmon-presence')}));
           if (body.op === 'arena_start' || body.op === 'defend') {
             if (p.arena && p.arena.phase !== 'finished') throw new GameError('Beende zuerst deinen aktuellen Arenakampf.', 409);
             const fehler = X.truppePruefen(p, body.squad, 'kampfteam');
