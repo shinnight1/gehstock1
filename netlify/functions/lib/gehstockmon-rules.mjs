@@ -2794,7 +2794,10 @@ const SG = { rules: {} };
      ---------------------------------------------------------------- */
   X.WAHL_OPS = ['kandidieren', 'waehlen'];
   X.SPIELZUEGE.push.apply(X.SPIELZUEGE, X.WAHL_OPS);
-  X.WAHL = { stimmeErfahrung: 60, kandidatErfahrung: 150, tage: 3, stimmeAlter: 3 * 86400000, kandidatAlter: 7 * 86400000, fenster: 14 };
+  /* offen: Vorerst (28.09.2026, auf Wunsch von Louis) darf jeder waehlen
+     und kandidieren. Die Huerden unten bleiben stehen und gelten wieder,
+     sobald offen auf false steht. */
+  X.WAHL = { offen: true, stimmeErfahrung: 60, kandidatErfahrung: 150, tage: 3, stimmeAlter: 3 * 86400000, kandidatAlter: 7 * 86400000, fenster: 14 };
   /* Schultage, an denen jemand da war - die letzten vierzehn. */
   X.aktivMerken = function (p, now) {
     var tag = H.day(now); p.aktivTage = Array.isArray(p.aktivTage) ? p.aktivTage : [];
@@ -2802,6 +2805,7 @@ const SG = { rules: {} };
   };
   X.aktiveTage = function (p, now) { var heute = H.day(now); return (p && p.aktivTage || []).filter(function (t) { return heute - t < X.WAHL.fenster; }).length; };
   X.wahlRecht = function (p, now) {
+    if (X.WAHL.offen) return { stimme: true, kandidat: true, fehlt: [], kandidatFehlt: [] };
     var erf = X.erfahrung(p), tage = X.aktiveTage(p, now), alter = now - ((p && p.joinedAt) || now), W = X.WAHL, fehlt = [];
     if (erf < W.stimmeErfahrung) fehlt.push('Trainerrang Späher (' + erf + '/' + W.stimmeErfahrung + ' Erfahrung)');
     if (tage < W.tage) fehlt.push(W.tage + ' Schultage in zwei Wochen (' + tage + ')');

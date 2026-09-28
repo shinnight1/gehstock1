@@ -8,6 +8,8 @@ const at = (s) => Date.parse(s), TAG = 86400000;
 const mo = at('2026-10-05T08:00:00+02:00'), naechsterMo = at('2026-10-12T08:00:00+02:00');
 let checks = 0;
 async function test(name, fn) { await fn(); checks++; console.log('ok', name); }
+/* Die Huerden gelten nur, wenn die Wahl nicht fuer alle offen ist. */
+async function mitHuerden(fn) { const vorher = X.WAHL.offen; X.WAHL.offen = false; try { await fn(); } finally { X.WAHL.offen = vorher; } }
 function store() {
   let data = null, v = 0;
   return { get data() { return data; }, async getWithMetadata() { return data ? { data: structuredClone(data), etag: String(v) } : null; },
@@ -38,7 +40,7 @@ async function welt(start = mo) {
   return { uhr, db, call, ids, p: (c) => db.data.players[ids[c]] };
 }
 
-await test('Only experienced, regular players may vote, and running needs more', () => {
+await test('Only experienced, regular players may vote, and running needs more', () => mitHuerden(() => {
   const p = D.neuerStand(null, mo);
   p.joinedAt = mo - 10 * TAG; p.aktivTage = [H.day(mo) - 2, H.day(mo) - 1, H.day(mo)];
   let r = X.wahlRecht(p, mo);
@@ -53,7 +55,7 @@ await test('Only experienced, regular players may vote, and running needs more',
   /* Jeder Tag zaehlt einmal. */
   const q = D.neuerStand(null, mo); X.aktivMerken(q, mo); X.aktivMerken(q, mo + 3600000); X.aktivMerken(q, mo + TAG);
   assert.equal(q.aktivTage.length, 2);
-});
+}));
 
 await test('Candidates promise a decree, votes stay secret, and Monday the most votes win', async () => {
   const w = await welt();
@@ -84,7 +86,7 @@ await test('Candidates promise a decree, votes stay secret, and Monday the most 
   assert.notEqual(r.turnier.gegner.find((g) => g.name === 'Anna').titel, 'Bürgermeister');
 });
 
-await test('A tie goes to who stood first; withdrawing frees the votes; the ineligible can neither vote nor run', async () => {
+await test('A tie goes to who stood first; withdrawing frees the votes; the ineligible can neither vote nor run', () => mitHuerden(async () => {
   const w = await welt();
   assert.equal((await w.call(cb, 'kandidieren', { erlass: 'arenafest' })).status, 200);
   assert.equal((await w.call(ca, 'kandidieren', { erlass: 'schutzwache' })).status, 200);
@@ -104,6 +106,15 @@ await test('A tie goes to who stood first; withdrawing frees the votes; the inel
   assert.equal((await w.call(cb, 'waehlen', { kandidatId: w.ids[ca] })).status, 200);
   r = await w.call(ca, 'kandidieren', { erlass: null }); assert.equal(r.status, 200, r.error);
   assert.equal(r.insel.rathaus.abgegeben, 0); assert.deepEqual(r.insel.rathaus.kandidaten, []);
+}));
+
+await test('While the election is open, a brand-new player may vote and run', async () => {
+  assert.equal(X.WAHL.offen, true);
+  const w = await welt();
+  Object.assign(w.p(cc), { joinedAt: mo, aktivTage: [], progress: { ...w.p(cc).progress, trainerWins: 0 } });
+  let r = await w.call(cc, 'kandidieren', { erlass: 'bauwoche' }); assert.equal(r.status, 200, r.error);
+  r = await w.call(cc, 'waehlen', { kandidatId: w.ids[cc] }); assert.equal(r.status, 200, r.error);
+  assert.deepEqual(r.insel.rathaus.recht, { stimme: true, kandidat: true, fehlt: [], kandidatFehlt: [] });
 });
 
 await test('Decrees reach the levy and the raid rest', async () => {
