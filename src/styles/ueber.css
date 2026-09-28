@@ -123,6 +123,10 @@
 .uu-person { width: 100%; max-width: 380px; animation: uu-rein .7s ease both; }
 .uu-person:not(.gross) { max-width: 340px; }
 @media (min-width: 700px) { .uu-person:not(.gross) { margin-top: 42px; } }
+/* Halb so gross wie der CEO, in einer eigenen Reihe darunter. */
+.uu-person.klein { max-width: 190px; grid-column: 1 / -1; justify-self: center; margin-top: 0; }
+.uu-person.klein .uu-schild { min-width: 60%; padding: 7px 16px 8px; }
+.uu-person.klein .uu-schild b { font-size: 18px; }
 
 .uu-bild { position: relative; padding-bottom: 28px; }
 .uu-rahmen {

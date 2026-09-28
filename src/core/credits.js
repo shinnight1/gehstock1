@@ -35,6 +35,8 @@
         + 'Codes, von den Spielen bis zu den großen Tycoons. In der Führungsebene '
         + 'ist er heute für die Qualität zuständig.',
     },
+    /* Nur Bild und Name, halb so gross wie der CEO (uu-person.klein). */
+    { name: 'Tino', bild: 'ui-team-tino', klein: true },
   ];
 
   C.stellen = {
@@ -86,24 +88,24 @@
     var quelle = SG.assets && SG.assets[p.bild];
     return UI.el('div.uu-rahmen', null, [
       quelle
-        ? UI.el('img', { src: quelle, alt: p.name + ', ' + p.rolle, loading: 'lazy' })
+        ? UI.el('img', { src: quelle, alt: p.rolle ? p.name + ', ' + p.rolle : p.name, loading: 'lazy' })
         : UI.el('span.uu-monogramm', { text: p.name.charAt(0), 'aria-hidden': 'true' }),
     ]);
   }
 
   function person(p, k) {
-    return UI.el('article.uu-person' + (p.gross ? '.gross' : ''), {
+    return UI.el('article.uu-person' + (p.gross ? '.gross' : '') + (p.klein ? '.klein' : ''), {
       style: { animationDelay: (120 + k * 140) + 'ms' },
     }, [
       UI.el('div.uu-bild', null, [
         portraet(p),
         UI.el('div.uu-schild', null, [
           UI.el('b', { text: p.name }),
-          UI.el('span', { text: p.rolle }),
+          p.rolle ? UI.el('span', { text: p.rolle }) : null,
         ]),
       ]),
       p.zusatz ? UI.el('div.uu-zusatz', { text: p.zusatz }) : null,
-      UI.el('p.uu-text', { text: p.text }),
+      p.text ? UI.el('p.uu-text', { text: p.text }) : null,
     ]);
   }
 
