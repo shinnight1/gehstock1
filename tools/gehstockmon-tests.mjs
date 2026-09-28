@@ -32,7 +32,8 @@ await test('A second copy raises the rune level and only becomes runes at the ca
 await test('Enough eggs still complete the collection, and nothing ever yields flat gold',()=>{
   let seed=7;const zufall=()=>((seed=(seed*1103515245+12345)>>>0)/4294967296);
   const p=D.neuerStand(null,stamp),gold=p.gold;
-  for(let i=0;i<4000&&new Set(p.besitz).size<D.KATALOG.length;i++){p.eggs=[{id:'egg'+i,territoryId:1,startedAt:stamp,readyAt:stamp+E.HOUR,producedAt:stamp}];E.hatch(p,'egg'+i,stamp+E.HOUR,zufall());}
+  /* Seit Apokalyptisch nur noch 0,1 % hat, braucht es im Schnitt gut 5000 Eier. */
+  for(let i=0;i<30000&&new Set(p.besitz).size<D.KATALOG.length;i++){p.eggs=[{id:'egg'+i,territoryId:1,startedAt:stamp,readyAt:stamp+E.HOUR,producedAt:stamp}];E.hatch(p,'egg'+i,stamp+E.HOUR,zufall());}
   assert.equal(new Set(p.besitz).size,D.KATALOG.length);assert.equal(p.gold,gold,'a twin pays in rune levels, never in gold');});
 await test('Bought incubator slots stack on top of the lighthouse slot',()=>{
   const p=D.neuerStand(null,stamp);assert.equal(X.brutplaetze(null,p),E.INCUBATORS);
@@ -304,7 +305,7 @@ await test('The one-time adjustment gives Mooswacht and Tauwiese to Louis and th
   const louisRuft=async(op)=>{const res=await h(new Request('http://localhost/api/gehstockmon',{method:'POST',body:JSON.stringify({code:cl,name:'Louis',op,requestId:'louis-'+(++sequence)})}));return{status:res.status,...await res.json()};};
   await call(h,ca,'join');const b=await call(h,cb,'join');
   await call(h,ca,'admin_grant',{zielCode:cb,zielName:'Test B',gebiete:[1,9]});
-  assert.equal(store.data.einmalig,undefined,'ohne Louis passiert nichts');assert.equal(store.data.territories[8].ownerId,b.playerId);
+  assert.equal((store.data.einmalig||{})['2026-09-28-gebiete'],undefined,'ohne Louis passiert nichts');assert.equal(store.data.territories[8].ownerId,b.playerId);
   const l=await louisRuft('join');assert.equal(l.status,200,l.error);
   // Louis gibt es jetzt; beim nächsten Laden der Welt greift die Anpassung.
   assert.equal((await louisRuft('join')).status,200);
@@ -318,6 +319,26 @@ await test('The one-time adjustment gives Mooswacht and Tauwiese to Louis and th
   // Nur einmal: wer den Weltenschlund danach erobert oder bekommt, behält ihn.
   await call(h,ca,'admin_grant',{zielCode:cb,gebiete:[9]});await louisRuft('world');
   assert.equal(store.data.territories[8].ownerId,b.playerId);
+});
+await test('The one-time egg gift gives five hatched eggs to everyone but Dennis and Jamie, queueing what does not fit, exactly once',async()=>{
+  const store=memoryStore(),h=createHandler({store,now:()=>stamp});
+  const ruft=async(code,name,op,data={})=>{const res=await h(new Request('http://localhost/api/gehstockmon',{method:'POST',body:JSON.stringify({code,name,op,requestId:'eier-'+(++sequence),...data})}));return{status:res.status,...await res.json()};};
+  const leute=[[codeAt(0),'Test A'],[codeAt(1),'Dennis'],[codeAt(2),'jamie'],[codeAt(3),'Voll']],ids={};
+  for(const [code,name] of leute)ids[name]=(await ruft(code,name,'join')).playerId;
+  assert.ok(store.data.einmalig['2026-09-28-eier'],'a brand-new world never gets the gift');
+  delete store.data.einmalig['2026-09-28-eier'];
+  store.data.players[ids.Voll].eggs=Array.from({length:10},(_,i)=>({id:'alt-'+i,territoryId:1,producedAt:stamp,startedAt:null,readyAt:null}));
+  await ruft(codeAt(0),'Test A','world');
+  const eier=(name)=>store.data.players[ids[name]].eggs.filter(e=>e.art==='geschenk');
+  assert.equal(eier('Test A').length,5);assert.ok(eier('Test A').every(e=>e.readyAt<=stamp),'the eggs are ready to hatch');
+  assert.equal(eier('Dennis').length,0);assert.equal(eier('jamie').length,0);
+  const voll=store.data.players[ids.Voll];
+  assert.equal(voll.eggs.length,E.BAG_LIMIT);assert.equal(voll.sonderEier.length,3,'what does not fit waits');
+  /* Nach dem Schluepfen rutscht ein wartendes Ei nach - und ist ebenfalls fertig. */
+  const r=await ruft(codeAt(3),'Voll','hatch',{eggId:eier('Voll')[0].id});assert.equal(r.status,200,r.error);
+  assert.equal(store.data.players[ids.Voll].sonderEier.length,2);assert.equal(eier('Voll').length,2);
+  assert.ok(eier('Voll').every(e=>e.readyAt<=stamp));
+  await ruft(codeAt(0),'Test A','world');assert.equal(eier('Test A').length,5,'only once');
 });
 await test('The admin gift tab and the server agree on every field',async()=>{
   const store=memoryStore(),h=createHandler({store,now:()=>stamp});

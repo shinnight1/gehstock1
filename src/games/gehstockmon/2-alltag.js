@@ -142,6 +142,8 @@
       var ei = { id: e.id, territoryId: e.territoryId, producedAt: Number(e.producedAt) || 0, startedAt: null, readyAt: null };
       if (ganz(e.mindestens, D.SELTENHEITEN.length - 1)) ei.mindestens = ganz(e.mindestens, D.SELTENHEITEN.length - 1);
       if (typeof e.art === 'string' && /^[a-z]{1,16}$/.test(e.art)) ei.art = e.art;
+      /* Ein geschenktes, schon ausgebruetetes Ei bleibt auch beim Warten fertig. */
+      if (e.fertig === true && Number.isFinite(e.startedAt) && e.startedAt >= 0) { ei.fertig = true; ei.startedAt = e.startedAt; ei.readyAt = e.startedAt + E.HATCH_TIME; }
       return ei;
     });
     return p;
