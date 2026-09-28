@@ -65,18 +65,16 @@
         projektLeiste.appendChild(marke('Streifzüge', da ? '🎒 ' + da + ' zurück!' : 'bis ' + X.uhrText(naechster, jetzt).replace(/^um /, ''),
           da ? '#81d2a3' : '#89cce5', streifzuege, 'streifzug'));
       }
-      /* Kurierkontor und Gemeinschaftsbau kommen aus 2-handel-ui.js. */
+      /* Der Gemeinschaftsbau kommt aus 2-handel-ui.js. Kurier, Zerhacker und
+         Wochenaufgabe stehen seit dem 28.09.2026 nicht mehr in der Leiste -
+         sie war auf dem iPad abgeschnitten. Der Kurier sitzt im Hafenkontor,
+         Zerhacker und Wochenaufgabe im Fenster Abenteuer. */
       var handelKacheln = handel.kacheln(marke, balken);
-      if (handelKacheln.kurier) projektLeiste.appendChild(handelKacheln.kurier);
       var schatzKachel = schatz.kacheln(marke).schatz;
       if (schatzKachel) projektLeiste.appendChild(schatzKachel);
-      var z = projekte && projekte.zerhacker, l = projekte && projekte.leuchtturm;
-      if (z && z.hp > 0) projektLeiste.appendChild(balken('Zerhacker', z.hp, z.maxHp, '#f2705a', zeigeZerhacker, 'zerhacker'));
-      else if (z) projektLeiste.appendChild(balken('Zerhacker erlegt', 1, 1, '#81d2a3', zeigeZerhacker, 'zerhacker'));
+      var l = projekte && projekte.leuchtturm;
       if (l && !l.fertig) projektLeiste.appendChild(balken('Leuchtturm', l.gold, l.ziel, '#f0b429', zeigeLeuchtturm, 'leuchtturm'));
       if (handelKacheln.bau) projektLeiste.appendChild(handelKacheln.bau);
-      var a = projekte && projekte.wochenaufgabe;
-      if (a) projektLeiste.appendChild(balken(a.name, a.stand, a.ziel, a.erfuellt ? '#81d2a3' : '#89cce5', zeigeWoche, 'woche'));
       /* Das Kopfgeld stand bisher nur im Ausruestungsfenster und fiel damit
          niemandem auf, obwohl es das ganze Spielfeld betrifft. Hier steht es
          neben den anderen Weltzustaenden: eine Zeile, kein Banner. */
@@ -359,6 +357,10 @@
     function adventure(){if(!c.open('Abenteuer & Quests','adventure'))return;var s=state();drawer.appendChild(el('p','Trainer auf der Karte schenken dir Eier, Runen und Rohstoffe liegen überall herum. Biome werden erkundet, sobald du sie betrittst.','gm-beginner-tip'));
       drawer.appendChild(el('p','Dein Lager: '+R.lagerText(s),'gm-plan-hinweis'));
       var karte=X.schatzStand(s),kb=button('🗺️ Schatzkarte · '+(karte.karte?'auf der Suche':karte.fetzen+'/'+X.SCHATZ_FETZEN+' Fetzen'),schatz.fenster,'gm-button');drawer.appendChild(kb);
+      /* Frueher Kacheln in der Leiste ueber der Karte, jetzt hier. */
+      var z=projekte&&projekte.zerhacker,wa=projekte&&projekte.wochenaufgabe;
+      if(z)drawer.appendChild(button('🪓 Zerhacker · '+(z.hp>0?Math.round(100*z.hp/z.maxHp)+' % Lebenskraft':'erlegt'),zeigeZerhacker,'gm-button'));
+      if(wa)drawer.appendChild(button('🏋️ '+wa.name+' · '+(wa.erfuellt?'geschafft':Math.round(100*Math.min(1,wa.stand/wa.ziel))+' %'),zeigeWoche,'gm-button'));
       drawer.appendChild(el('h3','Deine Quests'));X.QUESTS.forEach(function(q){var done=s.claimedQuests.indexOf(q.id)>=0,n=Math.min(q.goal,X.progress(s,q)),card=el('article',undefined,'gm-quest-card');card.appendChild(el('h3',q.name));card.appendChild(el('p',({trainerWins:'Trainingssiege',visited:'Biome erkundet',gathered:'Runen gesammelt',hatched:'Eier ausgebrütet',upgrades:'Außenposten ausgebaut'}[q.stat])+' · '+n+'/'+q.goal));card.appendChild(SG.ui.el('progress',{value:n,max:q.goal,'aria-label':q.name}));card.appendChild(el('p',q.skin?'Skin: '+X.skin(q.skin).name:q.gold+' Gold'));var claim=button(done?'Erhalten':'Belohnung abholen',function(){run('quest_claim',{questId:q.id},'adventure');},'gm-button gm-primary');claim.disabled=done||n<q.goal;card.appendChild(claim);drawer.appendChild(card);});
     }
     function shop(){if(!c.open('Skins & Waffen','shop'))return;var s=state();drawer.appendChild(el('p',s.gold+' Gold · Skins verändern deine Figur. Waffen bestimmen den Schaden im Waffenduell.'));
