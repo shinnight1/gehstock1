@@ -269,6 +269,38 @@
         body2.appendChild(UI.el('div', { style: { height: '10px' } }));
       }
 
+      /* Das Profilbild ansehen - und abnehmen, wenn es nicht in die
+         Schule passt. Es verschwindet dann ueberall. */
+      if (darf) {
+        var pbKreis = SG.profilbild.kreis('pb-admin-k');
+        pbKreis.zeigen(null, e.name);
+        var pbText = UI.el('div.small.muted', { text: 'Profilbild wird geladen …' });
+        var pbKnopf = UI.btn('Abnehmen', function () {
+          UI.confirm('Profilbild abnehmen?',
+            'Das Bild verschwindet überall. ' + (e.name || 'Die Person')
+            + ' kann danach ein neues machen.', 'Abnehmen', true)
+            .then(function (ok) {
+              if (!ok) return;
+              SG.profilbild.abnehmenFuer(e.code).then(function () {
+                pbKreis.zeigen(null, e.name);
+                pbText.textContent = 'Kein Profilbild';
+                pbKnopf.disabled = true;
+                SG.protokoll.schreiben('profilbild',
+                  'Profilbild von ' + (e.name || e.code) + ' abgenommen', '', e.code);
+                UI.toast('Profilbild abgenommen.', 'good');
+              }, function (err) { UI.toast(SG.relais.klartext(err), 'bad'); });
+            });
+        }, 'sm bad');
+        pbKnopf.disabled = true;
+        SG.profilbild.vonCode(e.code).then(function (data) {
+          pbText.textContent = data ? 'Profilbild' : 'Kein Profilbild';
+          if (!data) return;
+          pbKreis.zeigen(data, e.name);
+          pbKnopf.disabled = false;
+        });
+        body2.appendChild(UI.el('div.pb-admin', null, [pbKreis, pbText, UI.el('div.spacer'), pbKnopf]));
+      }
+
       /* Wer geschuetzt ist, wird hier nur angesehen - kein Bann, keine
          Spielsperre, kein Loeschen, keine Freigaben. */
       if (!darf) {

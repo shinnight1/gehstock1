@@ -31,6 +31,10 @@
     var tools = UI.el('div.tools');
 
     bar.appendChild(backBtn);
+    /* Das eigene Profilbild steht in jedem Spiel gleich neben dem
+       Zurueck-Knopf. Antippen tut nichts - mitten im Spiel soll kein
+       versehentlicher Tipp einen Dialog oeffnen. */
+    if (SG.profilbild) bar.appendChild(SG.profilbild.eigenerKreis('pb-leiste'));
     bar.appendChild(title);
     bar.appendChild(stats);
     bar.appendChild(UI.el('div.spacer'));

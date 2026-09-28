@@ -281,7 +281,7 @@ function startpunkt(eintrag, world, id, timestamp) {
 async function eigenerEintrag(db, id) {
   try { return (await anwesenheitLesen(db)).eintraege[id] || null; } catch (err) { return null; }
 }
-async function updatePresence(db, world, id, position, timestamp, clock, bypass = false) {
+async function updatePresence(db, world, id, position, timestamp, clock, bypass = false, bild = 0) {
   const p = world.players[id];
   if (!p) throw new GameError('Betritt zuerst die Spielerwelt.',409);
   if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.z) || !Number.isFinite(position.heading)
@@ -301,7 +301,7 @@ async function updatePresence(db, world, id, position, timestamp, clock, bypass 
     if(!route)return json({serverTime:timestamp,access:accessFor(timestamp,bypass),position:{x:from.x,z:from.z,heading:from.heading||0},positionCorrected:true,peers:peers()});
     let traveled=0,cursor=from;for(const point of route){traveled+=Math.hypot(point.x-cursor.x,point.z-cursor.z);cursor=point;}
     const eintrag=!players[id]||players[id].updatedAt<=timestamp?{ id, name:p.name, x:Math.round(position.x*100)/100, z:Math.round(position.z*100)/100,
-      heading:position.heading, activity:activeArena(p)||activeDuel(p)||activeDungeon(world,p)||imDuellKampf(world,p,id)?'arena':'map', updatedAt:timestamp,spawnAt:p.lastJoinAt,credit:Math.max(0,credit-traveled),skin:p.skin,weapon:p.weapon,squad:p.truppe.slice(),protected:X.protected(p,timestamp),eier:p.eggs.length,champion:world.champion?.id===id,titel:amtTitel(world,id,timestamp)||X.titelName(p) }:null;
+      heading:position.heading, activity:activeArena(p)||activeDuel(p)||activeDungeon(world,p)||imDuellKampf(world,p,id)?'arena':'map', updatedAt:timestamp,spawnAt:p.lastJoinAt,credit:Math.max(0,credit-traveled),skin:p.skin,weapon:p.weapon,squad:p.truppe.slice(),protected:X.protected(p,timestamp),eier:p.eggs.length,champion:world.champion?.id===id,titel:amtTitel(world,id,timestamp)||X.titelName(p),...(bild?{bild}:{}) }:null;
     requireOpen(clock(), bypass);
     /* Eine Duell-Einladung muss schnell ankommen - die Anwesenheit laeuft alle paar Sekunden, die Weltabfrage nur alle dreissig. */
     if(await anwesenheitSchreiben(db,stand,id,eintrag,weg))return json({serverTime:timestamp,access:accessFor(timestamp,bypass),peers:peers(),duellEinladung:duellEinladung(world,p,id,timestamp)});
@@ -456,7 +456,11 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
            haelt es deshalb kurz fest; erst wenn der Spieler darin fehlt
            (er ist gerade erst beigetreten), wird sofort neu gelesen. */
         const welt=await presenzWelt(db,id,timestamp);
-        return await updatePresence(presenceStore||speicher('hgh-gehstockmon-presence'),welt,id,body.position,timestamp,now,bypass);
+        /* Die Version des Profilbilds (Uhrzeit des Hochladens) reist mit:
+           so holen die anderen ein neues Bild genau einmal. Das Bild selbst
+           liegt im Relais (room.mjs, profilbild:*). */
+        const bild=Number.isSafeInteger(body.bild)&&body.bild>0?body.bild:0;
+        return await updatePresence(presenceStore||speicher('hgh-gehstockmon-presence'),welt,id,body.position,timestamp,now,bypass,bild);
       }
       const zuletzt = body.op === 'join' ? await eigenerEintrag(presenceStore || speicher('hgh-gehstockmon-presence'), id) : null;
       for (let attempt = 0; attempt < 8; attempt++) {

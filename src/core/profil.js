@@ -72,13 +72,33 @@
 
     /* ---------------------------------------------------- Kopf */
 
+    /* In der Mitte des Rings steht das Profilbild, darunter die Stufe.
+       Ohne Bild bleibt die grosse Zahl. Antippen macht ein neues. */
+    var mitte = UI.el('div.pf-ring-in');
+    var bildKnopf = UI.btn('', function () { SG.profilbild.bearbeiten(); }, 'sm pf-bild-knopf');
+    function mitteZeichnen() {
+      var bild = SG.profilbild.eigenes();
+      UI.clear(mitte);
+      if (bild) {
+        mitte.appendChild(SG.profilbild.eigenerKreis('pb-profil'));
+        mitte.appendChild(UI.el('div.pf-stufe-plakette', { text: 'Stufe ' + stand.stufe }));
+      } else {
+        mitte.appendChild(UI.el('div.pf-stufe', { text: String(stand.stufe) }));
+        mitte.appendChild(UI.el('div.pf-stufe-k', { text: 'Stufe' }));
+      }
+      bildKnopf.textContent = bild ? '📷 Profilbild ändern' : '📷 Profilbild machen';
+    }
+    mitteZeichnen();
+    SG.profilbild.on('aenderung', mitteZeichnen);
+
     var kopf = UI.el('div.pf-kopf', null, [
-      UI.el('div.pf-ring', null, [
+      UI.el('button.pf-ring', {
+        'aria-label': 'Profilbild ändern',
+        on: { click: function () { SG.profilbild.bearbeiten(); } },
+      }, [
         ring(stand, 132),
-        UI.el('div.pf-ring-in', null, [
-          UI.el('div.pf-stufe', { text: String(stand.stufe) }),
-          UI.el('div.pf-stufe-k', { text: 'Stufe' }),
-        ]),
+        mitte,
+        SG.auth.aktuell ? UI.el('span.pf-kamera', { text: '📷' }) : null,
       ]),
       UI.el('div.pf-wer', null, [
         UI.el('div.pf-name', { text: name }),
@@ -98,6 +118,7 @@
           }),
         ]),
         UI.el('div.pf-gesamt', { text: U.num(stand.xp) + ' XP insgesamt' }),
+        SG.auth.aktuell ? bildKnopf : null,
       ]),
     ]);
     wrap.appendChild(kopf);
@@ -224,7 +245,7 @@
     zeichne();
 
     return {
-      destroy: function () { /* nichts zu loesen */ },
+      destroy: function () { SG.profilbild.off('aenderung', mitteZeichnen); },
     };
   };
 

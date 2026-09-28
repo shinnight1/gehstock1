@@ -40,6 +40,7 @@ const CSS_ORDER = [
   'styles/umzug.css',
   'styles/ueber.css',
   'styles/kroenung.css',
+  'styles/profilbild.css',
 ];
 
 const CORE_ORDER = [
@@ -62,6 +63,7 @@ const CORE_ORDER = [
   'core/net.js',
   'core/verwaltung.js',
   'core/auth.js',
+  'core/profilbild.js',
   'core/protokoll.js',
   'core/registry.js',
   'core/tarnung.js',

@@ -58,6 +58,7 @@ src/
                        relais.js     die eine Verbindung je Gerät
                        net.js        Spielräume darauf
                        verwaltung.js Profile, Sperren, Banne, BND-Freigaben
+                       profilbild.js Profilbild machen, speichern, überall zeigen
                        chat.js       Bretter: Text, Bilder, Abstimmungen
                        adminraum.js  Chat, Protokoll, Anträge, Bildschirme
                        protokoll.js  was passiert ist — nur anhängen

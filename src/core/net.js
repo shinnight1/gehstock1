@@ -124,11 +124,15 @@
       } catch (e) { /* egal */ }
     }
 
+    /* Der eigene Zugangscode reist mit, damit der Raum das Profilbild
+       kennt. 'code' ist hier schon der Raumcode. */
+    function zugang() { return (SG.auth.aktuell && SG.auth.aktuell.code) || undefined; }
+
     R.create = function (name, opts) {
       setStatus('connecting');
       return post({
         op: 'create', game: R.game, seats: R.seats,
-        name: name || 'Spieler', opts: opts || {},
+        name: name || 'Spieler', opts: opts || {}, zugang: zugang(),
       }).then(function (res) {
         R.code = res.code; R.playerId = res.playerId; R.token = res.token;
         R.seat = res.seat; R.isHost = true; R.seed = res.seed;
@@ -147,7 +151,7 @@
       setStatus('connecting');
       return post({
         op: 'join', code: String(code || '').toUpperCase().replace(/\s/g, ''),
-        game: R.game, name: name || 'Spieler',
+        game: R.game, name: name || 'Spieler', zugang: zugang(),
       }).then(function (res) {
         R.code = res.code; R.playerId = res.playerId; R.token = res.token;
         R.seat = res.seat; R.isHost = !!res.isHost; R.seed = res.seed;
@@ -446,6 +450,8 @@
           ps.forEach(function (p) {
             listEl.appendChild(UI.el('div.player-row', null, [
               UI.el('div.dot' + (p.id === room.playerId ? '.me' : (p.connected ? '.on' : ''))),
+              p.id === room.playerId ? SG.profilbild.eigenerKreis('pb-raum')
+                : SG.profilbild.fremderKreis(p.bild, undefined, p.name, 'pb-raum'),
               UI.el('div', { text: p.name + (p.id === room.playerId ? ' (du)' : '') }),
               UI.el('div.spacer'),
               UI.el('div.small.muted', { text: 'Platz ' + (p.seat + 1) }),

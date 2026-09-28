@@ -46,6 +46,7 @@
    die Liste der Zuege, jeder Client rechnet sie selbst nach.
    ------------------------------------------------------------------ */
 
+import { createHash } from 'node:crypto';
 import { speicher, speicherArt } from './lib/speicher.mjs';
 
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // ohne 0/O/1/I
@@ -81,6 +82,8 @@ const streuung = (geraet) => {
   return h % 15000;
 };
 const BILD_MAX = 700 * 1024;                           // Base64-Laenge
+const PROFILBILD_MAX = 60 * 1024;                      // 128 x 128 JPEG braucht rund 10 KB
+const PROFILBILDER_JE_ABFRAGE = 40;
 const SCHIRM_MAX = 260 * 1024;
 
 /* Dasselbe Geheimnis wie in src/core/auth.js. Der Server kann damit
@@ -370,6 +373,7 @@ function publicRoom(room) {
       id: p.id,
       name: p.name,
       seat: p.seat,
+      bild: p.bild || null,
       connected: now - p.seen < 30000,
     })),
   };
@@ -422,6 +426,11 @@ export default async (req) => {
 
     if (op === 'bild:put') return await bildPut(st, msg);
     if (op === 'bild:get') return await bildGet(st, msg);
+
+    if (op === 'profilbild:put') return await profilbildPut(st, msg);
+    if (op === 'profilbild:weg') return await profilbildWeg(st, msg);
+    if (op === 'profilbild:mein') return await profilbildMein(st, msg);
+    if (op === 'profilbild:get') return await profilbildGet(st, msg);
 
     if (op === 'schirm:put') return await schirmPut(st, msg);
     if (op === 'schirm:get') return await schirmGet(st, msg);
@@ -807,6 +816,76 @@ async function bildGet(st, msg) {
 }
 
 /* ==================================================================
+   Profilbilder
+
+   Eins je Zugangscode. Abgelegt unter derselben Kennung, unter der
+   GehstockMon den Spieler fuehrt (sha256 aus dem Code) - so findet die
+   Insel zu jeder Figur das Bild, und nirgends wird dafuer ein Code
+   herausgegeben. Klein (128 x 128, ein paar KB), denn jeder, der eine
+   Figur sieht, holt es einmal.
+
+   Die Version ist die Uhrzeit des Hochladens. Sie wandert in GehstockMon
+   mit der Anwesenheit mit, damit ein neues Bild bei den anderen ankommt,
+   ohne dass sie immer wieder nachfragen muessen.
+   ================================================================== */
+
+export function profilbildKennung(code) {
+  return createHash('sha256').update('gehstockmon-player:' + code).digest('hex').slice(0, 24);
+}
+
+function reinerCode(code) {
+  return String(code || '').replace(/\D/g, '').slice(0, 4);
+}
+
+async function profilbildPut(st, msg) {
+  if (!rolleVonCode(msg.code)) return fail('kein_code', 403);
+  const data = String(msg.data || '');
+  if (data.length > PROFILBILD_MAX) return fail('zu_gross');
+  if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/.test(data)) return fail('kein_bild');
+  const id = profilbildKennung(reinerCode(msg.code));
+  const v = Date.now();
+  await st.setJSON('profilbild:' + id, { data, v });
+  return json({ id, v });
+}
+
+/* Abnehmen darf man das eigene - und ein Admin jedes, etwa eins, das
+   nicht in die Schule passt. */
+async function profilbildWeg(st, msg) {
+  const rolle = rolleVonCode(msg.code);
+  if (!rolle) return fail('kein_code', 403);
+  const ziel = msg.ziel ? reinerCode(msg.ziel) : reinerCode(msg.code);
+  if (ziel !== reinerCode(msg.code) && rolle !== 'A') return fail('kein_zugang', 403);
+  if (!rolleVonCode(ziel)) return fail('kein_code');
+  const id = profilbildKennung(ziel);
+  await st.delete('profilbild:' + id);
+  return json({ id, v: 0 });
+}
+
+/* Das eigene, zum Abgleich beim Anmelden: auf einem anderen iPad
+   gemacht, soll es hier trotzdem erscheinen. */
+async function profilbildMein(st, msg) {
+  if (!rolleVonCode(msg.code)) return fail('kein_code', 403);
+  const id = profilbildKennung(reinerCode(msg.code));
+  const b = await st.get('profilbild:' + id, { type: 'json' });
+  return json({ id, v: (b && b.v) || 0, data: (b && b.data) || null });
+}
+
+/* Mehrere auf einmal - wer die Insel betritt, sieht meist gleich ein
+   paar Figuren. Fehlende kommen als null zurueck. */
+async function profilbildGet(st, msg) {
+  if (!rolleVonCode(msg.code)) return fail('kein_code', 403);
+  const ids = [...new Set((Array.isArray(msg.ids) ? msg.ids : [])
+    .map((i) => String(i || '').toLowerCase())
+    .filter((i) => /^[0-9a-f]{24}$/.test(i)))].slice(0, PROFILBILDER_JE_ABFRAGE);
+  const bilder = {};
+  await Promise.all(ids.map(async (id) => {
+    const b = await st.get('profilbild:' + id, { type: 'json' });
+    bilder[id] = b && b.data ? { data: b.data, v: b.v || 0 } : null;
+  }));
+  return json({ bilder });
+}
+
+/* ==================================================================
    Bildschirme
 
    Ein Geraet laedt nur dann Bilder hoch, wenn jemand hinsieht. Wer
@@ -1037,6 +1116,13 @@ function pixAntwort(doc, since) {
    Version hochgezaehlt - und jede offene Langabfrage im ganzen Hideout
    antwortete darauf sofort und fragte gleich wieder. Ein einziges
    Arena-Duell hielt so alle Fenster der Schule im Halbsekundentakt wach. */
+/* Wer mit seinem Zugangscode in einen Raum kommt, bringt sein
+   Profilbild mit. Der Code heisst hier 'zugang', denn 'code' ist in
+   Raumanfragen der Raumcode. Im Raum steht nur die Kennung. */
+function raumBild(msg) {
+  return rolleVonCode(msg.zugang) ? profilbildKennung(reinerCode(msg.zugang)) : null;
+}
+
 function imVerzeichnis(room) {
   return !room || room.game !== 'arena';
 }
@@ -1059,6 +1145,7 @@ async function raum(st, op, msg) {
       token: newId(16),
       name: String(msg.name || 'Spieler').slice(0, 14),
       seat: 0,
+      bild: raumBild(msg),
       seen: Date.now(),
     };
     const room = {
@@ -1128,6 +1215,7 @@ async function raum(st, op, msg) {
         token: newId(16),
         name: String(msg.name || 'Spieler').slice(0, 14),
         seat: r.players.length,
+        bild: raumBild(msg),
         seen: Date.now(),
       };
       r.players.push(player);

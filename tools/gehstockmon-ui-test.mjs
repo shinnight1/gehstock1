@@ -16,8 +16,10 @@ export async function checkUi(D,E,A,handler,code,clock,otherCode){
   const values=new Map([['stand',legacy],['arena-v1',{invalid:'legacy fight'}],['online-squad',['moosling']]]),timers=new Map(),storage={get:(k,d)=>values.has(k)?structuredClone(values.get(k)):d,set:(k,v)=>values.set(k,structuredClone(v)),del:k=>values.delete(k)};
   let position={x:0,z:30},definition,timerId=0,blocked=false,pauses=[],latest,unreachable=true,loseResponse=false,requests=[],visiblePeers=[],worldFrame,delayReply=false,releaseReply;
   const stage=new Element('div'),root=new Element('div');root.appendChild(stage);
+  /* Profilbilder (src/core/profilbild.js) nur als Kreise, die sich merken, wen sie zeigen sollen. */
+  const profilbild={version:()=>1234,eigenerKreis:()=>new Element('span'),fremderKreis:(id,v,name)=>{const k=new Element('span');k.laden=(i,v2,n)=>{k.gezeigt={id:i,v:v2,name:n};};k.laden(id,v,name);return k;}};
   const world={setHeld(){},setSquad(){},setTerritories(){},setPeers:list=>visiblePeers=list,position:()=>({...position,heading:0}),setPosition:p=>position=p,select(){},follow(){},overview(){},distanceTo:()=>0,blockInput:yes=>{blocked=yes;},move(){},pause:yes=>pauses.push(yes),destroy(){}};
-  const SG={gehstockmon:{daten:D,wirtschaft:E,arena:A,orte:D.BIOME,createWorld:(host,container,handlers)=>{worldFrame=handlers.frame;return world;}},util:{},storage,auth:{aktuell:{code,name:'UI Test'}},offline:false,env:{},assets:{},register:def=>{definition=def;}};
+  const SG={gehstockmon:{daten:D,wirtschaft:E,arena:A,orte:D.BIOME,createWorld:(host,container,handlers)=>{worldFrame=handlers.frame;return world;}},util:{},storage,auth:{aktuell:{code,name:'UI Test'}},profilbild,offline:false,env:{},assets:{},register:def=>{definition=def;}};
   const document={createElement:tag=>new Element(tag),addEventListener(){},removeEventListener(){},hidden:false};
   const listeners={};
   const context=vm.createContext({SG,document,Image:class {},window:{addEventListener:(k,fn)=>listeners[k]=fn,removeEventListener:k=>delete listeners[k]},Date:class extends Date{static now(){return clock.value;}},AbortController,setTimeout,clearTimeout,fetch:async(url,opts)=>{

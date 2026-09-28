@@ -47,7 +47,11 @@
         var u = s.teams[seite][s.active[seite]], einheit = el('div', undefined, 'gm-arena-unit ' + (seite ? 'enemy' : 'ally'));
         einheit.setAttribute('data-unit', u.uid);
         var leben = el('div', undefined, 'gm-arena-health');
-        leben.appendChild(el('strong', d.namen[seite] + ': ' + u.name));
+        var wer = el('strong', d.namen[seite] + ': ' + u.name);
+        /* Das Profilbild der beiden steht vor ihrem Namen. */
+        if (d.ids) wer.insertBefore(seite || d.zuschauer ? SG.profilbild.fremderKreis(d.ids[seite], undefined, d.namen[seite], 'pb-gm-duell')
+          : SG.profilbild.eigenerKreis('pb-gm-duell'), wer.firstChild);
+        leben.appendChild(wer);
         leben.appendChild(el('span', Math.max(0, Math.ceil(u.hp)) + ' / ' + u.maxHp + ' KP'));
         leben.appendChild(SG.ui.el('progress', { value: Math.max(0, u.hp), max: u.maxHp, 'aria-label': u.name + ' Lebenspunkte' }));
         einheit.appendChild(leben);einheit.appendChild(el('div', undefined, 'gm-arena-pedestal'));einheit.appendChild(bild(u));

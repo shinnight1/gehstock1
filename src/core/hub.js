@@ -119,6 +119,7 @@
       title: stand.rang.name + ' · ' + U.num(stand.xp) + ' XP',
       on: { click: function () { SG.router.go('#/profil'); } },
     }, [
+      SG.profilbild.eigenerKreis('pb-chip'),
       UI.symbol(stand.rang.bild, stand.rang.icon),
       UI.el('span.lbl', { text: 'Stufe ' + stand.stufe }),
       UI.el('span.stufe-bar', null, [balken]),

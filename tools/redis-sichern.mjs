@@ -8,6 +8,7 @@
                          kanal:*       Chatbretter und Protokoll
                          wplace        die gemeinsame Pixelkarte
                          bild:*        hochgeladene Bilder
+                         profilbild:*  Profilbilder, eins je Zugangscode
 
    Kurzlebiges bleibt draussen: room:* (20 Minuten), schirm:*,
    presence-v1 und anwesenheit-v2 (wer gerade wo auf der Insel steht).

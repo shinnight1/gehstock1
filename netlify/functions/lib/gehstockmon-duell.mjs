@@ -125,6 +125,7 @@ export async function duellAction({ world, p, id, body, now, presence }) {
 /* Ein Duell aus der Sicht einer Seite: die eigene Truppe immer vorn. */
 function sicht(d, seite, zuschauer) {
   const v = { id: d.id, phase: d.phase, zuschauer: !!zuschauer, namen: seite ? [d.namen[1], d.namen[0]] : d.namen.slice(),
+    ids: seite ? [d.b, d.a] : [d.a, d.b],
     einladungBis: d.einladungBis, grund: d.grund || null, endeAm: d.endeAm || null,
     eingeladen: !zuschauer && d.phase === 'einladung' && seite === 1, wartetAufAntwort: !zuschauer && d.phase === 'einladung' && seite === 0 };
   if (d.phase === 'ende' && d.sieger !== undefined) v.ergebnis = d.sieger === 'patt' ? 'patt' : d.sieger === seite ? 'sieg' : 'niederlage';

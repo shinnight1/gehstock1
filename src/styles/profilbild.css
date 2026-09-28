@@ -1,0 +1,124 @@
+/* ------------------------------------------------------------------
+   Profilbild: der runde Kreis an allen Stellen, wo er steht, und der
+   Dialog zum Machen (src/core/profilbild.js).
+   ------------------------------------------------------------------ */
+
+.pb {
+  --pb: 32px;
+  width: var(--pb); height: var(--pb);
+  flex: 0 0 auto;
+  display: inline-grid; place-items: center;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--panel-3);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, .16);
+  color: #fff;
+  font-size: calc(var(--pb) * .46); font-weight: 750; line-height: 1;
+  user-select: none; -webkit-user-select: none;
+}
+.pb img { display: block; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+.pb.gast { display: none; }
+
+/* --- Spielleiste: immer da, in jedem Spiel --- */
+.gamebar .pb-leiste { --pb: 34px; box-shadow: 0 0 0 2px var(--gold-dim); }
+@media (max-width: 560px) { .gamebar .pb-leiste { --pb: 28px; } }
+.gm-game .gamebar .pb-leiste { box-shadow: 0 0 0 2px #8fc6dd88; }
+
+/* --- Stufenabzeichen im Hub: nur mit echtem Bild --- */
+.stufe-chip .pb-chip { --pb: 22px; box-shadow: 0 0 0 1.5px var(--gold-dim); }
+.stufe-chip .pb-chip.leer { display: none; }
+
+/* --- Profilseite: das Bild im Stufenring --- */
+.pf-ring { cursor: pointer; border-radius: 50%; }
+.pf-ring:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.pf-ring-in .pb-profil { --pb: 104px; box-shadow: none; }
+.pf-stufe-plakette {
+  position: absolute; left: 50%; bottom: 2px;
+  transform: translateX(-50%);
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--gold); color: #241a04;
+  font-size: 12px; font-weight: 800; white-space: nowrap;
+}
+.pf-kamera {
+  position: absolute; right: 4px; top: 4px;
+  width: 30px; height: 30px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: var(--panel-2); border: 1px solid var(--edge-line);
+  font-size: 15px;
+}
+.pf-bild-knopf { margin-top: 12px; }
+
+/* --- Admin: Profil einer Person --- */
+.pb-admin {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px; margin-bottom: 10px;
+  border-radius: var(--r-sm); background: var(--panel-2);
+}
+.pb-admin .pb-admin-k { --pb: 56px; }
+
+/* --- Warteraum der Online-Spiele --- */
+.player-row .pb-raum { --pb: 28px; }
+
+/* --- GehstockMon --- */
+.gm-peer-label.mit-bild { display: flex; align-items: center; gap: 7px; padding-left: 5px; }
+.gm-peer-label .pb-gm { --pb: 28px; box-shadow: 0 0 0 2px #8fc6dd; }
+.gm-peer-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.gm-ich-label {
+  position: absolute; top: 0; left: 0;
+  pointer-events: none;
+}
+.gm-ich-label .pb-gm-ich { --pb: 38px; box-shadow: 0 0 0 3px #f0b429, 0 4px 12px #071e2988; }
+.gm-ich-label .pb-gm-ich.leer { display: none; }
+.gm-arena-open .gm-ich-label, .gm-drawer-open .gm-ich-label { visibility: hidden; }
+.gm-rival-bild { display: flex; align-items: center; gap: 12px; margin: 4px 0 10px; }
+.gm-rival-bild .pb-gm-gross { --pb: 72px; box-shadow: 0 0 0 3px #8fc6dd; }
+.gm-duel-fighter h3 { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.gm-duel-fighter .pb-gm-duell, .gm-arena-health .pb-gm-duell { --pb: 26px; }
+.gm-arena-health strong { display: flex; align-items: center; gap: 6px; }
+/* .gm-arena-health span faerbt sonst auch den Kreis und seinen Buchstaben um. */
+.gm-arena-health .pb { font-size: calc(var(--pb) * .46); color: #fff; }
+.gm-arena-health .pb span { font-size: inherit; color: inherit; }
+
+@media (max-width: 600px) {
+  .gm-peer-label .pb-gm { --pb: 24px; }
+  .gm-ich-label .pb-gm-ich { --pb: 32px; }
+}
+
+/* --- Der Dialog --- */
+.pb-editor { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.pb-buehne {
+  width: min(200px, 60vw, 30vh); aspect-ratio: 1;
+  border-radius: 50%;
+  overflow: hidden;
+  box-shadow: 0 0 0 3px var(--gold-dim), 0 10px 30px rgba(0, 0, 0, .45);
+  background: var(--panel-2);
+}
+.pb-flaeche { display: block; width: 100%; height: 100%; touch-action: none; }
+.pb-flaeche.ziehbar { cursor: grab; }
+.pb-zoom-zeile { display: flex; align-items: center; gap: 10px; width: min(260px, 80vw); color: var(--muted); }
+.pb-zoom-zeile[hidden] { display: none; }
+.pb-zoom { flex: 1 1 auto; accent-color: var(--gold); }
+.pb-hinweis { font-size: 13.5px; color: var(--text-2); text-align: center; min-height: 18px; max-width: 360px; }
+.pb-wege { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.pb-figur { width: 100%; display: flex; flex-direction: column; gap: 10px; }
+.pb-figur[hidden] { display: none; }
+.pb-zeichen { display: grid; grid-template-columns: repeat(8, 1fr); gap: 5px; }
+.pb-zeichen-k {
+  height: 40px;
+  border-radius: 10px;
+  background: var(--panel-2);
+  font-size: 22px; line-height: 1;
+}
+.pb-zeichen-k.an { background: var(--panel-3); box-shadow: 0 0 0 2px var(--gold); }
+.pb-farben { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
+.pb-farbe { width: 30px; height: 30px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, .15); }
+.pb-farbe.an { box-shadow: 0 0 0 3px var(--text); }
+.pb-sichtbar { text-align: center; margin: 0; }
+.pb-knoepfe { display: flex; gap: 8px; width: 100%; align-items: center; flex-wrap: wrap; }
+
+@media (max-width: 420px) {
+  .pb-zeichen { gap: 4px; }
+  .pb-zeichen-k { height: 36px; font-size: 19px; }
+}
