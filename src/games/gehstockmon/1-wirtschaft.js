@@ -56,7 +56,7 @@
   E.BILANZ_REIN = { gebiete: 'Gebiete', tagesgeld: 'Tagesgeld', sold: 'Champion-Sold', eroberung: 'Eroberungen', arena: 'Große Arena',
     trainer: 'Wandertrainer', runen: 'Verlorene Runen', tagwerk: 'Tagwerk', truhe: 'Tagestruhe', streifzug: 'Streifzüge', kurier: 'Kurierdienst',
     quest: 'Quests', woche: 'Wochenaufgabe', zerhacker: 'Zerhacker', fehde: 'Fehde', duell: 'Live-Duelle', kopfgeld: 'Kopfgeld',
-    handel: 'Verkauf an den Händler', schatz: 'Schätze', geschenk: 'Geschenke' };
+    handel: 'Verkauf an den Händler', schatz: 'Schätze', geschenk: 'Geschenke', amt: 'Bürgermeister-Gehalt' };
   E.BILANZ_RAUS = { abgabe: 'Gebietsabgabe', ausbau: 'Ausbau', ausruestung: 'Skins & Waffen', brutplatz: 'Brutplätze', eier: 'Eierhändler',
     schmiede: 'Runenschmiede', perle: 'Schimmerperle', wesen: 'Wesen prägen', spende: 'Spenden', handel: 'Kauf beim Händler' };
   E.woche = function (now) { return Math.floor((now + 3 * 86400000) / (7 * 86400000)); };

@@ -110,7 +110,10 @@
   /* offen: Vorerst (28.09.2026, auf Wunsch von Louis) darf jeder waehlen
      und kandidieren. Die Huerden unten bleiben stehen und gelten wieder,
      sobald offen auf false steht. */
-  X.WAHL = { offen: true, stimmeErfahrung: 60, kandidatErfahrung: 150, tage: 3, stimmeAlter: 3 * 86400000, kandidatAlter: 7 * 86400000, fenster: 14 };
+  /* gehalt: Gold fuer den Sieger, einmal bei der Auszaehlung (28.09.2026).
+     Der Erlass hilft allen gleich - ohne eigenen Lohn hatte das Amt ausser
+     dem Titel nichts zu bieten. So viel wie die groesste Wochenaufgabe. */
+  X.WAHL = { offen: true, gehalt: 300, stimmeErfahrung: 60, kandidatErfahrung: 150, tage: 3, stimmeAlter: 3 * 86400000, kandidatAlter: 7 * 86400000, fenster: 14 };
   /* Schultage, an denen jemand da war - die letzten vierzehn. */
   X.aktivMerken = function (p, now) {
     var tag = H.day(now); p.aktivTage = Array.isArray(p.aktivTage) ? p.aktivTage : [];

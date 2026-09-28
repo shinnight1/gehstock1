@@ -6,7 +6,7 @@
    die Spielerwelt veraendert, und die eine Funktion, ueber die jeder Zug
    nach dem Faktor der Woche fragt: effekt(world, now, schluessel).
    ------------------------------------------------------------------ */
-import { adventure as X } from './gehstockmon-rules.mjs';
+import { adventure as X, economy as E } from './gehstockmon-rules.mjs';
 import { tickern } from './gehstockmon-alltag.mjs';
 
 const fail = (message) => { throw new Error(message); };
@@ -48,9 +48,11 @@ function wahlAuswerten(world, now) {
   const sieger = Object.keys(zaehlung).sort((a, b) => zaehlung[b] - zaehlung[a] || reihe(a) - reihe(b))[0];
   if (r.woche !== null && sieger) {
     const p = world.players[sieger], e = X.erlass(r.kandidaten[sieger].erlass);
-    r.amt = { id: sieger, name: p.name, erlass: e.id, woche, stimmen: zaehlung[sieger], kandidaten: Object.keys(r.kandidaten).length };
+    r.amt = { id: sieger, name: p.name, erlass: e.id, woche, stimmen: zaehlung[sieger], kandidaten: Object.keys(r.kandidaten).length, gehalt: X.WAHL.gehalt };
+    /* Das Amtsgehalt - genau einmal, weil die Auszaehlung nur beim Wochenwechsel laeuft. */
+    E.buchen(p, X.WAHL.gehalt, 'amt', now);
     r.chronik = r.chronik.concat({ name: p.name, erlass: e.name, woche, stimmen: zaehlung[sieger] }).slice(-10);
-    tickern(world, '👑 ' + p.name + ' ist Bürgermeister dieser Woche (' + zaehlung[sieger] + (zaehlung[sieger] === 1 ? ' Stimme' : ' Stimmen') + '). Erlass: '
+    tickern(world, '👑 ' + p.name + ' ist Bürgermeister dieser Woche (' + zaehlung[sieger] + (zaehlung[sieger] === 1 ? ' Stimme' : ' Stimmen') + ', ' + X.WAHL.gehalt + ' Gold Amtsgehalt). Erlass: '
       + e.zeichen + ' ' + e.name + ' - ' + e.text, 'wahl', now, sieger);
   } else if (r.woche !== null && Object.keys(r.kandidaten).length) {
     tickern(world, '🏛️ Niemand hat gewählt - die Insel bleibt diese Woche ohne Bürgermeister.', 'wahl', now);

@@ -379,7 +379,7 @@ const SG = { rules: {} };
   E.BILANZ_REIN = { gebiete: 'Gebiete', tagesgeld: 'Tagesgeld', sold: 'Champion-Sold', eroberung: 'Eroberungen', arena: 'Große Arena',
     trainer: 'Wandertrainer', runen: 'Verlorene Runen', tagwerk: 'Tagwerk', truhe: 'Tagestruhe', streifzug: 'Streifzüge', kurier: 'Kurierdienst',
     quest: 'Quests', woche: 'Wochenaufgabe', zerhacker: 'Zerhacker', fehde: 'Fehde', duell: 'Live-Duelle', kopfgeld: 'Kopfgeld',
-    handel: 'Verkauf an den Händler', schatz: 'Schätze', geschenk: 'Geschenke' };
+    handel: 'Verkauf an den Händler', schatz: 'Schätze', geschenk: 'Geschenke', amt: 'Bürgermeister-Gehalt' };
   E.BILANZ_RAUS = { abgabe: 'Gebietsabgabe', ausbau: 'Ausbau', ausruestung: 'Skins & Waffen', brutplatz: 'Brutplätze', eier: 'Eierhändler',
     schmiede: 'Runenschmiede', perle: 'Schimmerperle', wesen: 'Wesen prägen', spende: 'Spenden', handel: 'Kauf beim Händler' };
   E.woche = function (now) { return Math.floor((now + 3 * 86400000) / (7 * 86400000)); };
@@ -2797,7 +2797,10 @@ const SG = { rules: {} };
   /* offen: Vorerst (28.09.2026, auf Wunsch von Louis) darf jeder waehlen
      und kandidieren. Die Huerden unten bleiben stehen und gelten wieder,
      sobald offen auf false steht. */
-  X.WAHL = { offen: true, stimmeErfahrung: 60, kandidatErfahrung: 150, tage: 3, stimmeAlter: 3 * 86400000, kandidatAlter: 7 * 86400000, fenster: 14 };
+  /* gehalt: Gold fuer den Sieger, einmal bei der Auszaehlung (28.09.2026).
+     Der Erlass hilft allen gleich - ohne eigenen Lohn hatte das Amt ausser
+     dem Titel nichts zu bieten. So viel wie die groesste Wochenaufgabe. */
+  X.WAHL = { offen: true, gehalt: 300, stimmeErfahrung: 60, kandidatErfahrung: 150, tage: 3, stimmeAlter: 3 * 86400000, kandidatAlter: 7 * 86400000, fenster: 14 };
   /* Schultage, an denen jemand da war - die letzten vierzehn. */
   X.aktivMerken = function (p, now) {
     var tag = H.day(now); p.aktivTage = Array.isArray(p.aktivTage) ? p.aktivTage : [];

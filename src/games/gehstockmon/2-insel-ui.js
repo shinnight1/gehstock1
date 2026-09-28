@@ -47,7 +47,7 @@
     function erlassZeile(e) { return e ? e.zeichen + ' ' + e.name + ' - ' + e.text : ''; }
     function rathausFenster() {
       var r = insel && insel.rathaus; if (!r || !c.open('Rathaus', 'rathaus')) return;
-      drawer.appendChild(el('p', 'Jede Woche wählt die Insel einen Bürgermeister, dessen Erlass die ganze nächste Woche gilt. Gewählt wird bis zum Wochenende, ausgezählt am Montag.', 'gm-beginner-tip'));
+      drawer.appendChild(el('p', 'Jede Woche wählt die Insel einen Bürgermeister, dessen Erlass die ganze nächste Woche gilt. Gewählt wird bis zum Wochenende, ausgezählt am Montag. Wer gewinnt, bekommt ' + X.WAHL.gehalt + ' Gold Amtsgehalt und den Titel Bürgermeister.', 'gm-beginner-tip'));
       drawer.appendChild(titel('Diese Woche', 'rathaus'));
       drawer.appendChild(el('p', r.amt ? '👑 ' + (r.amt.selbst ? 'Du bist' : r.amt.name + ' ist') + ' Bürgermeister dieser Woche (' + r.amt.stimmen + (r.amt.stimmen === 1 ? ' Stimme' : ' Stimmen') + '). Erlass: ' + erlassZeile(r.amt.erlass)
         : 'Diese Woche regiert niemand - es gilt kein Erlass.'));

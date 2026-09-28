@@ -70,12 +70,20 @@ await test('Candidates promise a decree, votes stay secret, and Monday the most 
   assert.ok(sicht.kandidaten.every((k) => k.stimmen === undefined), 'no counts before Monday');
   assert.deepEqual(sicht.kandidaten.map((k) => k.name), ['Anna', 'Ben'], 'in the order they stood');
   assert.match((await w.call(cc, 'waehlen', { kandidatId: w.ids[cc] })).error, /nicht auf dem Wahlzettel/);
+  const goldVorher = w.p(ca).gold, benVorher = w.p(cb).gold;
   w.uhr.t = naechsterMo;
   r = await w.call(cc, 'join');
   assert.equal(r.insel.rathaus.amt.name, 'Anna'); assert.equal(r.insel.rathaus.amt.stimmen, 2);
+  /* Amtsgehalt: nur fuer Anna, genau einmal, und in ihrer Wochenbilanz. */
+  await w.call(ca, 'world'); await w.call(cb, 'world');
+  assert.ok(w.p(ca).gold - goldVorher >= X.WAHL.gehalt, 'the mayor is paid');
+  assert.ok(w.p(cb).gold - benVorher < X.WAHL.gehalt, 'the loser is not');
+  assert.equal(w.p(ca).bilanz.rein.amt, X.WAHL.gehalt);
+  const nachGehalt = w.p(ca).gold; await w.call(cc, 'join'); await w.call(ca, 'world');
+  assert.ok(w.p(ca).gold - nachGehalt < X.WAHL.gehalt, 'paid only once');
   assert.equal(r.insel.erlass.id, 'kurierwoche'); assert.deepEqual(r.insel.rathaus.kandidaten, []);
   assert.equal(r.insel.rathaus.chronik[0].name, 'Anna');
-  assert.ok(w.db.data.ticker.some((t) => /Anna ist Bürgermeister dieser Woche \(2 Stimmen\)/.test(t.text)));
+  assert.ok(w.db.data.ticker.some((t) => /Anna ist Bürgermeister dieser Woche \(2 Stimmen, 300 Gold Amtsgehalt\)/.test(t.text)));
   /* Der Erlass wirkt: Kurierwoche mal Duerre. */
   assert.ok(Math.abs(r.insel.effekte.kurier - 1.3 * 1.25) < 1e-9);
   /* Titel unter dem Namen, in der Arena-Liste - und nur in der Amtswoche. */
