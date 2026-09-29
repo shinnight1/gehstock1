@@ -9,6 +9,7 @@
 
 import { BOT_REIHE, BOT_STUFEN, MATCH, QUALITAET, QUALITAET_REIHE, TEAMS, WAFFEN, WAFFEN_REIHE } from '../konfig.js';
 import { nameSaeubern } from '../einstellungen.js';
+import { diagnoseText, fehlerLeeren, fehlerListe } from '../diagnose.js';
 import { MAX_MENSCHEN, PFAD } from '../netz/protokoll.js';
 import { tabelleBauen } from './hud.js';
 
@@ -378,11 +379,46 @@ export class Menues {
           schalter('Bildrate anzeigen', 'fps'),
           el('h3', '', null, 'Ton'),
           regler('Lautstärke', 'lautstaerke', 0, 1, 0.05, prozent),
+          this.diagnoseBlock(),
         ]),
       ]),
       knopf('Fertig', 'haupt', () => this.ueberSchliessen()),
     ]);
     this.ueberZeigen(inhalt);
+  }
+
+  /* Fehlerprotokoll: auf dem iPad gibt es keine Konsole. Hier stehen die
+     letzten Fehler und Abbrueche zum Kopieren. */
+  diagnoseBlock() {
+    const app = this.app;
+    const liste = fehlerListe();
+    const zeilen = el('pre', 'e-diagnose');
+    const fuellen = () => {
+      const l = fehlerListe();
+      zeilen.textContent = l.length
+        ? l.slice(-6).reverse().map((f) => f.zeit.slice(5, 16).replace('T', ' ') + '  ' + f.text).join('\n')
+        : 'Keine Fehler gemerkt.';
+    };
+    fuellen();
+    const kopieren = knopf('Kopieren', 'klein', () => {
+      const text = diagnoseText(app.diagnoseTechnik());
+      const ok = () => this.hinweis('Diagnose kopiert.');
+      try {
+        navigator.clipboard.writeText(text).then(ok, () => this.hinweis('Kopieren ging nicht.'));
+      } catch (e) {
+        this.hinweis('Kopieren ging nicht.');
+      }
+    });
+    const leeren = knopf('Löschen', 'klein', () => {
+      fehlerLeeren();
+      fuellen();
+    });
+    return el('div', 'e-diagnose-block', [
+      el('h3', '', null, 'Diagnose'),
+      el('div', 'e-hinweis', null, liste.length + ' Einträge – bei Problemen kopieren und weitergeben.'),
+      zeilen,
+      el('div', 'm-leiste', [kopieren, leeren]),
+    ]);
   }
 
   /* ---------------------------------------------------------- Pause */

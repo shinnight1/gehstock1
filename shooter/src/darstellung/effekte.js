@@ -5,11 +5,15 @@
    in der Farbe des Schuetzen, Treffer an Figuren eine kleine Farbwolke.
    Alles kommt aus festen Vorraeten, die beim Start angelegt werden - im
    Spiel entsteht kein einziges neues Objekt.
+
+   Alle Kleckse sind ein einziges Instanz-Mesh: frueher war jeder Klecks
+   ein eigener Zeichenaufruf, nach ein paar Minuten Gefecht bis zu 56
+   zusaetzliche pro Bild.
    ------------------------------------------------------------------ */
 
 import {
-  AdditiveBlending, BoxGeometry, Mesh, MeshBasicMaterial, MeshLambertMaterial, PlaneGeometry,
-  Quaternion, Sprite, SpriteMaterial, Vector3,
+  AdditiveBlending, BoxGeometry, Color, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, MeshLambertMaterial,
+  PlaneGeometry, Quaternion, Sprite, SpriteMaterial, Vector3,
 } from 'three';
 import { klecksTextur, weichTextur } from './texturen.js';
 
@@ -17,8 +21,13 @@ const Z = new Vector3(0, 0, 1);
 const V = new Vector3();
 const Q = new Quaternion();
 const QR = new Quaternion();
+const P = new Vector3();
+const S = new Vector3();
+const M = new Matrix4();
+const LEER = new Matrix4().makeScale(0, 0, 0);
 
 export const FARBEN = ['#3f86ff', '#ff4a3a', '#c9c3b5'];
+const FARBWERTE = FARBEN.map((f) => new Color(f));
 
 export class Effekte {
   constructor(szene, qualitaet) {
@@ -40,22 +49,25 @@ export class Effekte {
     }
     this.spurI = 0;
 
-    // Kleckse: je Team ein Material
+    // Kleckse: ein Instanz-Mesh, die Teamfarbe steckt in der Instanzfarbe
     this.klecksTex = klecksTextur(3);
     this.klecksGeo = new PlaneGeometry(0.3, 0.3);
-    this.klecksMat = FARBEN.map((f) => new MeshLambertMaterial({
-      map: this.klecksTex, color: f, transparent: true, depthWrite: false,
+    this.klecksMat = new MeshLambertMaterial({
+      map: this.klecksTex, color: '#ffffff', transparent: true, depthWrite: false,
       polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4,
-    }));
-    this.kleckse = [];
-    for (let i = 0; i < (viel ? 56 : 24); i++) {
-      const m = new Mesh(this.klecksGeo, this.klecksMat[2]);
-      m.visible = false;
-      m.renderOrder = 3;
-      m.receiveShadow = true;
-      szene.add(m);
-      this.kleckse.push(m);
+    });
+    this.klecksAnzahl = viel ? 56 : 24;
+    const k = new InstancedMesh(this.klecksGeo, this.klecksMat, this.klecksAnzahl);
+    k.renderOrder = 3;
+    k.receiveShadow = true;
+    k.frustumCulled = false;
+    for (let i = 0; i < this.klecksAnzahl; i++) {
+      k.setMatrixAt(i, LEER);
+      k.setColorAt(i, FARBWERTE[2]);
     }
+    szene.add(k);
+    this.klecksMesh = k;
+    this.kleckse = [k];          // fuer vorwaermen()
     this.klecksI = 0;
 
     // Wolken (Staub, Farbe) - je Sprite ein eigenes Material fuer die Deckkraft
@@ -89,17 +101,21 @@ export class Effekte {
   }
 
   klecks(x, y, z, nx, ny, nz, team, zufall) {
-    const m = this.kleckse[this.klecksI++ % this.kleckse.length];
-    m.material = this.klecksMat[team >= 0 && team < 2 ? team : 2];
-    m.position.set(x + nx * 0.01, y + ny * 0.01, z + nz * 0.01);
+    const i = this.klecksI++ % this.klecksAnzahl;
+    const k = this.klecksMesh;
+    P.set(x + nx * 0.01, y + ny * 0.01, z + nz * 0.01);
     V.set(nx, ny, nz);
     if (V.lengthSq() < 0.5) V.set(0, 1, 0);
     Q.setFromUnitVectors(Z, V.normalize());
     QR.setFromAxisAngle(Z, zufall * Math.PI * 2);
-    m.quaternion.copy(Q).multiply(QR);
+    Q.multiply(QR);
     const s = 0.7 + zufall * 0.6;
-    m.scale.set(s, s, 1);
-    m.visible = true;
+    S.set(s, s, 1);
+    M.compose(P, Q, S);
+    k.setMatrixAt(i, M);
+    k.setColorAt(i, FARBWERTE[team >= 0 && team < 2 ? team : 2]);
+    k.instanceMatrix.needsUpdate = true;
+    k.instanceColor.needsUpdate = true;
   }
 
   wolke(x, y, z, farbe, groesse, dauer) {
@@ -143,13 +159,16 @@ export class Effekte {
 
   leeren() {
     for (const s of this.spuren) s.m.visible = false;
-    for (const k of this.kleckse) k.visible = false;
+    const k = this.klecksMesh;
+    for (let i = 0; i < this.klecksAnzahl; i++) k.setMatrixAt(i, LEER);
+    k.instanceMatrix.needsUpdate = true;
     for (const w of this.wolken) w.s.visible = false;
   }
 
   entsorgen() {
     for (const s of this.spuren) this.szene.remove(s.m);
-    for (const k of this.kleckse) this.szene.remove(k);
+    this.szene.remove(this.klecksMesh);
+    this.klecksMesh.dispose();
     for (const w of this.wolken) {
       this.szene.remove(w.s);
       w.mat.dispose();
@@ -158,7 +177,7 @@ export class Effekte {
     this.spurMat.dispose();
     this.klecksGeo.dispose();
     this.klecksTex.dispose();
-    for (const m of this.klecksMat) m.dispose();
+    this.klecksMat.dispose();
     this.weich.dispose();
   }
 }

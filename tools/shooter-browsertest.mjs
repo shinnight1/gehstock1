@@ -4,6 +4,8 @@
    Startet den Entwicklungsserver auf einem eigenen Port, oeffnet den
    Shooter in Chromium und prueft, was Node-Tests nicht koennen:
      - Touch mit mehreren Fingern gleichzeitig (laufen, umsehen, feuern),
+       Visierfeuer mit drei Fingern (laufen, ziehen, springen) - der
+       Visierpunkt bleibt dabei in der Bildmitte -, Hueftfeuer,
        pointercancel, Fokusverlust, alle Knoepfe, Sprint ueber den Stick,
        kein Scrollen oder Zoomen, Hochformat-Hinweis
      - Maus und Tastatur: Pointer Lock, Pause bei Verlust, P und Escape,
@@ -171,12 +173,53 @@ try {
     s = await ev(() => ({ f: window.__ops.eingabe.feuerFinger, n: window.__ops.sim.spieler.waffe.schuesse, v: window.__ops.sim.spieler.waffe.visier }));
     pruefe(s.f === 1 && s.n > n0 && s.v < 0.1, 'kleiner Knopf darueber schiesst aus der Huefte');
     await touch('touchEnd', []);
+
+    // Drei Finger: laufen, Visierfeuer halten und dabei zielen, springen.
+    // Im vollen Visier muss der Visierpunkt in der Bildmitte bleiben - dort
+    // fliegen die Kugeln hin.
+    await ev(() => {
+      const a = window.__ops, sp = a.sim.spieler;
+      sp.waffe.reserve = 999;
+      window.__magazinVoll = setInterval(() => { sp.waffe.magazin = Math.max(sp.waffe.magazin, 20); sp.waffe.laden = 0; }, 30);
+      window.__visierAbweichung = () => {
+        const wm = a.darstellung.waffenmodell, k = wm.kamera, m = wm.modelle[sp.waffe.id], p = m.visier;
+        const e = m.gruppe.matrixWorld.elements, v = k.matrixWorldInverse.elements;
+        const x = e[0] * p[0] + e[4] * p[1] + e[8] * p[2] + e[12];
+        const y = e[1] * p[0] + e[5] * p[1] + e[9] * p[2] + e[13];
+        const z = e[2] * p[0] + e[6] * p[1] + e[10] * p[2] + e[14];
+        const cx = v[0] * x + v[4] * y + v[8] * z + v[12], cy = v[1] * x + v[5] * y + v[9] * z + v[13], cz = v[2] * x + v[6] * y + v[10] * z + v[14];
+        return Math.atan2(Math.hypot(cx, cy), -cz) * 180 / Math.PI;
+      };
+    });
+    await page.waitForFunction(() => window.__ops.sim.spieler.amBoden, null, { timeout: 10000 });
+    const sprungKnopf = await mitte('.t-sprung');
+    const yaw0 = await ev(() => window.__ops.eingabe.yaw);
+    const schuss0 = await ev(() => window.__ops.sim.spieler.waffe.schuesse);
+    await touch('touchStart', [[11, 200, 640]]);
+    await touch('touchMove', [[11, 200, 590]]);
+    await touch('touchStart', [[11, 200, 590], [12, feuer[0], feuer[1]]]);
+    let abweichung = 0, vollesVisier = 0;
+    for (let i = 1; i <= 10; i++) {
+      await touch('touchMove', [[11, 200, 590], [12, feuer[0] - i * 6, feuer[1] + Math.sin(i) * 5]]);
+      await warten(90);
+      const p = await ev(() => ({ v: window.__ops.sim.spieler.waffe.visier, ab: window.__visierAbweichung() }));
+      if (p.v > 0.99) { vollesVisier++; abweichung = Math.max(abweichung, p.ab); }
+    }
+    await touch('touchStart', [[11, 200, 590], [12, feuer[0] - 60, feuer[1]], [13, sprungKnopf[0], sprungKnopf[1]]]);
+    const sprang = await page.waitForFunction(() => window.__ops.sim.spieler.y > 0.05, null, { timeout: 5000 }).then(() => true, () => false);
+    const mitte3 = await ev(() => ({ yaw: window.__ops.eingabe.yaw, n: window.__ops.sim.spieler.waffe.schuesse, vff: window.__ops.eingabe.visierFeuerFinger, sy: window.__ops.eingabe.stickY }));
+    await touch('touchEnd', []);
+    pruefe(vollesVisier > 0 && abweichung < 0.2, 'Visierfeuer: Visierpunkt bleibt beim Ziehen und Dauerfeuer in der Bildmitte (max. ' + abweichung.toFixed(2) + ' Grad)');
+    pruefe(Math.abs(mitte3.yaw - yaw0) > 0.03 && mitte3.n > schuss0 + 3, 'dabei gezielt (Blick gedreht) und durchgehend geschossen');
+    pruefe(sprang && mitte3.vff === 1 && mitte3.sy > 0.3, 'dritter Finger springt, Laufen und Visierfeuer laufen weiter');
+    const zurueck = await page.waitForFunction(() => window.__ops.sim.spieler.waffe.visier < 0.05 && !window.__ops.eingabe.feuert(), null, { timeout: 8000 }).then(() => true, () => false);
+    pruefe(zurueck, 'Loslassen: Schiessen endet, Ansicht zurueck aus dem Visier');
+    await ev(() => clearInterval(window.__magazinVoll));
     await tippe('.t-ducken');
     pruefe(await ev(() => window.__ops.sim.spieler.geduckt), 'Ducken');
     await tippe('.t-ducken');
     await tippe('.t-visier');
-    await warten(400);
-    pruefe(await ev(() => window.__ops.sim.spieler.waffe.visier > 0.9), 'Visier');
+    pruefe(await page.waitForFunction(() => window.__ops.sim.spieler.waffe.visier > 0.9, null, { timeout: 8000 }).then(() => true, () => false), 'Visier');
     await tippe('.t-visier');
     await ev(() => { window.__ops.sim.spieler.waffe.magazin = 5; });
     await tippe('.t-laden');
@@ -196,9 +239,10 @@ try {
     pruefe(await ev(() => window.__ops.zustand === 'pause'), 'Pause-Knopf');
     await page.tap('.ops-menue .m-knopf.haupt');
     await warten(200);
+    await page.waitForFunction(() => window.__ops.zustand === 'spiel', null, { timeout: 8000 }).catch(() => {});
     await page.setViewportSize({ width: 820, height: 1180 });
-    await warten(500);
-    pruefe(await ev(() => window.__ops.zustand === 'pause' && window.__ops.wurzel.classList.contains('hochkant')), 'Hochformat: Hinweis und Pause');
+    pruefe(await page.waitForFunction(() => window.__ops.zustand === 'pause' && window.__ops.wurzel.classList.contains('hochkant'), null, { timeout: 8000 })
+      .then(() => true, () => false), 'Hochformat: Hinweis und Pause');
     await page.setViewportSize({ width: 1180, height: 820 });
     await warten(300);
     pruefe(fehler.length === 0, 'keine Fehler in der Konsole' + (fehler.length ? ': ' + fehler[0] : ''));
@@ -299,6 +343,9 @@ try {
       const a = await A.ev(() => ({ x: window.__ops.sim.spieler.x, z: window.__ops.sim.spieler.z, k: window.__ops.online.korrekturen,
         lebt: window.__ops.sim.spieler.lebt, nr: window.__ops.sim.spieler.lebenNr, spiel: window.__ops.zustand === 'spiel' }));
       await vorn(B);
+      // Bens Bild holt nach dem Vorholen auf (bis zu vier Sekunden)
+      await B.page.waitForFunction(([id, x, z]) => { const f = window.__ops.sim.akteure[id]; return Math.hypot(f.x - x, f.z - z) < 0.3; },
+        [idA, a.x, a.z], { timeout: 4000 }).catch(() => {});
       const nachher = await B.ev((id) => { const x = window.__ops.sim.akteure[id]; return [x.x, x.z]; }, idA);
       if (a.lebt && a.nr === leben && a.spiel && Math.hypot(nachher[0] - vorher[0], nachher[1] - vorher[1]) > 0.5) lauf = { vorher, nachher, a };
     }

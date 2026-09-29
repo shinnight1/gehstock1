@@ -212,9 +212,11 @@ export const BOT_REICHWEITE = {
    Darstellung: Qualitaetsstufen
    ------------------------------------------------------------------ */
 export const QUALITAET = {
-  niedrig: { name: 'Niedrig', pixel: 1.0, schatten: 0, kantenglaettung: false, effekte: 0.5, sichtweite: 110 },
-  mittel: { name: 'Mittel', pixel: 1.35, schatten: 1024, kantenglaettung: false, effekte: 1, sichtweite: 140 },
-  hoch: { name: 'Hoch', pixel: 2.0, schatten: 2048, kantenglaettung: true, effekte: 1, sichtweite: 160 },
+  // pixelTouch: Obergrenze auf Touch-Geraeten. Das iPad hat Pixeldichte 2 -
+  // voll aufgeloest mit Kantenglaettung waeren das ueber 100 MB Bildspeicher.
+  niedrig: { name: 'Niedrig', pixel: 1.0, pixelTouch: 1.0, schatten: 0, kantenglaettung: false, effekte: 0.5, sichtweite: 110 },
+  mittel: { name: 'Mittel', pixel: 1.35, pixelTouch: 1.25, schatten: 1024, kantenglaettung: false, effekte: 1, sichtweite: 140 },
+  hoch: { name: 'Hoch', pixel: 2.0, pixelTouch: 1.5, schatten: 2048, kantenglaettung: true, effekte: 1, sichtweite: 160 },
 };
 
 export const QUALITAET_REIHE = ['niedrig', 'mittel', 'hoch'];

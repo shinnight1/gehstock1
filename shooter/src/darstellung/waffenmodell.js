@@ -289,7 +289,7 @@ export class Waffenmodell {
     // Laufwackeln
     const tempo = z.amBoden ? z.tempo : 0;
     this.phase += tempo * dt * (z.sprint ? 1.55 : 2.0);
-    const amp = Math.min(1.4, tempo / 4.8) * (1 - 0.82 * this.visier) * (z.rutschen ? 0.2 : 1);
+    const amp = Math.min(1.4, tempo / 4.8) * (1 - 0.97 * this.visier) * (z.rutschen ? 0.2 : 1);
     const bobX = Math.sin(this.phase) * 0.011 * amp * (1 + this.sprint * 1.2);
     const bobY = -Math.abs(Math.cos(this.phase)) * 0.009 * amp * (1 + this.sprint * 1.4);
     const atmen = Math.sin(this.zeit * 1.6) * 0.0018 * (1 - this.visier);
@@ -360,16 +360,20 @@ export class Waffenmodell {
 
     // Hochnehmen und Landung
     const h = 1 - glatt(this.heben);
-    py += -0.22 * h - this.landung * 0.035;
+    py += -0.22 * h - this.landung * 0.035 * (1 - 0.8 * v);
     rx += -0.55 * h;
 
-    // Rueckstoss
+    // Im vollen Visier liegt der Visierpunkt genau in der Bildmitte - dort,
+    // wohin die Kugeln fliegen. Alles, was die Visierlinie verschieben
+    // wuerde (Nachziehen, Kippen beim Rueckstoss), blendet darum mit dem
+    // Visier aus; der Stoss nach hinten bleibt, er liegt auf der Linie.
+    const frei = 1 - v;
     pz += this.rueck * 0.028 * (1 - 0.5 * v);
-    py += this.rueck * 0.004;
-    rx += this.rueckDreh * (0.045 - 0.03 * v);
+    py += this.rueck * 0.004 * frei;
+    rx += this.rueckDreh * 0.045 * frei;
 
-    this.halter.position.set(px + bobX + this.swayX * (1 - 0.7 * v), py + bobY + atmen + this.swayY * (1 - 0.7 * v), pz);
-    this.halter.rotation.set(rx + this.swayY * 0.6, ry - this.swayX * 0.5, rz + bobX * 2);
+    this.halter.position.set(px + bobX + this.swayX * frei, py + bobY + atmen + this.swayY * frei, pz);
+    this.halter.rotation.set(rx + this.swayY * 0.6 * frei, ry - this.swayX * 0.5 * frei, rz + bobX * 2);
 
     // Huelsen
     for (const s of this.huelsen) {

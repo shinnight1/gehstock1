@@ -67,7 +67,7 @@ Server).
 | linke Hälfte: Daumen aufsetzen und ziehen = laufen | W A S D |
 | Stick weit nach oben = sprinten | Shift |
 | rechte Hälfte wischen = umsehen | Maus (nach Klick ins Bild) |
-| großer Feuerknopf rechts: zielt beim Schießen übers Visier (wie in CoD Mobile), beim Halten weiter umsehen | linke Maustaste (aus der Hüfte) |
+| großer Feuerknopf rechts: halten = durchs Visier zielen und schießen (wie in CoD Mobile), die Schüsse gehen sofort auf den Visierpunkt; beim Halten weiter umsehen, loslassen = zurück | linke Maustaste (aus der Hüfte) |
 | kleiner Knopf darüber: schießt aus der Hüfte, ohne Visier | |
 | zweiter Feuerknopf links (wie der große) | |
 | Visier (antippen schaltet, einstellbar auf Halten) | rechte Maustaste (halten) |
@@ -165,6 +165,29 @@ rund acht Zeichenaufrufen. Im Spiel sind es insgesamt etwa 50 bis 100.
   Pfadspeicher kommen aus festen Vorräten.
 - „Bildrate anzeigen“ in den Einstellungen zeigt fps, Bildzeit, aktuelle
   Pixeldichte und Zeichenaufrufe.
+- Auf Touch-Geräten ist die Pixeldichte zusätzlich gedeckelt (Niedrig 1,0,
+  Mittel 1,25, Hoch 1,5) - das iPad hat 2, voll aufgelöst mit
+  Kantenglättung wären das über 100 MB Bildspeicher.
+- Alle Farbkleckse sind ein Instanz-Mesh (vorher bis zu 56 Zeichenaufrufe
+  mehr, je länger das Match lief): im Gefecht 43 bis 51 Aufrufe pro Bild.
+
+**Stabilität auf dem iPad.** Gefundene Risiken und was dagegen getan ist:
+
+- Ton: höchstens 18 Stimmen gleichzeitig (10 für Geräusche anderer Figuren,
+  je Geräusch höchstens 3); eigene Klänge und Rückmeldungen verdrängen
+  notfalls die älteste Umgebungsstimme; jede Stimme wird nach dem Ende vom
+  Audiographen getrennt. Vorher liefen im Gefecht über hundert Audioknoten
+  gleichzeitig auf - auf iOS eine bekannte Absturzquelle.
+- Bildspeicher: Größenereignisse (Safari meldet beim Ein- und Ausblenden
+  seiner Leisten viele) werden gebündelt, neu angelegt wird nur bei
+  wirklich geänderter Pixelgröße.
+- Treffer-Animationen ohne erzwungenes Layout (Web Animations).
+- Ein Fehler in einem Bild beendet das Spiel nicht mehr; erst fünf in drei
+  Sekunden gelten als Absturz.
+- Diagnose (Einstellungen → Diagnose): Fehler mit Ort und Aufrufstapel,
+  zum Kopieren. Ein Herzschlag alle fünf Sekunden erkennt, wenn iOS die
+  sichtbare Seite hart beendet hat (meist Speicher); beim nächsten Start
+  sinkt dann die Grafikqualität um eine Stufe, mit Hinweis.
 
 Gemessen (Linux-Container, Node 22): ein Simulationsschritt mit sechs
 Figuren kostet rund 60 bis 70 µs, ein Strahltest wenige µs, eine Pfadsuche
@@ -244,7 +267,9 @@ auf freiem Port, die echte Runde bleibt unberührt).
 
 - 60 fps auf dem iPad 10 sind nicht auf dem Gerät gemessen (keine GPU im
   Container); Touch und Mehrfinger sind im Browser mit Touch-Emulation
-  getestet, nicht auf echter Hardware.
+  getestet, nicht auf echter Hardware. Die Absturzursachen oben sind aus
+  Code und Messungen in Chromium abgeleitet - ob sie die Abstürze auf dem
+  iPad erklären, zeigt erst das Gerät (Einstellungen → Diagnose).
 - Nur eine Karte, ein Modus, drei Waffen, kein Waffenwechsel im Leben
   (gewählt wird im Menü oder im Todesbildschirm fürs nächste Leben).
 - Bots springen nur, um sich zu befreien; auf Kisten klettern sie nicht.

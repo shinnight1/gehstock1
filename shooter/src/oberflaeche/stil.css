@@ -247,6 +247,8 @@ html, body {
 }
 
 /* Trefferanzeige */
+/* Hitmarker: vier schmale Striche als X um die Bildmitte, mit Luecke -
+   das Ziel bleibt sichtbar. Gestartet wird per Web Animation (hud.js). */
 .hud-treffer {
   position: absolute;
   left: 50%;
@@ -254,26 +256,61 @@ html, body {
   width: 0;
   height: 0;
   opacity: 0;
+  will-change: transform, opacity;
 }
-.hud-treffer.an { opacity: 1; }
 .hud-treffer i {
   position: absolute;
-  width: 3px;
-  height: 11px;
-  left: -1.5px;
-  top: -5.5px;
+  width: 2.5px;
+  height: 10px;
+  left: -1.25px;
+  top: -5px;
+  border-radius: 1px;
   background: #fff;
-  box-shadow: 0 0 2px rgba(0, 0, 0, 0.8);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55);
 }
 .hud-treffer i:nth-child(1) { transform: rotate(45deg) translateY(-12px); }
 .hud-treffer i:nth-child(2) { transform: rotate(135deg) translateY(-12px); }
 .hud-treffer i:nth-child(3) { transform: rotate(225deg) translateY(-12px); }
 .hud-treffer i:nth-child(4) { transform: rotate(315deg) translateY(-12px); }
-.hud-treffer.kopf i { background: var(--gold-hell); }
-.hud-treffer.toedlich i { background: #ff4a3a; height: 14px; }
+.hud-treffer.kopf i { background: #ffd24a; height: 12px; top: -6px; }
+.hud-treffer.toedlich i { background: #ff3b30; width: 3px; height: 15px; left: -1.5px; top: -7.5px; }
+.hud-treffer.toedlich i:nth-child(1) { transform: rotate(45deg) translateY(-14px); }
+.hud-treffer.toedlich i:nth-child(2) { transform: rotate(135deg) translateY(-14px); }
+.hud-treffer.toedlich i:nth-child(3) { transform: rotate(225deg) translateY(-14px); }
+.hud-treffer.toedlich i:nth-child(4) { transform: rotate(315deg) translateY(-14px); }
 .hud-treffer.geschuetzt i { background: #8fb7d6; }
-.hud-treffer.puls { animation: ops-puls 0.22s ease-out; }
-@keyframes ops-puls { from { transform: scale(1.5); } to { transform: scale(1); } }
+
+/* Abschussbestaetigung: klein, unter dem Fadenkreuz */
+.hud-kill {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 76px);
+  transform: translate(-50%, 0);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 11px 4px 8px;
+  border-radius: 6px;
+  background: rgba(10, 12, 16, 0.55);
+  border-left: 3px solid #ff3b30;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+.hud-kill .k-x { color: #ff3b30; font-size: 15px; font-weight: 900; }
+.hud-kill .k-name { color: #fff; font-size: 15px; font-weight: 800; letter-spacing: 0.02em; }
+.hud-kill .k-tag {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #e8edf2;
+}
+.hud-kill .k-kopf { background: rgba(255, 210, 74, 0.25); color: #ffd24a; }
+.hud-kill.kopf { border-left-color: #ffd24a; }
 
 /* Schadensrichtung */
 .hud-schaden i {
@@ -795,4 +832,22 @@ html, body {
   .m-rumpf { flex-direction: column; }
   .m-karten { grid-template-columns: 1fr; }
   .s-spalten, .e-rollen { grid-template-columns: 1fr; }
+}
+
+/* Diagnose in den Einstellungen */
+.e-diagnose-block { margin-top: 6px; }
+.e-hinweis { font-size: 12px; color: var(--gedaempft); margin-bottom: 6px; }
+.e-diagnose {
+  font: 11px/1.45 ui-monospace, Menlo, monospace;
+  color: #cfd6de;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin: 0 0 8px;
+  max-height: 110px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  -webkit-user-select: text;
+  user-select: text;
 }

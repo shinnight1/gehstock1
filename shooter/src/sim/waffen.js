@@ -20,6 +20,17 @@ import { klemme, mische, naehere, startwert, zufallsquelle } from './mathe.js';
    (Vorhersage) und der Server (Mehrspieler) denselben Ausschlag. */
 const RUECK = zufallsquelle(1);
 
+/* Zielt ein Mensch (Visierknopf, Visierfeuer, rechte Maustaste), fliegen
+   seine Schuesse sofort fast so genau wie voll im Visier - auch waehrend
+   das Visier noch hochkommt. Sonst gingen beim Visierfeuer die ersten
+   Schuesse wie aus der Huefte daneben, obwohl der Visierpunkt schon auf
+   dem Ziel liegt. Bots zielen wie bisher mit dem echten Visieranteil. */
+const ZIEL_ANTEIL = 0.9;
+
+function zielAnteil(w) {
+  return w.menschZielt ? Math.max(w.visier, ZIEL_ANTEIL) : w.visier;
+}
+
 export function neueWaffe(id) {
   const def = WAFFEN[id] || WAFFEN.sturmgewehr;
   return {
@@ -32,6 +43,7 @@ export function neueWaffe(id) {
     ladenGesamt: 0,
     ladenPhase: 0,     // Schrot: 1 Anfang, 2 Patronen, 3 Ende
     visier: 0,         // 0 = Huefte, 1 = voll im Visier
+    menschZielt: false, // ein Mensch haelt das Visier (siehe ZIEL_ANTEIL)
     bloom: 0,          // zusaetzliche Streuung durch Dauerfeuer (Grad)
     rueckHoch: 0,      // Rueckstoss (Grad), wirkt auf Blick und Schuss
     rueckSeite: 0,
@@ -51,6 +63,7 @@ export function waffeAuffuellen(w) {
   w.ladenGesamt = 0;
   w.ladenPhase = 0;
   w.visier = 0;
+  w.menschZielt = false;
   w.bloom = 0;
   w.rueckHoch = 0;
   w.rueckSeite = 0;
@@ -124,9 +137,10 @@ function nachladenFortschritt(sim, a, w, dt) {
 /* Aktuelle Streuung in Grad (halber Kegelwinkel). */
 export function streuungBerechnen(a, w) {
   const s = w.def.streuung;
-  let grad = mische(s.hueft, s.visier, w.visier);
+  const ziel = zielAnteil(w);
+  let grad = mische(s.hueft, s.visier, ziel);
   const v = Math.hypot(a.vx, a.vz);
-  grad += s.bewegung * klemme(v / FIGUR.tempo.gehen, 0, 1.4) * (1 - 0.6 * w.visier);
+  grad += s.bewegung * klemme(v / FIGUR.tempo.gehen, 0, 1.4) * (1 - 0.6 * ziel);
   if (!a.amBoden) grad += s.luft;
   if (a.geduckt && a.amBoden && a.rutschZeit <= 0) grad *= 0.82;
   grad += w.bloom;
@@ -145,6 +159,7 @@ export function waffeTick(sim, a, tasten, neu, dt, darfSchiessen, jetzt) {
   // Zielen: nicht im Sprint. Waehrend des Nachladens darf man zielen.
   const willVisier = (tasten & T_VISIER) !== 0 && !a.sprintet && darfSchiessen;
   w.visier = naehere(w.visier, willVisier ? 1 : 0, dt / def.visier.zeit);
+  w.menschZielt = willVisier && !a.ki;
 
   if (a.sprintet) w.sprintAus = def.sprintAus;
   else if (w.sprintAus > 0) w.sprintAus = Math.max(0, w.sprintAus - dt);
@@ -201,8 +216,9 @@ export function nachSchuss(sim, w) {
   const def = w.def;
   const r = def.rueckstoss;
   const s = def.streuung;
-  w.bloom = Math.min(s.bloomMax, w.bloom + mische(s.bloom, s.bloomVisier, w.visier));
-  const faktor = mische(1, r.visierFaktor, w.visier);
+  const ziel = zielAnteil(w);
+  w.bloom = Math.min(s.bloomMax, w.bloom + mische(s.bloom, s.bloomVisier, ziel));
+  const faktor = mische(1, r.visierFaktor, ziel);
   RUECK.setzen(startwert(w.schuesse, def.rpm, 0x7e57));
   w.rueckHoch = Math.min(r.max, w.rueckHoch + r.hoch * faktor * RUECK.zwischen(0.85, 1.15));
   w.rueckSeite = klemme(w.rueckSeite + r.seite * faktor * RUECK.zwischen(-1, 1), -r.max * 0.5, r.max * 0.5);

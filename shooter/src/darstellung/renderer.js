@@ -48,6 +48,7 @@ export class Darstellung {
     this.qualitaet = QUALITAET[qualitaet] ? qualitaet : 'mittel';
     this.aufloesung = 1;         // dynamischer Faktor auf die Pixeldichte
     this.dynamisch = true;
+    this.touch = false;          // Touch-Geraet: niedrigere Obergrenze der Pixeldichte
     this.kontextWeg = false;
     this.beiKontext = null;
 
@@ -139,6 +140,7 @@ export class Darstellung {
 
   rendererEntfernen() {
     if (!this.renderer) return;
+    this.groesseSchluessel = '';
     this.canvas.removeEventListener('webglcontextlost', this.kontextVerloren);
     this.canvas.removeEventListener('webglcontextrestored', this.kontextZurueck);
     this.renderer.dispose();
@@ -184,16 +186,27 @@ export class Darstellung {
   pixelDichte() {
     const q = QUALITAET[this.qualitaet];
     const geraet = window.devicePixelRatio || 1;
-    return Math.max(0.5, Math.min(geraet, q.pixel) * this.aufloesung);
+    const grenze = this.touch ? q.pixelTouch : q.pixel;
+    // Auf Hundertstel runden: sonst loest jeder Rundungsunterschied ein
+    // neues Anlegen des Bildspeichers aus.
+    return Math.round(Math.max(0.5, Math.min(geraet, grenze) * this.aufloesung) * 100) / 100;
   }
 
+  /* Nur wenn sich die Pixelgroesse wirklich aendert: jedes setSize legt
+     den Bildspeicher neu an. Safari auf dem iPad meldet beim Ein- und
+     Ausblenden seiner Leisten viele Groessenaenderungen - neu angelegt
+     wird trotzdem nur einmal. */
   groesseAnpassen() {
     if (!this.renderer) return;
-    const b = this.behaelter.clientWidth || window.innerWidth;
-    const h = this.behaelter.clientHeight || window.innerHeight;
-    this.breite = Math.max(1, b);
-    this.hoehe = Math.max(1, h);
-    this.renderer.setPixelRatio(this.pixelDichte());
+    const b = Math.max(1, this.behaelter.clientWidth || window.innerWidth);
+    const h = Math.max(1, this.behaelter.clientHeight || window.innerHeight);
+    const dichte = this.pixelDichte();
+    const schluessel = b + 'x' + h + '@' + dichte;
+    if (schluessel === this.groesseSchluessel) return;
+    this.groesseSchluessel = schluessel;
+    this.breite = b;
+    this.hoehe = h;
+    this.renderer.setPixelRatio(dichte);
     this.renderer.setSize(this.breite, this.hoehe, false);
     this.kamera.aspect = this.breite / this.hoehe;
     this.kamera.updateProjectionMatrix();

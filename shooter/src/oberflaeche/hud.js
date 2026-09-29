@@ -41,6 +41,7 @@ export class Hud {
       '<div class="hud-muni"><div class="m-zahlen"><span class="m-mag">30</span><span class="m-res">/ 150</span></div><div class="m-name">Sturmgewehr</div><div class="m-laden"><i></i></div></div>',
       '<div class="hud-kreuz"><i class="k-o"></i><i class="k-u"></i><i class="k-l"></i><i class="k-r"></i><b class="k-punkt"></b></div>',
       '<div class="hud-treffer"><i></i><i></i><i></i><i></i></div>',
+      '<div class="hud-kill"><span class="k-x">✕</span><span class="k-name"></span><span class="k-tag k-kopf">KOPFSCHUSS</span><span class="k-tag k-serie"></span></div>',
       '<div class="hud-schaden"><i></i><i></i><i></i><i></i></div>',
       '<div class="hud-zielname"></div>',
       '<div class="hud-hinweis"></div>',
@@ -82,6 +83,10 @@ export class Hud {
       kreuz: q('.hud-kreuz'),
       kreuzTeile: [q('.k-o'), q('.k-u'), q('.k-l'), q('.k-r')],
       treffer: q('.hud-treffer'),
+      kill: q('.hud-kill'),
+      killName: q('.k-name'),
+      killKopf: q('.k-kopf'),
+      killSerie: q('.k-serie'),
       schaden: Array.from(h.querySelectorAll('.hud-schaden i')),
       zielname: q('.hud-zielname'),
       hinweis: q('.hud-hinweis'),
@@ -94,7 +99,6 @@ export class Hud {
       tabelle: q('.hud-tabelle'),
     };
     this.alt = {};
-    this.trefferBis = 0;
     this.meldungBis = 0;
     this.ansageBis = 0;
     this.schadenQuellen = [];
@@ -186,9 +190,6 @@ export class Hud {
       }
     }
 
-    // Trefferanzeige
-    this.klasse('tr', E.treffer, 'an', jetzt < this.trefferBis);
-
     // Hinweise
     let hinweis = '';
     if (lebt && sim.phase === 'laeuft') {
@@ -243,17 +244,49 @@ export class Hud {
     this.e.fps.classList.toggle('an', !!v);
   }
 
-  treffer(kopf, toedlich, geschuetzt, zeit) {
+  /* Hitmarker: weiss am Koerper, gold am Kopf, rot beim Abschuss, blau
+     auf Spawnschutz. Gestartet per Web Animation - kein erzwungenes
+     Layout pro Treffer (bei Dauerfeuer zehnmal pro Sekunde). */
+  treffer(kopf, toedlich, geschuetzt) {
     const T = this.e.treffer;
-    T.classList.toggle('kopf', !!kopf);
-    T.classList.toggle('toedlich', !!toedlich);
-    T.classList.toggle('geschuetzt', !!geschuetzt);
-    // Animation neu starten
-    T.classList.remove('puls');
-    void T.offsetWidth;
-    T.classList.add('puls');
-    this.alt['tr:an'] = undefined;
-    this.trefferBis = zeit + (toedlich ? 0.4 : 0.22);
+    T.className = 'hud-treffer' + (toedlich ? ' toedlich' : kopf ? ' kopf' : '') + (geschuetzt ? ' geschuetzt' : '');
+    if (this.trefferAnim) this.trefferAnim.cancel();
+    const dauer = toedlich ? 460 : kopf ? 320 : 230;
+    if (T.animate) {
+      this.trefferAnim = T.animate([
+        { opacity: 1, transform: 'scale(' + (toedlich ? 1.7 : 1.4) + ')' },
+        { opacity: 1, transform: 'scale(1)', offset: 0.22 },
+        { opacity: 1, transform: 'scale(1)', offset: 0.65 },
+        { opacity: 0, transform: 'scale(0.96)' },
+      ], { duration: dauer, easing: 'ease-out' });
+    } else {
+      T.style.opacity = '1';
+      clearTimeout(this.trefferTimer);
+      this.trefferTimer = setTimeout(() => { T.style.opacity = ''; }, dauer);
+    }
+  }
+
+  /* Abschussbestaetigung: kurz, unter dem Fadenkreuz, verdeckt nichts. */
+  abschussBestaetigen(name, kopf, serie) {
+    const E = this.e;
+    E.killName.textContent = name;
+    E.killKopf.style.display = kopf ? '' : 'none';
+    E.killSerie.style.display = serie >= 2 ? '' : 'none';
+    E.killSerie.textContent = 'SERIE ' + serie;
+    E.kill.classList.toggle('kopf', !!kopf);
+    if (this.killAnim) this.killAnim.cancel();
+    if (E.kill.animate) {
+      this.killAnim = E.kill.animate([
+        { opacity: 0, transform: 'translate(-50%, 8px) scale(1.12)' },
+        { opacity: 1, transform: 'translate(-50%, 0) scale(1)', offset: 0.08 },
+        { opacity: 1, transform: 'translate(-50%, 0) scale(1)', offset: 0.8 },
+        { opacity: 0, transform: 'translate(-50%, -4px) scale(1)' },
+      ], { duration: 1400, easing: 'ease-out' });
+    } else {
+      E.kill.style.opacity = '1';
+      clearTimeout(this.killTimer);
+      this.killTimer = setTimeout(() => { E.kill.style.opacity = ''; }, 1400);
+    }
   }
 
   schadenVon(id, zeit) {
@@ -302,7 +335,10 @@ export class Hud {
     this.feedEintraege.length = 0;
     this.e.feed.textContent = '';
     this.schadenQuellen.length = 0;
-    this.trefferBis = 0;
+    if (this.trefferAnim) this.trefferAnim.cancel();
+    if (this.killAnim) this.killAnim.cancel();
+    clearTimeout(this.trefferTimer);
+    clearTimeout(this.killTimer);
     this.meldungBis = 0;
     this.ansageBis = 0;
     this.alt = {};

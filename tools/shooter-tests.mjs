@@ -19,9 +19,9 @@ import { Navigation } from '../shooter/src/sim/navigation.js';
 import { Simulation } from '../shooter/src/sim/simulation.js';
 import { augenhoehe, bewegeFigur, steckt } from '../shooter/src/sim/bewegung.js';
 import { T_DUCKEN, T_FEUER, T_NACHLADEN, T_SPRINGEN, T_SPRINT, T_VISIER, neuerBefehl } from '../shooter/src/sim/befehl.js';
-import { neueWaffe } from '../shooter/src/sim/waffen.js';
+import { neueWaffe, streuungBerechnen } from '../shooter/src/sim/waffen.js';
 import { schadenBerechnen, ZONE_BEINE, ZONE_KOPF, ZONE_RUMPF } from '../shooter/src/sim/treffer.js';
-import { FIGUR, LEBEN, MATCH, TICK, WAFFEN } from '../shooter/src/konfig.js';
+import { FIGUR, LEBEN, MATCH, TICK, WAFFEN, WAFFEN_REIHE } from '../shooter/src/konfig.js';
 import { yawZu } from '../shooter/src/sim/mathe.js';
 
 function pruefe(bedingung, text) {
@@ -457,6 +457,38 @@ export function shooterTests(test) {
     pruefe(!s.sprintet && s.waffe.schuesse === vorher, 'Schuss im Sprint');
     schritte(sim, Math.ceil(WAFFEN.sturmgewehr.sprintAus / TICK) + 1);
     pruefe(s.waffe.schuesse > vorher, 'nach dem Sprint kein Schuss');
+  });
+
+  test('Ops: Visierfeuer trifft sofort den Visierpunkt, Bots zielen wie bisher', () => {
+    for (const id of WAFFEN_REIHE) {
+      const sim = stilleSim(karte, welt, nav);
+      const s = sim.spieler;
+      setze(s, -26, 0, 0, yawZu(1, 0));
+      s.waffe = neueWaffe(id);
+      // Aus der Huefte: Visierfeuer gedrueckt - erster Schuss im ersten Schritt
+      s.befehl.tasten = T_FEUER | T_VISIER;
+      schritte(sim, 1);
+      const def = WAFFEN[id];
+      pruefe(s.waffe.schuesse === 1, id + ': kein sofortiger Schuss');
+      pruefe(s.waffe.visier < 0.2, id + ': Visier schon oben?');
+      const soll = def.streuung.hueft + (def.streuung.visier - def.streuung.hueft) * 0.9;
+      // streuung enthaelt schon den Aufschlag dieses Schusses (bloom) - der Schuss selbst flog ohne
+      const erster = s.waffe.streuung - s.waffe.bloom;
+      pruefe(erster <= soll + 1e-9, id + ': erster Schuss streut ' + erster.toFixed(2) + ' Grad');
+      // Loslassen: zurueck aus dem Visier, Streuung wieder aus der Huefte
+      s.befehl.tasten = 0;
+      schritte(sim, 60);
+      pruefe(s.waffe.visier === 0 && s.waffe.streuung > soll, id + ': nach dem Loslassen nicht zurueck');
+    }
+    // Bots bekommen den Vorteil nicht
+    const sim = stilleSim(karte, welt, nav);
+    const b = sim.akteure.find((a) => a.bot);
+    const w = b.waffe;
+    w.visier = 0.1;
+    w.menschZielt = false;
+    b.vx = 0; b.vz = 0; b.amBoden = true; b.geduckt = false;
+    const stBot = streuungBerechnen(b, w);
+    pruefe(stBot > w.def.streuung.hueft * 0.85, 'Bot streut nicht mehr wie aus der Huefte');
   });
 
   /* --- Leben, Spawn, Match --- */

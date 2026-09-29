@@ -9,11 +9,20 @@
 
    Geraeusche anderer Figuren klingen raeumlich: leiser und dumpfer mit
    der Entfernung, links oder rechts je nach Richtung.
+
+   Stimmen sind hart begrenzt. Ohne Grenze liefen im Gefecht (sechs
+   Figuren, Dauerfeuer, Schritte, Einschlaege) weit ueber hundert
+   Audioknoten gleichzeitig - Safari auf dem iPad verkraftet das schlecht.
+   Eigene Geraeusche und Rueckmeldungen haben Vorrang und verdraengen
+   notfalls die aelteste Umgebungsstimme. Jede Stimme wird nach dem Ende
+   vom Graphen getrennt.
    ------------------------------------------------------------------ */
 
 import { zufallsquelle } from '../sim/mathe.js';
 
-const MAX_STIMMEN = 28;
+const MAX_STIMMEN = 18;          // insgesamt
+const MAX_UMGEBUNG = 10;         // davon fuer Geraeusche anderer Figuren
+const MAX_GLEICHE = 3;           // gleiches Umgebungsgeraeusch gleichzeitig
 
 /* ---------------------------------------------------------- Synthese */
 
@@ -115,18 +124,33 @@ const REZEPTE = {
     { art: 'rauschen', laut: 0.8, zerfall: 0.006, hp: 0.8 },
     { art: 'sinus', laut: 0.4, zerfall: 0.012, von: 2600 },
   ], 26],
-  treffer: [0.08, [
-    { art: 'sinus', laut: 0.8, zerfall: 0.018, von: 3000 },
-    { art: 'rauschen', laut: 0.3, zerfall: 0.006, hp: 0.9 },
+  // Rueckmeldungen: kurz, hell und trocken - man hoert sie auch im Gefecht.
+  treffer: [0.07, [
+    { art: 'rauschen', laut: 0.9, zerfall: 0.0035, hp: 0.95 },
+    { art: 'sinus', laut: 0.75, zerfall: 0.016, von: 2900, bis: 2350, gleit: 0.02 },
+    { art: 'sinus', laut: 0.3, zerfall: 0.009, von: 4300 },
   ], 31],
-  kopftreffer: [0.2, [
-    { art: 'sinus', laut: 0.8, zerfall: 0.05, von: 4200, oberton: 0.3 },
-    { art: 'sinus', laut: 0.5, zerfall: 0.02, von: 2800 },
+  kopftreffer: [0.26, [
+    { art: 'rauschen', laut: 0.9, zerfall: 0.003, hp: 0.95 },
+    { art: 'sinus', laut: 0.8, zerfall: 0.07, von: 3150 },
+    { art: 'sinus', laut: 0.45, zerfall: 0.05, von: 4870 },
+    { art: 'sinus', laut: 0.25, zerfall: 0.03, von: 6230 },
   ], 32],
-  abschuss: [0.34, [
-    { art: 'sinus', laut: 0.7, zerfall: 0.09, von: 880, oberton: 0.2 },
-    { art: 'sinus', laut: 0.8, zerfall: 0.12, von: 1320, oberton: 0.2, start: 0.07 },
+  abschuss: [0.5, [
+    { art: 'sinus', laut: 1.0, zerfall: 0.055, von: 140, bis: 52, gleit: 0.03 },
+    { art: 'rauschen', laut: 0.55, zerfall: 0.012, tp: 0.3 },
+    { art: 'rauschen', laut: 0.5, zerfall: 0.004, hp: 0.9 },
+    { art: 'sinus', laut: 0.55, zerfall: 0.13, von: 1245, oberton: 0.15, start: 0.03 },
+    { art: 'sinus', laut: 0.5, zerfall: 0.17, von: 1865, start: 0.065 },
   ], 33],
+  kopfabschuss: [0.55, [
+    { art: 'sinus', laut: 1.0, zerfall: 0.055, von: 140, bis: 52, gleit: 0.03 },
+    { art: 'rauschen', laut: 0.6, zerfall: 0.004, hp: 0.95 },
+    { art: 'sinus', laut: 0.6, zerfall: 0.08, von: 3150 },
+    { art: 'sinus', laut: 0.3, zerfall: 0.05, von: 4870 },
+    { art: 'sinus', laut: 0.55, zerfall: 0.14, von: 1245, oberton: 0.15, start: 0.04 },
+    { art: 'sinus', laut: 0.55, zerfall: 0.19, von: 1865, start: 0.08 },
+  ], 34],
   schritt: [0.09, [
     { art: 'rauschen', laut: 0.9, zerfall: 0.02, tp: 0.12 },
     { art: 'rauschen', laut: 0.3, zerfall: 0.01, tp: 0.5, hp: 0.4 },
@@ -173,6 +197,7 @@ export class Klang {
     this.puffer = {};
     this.lautstaerke = 0.8;
     this.stimmen = 0;
+    this.liste = [];             // laufende Stimmen, aelteste zuerst
     this.bereit = false;
   }
 
@@ -200,7 +225,8 @@ export class Klang {
         }
         this.bereit = true;
       }
-      if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
+      // iOS meldet nach Anruf oder Hintergrund auch "interrupted".
+      if (this.ctx.state !== 'running' && this.ctx.state !== 'closed') this.ctx.resume().catch(() => {});
     } catch (e) {
       this.bereit = false;
     }
@@ -211,49 +237,91 @@ export class Klang {
     if (this.master) this.master.gain.setTargetAtTime(this.lautstaerke, this.ctx.currentTime, 0.02);
   }
 
-  /* Direkt abspielen (eigene Geraeusche, Oberflaeche). */
+  /* Direkt abspielen (eigene Geraeusche, Oberflaeche) - mit Vorrang. */
   spielen(name, laut, rate, pan, tiefpass, verzoegerung) {
+    this.stimme(name, laut, rate, pan, tiefpass, verzoegerung, true);
+  }
+
+  stimme(name, laut, rate, pan, tiefpass, verzoegerung, wichtig) {
     if (!this.bereit || this.lautstaerke <= 0 || this.ctx.state !== 'running') return;
     const b = this.puffer[name];
     if (!b) return;
-    if (this.stimmen >= MAX_STIMMEN && (laut || 1) < 0.5) return;
+    const L = this.liste;
+    if (!wichtig) {
+      let umgebung = 0, gleiche = 0;
+      for (const s of L) {
+        if (s.wichtig) continue;
+        umgebung++;
+        if (s.name === name) gleiche++;
+      }
+      if (umgebung >= MAX_UMGEBUNG || gleiche >= MAX_GLEICHE || L.length >= MAX_STIMMEN) return;
+    } else if (L.length >= MAX_STIMMEN) {
+      // Platz schaffen: die aelteste Umgebungsstimme, sonst die aelteste ueberhaupt
+      const alt = L.find((s) => !s.wichtig) || L[0];
+      this.stoppen(alt);
+    }
     const ctx = this.ctx;
     const quelle = ctx.createBufferSource();
     quelle.buffer = b;
     quelle.playbackRate.value = rate || 1;
-    let knoten = quelle;
-    if (tiefpass && tiefpass < 18000) {
+    const knoten = [quelle];
+    let letzter = quelle;
+    if (tiefpass && tiefpass < 12000) {
       const f = ctx.createBiquadFilter();
       f.type = 'lowpass';
       f.frequency.value = tiefpass;
-      knoten.connect(f);
-      knoten = f;
+      letzter.connect(f);
+      letzter = f;
+      knoten.push(f);
     }
     const g = ctx.createGain();
     g.gain.value = laut === undefined ? 1 : laut;
-    knoten.connect(g);
-    knoten = g;
-    if (pan && ctx.createStereoPanner) {
+    letzter.connect(g);
+    letzter = g;
+    knoten.push(g);
+    if (pan && Math.abs(pan) > 0.05 && ctx.createStereoPanner) {
       const p = ctx.createStereoPanner();
       p.pan.value = Math.max(-1, Math.min(1, pan));
-      knoten.connect(p);
-      knoten = p;
+      letzter.connect(p);
+      letzter = p;
+      knoten.push(p);
     }
-    knoten.connect(this.master);
-    this.stimmen++;
-    quelle.onended = () => { this.stimmen--; };
+    letzter.connect(this.master);
+    const s = { name, wichtig, quelle, knoten, aus: false };
+    quelle.onended = () => this.ende(s);
+    L.push(s);
+    this.stimmen = L.length;
     quelle.start(ctx.currentTime + (verzoegerung || 0));
+  }
+
+  /* Stimme beenden und vom Graphen trennen - sonst haelt Safari die
+     Knoten laenger fest als noetig. */
+  ende(s) {
+    if (s.aus) return;
+    s.aus = true;
+    s.quelle.onended = null;
+    for (const k of s.knoten) {
+      try { k.disconnect(); } catch (e) { /* schon getrennt */ }
+    }
+    const i = this.liste.indexOf(s);
+    if (i >= 0) this.liste.splice(i, 1);
+    this.stimmen = this.liste.length;
+  }
+
+  stoppen(s) {
+    try { s.quelle.stop(); } catch (e) { /* lief noch nicht oder schon aus */ }
+    this.ende(s);
   }
 
   /* Raeumlich: dx/dz relativ zum Hoerer, yaw = Blickrichtung des Hoerers. */
   raeumlich(name, dx, dz, yaw, laut, rate) {
     const d = Math.hypot(dx, dz);
     const abnahme = 1 / (1 + Math.pow(d / 10, 1.35));
-    if (abnahme * (laut || 1) < 0.02) return;
+    if (abnahme * (laut || 1) < 0.04) return;
     // Rechts vom Hoerer ist (cos yaw, -sin yaw)
     const rechts = d > 0.01 ? (dx * Math.cos(yaw) - dz * Math.sin(yaw)) / d : 0;
     const tp = 18000 / (1 + d / 9);
-    this.spielen(name, (laut || 1) * abnahme, rate, rechts * 0.75, tp);
+    this.stimme(name, (laut || 1) * abnahme, rate, rechts * 0.75, tp, 0, false);
   }
 
   pausieren() {
@@ -265,6 +333,7 @@ export class Klang {
   }
 
   zerstoeren() {
+    for (const s of this.liste.slice()) this.stoppen(s);
     if (this.ctx) {
       try { this.ctx.close(); } catch (e) { /* schon zu */ }
     }

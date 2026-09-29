@@ -21,7 +21,8 @@
    Neuaufbau.
    ------------------------------------------------------------------ */
 
-import { MATCH, TEAMS, TICK, WAFFEN } from './konfig.js';
+import { MATCH, QUALITAET, QUALITAET_REIHE, TEAMS, TICK, WAFFEN } from './konfig.js';
+import { absturzPruefen, fehlerMerken, herzschlag, sitzungEnde } from './diagnose.js';
 import { kraehenfeld } from './karte/kraehenfeld.js';
 import { Welt } from './sim/welt.js';
 import { Navigation } from './sim/navigation.js';
@@ -108,6 +109,20 @@ export class App {
         + 'Bitte Safari oder Chrome in einer aktuellen Version verwenden und die Hardwarebeschleunigung eingeschaltet lassen.');
       return;
     }
+    // Letzte Sitzung abgestuerzt (von iOS beendet)? Dann eine Stufe
+    // weniger Grafik - und Bescheid sagen.
+    const abbruch = absturzPruefen();
+    if (abbruch) {
+      const i = QUALITAET_REIHE.indexOf(this.einst.qualitaet);
+      if (i > 0) {
+        this.einst.qualitaet = QUALITAET_REIHE[i - 1];
+        einstellungenSpeichern(this.einst);
+        this.startHinweis = 'Das Spiel wurde zuletzt unerwartet beendet – Grafik auf „'
+          + QUALITAET[this.einst.qualitaet].name + '“ gesenkt.';
+      } else {
+        this.startHinweis = 'Das Spiel wurde zuletzt unerwartet beendet. Details: Einstellungen → Diagnose.';
+      }
+    }
     this.karte = kraehenfeld();
     this.welt = new Welt(this.karte.quader.filter((q) => q.kollision));
     this.nav = new Navigation(this.welt, this.karte.grenzen);
@@ -128,16 +143,27 @@ export class App {
     this.zielhilfe = new Zielhilfe();
     this.menues = new Menues(this.wurzel, this);
 
+    this.reg(window, 'error', (e) => fehlerMerken(e.error || { message: e.message }, 'fenster', this.diagnoseInfo()));
+    this.reg(window, 'unhandledrejection', (e) => fehlerMerken(e.reason, 'versprechen', this.diagnoseInfo()));
     this.reg(window, 'resize', () => this.groesse());
     this.reg(window, 'orientationchange', () => {
       this.allesLoslassen();
       setTimeout(() => this.groesse(), 300);
     });
     this.reg(document, 'visibilitychange', () => {
-      if (document.hidden) this.versteckt();
+      if (document.hidden) {
+        this.versteckt();
+        // Im Hintergrund darf iOS die Seite schliessen - das ist kein Absturz.
+        sitzungEnde();
+      } else {
+        this.herzUhr = 0;
+      }
     });
     this.reg(window, 'blur', () => this.allesLoslassen());
-    this.reg(window, 'pagehide', () => this.versteckt());
+    this.reg(window, 'pagehide', () => {
+      this.versteckt();
+      sitzungEnde();
+    });
     this.reg(window, 'pageshow', (e) => {
       if (e.persisted) {
         this.letzte = performance.now();
@@ -161,7 +187,42 @@ export class App {
     const laden = document.getElementById('ops-laden');
     if (laden) laden.remove();
     window.__opsGestartet = true;
+    if (this.startHinweis) this.menues.hinweis(this.startHinweis, 6000);
     this.raf = requestAnimationFrame(this.schleife);
+  }
+
+  /* Geraet und Grafik, fuer das Kopieren aus der Diagnose. */
+  diagnoseTechnik() {
+    let gpu = '';
+    try {
+      const gl = this.darstellung.renderer.getContext();
+      const ext = gl.getExtension('WEBGL_debug_renderer_info');
+      gpu = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+    } catch (e) { /* egal */ }
+    return navigator.userAgent + '\nPixeldichte Geraet ' + (window.devicePixelRatio || 1) + ', GPU ' + gpu
+      + '\n' + JSON.stringify(this.diagnoseInfo());
+  }
+
+  /* Messwerte fuer Herzschlag und Fehlerprotokoll. */
+  diagnoseInfo() {
+    const d = this.darstellung;
+    const r = d && d.renderer;
+    const info = {
+      zustand: this.zustand,
+      art: this.online && this.sim === this.online.spiegel ? 'online' : this.sim ? 'bots' : '-',
+      qualitaet: d ? d.qualitaet : '',
+      dichte: d ? d.pixelDichte() : 0,
+      bild: d ? d.breite + 'x' + d.hoehe : '',
+      fps: this.fpsText.split(' ')[0] || '',
+      minuten: Math.round(this.zeit / 6) / 10,
+      stimmen: this.klang.stimmen,
+    };
+    if (r) {
+      info.aufrufe = r.info.render.calls;
+      info.geo = r.info.memory.geometries;
+      info.tex = r.info.memory.textures;
+    }
+    return info;
   }
 
   /* Aus dem Hideout kommt der Name im Anker mit (#name=...). */
@@ -183,13 +244,17 @@ export class App {
     if (window.__opsFehlerAnzeigen) window.__opsFehlerAnzeigen(text);
   }
 
+  /* Groessenereignisse kommen auf dem iPad oft in Serie (Leisten,
+     Drehen, visualViewport): angepasst wird einmal, im naechsten Bild. */
   groesse() {
-    if (this.darstellung) this.darstellung.groesseAnpassen();
+    this.groesseNoetig = true;
     this.neuZeichnen = true;
   }
 
   modusSetzen(m) {
     this.eingabe.modus = m;
+    this.darstellung.touch = m === 'touch';
+    this.groesse();
     this.wurzel.classList.toggle('touch', m === 'touch');
     this.wurzel.classList.toggle('maus', m === 'maus');
     this.hud.modus(m === 'touch');
@@ -517,8 +582,21 @@ export class App {
     try {
       this.bild(jetzt);
     } catch (e) {
-      this.absturz(e);
+      this.fehlerImBild(e);
     }
+  }
+
+  /* Ein einzelner Fehler in einem Bild beendet das Spiel nicht mehr:
+     gemerkt wird er, weiter geht's. Erst wenn er sich haeuft (fuenf in
+     drei Sekunden), ist wirklich etwas kaputt. */
+  fehlerImBild(e) {
+    console.error(e);
+    const t = performance.now();
+    this.fehlerZeiten = (this.fehlerZeiten || []).filter((x) => t - x < 3000);
+    this.fehlerZeiten.push(t);
+    if (this.fehlerZeiten.length === 1) fehlerMerken(e, 'bild', this.diagnoseInfo());
+    if (this.sim && this.sim.meldungenLeeren) this.sim.meldungenLeeren();
+    if (this.fehlerZeiten.length >= 5) this.absturz(e);
   }
 
   absturz(e) {
@@ -526,6 +604,7 @@ export class App {
     cancelAnimationFrame(this.raf);
     this.zerstoert = true;
     console.error(e);
+    fehlerMerken(e, 'absturz', this.diagnoseInfo());
     try {
       this.allesLoslassen();
       this.tm.sperreLoesen();
@@ -543,6 +622,15 @@ export class App {
     if (dt > 0.1) dt = 0.1;
     this.zeit += dt;
     this.messen(dt);
+    if (this.groesseNoetig) {
+      this.groesseNoetig = false;
+      this.darstellung.groesseAnpassen();
+    }
+    this.herzUhr = (this.herzUhr || 0) - dt;
+    if (this.herzUhr <= 0) {
+      this.herzUhr = 5;
+      herzschlag(this.diagnoseInfo());
+    }
 
     const quer = !this.hochkant();
     this.wurzel.classList.toggle('hochkant', !quer);
@@ -693,8 +781,9 @@ export class App {
         }
         case 'treffer':
           if (eigen) {
-            this.hud.treffer(m.kopf, m.toedlich, false, this.zeit);
-            this.klang.spielen(m.kopf ? 'kopftreffer' : 'treffer', 0.55);
+            this.hud.treffer(m.kopf, m.toedlich, false);
+            // Beim Abschuss spielt der Abschussklang - kein doppelter Treffer-Tick
+            if (!m.toedlich) this.klang.spielen(m.kopf ? 'kopftreffer' : 'treffer', m.kopf ? 0.7 : 0.6, 0.97 + Math.random() * 0.06);
           }
           if (m.b === id) {
             this.hud.schadenVon(m.a, this.zeit);
@@ -703,15 +792,15 @@ export class App {
           }
           break;
         case 'geschuetzt':
-          if (eigen) this.hud.treffer(false, false, true, this.zeit);
+          if (eigen) this.hud.treffer(false, false, true);
           break;
         case 'abschuss': {
           const opfer = sim.akteure[m.b];
           this.hud.abschuss(a, opfer, m.waffe, m.kopf, id);
           if (eigen) {
-            const serie = m.serie >= 3 ? ' · Serie ' + m.serie : '';
-            this.hud.meldung(opfer.name + ' ausgeschaltet' + (m.kopf ? ' · Kopftreffer' : '') + serie, 'abschuss', this.zeit);
-            this.klang.spielen('abschuss', 0.6);
+            this.hud.treffer(m.kopf, true, false);
+            this.hud.abschussBestaetigen(opfer.name, m.kopf, m.serie);
+            this.klang.spielen(m.kopf ? 'kopfabschuss' : 'abschuss', 0.8);
           } else if (m.b === id) {
             this.klang.spielen('schaden', 0.9, 0.7);
           }
@@ -950,6 +1039,7 @@ export class App {
     this.zerstoert = true;
     cancelAnimationFrame(this.raf);
     this.onlineBeenden();
+    sitzungEnde();
     for (const f of this.aus) f();
     this.aus.length = 0;
     if (this.tm) this.tm.ab();
