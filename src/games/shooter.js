@@ -26,9 +26,16 @@
     id: 'shooter',
     name: 'Gehstock Ops',
     category: 'arcade',
-    desc: '3D-Shooter: Team-Deathmatch drei gegen drei auf dem Übungsgelände',
-    tags: ['shooter', 'ego', '3d', 'fps', 'team', 'deathmatch', 'bots', 'action', 'ops'],
-    external: SEITE,
+    desc: '3D-Shooter: Team-Deathmatch drei gegen drei – online oder gegen Bots',
+    tags: ['shooter', 'ego', '3d', 'fps', 'team', 'deathmatch', 'bots', 'online', 'action', 'ops'],
+    /* Der Hub springt beim Antippen auf diese Adresse. Der Name der
+       angemeldeten Person reist im Anker mit - so heisst man im
+       Online-Match so wie im Hideout. Ein Getter, weil sich die Anmeldung
+       nach dem Registrieren noch aendert. */
+    get external() {
+      var name = SG.auth && SG.auth.aktuell && SG.auth.aktuell.name;
+      return name ? SEITE + '#name=' + encodeURIComponent(name) : SEITE;
+    },
     bildKachel: true,
 
     /* Kachel: Blick durch das Visier auf den Containerhof, davor der

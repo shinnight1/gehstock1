@@ -69,6 +69,13 @@ html,body{margin:0;height:100%;background:#0b0f14;color:#e7edf3;overflow:hidden;
   setTimeout(function () {
     fehler('Das Laden dauert ungewöhnlich lange. Bitte die Verbindung prüfen und erneut versuchen.');
   }, 30000);
+  /* Derselbe Service Worker wie im Hideout: hat man den Shooter einmal
+     geoeffnet, laeuft die Bot-Lobby auch ohne Netz. */
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('../../sw.js', { scope: '../../' }).catch(function () {});
+    });
+  }
 })();
 </script>
 <!--OPS-JS-->

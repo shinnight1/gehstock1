@@ -6,7 +6,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { once } from 'node:events';
+import net from 'node:net';
 import { serverErstellen } from './handy-server.mjs';
+import { OpsOnline } from '../shooter/server/online.mjs';
+import { halloSchreiben, Schreiber, S_WILLKOMMEN } from '../shooter/src/netz/protokoll.js';
 import { zugangPruefen, zugangSpeichern, zugangLesen, zugangSetzen, weltPruefen } from './handy-zugang.mjs';
 
 const zugang = { url: 'https://example-test.upstash.io', token: 'test-only-token-1234567890' };
@@ -170,4 +173,64 @@ test('HTTP-Auslieferung: echte Adapter-Schnittstelle, Dateien und geschuetzte Pf
   res = await fetch(base + '/ausserhalb/server.env');
   assert.equal(res.status, 404);
   await res.text();
+});
+
+test('Online-Match von Gehstock Ops: Status unter /api/ops, WebSocket nur dort und nur von der eigenen Seite', async (t) => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'handy-ops-'));
+  const dist = path.join(dir, 'dist');
+  await mkdir(dist);
+  await writeFile(path.join(dist, 'index.html'), 'Hideout');
+  const ops = new OpsOnline({ log: () => {} });
+  const leer = async () => new Response('x');
+  const server = await serverErstellen({ dist, room: leer, gehstockmon: leer, ops });
+  t.after(async () => {
+    ops.schliessen();
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+    await rm(dir, { recursive: true, force: true });
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const port = server.address().port;
+  const base = 'http://127.0.0.1:' + port;
+  let res = await fetch(base + '/api/ops');
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { spieler: 0, max: 6, version: 1 });
+  assert.equal(res.headers.get('cache-control'), 'no-store');
+  res = await fetch(base + '/api/ops', { method: 'POST' });
+  assert.equal(res.status, 405);
+  await res.text();
+
+  // Mitspielen: Hallo -> Willkommen, der Status zaehlt mit
+  const ws = new WebSocket('ws://127.0.0.1:' + port + '/api/ops');
+  ws.binaryType = 'arraybuffer';
+  const willkommen = new Promise((resolve, reject) => {
+    ws.onmessage = (e) => { if (new Uint8Array(e.data)[0] === S_WILLKOMMEN) resolve(); };
+    ws.onerror = reject;
+  });
+  await once(ws, 'open');
+  ws.send(halloSchreiben(new Schreiber(), 'Test', 'mp').slice());
+  await willkommen;
+  assert.equal((await (await fetch(base + '/api/ops')).json()).spieler, 1);
+  const zu = once(ws, 'close');
+  ws.close();
+  await zu;
+
+  // Anderswo gibt es kein WebSocket, fremde Seiten bekommen keins
+  const roh = async (pfad, origin) => {
+    const sock = net.connect(port, '127.0.0.1');
+    await once(sock, 'connect');
+    let text = '';
+    sock.on('data', (d) => { text += d.toString('latin1'); });
+    sock.write('GET ' + pfad + ' HTTP/1.1\r\nHost: 127.0.0.1:' + port + '\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n'
+      + 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n'
+      + (origin ? 'Origin: ' + origin + '\r\n' : '') + '\r\n');
+    await Promise.race([once(sock, 'close'), new Promise((r) => setTimeout(r, 1500))]);
+    sock.destroy();
+    return text;
+  };
+  assert.doesNotMatch(await roh('/'), /101/);
+  assert.doesNotMatch(await roh('/api/room'), /101/);
+  assert.match(await roh('/api/ops', 'https://fremd.example'), /^HTTP\/1\.1 403/);
+  assert.match(await roh('/api/ops', 'http://127.0.0.1:' + port), /^HTTP\/1\.1 101/);
 });

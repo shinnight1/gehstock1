@@ -2,7 +2,10 @@
 
 Termux mit Node.js 22 oder neuer, npm und Git wird benoetigt. Die komplette
 Website einschliesslich Arena und Gehstock Ops (`shooter/`, baut `build.mjs`
-mit, keine eigenen Pakete) wird auf dem Handy gebaut. Der Server verwendet
+mit, keine eigenen Pakete) wird auf dem Handy gebaut. Das Online-Match von
+Gehstock Ops laeuft im selben Server mit (WebSocket unter `/api/ops`, nur im
+Arbeitsspeicher, Takt nur solange jemand spielt); Caddy reicht WebSockets ohne
+Aenderung durch. Last messen: `node tools/shooter-lasttest.mjs 6 60`. Der Server verwendet
 dieselben Produktionsfunktionen wie Netlify und dieselbe Upstash-Spielerwelt.
 Zum Entwickeln am PC startet `npm run dev` denselben Server mit einer leeren Testwelt.
 

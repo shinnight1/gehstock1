@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { extraTests } from './extra-tests.mjs';
 import { shooterTests } from './shooter-tests.mjs';
+import { shooterOnlineTests } from './shooter-online-tests.mjs';
 
 globalThis.window = globalThis;
 globalThis.SG_BUILD = { offline: true, version: 'test' };
@@ -162,6 +163,13 @@ extraTests(SG, U, test);
 /* Gehstock Ops (shooter/): Simulation, Kollision, Waffen, Bots */
 console.log('\nGehstock Ops');
 shooterTests(test);
+
+/* Gehstock Ops online (shooter/server/): echte Verbindungen ueber localhost */
+console.log('\nGehstock Ops online');
+await shooterOnlineTests(async (name, fn) => {
+  try { await fn(); pass++; console.log('  ok   ' + name); }
+  catch (e) { fail++; console.log('  FAIL ' + name + '  -> ' + e.message); }
+});
 
 console.log('\n' + pass + ' bestanden, ' + fail + ' durchgefallen\n');
 process.exit(fail ? 1 : 0);

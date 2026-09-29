@@ -1,10 +1,16 @@
 # Gehstock Ops
 
-3D-Ego-Shooter für das Hideout: Team-Deathmatch, du und zwei verbündete Bots
-gegen drei gegnerische Bots, auf dem „Übungsgelände Krähenfeld“. Ein Match
-endet nach fünf Minuten oder bei 30 Team-Punkten. Läuft komplett im Browser,
-ohne Serveranfragen während des Spiels. Gebaut fürs iPad (10. Generation,
-Safari, quer), spielbar auch am Rechner mit Maus und Tastatur.
+3D-Ego-Shooter für das Hideout: Team-Deathmatch drei gegen drei auf dem
+„Übungsgelände Krähenfeld“. Ein Match endet nach fünf Minuten oder bei 30
+Team-Punkten. Gebaut fürs iPad (10. Generation, Safari, quer), spielbar auch
+am Rechner mit Maus und Tastatur. Zwei Arten zu spielen:
+
+- **Online**: eine einzige Runde für alle, ohne Lobby und ohne Codes. Wer
+  dazukommt, landet im Team mit weniger Menschen; freie Plätze spielen Bots.
+  Höchstens drei gegen drei Menschen. Der Handy-Server rechnet das Match
+  (siehe „Online-Match“ unten).
+- **Bot-Lobby**: du und zwei Bots gegen drei Bots, komplett im Browser, ohne
+  eine einzige Serveranfrage - läuft auch, wenn das Internet weg ist.
 
 Ausgeliefert wird das Spiel als eigene Seite unter `/games/shooter/`. Die
 Kachel im Hub steht in `src/games/shooter.js`; Code und Grafik lädt der
@@ -26,12 +32,16 @@ node shooter/bauen.mjs
 Tests der Simulation (ohne Browser, deterministisch, rund zwei Sekunden):
 
 ```sh
-node tools/shooter-tests.mjs   # einzeln
-node tools/test.mjs            # zusammen mit allen Hideout-Tests
+node tools/shooter-tests.mjs          # Simulation, einzeln
+node tools/shooter-online-tests.mjs   # Online-Match über echte Verbindungen (localhost)
+node tools/test.mjs                   # zusammen mit allen Hideout-Tests
+node tools/shooter-lasttest.mjs 6 30  # Last einer vollen Online-Runde messen
 ```
 
-`tools/test.mjs` bindet die Shooter-Tests ein - sie laufen damit auch auf dem
-Handy vor jedem Update mit (siehe AGENTS.md).
+`tools/test.mjs` bindet beide Testdateien ein - sie laufen damit auch auf dem
+Handy vor jedem Update mit (siehe AGENTS.md). `npm run test:handy` prüft
+zusätzlich, dass der Handy-Server das Online-Match nur unter `/api/ops` und
+nur von der eigenen Seite annimmt.
 
 Im echten Browser (optional, braucht Playwright, gehört nicht zu den Tests,
 die ein Update freigeben):
@@ -42,10 +52,13 @@ node tools/shooter-browsertest.mjs
 ```
 
 Prüft Touch mit mehreren Fingern (Laufen, Umsehen und Feuern gleichzeitig,
-pointercancel, Fokusverlust, alle Knöpfe, Hochformat), Maus und Tastatur
-(Pointer Lock, Pause, Escape, Tabelle), Matchende und Neustart, dass der
-GPU-Speicher über viele Matches nicht wächst und dass beim Verlassen alle
-Listener, der Ton und die Grafik abgebaut werden.
+Visierfeuer und Hüftfeuer, pointercancel, Fokusverlust, alle Knöpfe,
+Hochformat), Maus und Tastatur (Pointer Lock, Pause, Escape, Tabelle),
+Matchende und Neustart, dass der GPU-Speicher über viele Matches nicht wächst,
+dass beim Verlassen alle Listener, der Ton und die Grafik abgebaut werden,
+online mit zwei Browsern (Teams, gegenseitig sehen, Schüsse, Verlassen,
+Verbindungsabbruch) und offline (Seite aus dem Service Worker, Bot-Lobby ohne
+Server).
 
 ## Steuerung
 
@@ -54,7 +67,9 @@ Listener, der Ton und die Grafik abgebaut werden.
 | linke Hälfte: Daumen aufsetzen und ziehen = laufen | W A S D |
 | Stick weit nach oben = sprinten | Shift |
 | rechte Hälfte wischen = umsehen | Maus (nach Klick ins Bild) |
-| Feuerknopf rechts (beim Halten weiter umsehen), zweiter Feuerknopf links | linke Maustaste |
+| großer Feuerknopf rechts: zielt beim Schießen übers Visier (wie in CoD Mobile), beim Halten weiter umsehen | linke Maustaste (aus der Hüfte) |
+| kleiner Knopf darüber: schießt aus der Hüfte, ohne Visier | |
+| zweiter Feuerknopf links (wie der große) | |
 | Visier (antippen schaltet, einstellbar auf Halten) | rechte Maustaste (halten) |
 | ⟳ nachladen, ▲ springen, ▼ ducken, im Sprint ▼ = rutschen | R, Leertaste, C |
 | Punktestand antippen = Tabelle, ‖ = Pause | Tab, Esc oder P |
@@ -62,7 +77,8 @@ Listener, der Ton und die Grafik abgebaut werden.
 
 Einstellungen (im Menü und in der Pause): Blick- und Mausempfindlichkeit,
 Empfindlichkeit im Visier, dezente Zielhilfe (nur Touch), Visierknopf
-umschalten/halten, linker Feuerknopf, Knopfgröße, Y-Achse, Qualität,
+umschalten/halten, Feuern mit Visier (aus: ein schlichter Feuerknopf wie
+früher), linker Feuerknopf, Knopfgröße, Y-Achse, Qualität,
 dynamische Auflösung, Sichtfeld, Bildrate anzeigen, Lautstärke. Gespeichert
 wird unter eigenen Schlüsseln (`gehstock-ops:…`) - die Spielstände der
 Hideout-Seite fasst der Shooter nicht an.
@@ -87,11 +103,15 @@ shooter/
       navigation.js    Navigationsraster (0,5 m), A*, Pfadglättung
       bots.js          Bot-KI
       mathe.js         Winkel, Kegelstreuung, geseedeter Zufall
+    netz/              Online: Protokoll (Gerät und Server) und Vorhersage auf dem Gerät
     karte/             Kartenbeschreibung (Quader, Deko, Spawns, Wege)
     darstellung/       three.js: Renderer, Welt, Figuren, Waffenmodell, Effekte, Texturen
     eingabe/           Tastatur/Maus, Touch, Zielhilfe, gemeinsamer Eingabezustand
     klang/             synthetisierte Geräusche (Web Audio)
     oberflaeche/       HUD, Menüs, Stylesheet
+  server/              Online-Match im Handy-Server (Node, ohne Zusatzpaket)
+    online.mjs         die eine Runde: Plätze, Teams, Takt, Rückspulen, Zustände
+    websocket.mjs      WebSocket (RFC 6455, nur Serverseite)
 ```
 
 **Trennung von Eingabe, Simulation und Darstellung.** Die Eingabe füllt pro
@@ -161,52 +181,64 @@ Handy neben der laufenden Seite. Neue Pakete braucht der Shooter nicht: er
 nutzt `three` und `esbuild` aus der `package.json` des Hideouts. Die
 Dateinamen tragen einen Prüfwert, `tools/handy-server.mjs` liefert
 `games/shooter/bundle/` darum mit langer Cache-Dauer aus; der Service Worker
-des Hideouts legt die Dateien beim ersten Öffnen ab.
+des Hideouts lädt Seite und Bundle schon beim Öffnen des Hideouts mit
+(`EXTRAS` in `sw.js`, rund 180 KB komprimiert). Die Shooter-Seite meldet
+denselben Service Worker an - wer den Shooter direkt öffnet, hat ihn danach
+ebenfalls offline.
 
 Die Offline-Einzeldatei bleibt unverändert: `build.mjs` lässt
 `src/games/shooter.js` dort weg (`NUR_ONLINE_JS`), und der Shooter selbst ist
-eine eigene Seite. Offline ohne vorherigen Besuch gibt es den Shooter nicht.
+eine eigene Seite.
 
-## Mehrspieler: was dafür nötig wäre
+## Online-Match
 
 Das bestehende Relais (`/api/room`, Abfragen im Sekundentakt, Zustand in
-Redis) ist für einen Shooter ungeeignet und wird dafür **nicht** schneller
-gestellt. Ein Mehrspieler-Modus bräuchte:
+Redis) ist für einen Shooter ungeeignet und wurde dafür **nicht** schneller
+gestellt. Das Online-Match ist ein eigener Weg:
 
-1. **Eigenen WebSocket-Endpunkt auf dem Handy-Server**, etwa `/api/ops`.
-   `tools/handy-server.mjs` müsste dafür `upgrade`-Anfragen annehmen (Node
-   kann das ohne Zusatzpaket, bequemer ist `ws`). Caddy reicht WebSockets
-   ohne Änderung durch. Nichts davon geht über Redis: Matches leben nur im
-   Arbeitsspeicher, gespeichert wird höchstens das Ergebnis am Ende.
-2. **Server-autoritative Simulation.** Der Server rechnet dieselbe
-   `Simulation` (sie kennt weder DOM noch three.js) mit 30 oder 60 Schritten
-   pro Sekunde. Clients schicken nur `Befehl`e mit Folgenummer (rund 20 Byte,
-   30-mal pro Sekunde); Treffer, Schaden und Punkte entscheidet allein der
-   Server. Bots können Plätze füllen, die niemand belegt.
-3. **Zustandsbilder (Snapshots)** 20-mal pro Sekunde: Position, Blick,
-   Leben, Waffe, Tasten je Figur, dazu die Meldungen seit dem letzten Bild.
-   Geschätzt 150 bis 250 Byte je Bild, also rund 4 KB/s je Client und
-   25 KB/s für sechs Spieler - für das Handy im Heimnetz unkritisch (Schätzung,
-   nicht gemessen).
-4. **Vorhersage und Abgleich beim eigenen Spieler**: der Client simuliert
-   seine Befehle sofort mit, merkt sie sich und spielt nach jedem
-   Server-Bild die noch unbestätigten nach. Die Bewegung ist dafür bereits
-   deterministisch (fester Schritt, geseedeter Zufall für die Streuung).
-5. **Interpolation der anderen Figuren** mit rund 100 ms Puffer zwischen zwei
-   Server-Bildern - die Darstellung interpoliert heute schon zwischen zwei
-   Schritten, nur die Quelle würde der Puffer.
-6. **Trefferprüfung mit Rückspulen (Lag Compensation)**: der Server hält die
-   Trefferzonen der letzten rund 250 ms vor und prüft einen Schuss gegen die
-   Lage, die der Schütze gesehen hat (Laufzeit plus Interpolationspuffer,
-   gedeckelt). Sonst trifft man auf dem iPad im WLAN nie, was man sieht.
-7. **Lastmessung auf dem Handy** vor dem Einschalten, analog zu
-   `tools/handy-lasttest.mjs`: simulierte Clients, CPU je Match, Speicher,
-   Latenz. Grobe Schätzung: ein Match mit sechs Figuren braucht auf dem
-   Galaxy A25 wenige Prozent eines Kerns - das muss gemessen werden, bevor
-   mehr als ein Match gleichzeitig laufen darf.
-8. Oberfläche: Lobby, Beitreten per Code, Anzeige der Latenz, Umgang mit
-   Verbindungsabbrüchen. Online-Schaltflächen gibt es erst, wenn das alles
-   funktioniert.
+- **WebSocket `/api/ops` im Handy-Server** (`shooter/server/`), ohne neues
+  Paket. Caddy reicht WebSockets ohne Änderung durch. `GET /api/ops` sagt dem
+  Menü, wie viele gerade spielen - einmal beim Öffnen, kein Dauerabfragen.
+  Verbindungen von fremden Seiten (anderer `Origin`) werden abgewiesen.
+- **Nichts geht über Redis.** Das Match lebt nur im Arbeitsspeicher. Ohne
+  Spieler steht der Takt still; eine leere Runde wird nach zwei Minuten
+  weggeworfen.
+- **Eine Runde, drei gegen drei.** Wer beitritt, übernimmt den Platz eines
+  Bots im Team mit weniger Menschen (bei Gleichstand im zurückliegenden).
+  Der siebte Mensch bekommt „Runde voll“. Wer geht, wird wieder zum Bot. Nach
+  jeder Runde (5 Minuten oder 30 Punkte) folgen zwölf Sekunden Auswertung,
+  dann die nächste; stehen dann zwei Menschen mehr in einem Team, wechselt
+  einer die Seite.
+- **Der Server entscheidet.** Er rechnet dieselbe `Simulation` wie die
+  Bot-Lobby (60 Schritte pro Sekunde). Geräte schicken nur Befehle (30
+  Nachrichten pro Sekunde mit je zwei Befehlen), der Server schickt 20-mal
+  pro Sekunde den Zustand: alle Figuren, die Meldungen seitdem und - nur für
+  den Empfänger - den vollen Zustand seiner Figur.
+- **Vorhersage auf dem Gerät.** Befehle eines Menschen rechnet der Server,
+  sobald sie ankommen, mit derselben Funktion (`akteurSchritt`), mit der das
+  Gerät seine Figur sofort vorhersagt. Befehle werden vor dem Senden gerundet
+  und das Gerät rechnet mit genau diesen Werten; Rückstoß und Streuung hängen
+  nur an der Nummer des Schusses. Darum laufen Gerät und Server Bit für Bit
+  gleich - Korrekturen gibt es nur, wenn der Server wirklich anders
+  entscheidet (etwa Tod), und sie klingen dann weich aus.
+- **Andere Figuren** werden 100 ms hinter dem Server gezeigt und zwischen zwei
+  Zuständen verschoben. Mit jedem Befehl geht mit, welchen Zeitpunkt man
+  sieht; der Server rechnet Schüsse dort, wo der Schütze die Gegner gesehen
+  hat - höchstens 250 ms zurück, und nur im selben Leben des Ziels.
+- **Abgesichert**: Nachrichten höchstens 2 KB und 120 pro Sekunde, kaputte
+  Nachrichten trennen nur den Absender, mehr Befehle als Zeit vergangen ist
+  verfallen (kein Speedhack), Namen werden gesäubert und eindeutig gemacht,
+  ein Fehler in der Runde setzt nur die Runde neu auf, nie den Server.
+- **Name** kommt aus dem Hideout mit (Anker `#name=` beim Öffnen der Kachel)
+  und lässt sich im Menü ändern.
+
+Gemessen mit `node tools/shooter-lasttest.mjs` im Linux-Container (Xeon
+2,1 GHz, Node 22): sechs Menschen 4,8 % eines Kerns, ein Mensch mit fünf Bots
+5,6 %; ein Schritt im Mittel 0,13 bis 0,29 ms; rund 10 KB/s zu jedem Gerät.
+**Auf dem Galaxy A25 ist das noch nicht gemessen** - geschätzt das Zwei- bis
+Vierfache, also rund 10 bis 20 % eines Kerns, solange online gespielt wird.
+Auf dem Handy messen: `node tools/shooter-lasttest.mjs 6 60` (eigener Server
+auf freiem Port, die echte Runde bleibt unberührt).
 
 ## Bekannte Grenzen
 
@@ -216,7 +248,17 @@ gestellt. Ein Mehrspieler-Modus bräuchte:
 - Nur eine Karte, ein Modus, drei Waffen, kein Waffenwechsel im Leben
   (gewählt wird im Menü oder im Todesbildschirm fürs nächste Leben).
 - Bots springen nur, um sich zu befreien; auf Kisten klettern sie nicht.
-- Offline gibt es den Shooter nur, wenn er vorher einmal online geöffnet
-  wurde (Service Worker des Hideouts).
+- Offline gibt es den Shooter nur, wenn das Hideout (oder der Shooter) vorher
+  einmal online geöffnet wurde (Service Worker).
 - Zugangsregeln (Wartung, Kreis, Sperren) greifen wie bei der Arena an der
-  Kachel; wer die Adresse `/games/shooter/` direkt aufruft, umgeht sie.
+  Kachel; wer die Adresse `/games/shooter/` direkt aufruft, umgeht sie. Das
+  gilt auch online: der Server kennt die Anmeldung des Hideouts nicht (sie
+  wird nur im Browser geprüft), der Name im Match ist also nicht
+  überprüft.
+- Online ist nur mit Test-Clients über localhost und zwei Browsern auf einem
+  Rechner getestet - nicht mit mehreren echten Geräten über das Internet.
+  Ping, Rückspulen und Vorhersage sind für normale Heim- und Mobilnetze
+  ausgelegt (bis etwa 150 ms); darüber trifft man spürbar schlechter.
+- Pausieren hält online nichts an: die eigene Figur steht dann einfach.
+- Nach einem Update mit geändertem Protokoll bekommen Geräte mit altem Stand
+  „Neue Version – bitte neu laden“.

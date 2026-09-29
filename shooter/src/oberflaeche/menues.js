@@ -7,7 +7,9 @@
    oder Steuerung als Ebene darueber).
    ------------------------------------------------------------------ */
 
-import { BOT_REIHE, BOT_STUFEN, MATCH, QUALITAET, QUALITAET_REIHE, WAFFEN, WAFFEN_REIHE } from '../konfig.js';
+import { BOT_REIHE, BOT_STUFEN, MATCH, QUALITAET, QUALITAET_REIHE, TEAMS, WAFFEN, WAFFEN_REIHE } from '../konfig.js';
+import { nameSaeubern } from '../einstellungen.js';
+import { MAX_MENSCHEN, PFAD } from '../netz/protokoll.js';
 import { tabelleBauen } from './hud.js';
 
 function el(tag, klasse, kinder, text) {
@@ -142,6 +144,32 @@ export class Menues {
       ? 'Matches ' + st.matches + ' · Siege ' + st.siege + ' · Abschüsse ' + st.abschuesse + ' · beste Serie ' + st.besteSerie
       : 'Noch kein Match gespielt.';
 
+    // Online: eine Runde fuer alle, Bots fuellen auf
+    const onlineStatus = el('div', 'o-status', null, 'Frage den Server …');
+    const name = document.createElement('input');
+    name.type = 'text';
+    name.className = 'o-name';
+    name.maxLength = 16;
+    name.placeholder = 'Dein Name';
+    name.autocomplete = 'off';
+    name.spellcheck = false;
+    name.value = E.name || '';
+    name.setAttribute('aria-label', 'Dein Name im Online-Match');
+    name.addEventListener('change', () => {
+      const n = nameSaeubern(name.value);
+      name.value = n;
+      app.einstellungSetzen('name', n);
+    });
+    name.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') name.blur();
+    });
+    const onlineKnopf = knopf('ONLINE SPIELEN', 'm-start haupt', () => {
+      const n = nameSaeubern(name.value);
+      if (n !== E.name) app.einstellungSetzen('name', n);
+      app.onlineStarten();
+    });
+    this.onlineStatusLaden(onlineStatus, onlineKnopf);
+
     const inhalt = el('div', 'ops-menue haupt', [
       el('div', 'm-kopf', [
         el('div', 'm-logo', null, 'GEHSTOCK OPS'),
@@ -151,14 +179,17 @@ export class Menues {
         el('div', 'm-spalte', [
           el('h2', '', null, 'Waffe'),
           karten,
+          el('div', 'm-regeln', null,
+            'Drei gegen drei. Wer zuerst ' + MATCH.zielPunkte + ' Abschüsse hat oder nach '
+            + Math.round(MATCH.dauer / 60) + ' Minuten vorn liegt, gewinnt. Online spielen echte Leute zusammen – '
+            + 'freie Plätze übernehmen Bots. Die Bot-Lobby läuft auch ohne Internet.'),
         ]),
         el('div', 'm-spalte schmal', [
-          el('h2', '', null, 'Gegner'),
+          el('h2', '', null, 'Online'),
+          el('div', 'm-online', [onlineStatus, name, onlineKnopf]),
+          el('h2', '', null, 'Bot-Lobby'),
           stufen,
-          el('div', 'm-regeln', null,
-            'Du und zwei Verbündete gegen drei Gegner. Wer zuerst ' + MATCH.zielPunkte
-            + ' Abschüsse hat oder nach ' + Math.round(MATCH.dauer / 60) + ' Minuten vorn liegt, gewinnt.'),
-          knopf('SPIELEN', 'm-start haupt', () => app.matchStarten()),
+          knopf('BOT-LOBBY', 'm-start zweit', () => app.matchStarten()),
           el('div', 'm-leiste', [
             knopf('Steuerung', 'klein', () => this.steuerung()),
             knopf('Einstellungen', 'klein', () => this.einstellungen()),
@@ -169,6 +200,70 @@ export class Menues {
       ]),
     ]);
     this.zeigen(inhalt);
+  }
+
+  /* Wie viele spielen gerade online? Einmal beim Oeffnen des Menues
+     gefragt, kein Dauerabfragen. */
+  onlineStatusLaden(ziel, knopfEl) {
+    const setzen = (text, aus) => {
+      ziel.textContent = text;
+      ziel.classList.toggle('aus', !!aus);
+      knopfEl.classList.toggle('aus', !!aus);
+    };
+    if (navigator.onLine === false) {
+      setzen('Kein Internet – die Bot-Lobby geht trotzdem.', true);
+      return;
+    }
+    let abbruch = null;
+    try { abbruch = new AbortController(); } catch (e) { /* alt */ }
+    const wecker = setTimeout(() => { if (abbruch) abbruch.abort(); }, 4000);
+    fetch(new URL(PFAD, location.href).href, { cache: 'no-store', signal: abbruch ? abbruch.signal : undefined })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('status'))))
+      .then((d) => {
+        const n = Math.max(0, d.spieler | 0);
+        const max = d.max || MAX_MENSCHEN;
+        if (!n) setzen('Gerade spielt niemand – du eröffnest die Runde, Bots spielen mit.');
+        else if (n >= max) setzen('Die Runde ist voll (' + n + ' von ' + max + ').', true);
+        else setzen(n + (n === 1 ? ' Mensch spielt' : ' Menschen spielen') + ' gerade · noch ' + (max - n) + ' frei.');
+      })
+      .catch(() => setzen('Server gerade nicht erreichbar – die Bot-Lobby geht immer.', true))
+      .then(() => clearTimeout(wecker));
+  }
+
+  /* --------------------------------------------------------- Online */
+
+  verbinden(abbrechen) {
+    const inhalt = el('div', 'ops-menue pause', [
+      el('div', 'm-logo klein', null, 'ONLINE'),
+      el('p', 'o-warte', null, 'Verbinde mit dem Server …'),
+      el('div', 'm-leiste', [knopf('Abbrechen', 'klein', abbrechen)]),
+    ]);
+    this.zeigen(inhalt);
+  }
+
+  onlineFehler(art, text) {
+    const app = this.app;
+    const titel = { voll: 'RUNDE VOLL', alt: 'NEUE VERSION', weg: 'VERBINDUNG WEG' }[art] || 'KEINE VERBINDUNG';
+    const inhalt = el('div', 'ops-menue fehler', [
+      el('div', 'm-logo klein', null, titel),
+      el('p', '', null, text),
+      el('div', 'm-leiste', [
+        art === 'alt'
+          ? knopf('Neu laden', 'haupt', () => location.reload())
+          : knopf('Nochmal versuchen', 'haupt', () => app.onlineStarten()),
+        knopf('Bot-Lobby spielen', 'klein', () => app.matchStarten()),
+        knopf('Hauptmenü', 'klein', () => app.zumMenue()),
+      ]),
+    ]);
+    this.zeigen(inhalt);
+  }
+
+  /* Online zwischen zwei Runden: Sekunden bis zur naechsten. */
+  rundeCountdown(sekunden) {
+    const e = this.aktuell && this.aktuell.querySelector('.r-naechste');
+    if (!e) return;
+    const t = 'Nächste Runde in ' + Math.max(0, Math.ceil(sekunden)) + ' s';
+    if (e.textContent !== t) e.textContent = t;
   }
 
   /* ------------------------------------------------------ Steuerung */
@@ -186,7 +281,8 @@ export class Menues {
             ['Linke Hälfte', 'Daumen aufsetzen und ziehen: laufen'],
             ['Stick weit hoch', 'Sprinten'],
             ['Rechte Hälfte', 'Wischen: umsehen'],
-            ['Feuerknopf', 'Schießen – beim Halten weiter umsehen'],
+            ['Großer Feuerknopf', 'Zielen und schießen – beim Halten weiter umsehen'],
+            ['Kleiner Knopf darüber', 'Schießen aus der Hüfte, ohne Visier'],
             ['Visier', 'Antippen: zielen an/aus'],
             ['⟳ / ▲ / ▼', 'Nachladen / Springen / Ducken'],
             ['Im Sprint ▼', 'Rutschen'],
@@ -269,6 +365,7 @@ export class Menues {
           regler('Empfindlichkeit im Visier', 'empfVisier', 0.3, 1.5, 0.05, prozent),
           schalter('Zielhilfe (Touch)', 'zielhilfe', 'Bremst den Blick sanft am Gegner'),
           auswahl('Visierknopf (Touch)', 'visierModus', [['umschalten', 'Antippen schaltet'], ['halten', 'Halten zum Zielen']]),
+          schalter('Feuern mit Visier (Touch)', 'visierFeuer', 'Großer Feuerknopf zielt beim Schießen, der kleine darüber schießt aus der Hüfte'),
           schalter('Feuerknopf links', 'linkerFeuerknopf'),
           regler('Knopfgröße (Touch)', 'knopfGroesse', 0.75, 1.35, 0.05, prozent),
           schalter('Blick vertikal umkehren', 'yUmkehren'),
@@ -292,15 +389,17 @@ export class Menues {
 
   pause() {
     const app = this.app;
+    const online = !!(app.sim && app.sim.online);
     const inhalt = el('div', 'ops-menue pause', [
-      el('div', 'm-logo klein', null, 'PAUSE'),
+      el('div', 'm-logo klein', null, online ? 'MENÜ' : 'PAUSE'),
       el('div', 'p-stand', null, app.sim ? 'Blau ' + app.sim.punkte[0] + ' : ' + app.sim.punkte[1] + ' Rot' : ''),
+      online ? el('p', 'o-warte', null, 'Online läuft das Match weiter – deine Figur steht so lange still.') : null,
       knopf('Weiter', 'haupt', () => app.fortsetzen()),
       el('div', 'm-leiste', [
         knopf('Einstellungen', 'klein', () => this.einstellungen()),
         knopf('Steuerung', 'klein', () => this.steuerung()),
-        knopf('Match neu starten', 'klein', () => app.matchStarten()),
-        knopf('Hauptmenü', 'klein', () => app.zumMenue()),
+        online ? null : knopf('Match neu starten', 'klein', () => app.matchStarten()),
+        knopf(online ? 'Online verlassen' : 'Hauptmenü', 'klein', () => app.zumMenue()),
         knopf('Zurück zum Hideout', 'klein zurueck', () => app.zumHideout()),
       ]),
       app.sim ? el('div', 'p-tabelle', [tabelleBauen(app.sim)]) : null,
@@ -313,11 +412,15 @@ export class Menues {
   ergebnis(sim, eigen) {
     const app = this.app;
     const s = sim.spieler;
-    const titel = sim.sieger === 0 ? 'SIEG' : sim.sieger === 1 ? 'NIEDERLAGE' : 'UNENTSCHIEDEN';
+    const sieg = sim.sieger >= 0 && sim.sieger === s.team;
+    const niederlage = sim.sieger >= 0 && !sieg;
+    const titel = sieg ? 'SIEG' : niederlage ? 'NIEDERLAGE' : 'UNENTSCHIEDEN';
     const quote = s.schuesse ? Math.round((s.treffer / s.schuesse) * 100) + ' %' : '–';
     const wert = (name, w) => el('div', 'r-wert', [el('div', 'r-zahl', null, String(w)), el('div', 'r-name', null, name)]);
-    const inhalt = el('div', 'ops-menue ergebnis ' + (sim.sieger === 0 ? 'sieg' : sim.sieger === 1 ? 'niederlage' : ''), [
+    const online = !!sim.online;
+    const inhalt = el('div', 'ops-menue ergebnis ' + (sieg ? 'sieg' : niederlage ? 'niederlage' : ''), [
       el('div', 'm-logo', null, titel),
+      online ? el('div', 'r-team', null, 'Du spielst für Team ' + TEAMS[s.team].name) : null,
       el('div', 'r-stand', [
         el('span', 'blau', null, String(sim.punkte[0])),
         el('span', 'r-trenner', null, ':'),
@@ -333,11 +436,17 @@ export class Menues {
       ]),
       eigen && eigen.rekord ? el('div', 'r-rekord', null, 'Neuer Rekord: ' + eigen.rekord) : null,
       el('div', 'r-tabelle', [tabelleBauen(sim)]),
-      el('div', 'm-leiste', [
-        knopf('Nochmal', 'haupt', () => app.matchStarten()),
-        knopf('Hauptmenü', 'klein', () => app.zumMenue()),
-        knopf('Zurück zum Hideout', 'klein zurueck', () => app.zumHideout()),
-      ]),
+      online ? el('div', 'r-naechste', null, 'Nächste Runde gleich …') : null,
+      online
+        ? el('div', 'm-leiste', [
+          knopf('Online verlassen', 'klein', () => app.zumMenue()),
+          knopf('Zurück zum Hideout', 'klein zurueck', () => app.zumHideout()),
+        ])
+        : el('div', 'm-leiste', [
+          knopf('Nochmal', 'haupt', () => app.matchStarten()),
+          knopf('Hauptmenü', 'klein', () => app.zumMenue()),
+          knopf('Zurück zum Hideout', 'klein zurueck', () => app.zumHideout()),
+        ]),
     ]);
     this.zeigen(inhalt);
   }

@@ -3,6 +3,12 @@
 
    Zustaende: laden -> menue -> spiel <-> pause -> ergebnis -> ...
 
+   Zwei Arten zu spielen: die Bot-Lobby (alles auf dem Geraet, geht ohne
+   Netz) und online (netz/online.js: der Handy-Server rechnet, das Geraet
+   sagt die eigene Figur voraus). Fuer Darstellung, HUD und Ton sieht
+   beides gleich aus - this.sim ist entweder die Simulation oder ihr
+   Spiegelbild vom Server.
+
    Die Hauptschleife trennt drei Dinge:
      Eingabe      Tastatur/Maus/Touch fuellen einen Befehl je Schritt,
      Simulation   rechnet in festen Schritten (1/60 s), egal wie schnell
@@ -15,7 +21,7 @@
    Neuaufbau.
    ------------------------------------------------------------------ */
 
-import { TICK, WAFFEN } from './konfig.js';
+import { MATCH, TEAMS, TICK, WAFFEN } from './konfig.js';
 import { kraehenfeld } from './karte/kraehenfeld.js';
 import { Welt } from './sim/welt.js';
 import { Navigation } from './sim/navigation.js';
@@ -32,7 +38,9 @@ import { Touch } from './eingabe/touch.js';
 import { Zielhilfe } from './eingabe/zielhilfe.js';
 import { Hud } from './oberflaeche/hud.js';
 import { Menues } from './oberflaeche/menues.js';
-import { einstellungenLaden, einstellungenSpeichern, statistikLaden, statistikSpeichern } from './einstellungen.js';
+import { einstellungenLaden, einstellungenSpeichern, nameSaeubern, statistikLaden, statistikSpeichern } from './einstellungen.js';
+import { OnlineSpiel } from './netz/online.js';
+import { RUNDEN_PAUSE } from './netz/protokoll.js';
 
 const ZURUECK = '../../';
 const glatt = (t) => t * t * (3 - 2 * t);
@@ -65,6 +73,8 @@ export class App {
     this.pauseZeit = 0;
     this.neuZeichnen = false;
     this.leerBefehl = neuerBefehl();
+    this.online = null;
+    this.onlineBefehl = neuerBefehl();
 
     this.bildzeiten = new Float32Array(30);
     this.bildI = 0;
@@ -78,7 +88,7 @@ export class App {
       waffe: 'sturmgewehr', visier: 0, sprint: false, amBoden: true, tempo: 0, geduckt: false, rutschen: false,
       laden: -1, ladenPhase: 0, schuesse: 0, landung: 0, blickDx: 0, blickDy: 0,
     };
-    this.hz = { sim: null, zeit: 0, fov: 72, hoehe: 800, touch: false, yaw: 0, fps: undefined, zielName: '', zielFreund: false };
+    this.hz = { sim: null, zeit: 0, fov: 72, hoehe: 800, touch: false, yaw: 0, fps: undefined, online: '', zielName: '', zielFreund: false };
     this.laden = { p: -1 };
     this.countdownZahl = 0;
     this.zielTakt = 0;
@@ -140,6 +150,7 @@ export class App {
     this.reg(window, 'touchend', entsperren, true);
     if (window.visualViewport) this.reg(window.visualViewport, 'resize', () => this.groesse());
 
+    this.nameAusAdresse();
     this.modusSetzen(touchGeraet() ? 'touch' : 'maus');
     this.groesse();
     this.zustand = 'menue';
@@ -151,6 +162,20 @@ export class App {
     if (laden) laden.remove();
     window.__opsGestartet = true;
     this.raf = requestAnimationFrame(this.schleife);
+  }
+
+  /* Aus dem Hideout kommt der Name im Anker mit (#name=...). */
+  nameAusAdresse() {
+    try {
+      const m = /(?:^#|&)name=([^&]*)/.exec(location.hash || '');
+      if (!m) return;
+      const n = nameSaeubern(decodeURIComponent(m[1]));
+      if (n && n !== this.einst.name) {
+        this.einst.name = n;
+        einstellungenSpeichern(this.einst);
+      }
+      history.replaceState(null, '', location.pathname + location.search);
+    } catch (e) { /* kaputter Anker - egal */ }
   }
 
   startFehler(text) {
@@ -201,7 +226,7 @@ export class App {
       this.neuZeichnen = true;
     } else if (k === 'dynamisch') this.darstellung.dynamisch = v;
     else if (k === 'fps') this.hud.fpsZeigen(v);
-    else if (k === 'linkerFeuerknopf' || k === 'knopfGroesse') this.touch.einstellen(this.einst);
+    else if (k === 'linkerFeuerknopf' || k === 'knopfGroesse' || k === 'visierFeuer') this.touch.einstellen(this.einst);
   }
 
   naechsteWaffe(id) {
@@ -219,6 +244,7 @@ export class App {
       this.menues.steuerung(() => this.matchStarten());
       return;
     }
+    this.onlineBeenden();
     this.menues.schliessen();
     this.hud.feedLeeren();
     this.hud.tabelle(null, false);
@@ -246,6 +272,111 @@ export class App {
     this.touch.sichtbar(this.eingabe.modus === 'touch');
     if (this.eingabe.modus === 'maus') this.tm.sperreAnfordern();
     this.klang.fortsetzen();
+  }
+
+  /* ----------------------------------------------------------- Online */
+
+  onlineStarten() {
+    this.klang.entsperren();
+    if (!this.einst.hilfeGesehen) {
+      this.menues.steuerung(() => this.onlineStarten());
+      return;
+    }
+    this.onlineBeenden();
+    if (this.sim) this.spielAufraeumen();
+    this.menues.verbinden(() => this.zumMenue());
+    const on = new OnlineSpiel({
+      karte: this.karte, welt: this.welt, name: this.einst.name || 'Gast', waffe: this.einst.waffe,
+      beiStatus: (z, text) => { if (this.online === on) this.onlineStatus(z, text); },
+      beiRoster: (alt, neu) => { if (this.online === on) this.onlineRoster(alt, neu); },
+    });
+    this.online = on;
+    on.verbinden();
+  }
+
+  onlineBeenden() {
+    const on = this.online;
+    this.online = null;
+    if (on) on.trennen();
+  }
+
+  onlineStatus(z, text) {
+    if (z === 'drin') {
+      this.onlineDrin();
+    } else if (z === 'fehler' || z === 'voll' || z === 'alt' || z === 'weg') {
+      const imSpiel = this.online && this.sim === this.online.spiegel;
+      this.onlineBeenden();
+      if (imSpiel) this.spielAufraeumen();
+      this.menues.onlineFehler(z, text);
+    }
+  }
+
+  onlineDrin() {
+    const on = this.online;
+    const sim = on.spiegel;
+    this.menues.schliessen();
+    this.hud.feedLeeren();
+    this.hud.tabelle(null, false);
+    this.sim = sim;
+    this.darstellung.figurenVerbinden(sim);
+    if (!this.vorgewaermt) {
+      this.vorgewaermt = true;
+      this.darstellung.vorwaermen();
+    }
+    this.allesLoslassen();
+    this.eingabe.neuesLeben(sim.spieler.yaw);
+    this.darstellung.waffenmodell.hochnehmen();
+    this.akku = 0;
+    this.letzte = performance.now();
+    this.countdownZahl = 0;
+    this.kam.landung = 0;
+    this.kam.wackeln = 0;
+    // Mitten in der Auswertung dazugekommen: keine Auswertung, gleich geht's los.
+    this.ergebnisFertig = sim.phase === 'ende';
+    on.rundeNeu = false;
+    this.zustand = 'spiel';
+    this.hud.sichtbar(true);
+    this.touch.sichtbar(this.eingabe.modus === 'touch');
+    if (this.eingabe.modus === 'maus') this.tm.sperreAnfordern();
+    this.klang.fortsetzen();
+    this.hud.meldung('Online · du spielst für Team ' + TEAMS[sim.spieler.team].name, 'hilfe', this.zeit);
+    if (sim.phase === 'ende') this.hud.ansage('GLEICH GEHT’S LOS', this.zeit, 2.5, 'zahl');
+  }
+
+  /* Wer kam, wer ging, wer wechselt fuer den Ausgleich das Team. */
+  onlineRoster(alt, neu) {
+    const sim = this.sim;
+    if (!sim || !this.online || sim !== this.online.spiegel) return;
+    this.darstellung.figurenVerbinden(sim, false);
+    if (!alt.length) return;
+    const eigen = this.online.eigenId;
+    const vorher = new Map(alt.map((p) => [p.id, p]));
+    for (const p of neu) {
+      const q = vorher.get(p.id);
+      if (p.id === eigen) {
+        if (q && q.team !== p.team) this.hud.meldung('Teamausgleich: du spielst jetzt für ' + TEAMS[p.team].name, 'hilfe', this.zeit);
+        continue;
+      }
+      if (q && q.mensch && (!p.mensch || q.name !== p.name)) this.hud.meldung(q.name + ' ist raus – ein Bot übernimmt', 'hilfe', this.zeit);
+      if (p.mensch && (!q || !q.mensch || q.name !== p.name)) this.hud.meldung(p.name + ' ist dabei · Team ' + TEAMS[p.team].name, 'hilfe', this.zeit);
+    }
+  }
+
+  /* Neue Online-Runde: Auswertung zu, weiter geht's. */
+  onlineWeiter() {
+    this.menues.schliessen();
+    this.hud.feedLeeren();
+    this.hud.tabelle(null, false);
+    this.darstellung.effekte.leeren();
+    this.zustand = 'spiel';
+    this.akku = 0;
+    this.letzte = performance.now();
+    this.countdownZahl = 0;
+    this.allesLoslassen();
+    this.eingabe.neuesLeben(this.sim.spieler.yaw);
+    this.hud.sichtbar(true);
+    this.touch.sichtbar(this.eingabe.modus === 'touch');
+    if (this.eingabe.modus === 'maus') this.tm.sperreAnfordern();
   }
 
   pausieren() {
@@ -325,15 +456,21 @@ export class App {
   }
 
   zumMenue() {
+    this.onlineBeenden();
+    this.spielAufraeumen();
+    this.menues.haupt();
+  }
+
+  spielAufraeumen() {
     this.zustand = 'menue';
     this.sim = null;
     this.hud.sichtbar(false);
     this.hud.feedLeeren();
+    this.hud.tabelle(null, false);
     this.touch.sichtbar(false);
     this.tm.sperreLoesen();
     this.menues.klickHinweis(false);
     this.darstellung.effekte.leeren();
-    this.menues.haupt();
     this.neuZeichnen = true;
   }
 
@@ -355,9 +492,9 @@ export class App {
     const st = this.statistik;
     let rekord = '';
     st.matches++;
-    if (sim.sieger === 0) st.siege++;
-    else if (sim.sieger === 1) st.niederlagen++;
-    else st.unentschieden++;
+    if (sim.sieger < 0) st.unentschieden++;
+    else if (sim.sieger === s.team) st.siege++;
+    else st.niederlagen++;
     st.abschuesse += s.abschuesse;
     st.tode += s.tode;
     if (s.besteSerie > st.besteSerie) {
@@ -409,10 +546,20 @@ export class App {
 
     const quer = !this.hochkant();
     this.wurzel.classList.toggle('hochkant', !quer);
+    const online = this.online && this.sim && this.sim === this.online.spiegel ? this.online : null;
     if (!quer) {
       // Hochformat: Hinweis liegt ueber allem, Zeichnen spart nur Akku.
       if (this.zustand === 'spiel') this.pausieren();
       this.neuZeichnen = true;
+      // Online laeuft das Match weiter - Meldungen trotzdem abholen.
+      if (online) {
+        online.bild(dt);
+        this.meldungen(this.sim);
+      }
+      return;
+    }
+    if (online) {
+      this.onlineBild(online, dt);
       return;
     }
 
@@ -448,6 +595,53 @@ export class App {
     this.neuZeichnen = false;
     this.zeichnen(dt, alpha);
     if (this.zustand === 'spiel' && this.sim) this.hudAktualisieren(this.sim, dt);
+  }
+
+  /* Ein Bild im Online-Match. Pause und Auswertung halten das Match
+     nicht an: dann gehen nur keine Befehle raus (die Figur steht). */
+  onlineBild(on, dt) {
+    const sim = this.sim;
+    const s = sim.spieler;
+    let alpha = 1;
+    if (this.zustand === 'spiel') {
+      this.zielhilfe.aktualisieren(sim, this.eingabe, dt, this.einst.zielhilfe);
+      const w = s.waffe;
+      const v = glatt(w.visier);
+      this.eingabe.visierFaktor = (1 + (w.def.visier.zoom - 1) * v) * (1 + (this.einst.empfVisier - 1) * v);
+      this.akku += dt;
+      let n = 0;
+      while (this.akku >= TICK && n < 5) {
+        const b = this.onlineBefehl;
+        this.eingabe.befehl(b);
+        if (!s.lebt) {
+          b.vor = 0;
+          b.seit = 0;
+          b.tasten = 0;
+        }
+        on.schritt(b);
+        this.akku -= TICK;
+        n++;
+      }
+      if (n >= 5) this.akku = Math.min(this.akku, TICK);
+      alpha = this.akku / TICK;
+    }
+    on.bild(dt);
+    this.meldungen(sim);
+    this.nachladeGeraeusche(s);
+    this.countdown(sim);
+    if (on.rundeNeu) {
+      on.rundeNeu = false;
+      this.ergebnisFertig = false;
+      if (this.zustand === 'ergebnis') this.onlineWeiter();
+    }
+    if (sim.phase === 'ende' && !this.ergebnisFertig && sim.phasenZeit <= RUNDEN_PAUSE - MATCH.endePause) {
+      this.ergebnisFertig = true;
+      if (this.zustand === 'spiel' || this.zustand === 'pause') this.ergebnisZeigen();
+    }
+    if (this.zustand === 'ergebnis') this.menues.rundeCountdown(sim.phasenZeit);
+    this.neuZeichnen = false;
+    this.zeichnen(dt, alpha);
+    if (this.zustand === 'spiel') this.hudAktualisieren(sim, dt);
   }
 
   messen(dt) {
@@ -568,8 +762,9 @@ export class App {
           this.klang.spielen('start', 0.55);
           break;
         case 'ende': {
-          const t = sim.sieger === 0 ? 'SIEG' : sim.sieger === 1 ? 'NIEDERLAGE' : 'UNENTSCHIEDEN';
-          this.hud.ansage(t, this.zeit, 3, sim.sieger === 0 ? 'sieg' : 'niederlage');
+          const sieg = sim.sieger >= 0 && sim.sieger === s.team;
+          const t = sieg ? 'SIEG' : sim.sieger >= 0 ? 'NIEDERLAGE' : 'UNENTSCHIEDEN';
+          this.hud.ansage(t, this.zeit, 3, sieg ? 'sieg' : 'niederlage');
           this.klang.spielen('ende', 0.6);
           this.allesLoslassen();
           break;
@@ -616,9 +811,16 @@ export class App {
     if (sim && sim.spieler && this.zustand !== 'ergebnis') {
       const s = sim.spieler;
       if (s.lebt) {
-        const x = s.px + (s.x - s.px) * alpha;
-        const y = s.py + (s.y - s.py) * alpha;
-        const z = s.pz + (s.z - s.pz) * alpha;
+        let x = s.px + (s.x - s.px) * alpha;
+        let y = s.py + (s.y - s.py) * alpha;
+        let z = s.pz + (s.z - s.pz) * alpha;
+        if (this.online && sim === this.online.spiegel) {
+          // Korrekturen vom Server klingen weich aus, statt zu springen.
+          const k = this.online.kor;
+          x += k.x;
+          y += k.y;
+          z += k.z;
+        }
         const w = s.waffe;
         const wack = kam.wackeln * 0.012;
         a.x = x + (Math.random() - 0.5) * wack;
@@ -707,6 +909,8 @@ export class App {
     z.touch = this.eingabe.modus === 'touch';
     z.yaw = this.eingabe.yaw;
     z.fps = this.einst.fps ? this.fpsText : undefined;
+    const on = this.online && sim === this.online.spiegel ? this.online : null;
+    z.online = on ? 'ONLINE · ' + Math.round(on.ping) + ' MS' : '';
     // Name unter dem Fadenkreuz, zehnmal pro Sekunde
     this.zielTakt -= dt;
     if (this.zielTakt <= 0) {
@@ -745,6 +949,7 @@ export class App {
     this.zerstoertFertig = true;
     this.zerstoert = true;
     cancelAnimationFrame(this.raf);
+    this.onlineBeenden();
     for (const f of this.aus) f();
     this.aus.length = 0;
     if (this.tm) this.tm.ab();

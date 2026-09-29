@@ -566,6 +566,9 @@ function build() {
 
   // ---- Gehstock Ops: eigene Seite unter games/shooter/, nur online
   const ops = shooterBauen(path.join(DIST, 'games', 'shooter'));
+  // Der Service Worker holt den Shooter gleich mit: die Bot-Lobby laeuft
+  // dann auch, wenn das Netz weg ist, bevor man ihn je geoeffnet hat.
+  const opsExtras = ops.dateien.map((f) => 'games/shooter/' + f);
 
   // ---- Icons
   const icons = [32, 180, 192, 512];
@@ -605,7 +608,7 @@ function build() {
     '/* Beigaben: eigene Seiten, die neben dem Hideout liegen und erst nach',
     '   dem Hideout gebaut werden - tools/deploy-bauen.mjs traegt sie hier',
     '   ein. Ohne sie fehlt zum Beispiel die Arena, sobald das Netz weg ist. */',
-    'const EXTRAS = ' + JSON.stringify(skins.dateien) + ';',
+    'const EXTRAS = ' + JSON.stringify(skins.dateien.concat(opsExtras)) + ';',
     "self.addEventListener('install', function (e) {",
     '  e.waitUntil(caches.open(CACHE).then(function (c) {',
     '    /* Der Kern muss vollstaendig sein: fehlt davon etwas, ist die Seite',

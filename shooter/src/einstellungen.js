@@ -29,6 +29,7 @@ export function standard() {
     yUmkehren: false,
     zielhilfe: true,         // nur bei Touch wirksam
     visierModus: 'umschalten', // Touch: 'umschalten' oder 'halten'
+    visierFeuer: true,       // Touch: grosser Feuerknopf zielt mit, kleiner darueber aus der Huefte
     linkerFeuerknopf: true,
     knopfGroesse: 1.0,
     lautstaerke: 0.8,
@@ -39,7 +40,14 @@ export function standard() {
     schwierigkeit: 'normal',
     waffe: 'sturmgewehr',
     hilfeGesehen: false,
+    name: '',                // fuers Online-Match; kommt aus dem Hideout mit
   };
+}
+
+/* Name fuers Online-Match: hoechstens 16 Zeichen, ohne Steuerzeichen. */
+export function nameSaeubern(roh) {
+  const s = String(roh || '').replace(/[\u0000-\u001f\u007f-\u009f]/g, '').replace(/\s+/g, ' ').trim();
+  return Array.from(s).slice(0, 16).join('');
 }
 
 const ZAHLEN = { empfTouch: [0.3, 3], empfMaus: [0.2, 4], empfVisier: [0.3, 1.5], lautstaerke: [0, 1], sichtfeld: [55, 80], knopfGroesse: [0.75, 1.35] };
@@ -64,6 +72,8 @@ export function einstellungenLaden() {
           if (WAFFEN_REIHE.indexOf(v) >= 0) s[k] = v;
         } else if (k === 'visierModus') {
           if (v === 'umschalten' || v === 'halten') s[k] = v;
+        } else if (k === 'name') {
+          if (typeof v === 'string') s[k] = nameSaeubern(v);
         }
       }
     }

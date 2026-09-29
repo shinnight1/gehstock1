@@ -32,7 +32,8 @@ export class Eingabe {
     this.stickX = 0;
     this.stickY = 0;
     this.stickSprint = false;
-    this.feuerFinger = 0;
+    this.feuerFinger = 0;        // Huefte
+    this.visierFeuerFinger = 0;  // zielt beim Schiessen mit (wie Visierfeuer in CoD Mobile)
     this.visierFinger = false;
     this.visierAn = false;
 
@@ -92,7 +93,11 @@ export class Eingabe {
   }
 
   zielt() {
-    return this.mausVisier || this.visierFinger || this.visierAn;
+    return this.mausVisier || this.visierFinger || this.visierAn || this.visierFeuerFinger > 0;
+  }
+
+  feuert() {
+    return this.mausFeuer || this.feuerFinger > 0 || this.visierFeuerFinger > 0;
   }
 
   /* Alles loslassen: Fokusverlust, Pause, Drehen des Geraets. */
@@ -104,6 +109,7 @@ export class Eingabe {
     this.stickY = 0;
     this.stickSprint = false;
     this.feuerFinger = 0;
+    this.visierFeuerFinger = 0;
     this.visierFinger = false;
     this.kanteSprung = false;
     this.kanteLaden = false;
@@ -146,7 +152,7 @@ export class Eingabe {
     this.sprintVorher = sprint;
 
     let tasten = 0;
-    if (this.mausFeuer || this.feuerFinger > 0) tasten |= T_FEUER;
+    if (this.feuert()) tasten |= T_FEUER;
     if (this.zielt()) tasten |= T_VISIER;
     if (this.duckt) tasten |= T_DUCKEN;
     if (sprint) tasten |= T_SPRINT;

@@ -14,6 +14,7 @@ import { Readable } from 'node:stream';
 import { parseEnv } from 'node:util';
 import { zugangLesen, zugangSetzen, weltPruefen, weltPruefenMit } from './handy-zugang.mjs';
 import { lokalerClient, lokaleAdresse } from '../netlify/functions/lib/redis-lokal.mjs';
+import { OpsOnline } from '../shooter/server/online.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -45,13 +46,20 @@ function bodyLesen(req, limit) {
   });
 }
 
-export async function serverErstellen({ dist, room, gehstockmon, bodyLimit = 8 * 1024 * 1024 }) {
+/* ops: das Online-Match von Gehstock Ops (shooter/server/online.mjs) -
+   GET /api/ops sagt, wie viele mitspielen; als WebSocket ist es das Spiel. */
+export async function serverErstellen({ dist, room, gehstockmon, ops, bodyLimit = 8 * 1024 * 1024 }) {
   const wurzel = await realpath(dist);
   const routen = new Map([
     ['/api/room', room], ['/.netlify/functions/room', room],
     ['/api/gehstockmon', gehstockmon], ['/.netlify/functions/gehstockmon', gehstockmon],
   ]);
-  return http.createServer({ requestTimeout: 30000, headersTimeout: 15000 }, async (req, res) => {
+  if (ops) {
+    routen.set('/api/ops', async (request) => (request.method === 'GET'
+      ? new Response(JSON.stringify(ops.status()), { headers: { 'Content-Type': 'application/json; charset=utf-8' } })
+      : new Response('HTTP 405', { status: 405 })));
+  }
+  const server = http.createServer({ requestTimeout: 30000, headersTimeout: 15000 }, async (req, res) => {
     const fail = (status) => {
       if (res.headersSent) { res.destroy(); return; }
       res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8',
@@ -110,6 +118,18 @@ export async function serverErstellen({ dist, room, gehstockmon, bodyLimit = 8 *
       fail(e.status || (['ENOENT', 'ENOTDIR'].includes(e.code) ? 404 : 500));
     }
   });
+  // WebSocket nur fuer das Online-Match, alles andere wird abgewiesen.
+  server.on('upgrade', (req, socket, head) => {
+    socket.on('error', () => socket.destroy());
+    let pfad = '';
+    try { pfad = new URL(req.url, 'http://localhost').pathname; } catch { /* kaputte Adresse */ }
+    if (ops && pfad === '/api/ops') {
+      try { ops.upgrade(req, socket, head); } catch { socket.destroy(); }
+      return;
+    }
+    socket.destroy();
+  });
+  return server;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
@@ -142,7 +162,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
     ]);
     const port = Number((dev && process.argv[3]) || process.env.GEHSTOCK_PORT || process.env.PORT || (dev ? 8787 : 8080));
     if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('port');
-    const server = await serverErstellen({ dist, room, gehstockmon });
+    const ops = new OpsOnline();
+    const server = await serverErstellen({ dist, room, gehstockmon, ops });
     server.on('error', (e) => {
       console.error(e.code === 'EADDRINUSE' ? 'Port ' + port + ' belegt: laeuft der Server schon?' : 'Server konnte nicht starten.');
       process.exitCode = 1;
@@ -156,6 +177,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
       }
     });
     for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => {
+      ops.schliessen();
       server.close();
       setTimeout(() => server.closeAllConnections(), 8000).unref();
     });

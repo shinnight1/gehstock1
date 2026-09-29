@@ -83,6 +83,7 @@ tools/
   handy-*.sh           Einrichtung, Update und Dienste auf dem Handy
   test.mjs             Regel-Engines ohne Browser prüfen
   shooter-tests.mjs    Simulation von Gehstock Ops (läuft in test.mjs mit)
+  shooter-online-tests.mjs  Online-Match von Gehstock Ops (läuft in test.mjs mit)
   nojs.mjs             erzeugt den Dateien-Modus (Spiele ohne JavaScript)
 shooter/               Gehstock Ops: 3D-Shooter als eigene Seite (shooter/README.md)
 dist/                  Ergebnis des Builds (nicht ins Git nötig)
@@ -392,14 +393,18 @@ Abzeichen *Eigene Seite* und wird in der Offline-Datei ausgeblendet
 
 ## Gehstock Ops — der 3D-Shooter
 
-Team-Deathmatch drei gegen drei (du plus zwei Bots gegen drei Bots) auf einem
-eigenen Übungsgelände, mit three.js gebaut und fürs iPad quer ausgelegt:
-Touch-Stick, freie Blickfläche, Feuer-, Visier-, Nachlade-, Sprung- und
-Duckknöpfe; am Rechner WASD und Maus. Das Spiel ist ein kleines Teilprojekt
-unter `shooter/`, `build.mjs` baut es mit nach `dist/games/shooter/`. Geladen
-wird es erst beim Öffnen der Kachel; die Offline-Einzeldatei enthält es nicht
-und wird durch es nicht größer. Aufbau, Steuerung, Leistung und was für einen
-echten Mehrspieler-Modus nötig wäre: `shooter/README.md`.
+Team-Deathmatch drei gegen drei auf einem eigenen Übungsgelände, mit three.js
+gebaut und fürs iPad quer ausgelegt: Touch-Stick, freie Blickfläche, großer
+Feuerknopf mit Visier (wie in CoD Mobile) und kleiner Hüftfeuer-Knopf, Visier-,
+Nachlade-, Sprung- und Duckknöpfe; am Rechner WASD und Maus. **Online** gibt es
+eine einzige Runde für alle: wer dazukommt, landet im kleineren Team, freie
+Plätze spielen Bots, höchstens drei gegen drei Menschen. Das Match rechnet der
+Handy-Server im Arbeitsspeicher (WebSocket `/api/ops`, nichts in Redis). Die
+**Bot-Lobby** läuft ganz im Browser, auch ohne Internet. Das Spiel ist ein
+kleines Teilprojekt unter `shooter/`, `build.mjs` baut es mit nach
+`dist/games/shooter/`. Geladen wird es erst beim Öffnen der Kachel; die
+Offline-Einzeldatei enthält es nicht und wird durch es nicht größer. Aufbau,
+Steuerung, Online-Match, Leistung: `shooter/README.md`.
 
 ---
 

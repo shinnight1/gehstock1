@@ -227,13 +227,21 @@ export class Darstellung {
     this.renderer.shadowMap.needsUpdate = true;
   }
 
-  /* Figuren zu den Akteuren eines neuen Matchs. */
-  figurenVerbinden(sim) {
+  /* Figuren zu den Akteuren eines neuen Matchs - und online, wenn
+     jemand kommt, geht oder das Team wechselt. Verbuendete tragen ihren
+     Namen ueber dem Kopf. */
+  figurenVerbinden(sim, effekteLeeren = true) {
+    const ich = sim.spieler;
     for (const a of sim.akteure) {
+      const istSpieler = a === ich;
+      const freund = ich ? a.team === ich.team : a.team === 0;
+      const name = !istSpieler && freund ? a.name : '';
       const f = this.figuren.liste[a.id];
-      if (!f || f.team !== a.team || f.istSpieler !== !a.bot) this.figuren.anlegen(a, this.feuerMat, !a.bot);
+      if (!f || f.team !== a.team || f.istSpieler !== istSpieler || f.nameText !== name) {
+        this.figuren.anlegen(a, this.feuerMat, istSpieler, name);
+      }
     }
-    this.effekte.leeren();
+    if (effekteLeeren) this.effekte.leeren();
   }
 
   /* Alle Shader vorab uebersetzen: sonst ruckelt es beim ersten

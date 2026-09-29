@@ -159,8 +159,9 @@ export class Figuren {
   }
 
   /* Eine Figur fuer einen Akteur anlegen. feuerMaterial ist das geteilte
-     SpriteMaterial fuer das Muendungsfeuer. */
-  anlegen(akteur, feuerMaterial, istSpieler) {
+     SpriteMaterial fuer das Muendungsfeuer. name: Schild ueber dem Kopf
+     (Verbuendete) oder null. */
+  anlegen(akteur, feuerMaterial, istSpieler, name) {
     const G = this.geos;
     const team = akteur.team;
     const alt = this.liste[akteur.id];
@@ -217,9 +218,10 @@ export class Figuren {
     feuer.visible = false;
     waffe.add(feuer);
 
-    let name = null;
-    if (!istSpieler && akteur.bot && akteur.team === 0) {
-      const t = namensTextur(akteur.name, TEAMS[0].farbeHell);
+    const nameText = name || '';
+    name = null;
+    if (nameText) {
+      const t = namensTextur(nameText, TEAMS[team].farbeHell);
       const m = new SpriteMaterial({ map: t, depthTest: false, transparent: true });
       name = new Sprite(m);
       name.scale.set(1.2, 0.3, 1);
@@ -230,7 +232,7 @@ export class Figuren {
     this.szene.add(wurzel);
 
     const fig = {
-      id: akteur.id, team, istSpieler, wurzel, koerper, huefte, rumpf, kopf, beinL, beinR,
+      id: akteur.id, team, istSpieler, nameText, wurzel, koerper, huefte, rumpf, kopf, beinL, beinR,
       waffe, waffen, feuer, feuerBis: 0, weste, name,
       phase: 0, schussZaehler: -1, rueck: 0, waffenId: '', todZeit: -1, todDrehung: 1,
     };

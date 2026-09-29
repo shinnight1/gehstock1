@@ -60,7 +60,7 @@ export class Zielhilfe {
     eingabe.reibung = bestW <= nah ? 0.55 : 0.55 + 0.45 * klemme((bestW - nah) / (4.5 * GRAD), 0, 1);
 
     const bewegt = Math.abs(eingabe.stickX) + Math.abs(eingabe.stickY) > 0.2;
-    const feuert = eingabe.feuerFinger > 0;
+    const feuert = eingabe.feuerFinger > 0 || eingabe.visierFeuerFinger > 0;
     if ((bewegt || feuert || this.impuls > 0) && bestW > bestR * 0.3) {
       const rate = (3 + this.impuls * 22) * GRAD * dt;
       const zug = Math.min(bestW, rate) / bestW;

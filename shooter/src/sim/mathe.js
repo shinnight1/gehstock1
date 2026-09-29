@@ -67,7 +67,18 @@ export function zufallsquelle(start) {
   f.zwischen = (a, b) => a + (b - a) * f();
   f.ganz = (n) => Math.floor(f() * n);
   f.vorzeichen = () => (f() < 0.5 ? -1 : 1);
+  f.setzen = (n) => { s = n >>> 0; };
   return f;
+}
+
+/* Startwert aus mehreren ganzen Zahlen - fuer Zufall, der auf zwei
+   Rechnern gleich ausfallen muss (Schuss n einer Figur: Geraet und
+   Server streuen ihn gleich). */
+export function startwert(a, b, c) {
+  let h = Math.imul((a | 0) ^ 0x9E3779B9, 0x85EBCA6B);
+  h = Math.imul(h ^ (h >>> 13) ^ (b | 0), 0xC2B2AE35);
+  h = Math.imul(h ^ (h >>> 16) ^ Math.imul(c | 0, 0x27D4EB2F), 0x165667B1);
+  return (h ^ (h >>> 15)) >>> 0;
 }
 
 /* Richtung innerhalb eines Kegels streuen.

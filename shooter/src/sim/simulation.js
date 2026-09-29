@@ -8,14 +8,17 @@
    Ton lesen nur den Zustand und diese Meldungen.
 
    Damit laeuft dieselbe Simulation im Browser, in den Tests unter Node
-   und spaeter auf einem Server, der Mehrspieler-Matches verbindlich
-   rechnet (siehe shooter/README.md).
+   und auf dem Handy-Server, der das Online-Match verbindlich rechnet
+   (shooter/server/). Figuren, die ein Mensch uebers Netz steuert
+   ("fern"), rechnet der Server nicht im Takt, sondern sobald ihr Befehl
+   ankommt (fernSchritt) - mit genau derselben Funktion, mit der das
+   Geraet seine eigene Figur vorhersagt (akteurSchritt).
    ------------------------------------------------------------------ */
 
-import { BOT_STUFEN, FIGUR, LEBEN, MATCH, NAMEN, WAFFEN_REIHE } from '../konfig.js';
+import { BOT_STUFEN, FIGUR, LEBEN, MATCH, NAMEN, TICK, WAFFEN_REIHE } from '../konfig.js';
 import { neuerBefehl } from './befehl.js';
 import { augenhoehe, bewegeFigur, schiebeWaagerecht } from './bewegung.js';
-import { GRAD, kegelRichtung, klemme, zufallsquelle } from './mathe.js';
+import { GRAD, kegelRichtung, klemme, startwert, zufallsquelle } from './mathe.js';
 import { schadenBerechnen, strahlFigur, ZONE_KOPF } from './treffer.js';
 import { neueWaffe, nachSchuss, streuungBerechnen, waffeAuffuellen, waffeTick } from './waffen.js';
 import { botGespawnt, botGetroffen, botsHoeren, denkeBots, neueKi } from './bots.js';
@@ -24,9 +27,15 @@ const RICHTUNG = { x: 0, y: 0, z: 0 };
 const ZONE = { zone: 0 };
 const STILL = neuerBefehl();
 
-function neuerAkteur(id, name, team, bot, waffe, anzahl) {
+/* Namen der Bots je Platz: 0-2 Blau, 3-5 Rot. */
+export const BOT_NAMEN = ['Luchs', NAMEN.verbuendete[0], NAMEN.verbuendete[1], NAMEN.gegner[0], NAMEN.gegner[1], NAMEN.gegner[2]];
+
+export function neuerAkteur(id, name, team, bot, waffe, anzahl) {
   return {
     id, name, team, bot,
+    fern: false,       // steuert ein Mensch uebers Netz (nur auf dem Server)
+    uhr: 0,            // eigene Uhr fuer die Waffe (fern: Befehlsnummer * TICK)
+    lebenNr: 0,        // zaehlt die Spawns - fuer Netz und Rueckspulen
     x: 0, y: 0, z: 0, px: 0, py: 0, pz: 0,
     vx: 0, vy: 0, vz: 0,
     yaw: 0, pitch: 0, pyaw: 0, ppitch: 0,
@@ -60,6 +69,7 @@ export class Simulation {
     this.zeit = 0;
     this.phase = o.ohneVorlauf ? 'laeuft' : 'vorlauf';
     this.phasenZeit = o.ohneVorlauf ? 0 : MATCH.vorlauf;
+    this.vorlauf = o.ohneVorlauf ? 0 : MATCH.vorlauf;
     this.dauer = o.dauer || MATCH.dauer;
     this.restzeit = this.dauer;
     this.zielPunkte = o.zielPunkte || MATCH.zielPunkte;
@@ -73,26 +83,29 @@ export class Simulation {
     this.schrotSchaden = new Float32Array(6);
     this.schrotZone = new Uint8Array(6);
     this.schrotPunkt = new Float32Array(18);
+    this.schussZufall = zufallsquelle(1);
+    this.runde = 1;
+    this.online = !!o.online;
+    /* Mehrspieler: rueckspulen(schuetze, an) stellt die Gegner fuer einen
+       Schuss dorthin, wo der Schuetze sie gesehen hat (und wieder zurueck). */
+    this.rueckspulen = null;
 
     const waffeZufall = () => {
       const r = this.zufall();
       return r < 0.45 ? 'sturmgewehr' : r < 0.8 ? 'mp' : 'schrotflinte';
     };
     const plaetze = [];
-    if (o.nurBots) plaetze.push([0, 'Luchs', 0, true]);
+    const nurBots = o.nurBots || o.online;
+    if (nurBots) plaetze.push([0, BOT_NAMEN[0], 0, true]);
     else plaetze.push([0, 'Du', 0, false]);
-    plaetze.push([1, NAMEN.verbuendete[0], 0, true]);
-    plaetze.push([2, NAMEN.verbuendete[1], 0, true]);
-    plaetze.push([3, NAMEN.gegner[0], 1, true]);
-    plaetze.push([4, NAMEN.gegner[1], 1, true]);
-    plaetze.push([5, NAMEN.gegner[2], 1, true]);
+    for (let id = 1; id < 6; id++) plaetze.push([id, BOT_NAMEN[id], id < 3 ? 0 : 1, true]);
     for (const [id, name, team, bot] of plaetze) {
       const waffe = bot ? waffeZufall() : (WAFFEN_REIHE.indexOf(o.spielerWaffe) >= 0 ? o.spielerWaffe : 'sturmgewehr');
       const a = neuerAkteur(id, name, team, bot, waffe, plaetze.length);
       if (bot) a.ki = neueKi(this, a);
       this.akteure.push(a);
     }
-    if (!o.nurBots) this.spieler = this.akteure[0];
+    if (!nurBots) this.spieler = this.akteure[0];
     for (const a of this.akteure) this.spawnen(a);
   }
 
@@ -149,8 +162,10 @@ export class Simulation {
 
     const laeuft = this.phase === 'laeuft';
     for (const a of this.akteure) {
-      a.px = a.x; a.py = a.y; a.pz = a.z;
-      a.pyaw = a.yaw; a.ppitch = a.pitch;
+      if (!a.fern) {
+        a.px = a.x; a.py = a.y; a.pz = a.z;
+        a.pyaw = a.yaw; a.ppitch = a.pitch;
+      }
       if (!a.lebt) {
         if (this.phase !== 'ende') {
           a.respawnIn -= dt;
@@ -158,35 +173,91 @@ export class Simulation {
         }
         continue;
       }
-      let bef = a.befehl;
-      if (!laeuft) {
-        STILL.yaw = bef.yaw;
-        STILL.pitch = bef.pitch;
-        STILL.tasten = 0;
-        bef = STILL;
+      if (!a.fern) {
+        a.uhr = this.zeit;
+        akteurSchritt(this, a, a.befehl, dt, laeuft, this.zeit);
+        // Sicherheitsnetz: wer aus der Welt faellt, kommt neu herein.
+        if (a.y < -6 || !Number.isFinite(a.x + a.y + a.z)) {
+          this.spawnen(a);
+          continue;
+        }
       }
-      a.yaw = bef.yaw;
-      a.pitch = klemme(bef.pitch, -1.5, 1.5);
-      const neu = bef.tasten & ~a.tastenVorher;
-      waffeTick(this, a, bef.tasten, neu, dt, laeuft);
-      bewegeFigur(this.welt, a, bef, dt, a.waffe, neu);
-      a.tastenVorher = bef.tasten;
-
-      if (a.gesprungen) { a.gesprungen = false; this.melden('sprung', a.id, -1, 0); }
-      if (a.landung) { this.melden('landung', a.id, -1, a.landung); a.landung = 0; }
-      if (a.schritt) {
-        a.schritt = false;
-        this.melden('schritt', a.id, -1, a.sprintet ? 1 : a.geduckt ? 0.35 : 0.65);
-      }
-      if (a.rutschtNeu) { a.rutschtNeu = false; this.melden('rutschen', a.id, -1, 0); }
       if (a.schutz > 0) a.schutz = Math.max(0, a.schutz - dt);
       if (a.leben < LEBEN.max && this.zeit - a.letzterTreffer >= LEBEN.regenPause) {
         a.leben = Math.min(LEBEN.max, a.leben + LEBEN.regenRate * dt);
       }
-      // Sicherheitsnetz: wer aus der Welt faellt, kommt neu herein.
-      if (a.y < -6 || !Number.isFinite(a.x + a.y + a.z)) this.spawnen(a);
     }
     this.trennen();
+  }
+
+  /* Einen Befehl einer fern gesteuerten Figur ausfuehren (Server). Der
+     Aufrufer setzt vorher a.uhr auf Befehlsnummer * TICK. */
+  fernSchritt(a, bef) {
+    if (!a.lebt) return false;
+    akteurSchritt(this, a, bef, TICK, this.phase === 'laeuft', a.uhr);
+    if (a.y < -6 || !Number.isFinite(a.x + a.y + a.z)) this.spawnen(a);
+    return true;
+  }
+
+  /* ------------------------------------------------------- Mehrspieler */
+
+  /* Einen Platz an einen Menschen geben (der Bot geht). */
+  menschSetzen(a, name, waffe) {
+    a.bot = false;
+    a.fern = true;
+    a.ki = null;
+    a.name = name;
+    this.werteLeeren(a);
+    a.naechsteWaffe = WAFFEN_REIHE.indexOf(waffe) >= 0 ? waffe : 'sturmgewehr';
+    a.waffe = neueWaffe(a.naechsteWaffe);
+    a.uhr = 0;
+    a.befehl.tasten = 0;
+    a.befehl.vor = 0;
+    a.befehl.seit = 0;
+    this.spawnen(a);
+  }
+
+  /* Der Mensch ist weg: ein Bot uebernimmt, wo er gerade steht. */
+  botSetzen(a) {
+    a.bot = true;
+    a.fern = false;
+    a.name = BOT_NAMEN[a.id] || 'Bot';
+    a.ki = neueKi(this, a);
+    this.werteLeeren(a);
+    a.befehl.yaw = a.yaw;
+    a.befehl.pitch = 0;
+    a.befehl.tasten = 0;
+    a.befehl.vor = 0;
+    a.befehl.seit = 0;
+    a.tastenVorher = 0;
+    if (a.lebt) botGespawnt(this, a);
+  }
+
+  werteLeeren(a) {
+    a.abschuesse = 0;
+    a.tode = 0;
+    a.assists = 0;
+    a.serie = 0;
+    a.besteSerie = 0;
+    a.schuesse = 0;
+    a.treffer = 0;
+    a.kopftreffer = 0;
+    a.schadenVon.fill(0);
+  }
+
+  /* Naechste Runde im Online-Match: Punkte auf null, alle neu herein. */
+  neueRunde() {
+    this.runde++;
+    this.phase = 'vorlauf';
+    this.phasenZeit = this.vorlauf;
+    this.restzeit = this.dauer;
+    this.punkte[0] = 0;
+    this.punkte[1] = 0;
+    this.sieger = -1;
+    for (const a of this.akteure) {
+      this.werteLeeren(a);
+      this.spawnen(a);
+    }
   }
 
   beenden() {
@@ -218,9 +289,13 @@ export class Simulation {
         let d = Math.hypot(dx, dz);
         if (d >= min) continue;
         if (d < 1e-4) { dx = 1; dz = 0; d = 1; }
-        const schub = (min - d) * 0.5;
-        schiebeWaagerecht(this.welt, a, -dx / d * schub, -dz / d * schub);
-        schiebeWaagerecht(this.welt, b, dx / d * schub, dz / d * schub);
+        // Fern gesteuerte Figuren schiebt niemand: ihre Lage sagt das
+        // Geraet voraus, ein Schubs vom Server liesse sie springen.
+        if (a.fern && b.fern) continue;
+        const schubA = a.fern ? 0 : b.fern ? min - d : (min - d) * 0.5;
+        const schubB = b.fern ? 0 : a.fern ? min - d : (min - d) * 0.5;
+        if (schubA) schiebeWaagerecht(this.welt, a, -dx / d * schubA, -dz / d * schubA);
+        if (schubB) schiebeWaagerecht(this.welt, b, dx / d * schubB, dz / d * schubB);
       }
     }
   }
@@ -280,6 +355,7 @@ export class Simulation {
     a.luftZeit = 0;
     a.tastenVorher = 0;
     a.lebt = true;
+    a.lebenNr = (a.lebenNr + 1) & 255;
     a.leben = LEBEN.max;
     a.letzterTreffer = -99;
     a.schutz = MATCH.spawnSchutz;
@@ -310,6 +386,21 @@ export class Simulation {
 
     const schuss = this.melden('schuss', a.id, -1, 0);
     schuss.waffe = def.id;
+    // Die Streuung haengt am Schuss, nicht am Spielverlauf: das Geraet
+    // zeichnet die Leuchtspur genau dorthin, wo der Server trifft.
+    const zufall = this.schussZufall;
+    zufall.setzen(startwert(a.id + 1, w.schuesse, a.lebenNr));
+    if (this.rueckspulen) this.rueckspulen(a, true);
+    try {
+      this.kugeln(a, w, def, schuss, augeY, yaw, pitch, streuRad, zufall);
+    } finally {
+      if (this.rueckspulen) this.rueckspulen(a, false);
+    }
+    nachSchuss(this, w);
+    botsHoeren(this, a, def.hoerweite);
+  }
+
+  kugeln(a, w, def, schuss, augeY, yaw, pitch, streuRad, zufall) {
     const n = def.kugeln;
     const sammeln = n > 1;
     if (sammeln) {
@@ -319,21 +410,7 @@ export class Simulation {
     let getroffen = false;
     let kopf = false;
     for (let k = 0; k < n; k++) {
-      let winkel, phi;
-      if (n > 1) {
-        // Schrot: ein festes Muster aus Ring und Mitte, leicht verwackelt.
-        if (k === 0) {
-          winkel = streuRad * 0.12 * this.zufall();
-          phi = this.zufall() * Math.PI * 2;
-        } else {
-          phi = ((k - 1) / (n - 1)) * Math.PI * 2 + this.zufall.zwischen(-0.35, 0.35);
-          winkel = streuRad * this.zufall.zwischen(0.45, 1);
-        }
-      } else {
-        winkel = streuRad * Math.sqrt(this.zufall());
-        phi = this.zufall() * Math.PI * 2;
-      }
-      kegelRichtung(yaw, pitch, winkel, phi, RICHTUNG);
+      kugelRichtung(k, n, streuRad, yaw, pitch, zufall, RICHTUNG);
       const erg = this.strahl(a, a.x, augeY, a.z, RICHTUNG.x, RICHTUNG.y, RICHTUNG.z, def.reichweite.max);
       const hx = a.x + RICHTUNG.x * erg.t;
       const hy = augeY + RICHTUNG.y * erg.t;
@@ -373,8 +450,6 @@ export class Simulation {
     }
     if (getroffen) a.treffer++;
     if (kopf) a.kopftreffer++;
-    nachSchuss(this, w);
-    botsHoeren(this, a, def.hoerweite);
   }
 
   /* Strahl gegen Welt und gegnerische Figuren. Verbuendete stehen
@@ -465,4 +540,50 @@ export class Simulation {
   waffeWaehlen(a, id) {
     if (WAFFEN_REIHE.indexOf(id) >= 0) a.naechsteWaffe = id;
   }
+}
+
+/* Richtung der Kugel k von n. Das Geraet rechnet sie fuer seine
+   Leuchtspur mit demselben Zufall nach wie der Server fuer den Treffer. */
+export function kugelRichtung(k, n, streuRad, yaw, pitch, zufall, aus) {
+  let winkel, phi;
+  if (n > 1) {
+    // Schrot: ein festes Muster aus Ring und Mitte, leicht verwackelt.
+    if (k === 0) {
+      winkel = streuRad * 0.12 * zufall();
+      phi = zufall() * Math.PI * 2;
+    } else {
+      phi = ((k - 1) / (n - 1)) * Math.PI * 2 + zufall.zwischen(-0.35, 0.35);
+      winkel = streuRad * zufall.zwischen(0.45, 1);
+    }
+  } else {
+    winkel = streuRad * Math.sqrt(zufall());
+    phi = zufall() * Math.PI * 2;
+  }
+  return kegelRichtung(yaw, pitch, winkel, phi, aus);
+}
+
+/* Ein Schritt einer lebenden Figur: Blick, Waffe, Bewegung, Meldungen.
+   ctx ist die Simulation - oder auf dem Geraet die Vorhersage der eigenen
+   Figur im Online-Match (sie bringt welt, melden und schiessen mit). */
+export function akteurSchritt(ctx, a, bef, dt, laeuft, jetzt) {
+  if (!laeuft) {
+    STILL.yaw = bef.yaw;
+    STILL.pitch = bef.pitch;
+    STILL.tasten = 0;
+    bef = STILL;
+  }
+  a.yaw = bef.yaw;
+  a.pitch = klemme(bef.pitch, -1.5, 1.5);
+  const neu = bef.tasten & ~a.tastenVorher;
+  waffeTick(ctx, a, bef.tasten, neu, dt, laeuft, jetzt);
+  bewegeFigur(ctx.welt, a, bef, dt, a.waffe, neu);
+  a.tastenVorher = bef.tasten;
+
+  if (a.gesprungen) { a.gesprungen = false; ctx.melden('sprung', a.id, -1, 0); }
+  if (a.landung) { ctx.melden('landung', a.id, -1, a.landung); a.landung = 0; }
+  if (a.schritt) {
+    a.schritt = false;
+    ctx.melden('schritt', a.id, -1, a.sprintet ? 1 : a.geduckt ? 0.35 : 0.65);
+  }
+  if (a.rutschtNeu) { a.rutschtNeu = false; ctx.melden('rutschen', a.id, -1, 0); }
 }

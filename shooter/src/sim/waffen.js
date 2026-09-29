@@ -14,7 +14,11 @@
 
 import { FIGUR, WAFFEN } from '../konfig.js';
 import { T_FEUER, T_NACHLADEN, T_VISIER } from './befehl.js';
-import { klemme, mische, naehere } from './mathe.js';
+import { klemme, mische, naehere, startwert, zufallsquelle } from './mathe.js';
+
+/* Rueckstoss haengt nur an der Nummer des Schusses: so rechnen das Geraet
+   (Vorhersage) und der Server (Mehrspieler) denselben Ausschlag. */
+const RUECK = zufallsquelle(1);
 
 export function neueWaffe(id) {
   const def = WAFFEN[id] || WAFFEN.sturmgewehr;
@@ -130,10 +134,13 @@ export function streuungBerechnen(a, w) {
 }
 
 /* Ein Simulationsschritt fuer die Waffe einer lebenden Figur.
-   neu: in diesem Schritt frisch gedrueckte Tasten. */
-export function waffeTick(sim, a, tasten, neu, dt, darfSchiessen) {
+   neu: in diesem Schritt frisch gedrueckte Tasten. jetzt: die Uhr der
+   Figur - ohne Angabe die der Simulation. Mehrspieler-Figuren haben eine
+   eigene, die mit jedem ihrer Befehle weiterlaeuft. */
+export function waffeTick(sim, a, tasten, neu, dt, darfSchiessen, jetzt) {
   const w = a.waffe;
   const def = w.def;
+  if (jetzt === undefined) jetzt = sim.zeit;
 
   // Zielen: nicht im Sprint. Waehrend des Nachladens darf man zielen.
   const willVisier = (tasten & T_VISIER) !== 0 && !a.sprintet && darfSchiessen;
@@ -173,7 +180,7 @@ export function waffeTick(sim, a, tasten, neu, dt, darfSchiessen) {
         sim.schiessen(a, w);
         w.magazin--;
         w.schuesse++;
-        w.letzterSchuss = sim.zeit;
+        w.letzterSchuss = jetzt;
         w.abkling += 60 / def.rpm;
         n++;
       }
@@ -181,7 +188,7 @@ export function waffeTick(sim, a, tasten, neu, dt, darfSchiessen) {
   }
 
   // Rueckstoss und Bloom bauen sich ab, waehrend des Feuerns langsamer.
-  const feuert = sim.zeit - w.letzterSchuss < 60 / def.rpm + 0.06;
+  const feuert = jetzt - w.letzterSchuss < 60 / def.rpm + 0.06;
   const erholung = def.rueckstoss.erholung * (feuert ? 0.3 : 1) * dt;
   w.rueckHoch = naehere(w.rueckHoch, 0, erholung);
   w.rueckSeite = naehere(w.rueckSeite, 0, erholung * 0.8);
@@ -196,6 +203,7 @@ export function nachSchuss(sim, w) {
   const s = def.streuung;
   w.bloom = Math.min(s.bloomMax, w.bloom + mische(s.bloom, s.bloomVisier, w.visier));
   const faktor = mische(1, r.visierFaktor, w.visier);
-  w.rueckHoch = Math.min(r.max, w.rueckHoch + r.hoch * faktor * sim.zufall.zwischen(0.85, 1.15));
-  w.rueckSeite = klemme(w.rueckSeite + r.seite * faktor * sim.zufall.zwischen(-1, 1), -r.max * 0.5, r.max * 0.5);
+  RUECK.setzen(startwert(w.schuesse, def.rpm, 0x7e57));
+  w.rueckHoch = Math.min(r.max, w.rueckHoch + r.hoch * faktor * RUECK.zwischen(0.85, 1.15));
+  w.rueckSeite = klemme(w.rueckSeite + r.seite * faktor * RUECK.zwischen(-1, 1), -r.max * 0.5, r.max * 0.5);
 }

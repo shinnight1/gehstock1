@@ -36,6 +36,7 @@ export class Hud {
       '</div>',
       '<div class="hud-feed"></div>',
       '<div class="hud-fps"></div>',
+      '<div class="hud-online"></div>',
       '<div class="hud-leben"><div class="l-kopf"><span class="l-zahl">100</span><span class="l-schutz">SPAWNSCHUTZ</span></div><div class="l-balken"><i></i></div></div>',
       '<div class="hud-muni"><div class="m-zahlen"><span class="m-mag">30</span><span class="m-res">/ 150</span></div><div class="m-name">Sturmgewehr</div><div class="m-laden"><i></i></div></div>',
       '<div class="hud-kreuz"><i class="k-o"></i><i class="k-u"></i><i class="k-l"></i><i class="k-r"></i><b class="k-punkt"></b></div>',
@@ -59,6 +60,9 @@ export class Hud {
     this.e = {
       vignette: q('.hud-vignette'),
       schutzRand: q('.hud-schutz-rand'),
+      blauTeam: q('.p-team.blau'),
+      rotTeam: q('.p-team.rot'),
+      online: q('.hud-online'),
       blauZahl: q('.p-team.blau .p-zahl'),
       rotZahl: q('.p-team.rot .p-zahl'),
       blauBalken: q('.p-team.blau .p-balken i'),
@@ -145,6 +149,10 @@ export class Hud {
     this.setze('zeit', E.zeit, zeitText(sim.restzeit));
     this.klasse('zeit', E.zeit, 'knapp', sim.restzeit < 30 && sim.phase === 'laeuft');
     this.setze('ziel', E.ziel, 'bis ' + sim.zielPunkte);
+    // Online kann man in beiden Teams stehen: das eigene ist markiert.
+    this.klasse('eigenB', E.blauTeam, 'eigen', s.team === 0);
+    this.klasse('eigenR', E.rotTeam, 'eigen', s.team === 1);
+    this.setze('online', E.online, z.online || '');
 
     const w = s.waffe;
     const lebt = s.lebt;
@@ -332,7 +340,8 @@ export function tabelleBauen(sim) {
     zeile(['Name', 'Abschüsse', 'Tode', 'Hilfen', 'Waffe'], 'tab-titel');
     const liste = sim.akteure.filter((a) => a.team === team).sort((a, b) => b.abschuesse - a.abschuesse || a.tode - b.tode);
     for (const a of liste) {
-      zeile([a.name, String(a.abschuesse), String(a.tode), String(a.assists), a.waffe.def.name], a.bot ? '' : 'ich');
+      const name = sim.online && a.bot ? a.name + ' · Bot' : a.name;
+      zeile([name, String(a.abschuesse), String(a.tode), String(a.assists), a.waffe.def.name], a === sim.spieler ? 'ich' : '');
     }
     tab.appendChild(block);
   }

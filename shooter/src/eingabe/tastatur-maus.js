@@ -81,6 +81,9 @@ export class TastaturMaus {
   }
 
   taste(e, runter) {
+    // Beim Tippen (Name fuers Online-Match) sind Tasten nur Buchstaben.
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
     const code = e.code;
     const imSpiel = this.app.zustand === 'spiel';
     if (runter) {

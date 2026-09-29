@@ -4,7 +4,9 @@
      links    schwebender Stick: wo der Daumen aufsetzt, ist die Mitte.
               Weit nach oben geschoben: Sprint.
      rechts   freie Flaeche zum Umsehen
-     Knoepfe  Feuer (rechts, beim Halten weiter umsehen), zweiter
+     Knoepfe  grosser Feuerknopf rechts: zielt beim Schiessen mit
+              (Visierfeuer wie in CoD Mobile), kleiner darueber: aus der
+              Huefte; beide: beim Halten weiter umsehen. Zweiter
               Feuerknopf links oben neben dem Stick, Visier, Nachladen,
               Springen, Ducken, Pause, Tabelle
 
@@ -18,15 +20,16 @@
    ------------------------------------------------------------------ */
 
 const SYMBOLE = {
+  visierFeuer: '<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="14" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="24" cy="24" r="4" fill="currentColor"/><path d="M24 3v9M24 36v9M3 24h9M36 24h9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>',
   feuer: '<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="9" fill="none" stroke="currentColor" stroke-width="3"/><path d="M24 4v10M24 34v10M4 24h10M34 24h10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>',
-  visier: '<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="15" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="24" cy="24" r="3" fill="currentColor"/><path d="M24 5v8M24 35v8M5 24h8M35 24h8" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>',
+  visier: '<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="16" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="24" cy="24" r="8" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M19 20a7 7 0 0 1 6-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
   laden: '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M36 17a14 14 0 1 0 2 11" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/><path d="M38 7v11H27" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   sprung: '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M12 30l12-12 12 12" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 38h20" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>',
   ducken: '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M12 18l12 12 12-12" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 38h20" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>',
   pause: '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M17 12v24M31 12v24" stroke="currentColor" stroke-width="5" stroke-linecap="round"/></svg>',
 };
 
-const LOOK_KNOEPFE = new Set(['feuer', 'feuerL', 'visier']);
+const LOOK_KNOEPFE = new Set(['feuer', 'feuerL', 'feuerH', 'visier']);
 
 export class Touch {
   constructor(app, eingabe, wurzel) {
@@ -47,8 +50,9 @@ export class Touch {
       '<div class="t-stick"><div class="t-sprint">SPRINT</div><div class="t-knauf"></div></div>',
       '<div class="t-knopf t-pause" data-steuer="pause" role="button" aria-label="Pause">' + SYMBOLE.pause + '</div>',
       '<div class="t-tabelle" data-steuer="tabelle" role="button" aria-label="Punktetabelle"></div>',
-      '<div class="t-knopf t-feuer" data-steuer="feuer" role="button" aria-label="Feuer">' + SYMBOLE.feuer + '</div>',
-      '<div class="t-knopf t-feuer-links" data-steuer="feuerL" role="button" aria-label="Feuer links">' + SYMBOLE.feuer + '</div>',
+      '<div class="t-knopf t-feuer" data-steuer="feuer" role="button" aria-label="Feuer">' + SYMBOLE.visierFeuer + '</div>',
+      '<div class="t-knopf t-feuer-huefte" data-steuer="feuerH" role="button" aria-label="Feuer aus der Hüfte">' + SYMBOLE.feuer + '</div>',
+      '<div class="t-knopf t-feuer-links" data-steuer="feuerL" role="button" aria-label="Feuer links">' + SYMBOLE.visierFeuer + '</div>',
       '<div class="t-knopf t-visier" data-steuer="visier" role="button" aria-label="Visier">' + SYMBOLE.visier + '</div>',
       '<div class="t-knopf t-laden" data-steuer="laden" role="button" aria-label="Nachladen">' + SYMBOLE.laden + '</div>',
       '<div class="t-knopf t-sprung" data-steuer="sprung" role="button" aria-label="Springen">' + SYMBOLE.sprung + '</div>',
@@ -105,6 +109,14 @@ export class Touch {
   einstellen(einst) {
     this.el.style.setProperty('--knopf', String(einst.knopfGroesse || 1));
     this.knoepfe.feuerL.style.display = einst.linkerFeuerknopf ? '' : 'none';
+    this.knoepfe.feuerH.style.display = einst.visierFeuer ? '' : 'none';
+    // Ohne Visierfeuer zeigen die Feuerknoepfe wieder das schlichte Fadenkreuz.
+    const symbol = einst.visierFeuer ? SYMBOLE.visierFeuer : SYMBOLE.feuer;
+    if (this.feuerSymbol !== symbol) {
+      this.feuerSymbol = symbol;
+      this.knoepfe.feuer.innerHTML = symbol;
+      this.knoepfe.feuerL.innerHTML = symbol;
+    }
     this.radius = 58 * (einst.knopfGroesse || 1);
   }
 
@@ -119,6 +131,7 @@ export class Touch {
     this.eingabe.stickY = 0;
     this.eingabe.stickSprint = false;
     this.eingabe.feuerFinger = 0;
+    this.eingabe.visierFeuerFinger = 0;
     this.eingabe.visierFinger = false;
     this.stickEl.classList.remove('an');
     this.ruheEl.classList.remove('weg');
@@ -149,6 +162,13 @@ export class Touch {
         break;
       case 'feuer':
       case 'feuerL':
+        // Gemerkt wird, welcher Zaehler hochging - so passt das Loslassen,
+        // auch wenn die Einstellung mitten im Druecken wechselt.
+        z.mitVisier = !!this.app.einst.visierFeuer;
+        if (z.mitVisier) E.visierFeuerFinger++;
+        else E.feuerFinger++;
+        break;
+      case 'feuerH':
         E.feuerFinger++;
         break;
       case 'visier':
@@ -198,6 +218,10 @@ export class Touch {
         break;
       case 'feuer':
       case 'feuerL':
+        if (z.mitVisier) E.visierFeuerFinger = Math.max(0, E.visierFeuerFinger - 1);
+        else E.feuerFinger = Math.max(0, E.feuerFinger - 1);
+        break;
+      case 'feuerH':
         E.feuerFinger = Math.max(0, E.feuerFinger - 1);
         break;
       case 'visier':
