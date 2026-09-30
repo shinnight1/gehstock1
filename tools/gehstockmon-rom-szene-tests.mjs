@@ -68,15 +68,23 @@ export function szenenPruefen(T, SG, zeichnen = () => {}) {
     const gruppe = w.scene.getObjectByName('rom-event'), kulisse = gruppe.children[0];
     const sichtbareSprites = () => { let anzahl = 0; gruppe.traverseVisible(o => { if (o.isSprite) anzahl++; }); return anzahl; };
     const countdownSprites = sichtbareSprites();
+    const TANZENDE = 12 + 3 * ROM.TANZPLAETZE.length;
+    pruefe(countdownSprites >= TANZENDE, 'Die Kakerlaken tanzen schon im Countdown ueberall (' + countdownSprites + ')');
     const startHoehe = kulisse.position.y;
     w.schritt(plan.countdownBis - 1);
     pruefe(kulisse.position.y > startHoehe && kulisse.position.y < 0, 'Kulisse waechst im Countdown aus dem Boden');
 
-    for (let nr = 0; nr < 5; nr++) {
+    for (let nr = 0; nr < ROM.VORBEI; nr++) {
       const zeit = plan.phasen[nr].von + 100;
       ev.ueberraschungen = { spaghetti: zeit - 50, vespa: zeit - 50, nonna: zeit - 2000 };
       a.setEvent(ev); w.schritt(zeit);
       pruefe(a.zaehler().sichtbar && kulisse.position.y === 0, 'Phase ' + nr + ' sichtbar');
+      pruefe(sichtbareSprites() >= TANZENDE, 'Phase ' + nr + ': alle Kakerlaken tanzen');
+      if (nr === ROM.P.turbo) {
+        const p = ROM.pizzen(ev, zeit)[0];
+        pruefe(!!p, 'Im Overdrive rasen Pizzen');
+        a.tippen(p); pruefe(a.zielId() === null, 'Turbo-Pizzen lassen sich nicht als Ziel waehlen');
+      }
       if (nr === 0) {
         const p = ROM.pizzen(ev, zeit)[0];
         a.tippen(p); pruefe(a.zielId() === p.id, 'Pizza antippen waehlt ein Ziel');
@@ -86,25 +94,27 @@ export function szenenPruefen(T, SG, zeichnen = () => {}) {
         a.setEvent({ ...ev, ich: { zutaten: ROM.pizzen(ev, zeit).map(pz => pz.id) } });
         pruefe(a.naechstePizza(p) === null, 'Serverstand verhindert erneutes Sammeln nach Laden');
       }
-      if (nr === 2) for (let pose = 0; pose < 4; pose++) { a.pose(pose); w.schritt(zeit + pose); }
-      if (nr === 3) for (const hp of [1000, 499, 249, 0]) {
+      if (nr === ROM.P.invasion) for (let pose = 0; pose < 4; pose++) { a.pose(pose); w.schritt(zeit + pose); }
+      if (nr === ROM.P.imperator) for (const hp of [1000, 499, 249, 0]) {
         ev.boss = { hp, max: 1000, besiegt: hp === 0 }; a.setEvent(ev);
         a.treffer(); w.schritt(zeit + 10 + hp);
       }
       /* Viele Treffer erzwingen die Obergrenze unabhaengig vom Zufall. */
-      if (nr === 4) {
+      if (nr === ROM.P.trevi) {
         for (let i = 0; i < 80; i++) a.treffer();
         pruefe(a.zaehler().partikel === max, 'Belastungsprobe erreicht die Partikelgrenze ' + max);
+        a.eiSprung(0);
+        pruefe(a.zaehler().partikel === max + 3, 'Trevi-Eier kommen auch bei voller Partikelgrenze durch');
       }
       for (let i = 0; i < 12; i++) {
         w.schritt(zeit + 1100 + i * 34);
-        pruefe(a.zaehler().partikel <= max, 'Partikelgrenze ' + max + ' eingehalten');
+        pruefe(a.zaehler().partikel <= max + 3, 'Partikelgrenze ' + max + ' eingehalten');
       }
       w.kampf(true); w.schritt(zeit + 1700);
       pruefe(!a.zaehler().sichtbar, 'Event ist waehrend eines Kampfes ausgeblendet');
       w.kampf(false); w.schritt(zeit + 1800);
       pruefe(a.zaehler().sichtbar, 'Event kehrt nach dem Kampf zurueck');
-      if (nr === 3) {
+      if (nr === ROM.P.imperator) {
         const vorher = sichtbareSprites();
         w.schritt(zeit + ROM.dauer(ev, 20000) + 1);
         pruefe(sichtbareSprites() < vorher, 'Ueberraschungen verschwinden auch waehrend der Bossphase');
@@ -131,7 +141,7 @@ export function szenenPruefen(T, SG, zeichnen = () => {}) {
     a.setEvent(direkt); w.schritt(direkt.start + 100);
     pruefe(sichtbareSprites() === countdownSprites, 'Neustart ohne Abspann zeigt keine alten Pizzen und Sprechblasen');
     w.ende();
-    ergebnis.push((ruhig ? 'Ruhig' : 'Normal') + ', Tempo ' + faktor + ': Countdown, 5 Phasen, Interaktionen, Abspann, Neustart, Freigabe');
+    ergebnis.push((ruhig ? 'Ruhig' : 'Normal') + ', Tempo ' + faktor + ': Countdown, ' + ROM.PHASEN.length + ' Phasen, Interaktionen, Abspann, Neustart, Freigabe');
   }
 
   const abbruch = welt(), ev = { id: 'abbruch', start: 100000, abgebrochenAm: 101000 };

@@ -35,7 +35,7 @@ import { activeArena, activeDuel, trainerTruppe, TRAINER_EINSTIEG } from './gehs
 import { activeDungeon } from './gehstockmon-dungeons.mjs';
 import { imDuellKampf } from './gehstockmon-duell.mjs';
 
-const ROM = X.ROM;
+const ROM = X.ROM, P = ROM.P;
 export const DOKUMENT = 'rom-event';
 const beitragSchluessel = (evId) => 'rom-b:' + evId;
 
@@ -106,8 +106,9 @@ const mitFeldern = (db) => !!db && typeof db.felder === 'function';
 function beitragSauber(b) {
   const x = b && typeof b === 'object' ? clone(b) : {};
   const leer = ROM.leer();
-  x.lire = [0, 1, 2, 3, 4].map((i) => Math.max(0, Math.floor(Number(x.lire && x.lire[i]) || 0)));
-  for (const k of ['stern', 'schlaege', 'schaden', 'hp']) x[k] = Math.max(0, Math.floor(Number(x[k]) || leer[k] || 0));
+  x.lire = ROM.PHASEN.map((ph, i) => Math.max(0, Math.floor(Number(x.lire && x.lire[i]) || 0)));
+  for (const k of ['stern', 'schlaege', 'schaden', 'hp', 'kaeseGold']) x[k] = Math.max(0, Math.floor(Number(x[k]) || leer[k] || 0));
+  x.eier = Array.isArray(x.eier) ? [...new Set(x.eier.map(Number).filter((k) => Number.isInteger(k) && k >= 0 && k < ROM.EIER.anzahl))] : [];
   return x;
 }
 async function alleBeitraege(db, evId) {
@@ -176,13 +177,14 @@ function eigenSicht(b, ev, now) {
     vorrat: ROM.vorrat(x, ev, now), zutaten: (x.zutaten || []).slice(-40), tanz: (x.tanz || []).slice(-20),
     gefechte: x.gefechte || { s: 0, n: 0 }, muenze: !!x.muenze, fang: x.fang || {},
     tPolonaise: x.tPolonaise || 0, tGefecht: x.tGefecht || 0, tStern: x.tStern || 0, tZutat: x.tZutat || 0,
-    schlagStand: Number.isFinite(x.schlagStand) ? x.schlagStand : null };
+    schlagStand: Number.isFinite(x.schlagStand) ? x.schlagStand : null, kaeseGold: x.kaeseGold, tKaese: x.tKaese || 0, eier: x.eier };
 }
 function sicht(ev, alle, id, now) {
   if (!ev || !sichtbar(ev, now)) return null;
   const lage = ROM.lage(alle, ev);
   return { id: ev.id, start: ev.start, faktor: ROM.faktor(ev), abgebrochenAm: ev.abgebrochenAm || null,
     von: (ev.von && ev.von.name) || 'CEO', vorschau: !!ev.vorschau, ueberraschungen: ev.ueberraschungen || {},
+    bossBesiegtAm: Number.isFinite(ev.bossBesiegtAm) ? ev.bossBesiegtAm : null,
     teilnehmer: lage.teilnehmer, leiste: { wert: lage.leiste, ziel: lage.leisteZiel, voll: lage.leisteVoll },
     boss: { hp: lage.bossHp, max: lage.bossMax, besiegt: lage.bossBesiegt }, ich: eigenSicht(alle[id], ev, now), serverTime: now };
 }
@@ -240,7 +242,7 @@ const voll = (text) => text + ' Die Lire dieser Phase hast du aber schon voll.';
 function ausfuehren({ art, b, ev, ph, now, body, ort, p, lage, ctx, alle, id }) {
   const nr = ph.nr;
   if (art === 'zutat') {
-    if (nr > 1) fail('Die Pizzen sind weitergezogen.', 409);
+    if (nr > P.rebellion) fail('Die Pizzen sind weitergezogen.', 409);
     const pizzaId = String(body.pizzaId || '').slice(0, 30);
     if ((b.zutaten || []).includes(pizzaId)) fail('Diese Pizza hast du schon erwischt.', 409);
     const warten = ROM.dauer(ev, 2500) - (now - (b.tZutat || 0));
@@ -253,7 +255,7 @@ function ausfuehren({ art, b, ev, ph, now, body, ort, p, lage, ctx, alle, id }) 
     return { art, lire: plus, text: plus ? was + ' geschnappt! Die Pizza schreit „MAMMA MIA!“ und flüchtet.' : voll(was + ' geschnappt!') };
   }
   if (art === 'gefecht') {
-    if (nr !== 1) fail('Die Legion marschiert gerade nicht.', 409);
+    if (nr !== P.rebellion) fail('Die Legion marschiert gerade nicht.', 409);
     const warten = ROM.dauer(ev, 20000) - (now - (b.tGefecht || 0));
     if (warten > 0) fail('Deine Truppe verschnauft noch ' + sekunden(warten) + ' Sekunden.', 429);
     if (!Array.isArray(p.truppe) || !p.truppe.length) fail('Stelle zuerst eine Truppe auf.', 409);
@@ -265,7 +267,7 @@ function ausfuehren({ art, b, ev, ph, now, body, ort, p, lage, ctx, alle, id }) 
       text: kampf.sieg ? 'Sieg! ' + kampf.sie[0].name + ' zerfällt in Pizzastücke.' : kampf.sie[0].name + ' tanzt dich aus und rennt davon. Trost-Lira!' };
   }
   if (art === 'tanz') {
-    if (nr !== 2) fail('Die Kakerlaken tanzen gerade nicht.', 409);
+    if (nr !== P.invasion) fail('Die Kakerlaken tanzen gerade nicht.', 409);
     const runde = Math.floor(Number(body.runde)), jetzt = ROM.tanzRunde(ev, now);
     if (!Number.isInteger(runde) || runde < jetzt - 1 || runde > jetzt) fail('Diese Tanzrunde ist schon vorbei.', 409);
     if ((b.tanz || []).includes(runde)) fail('Diese Runde hast du schon getanzt - gleich kommt die nächste!', 409);
@@ -276,7 +278,7 @@ function ausfuehren({ art, b, ev, ph, now, body, ort, p, lage, ctx, alle, id }) 
     return { art, lire: plus, richtig, text: richtig ? (plus ? '¡Perfecto! Die Reisegruppe jubelt.' : voll('¡Perfecto!')) : 'Daneben - alle Kakerlaken stolpern übereinander.' };
   }
   if (art === 'polonaise') {
-    if (nr !== 2) fail('Gerade gibt es keine Polonaise.', 409);
+    if (nr !== P.invasion) fail('Gerade gibt es keine Polonaise.', 409);
     if (abstand(ort, ROM.PIAZZA) > ROM.POLONAISE.radius) fail('Stell dich zur Polonaise auf die Piazza.', 409);
     const warten = ROM.dauer(ev, ROM.POLONAISE.takt) - 500 - (now - (b.tPolonaise || 0));
     if (warten > 0) fail('Die Polonaise dreht noch ihre Runde.', 429);
@@ -285,7 +287,7 @@ function ausfuehren({ art, b, ev, ph, now, body, ort, p, lage, ctx, alle, id }) 
     return { art, lire: plus, text: plus ? 'Du tanzt eine Runde Polonaise mit.' : voll('Du tanzt eine Runde Polonaise mit.') };
   }
   if (art === 'schlag') {
-    if (nr !== 3) fail('Mozzarellus ist gerade nicht da.', 409);
+    if (nr !== P.imperator) fail('Mozzarellus ist gerade nicht da.', 409);
     if (lage.bossBesiegt) fail('Mozzarellus ist schon geschmolzen!', 409);
     if (!Array.isArray(p.truppe) || !p.truppe.length) fail('Stelle zuerst eine Truppe auf.', 409);
     if (ROM.vorrat(b, ev, now) < 1) fail('Deine Truppe holt Luft - gleich wieder.', 429);
@@ -303,7 +305,7 @@ function ausfuehren({ art, b, ev, ph, now, body, ort, p, lage, ctx, alle, id }) 
       text: danach.bossBesiegt ? 'DER LETZTE SCHLAG! Mozzarellus schmilzt!' : 'Treffer! ' + schaden + ' Schaden' + (passend ? ' - deine Truppe kontert den ' + haltung.name + '.' : '.') };
   }
   if (art === 'muenze') {
-    if (nr !== 4) fail('Der Trevi-Brunnen ist noch nicht so weit.', 409);
+    if (nr !== P.trevi) fail('Der Trevi-Brunnen ist noch nicht so weit.', 409);
     if (b.muenze) fail('Deine Münze liegt schon im Brunnen.', 409);
     b.muenze = true;
     const plus = lireGeben(b, nr, ROM.MUENZE);
@@ -312,7 +314,8 @@ function ausfuehren({ art, b, ev, ph, now, body, ort, p, lage, ctx, alle, id }) 
   if (art === 'fang') {
     const was = String(body.fang || ''), max = ROM.FANG[was];
     if (!max) fail('Das gibt es hier nicht zu fangen.', 409);
-    if (was === 'muenzen') { if (nr !== 4) fail('Noch regnet es keine Münzen.', 409); }
+    if (was === 'muenzen') { if (nr !== P.trevi) fail('Noch regnet es keine Münzen.', 409); }
+    else if (was === 'turbo') { if (nr !== P.turbo) fail('Der Espresso-Overdrive ist vorbei.', 409); }
     else {
       const u = ROM.UEBERRASCHUNGEN.find((v) => v.id === was), seit = ev.ueberraschungen && ev.ueberraschungen[was];
       if (!u || !seit || now < seit || now > seit + ROM.dauer(ev, u.dauer) + 3000) fail('Die Überraschung ist schon vorbei.', 409);
@@ -325,12 +328,36 @@ function ausfuehren({ art, b, ev, ph, now, body, ort, p, lage, ctx, alle, id }) 
     return { art, lire: plus, text: plus ? '+' + plus + ' Lire gefangen!' : voll('Gefangen!') };
   }
   if (art === 'stern') {
-    if (nr > 3) fail('Die Sternschnuppen sind schon verglüht.', 409);
+    /* Sternschnuppen gibt es das ganze Event ueber, auch schon im Countdown. */
     if (b.stern >= ROM.STERN.max) fail('Mehr Sternschnuppen gibt es für dich nicht.', 409);
     if (now - (b.tStern || 0) < ROM.dauer(ev, ROM.STERN.abstand)) fail('Die nächste Sternschnuppe kommt gleich.', 429);
     if (ROM.lire(b) >= ROM.LIRE_MAX) return { art, lire: 0, text: 'Deine Lire sind voll.' };
     b.stern += 1; b.tStern = now;
     return { art, lire: 1, text: 'Sternschnuppe gefangen! Wünsch dir was.' };
+  }
+  if (art === 'kaese') {
+    /* Zwei Gold je echter Sekunde, solange es nach Mozzarellus' Sieg Kaese
+       regnet. Gezaehlt wird ab der letzten Meldung, hoechstens acht Sekunden. */
+    if (nr !== P.imperator) fail('Gerade regnet es keinen Käse.', 409);
+    const von = Number.isFinite(ev.bossBesiegtAm) ? ev.bossBesiegtAm : lage.bossBesiegt ? now : null;
+    if (von === null) fail('Erst muss Mozzarellus schmelzen.', 409);
+    const bis = ROM.plan(ev).phasen[P.imperator].bis, ab = Math.max(von, b.tKaese || 0, now - ROM.KAESE.hoechstens);
+    const sekundenZahl = Math.max(0, Math.floor((Math.min(now, bis) - ab) / 1000));
+    const gold = sekundenZahl * ROM.KAESE.goldProSekunde;
+    b.tKaese = Math.max(b.tKaese || 0, ab + sekundenZahl * 1000);
+    b.kaeseGold = (b.kaeseGold || 0) + gold;
+    return { art, lire: 0, gold, text: gold ? '🧀 +' + gold + ' Gold aus dem Käseregen' : '' };
+  }
+  if (art === 'ei') {
+    if (nr !== P.trevi) fail('Die Eier sind noch im Brunnen.', 409);
+    const k = Math.floor(Number(body.ei));
+    if (!Number.isInteger(k) || k < 0 || k >= ROM.EIER.anzahl) fail('Dieses Ei gibt es nicht.', 409);
+    if (now < ROM.eiZeit(ev, k) - 1500) fail('Dieses Ei ist noch im Brunnen.', 409);
+    b.eier = b.eier || [];
+    if (b.eier.includes(k)) fail('Dieses Ei hast du schon.', 409);
+    b.eier.push(k);
+    const plus = lireGeben(b, nr, 1);
+    return { art, lire: plus, ei: k, text: '🥚 Ei aus dem Trevi gefangen! (' + b.eier.length + '/' + ROM.EIER.anzahl + ')' };
   }
   fail('Diese Event-Aktion gibt es nicht.', 400);
 }
@@ -343,7 +370,7 @@ export async function romAktion(ctx, { body, id, world, p, now }) {
   const s = await stand(ctx, now), ev = s.ev;
   if (!ev || !ROM.laeuft(ev, now)) fail('Gerade läuft kein Rom-Event.', 409);
   const ph = ROM.phase(ev, now);
-  if (ph.nr < 0) fail('Rom kommt gleich - noch ' + sekunden(ph.bis - now) + ' Sekunden.', 409);
+  if (ph.nr < 0 && art !== 'stern') fail('Rom kommt gleich - noch ' + sekunden(ph.bis - now) + ' Sekunden.', 409);
   if (activeArena(p) || activeDuel(p) || activeDungeon(world, p) || imDuellKampf(world, p, id)) fail('Beende zuerst deinen Kampf - das Event wartet auf dich.', 409);
   const ort = ORTSAKTIONEN.includes(art) ? await position(ctx, world, id, now) : null;
   const lage = ROM.lage(s.alle, ev);
@@ -363,7 +390,7 @@ export async function romAktion(ctx, { body, id, world, p, now }) {
   let evJetzt = ev;
   const alleJetzt = { ...s.alle, [id]: neu };
   /* Ueber eine Schwelle der Leiste? Dann einmal fuer alle die Ueberraschung. */
-  if (!doppelt && ph.nr <= 2 && ergebnis.lire > 0) {
+  if (!doppelt && ph.nr >= 0 && ph.nr <= P.invasion && ergebnis.lire > 0) {
     const danach = ROM.lage(alleJetzt, ev), schon = ev.ueberraschungen || {};
     const faellig = ROM.UEBERRASCHUNGEN.filter((u) => !schon[u.id] && danach.leiste >= u.anteil * danach.leisteZiel);
     if (faellig.length) {
@@ -378,6 +405,17 @@ export async function romAktion(ctx, { body, id, world, p, now }) {
       if (r.ev) evJetzt = r.ev;
     }
   }
+  /* Mozzarellus ist geschmolzen: den Zeitpunkt einmal fuer alle festhalten -
+     ab dann regnet es Kaese (ROM.kaeseFenster). */
+  if (ph.nr === P.imperator && !Number.isFinite(evJetzt.bossBesiegtAm) && ROM.lage(alleJetzt, evJetzt).bossBesiegt) {
+    const r = await dokAendern(ctx.db, (dok) => {
+      const e = aktuell(dok);
+      if (!e || e.id !== ev.id || Number.isFinite(e.bossBesiegtAm)) return { schreiben: false, ev: e && e.id === ev.id ? e : null };
+      e.bossBesiegtAm = now;
+      return { schreiben: true, ev: e };
+    });
+    if (r.ev) evJetzt = r.ev;
+  }
   return { serverTime: now, rom: sicht(evJetzt, alleJetzt, id, now), ergebnis };
 }
 
@@ -391,7 +429,7 @@ function steuerSicht(ctx, s, now) {
   let grund = null;
   if (laeuft) grund = 'Es läuft schon ein Rom-Event.';
   else if (!frei && !zugang.open) grund = 'GehstockMon ist geschlossen. Das Event startet nur während der Öffnungszeiten.';
-  else if (!reicht) grund = 'Bis zum Schließen um ' + uhrzeit(zugang.closesAt) + ' Uhr reicht die Zeit nicht mehr für 13 Minuten Rom.';
+  else if (!reicht) grund = 'Bis zum Schließen um ' + uhrzeit(zugang.closesAt) + ' Uhr reicht die Zeit nicht mehr für ' + Math.round(ROM.GESAMT / 60000) + ' Minuten Rom.';
   else if (wocheBelegt) grund = 'Das Rom-Event dieser Woche ist schon gelaufen. Nächste Woche wieder!';
   else if (!frei && !ctx.pin) grund = 'Auf dem Server ist noch keine Event-PIN gesetzt (node tools/rom-pin.mjs auf dem Handy).';
   const lage = ev ? ROM.lage(s.alle, ev) : null;
@@ -432,7 +470,7 @@ export async function romSteuern(ctx, { body, code, id, name, now }) {
     if (!frei) {
       const zugang = ctx.access || H.access(now);
       if (!zugang.open) fail('GehstockMon ist gerade geschlossen - das Event startet nur während der Öffnungszeiten.', 423);
-      if (zugang.closesAt - now < ROM.GESAMT + ROM.PUFFER) fail('Bis zum Schließen um ' + uhrzeit(zugang.closesAt) + ' Uhr reicht die Zeit nicht mehr für 13 Minuten Rom.', 409);
+      if (zugang.closesAt - now < ROM.GESAMT + ROM.PUFFER) fail('Bis zum Schließen um ' + uhrzeit(zugang.closesAt) + ' Uhr reicht die Zeit nicht mehr für ' + Math.round(ROM.GESAMT / 60000) + ' Minuten Rom.', 409);
     }
     const r = await dokAendern(ctx.db, (dok) => {
       const letztes = aktuell(dok);
@@ -495,6 +533,15 @@ function romEiGeben(p, ev, pid, now) {
 
 /* ---------------------------------------------------------- Abrechnung */
 
+/* Ein ganz normales Ei aus dem Trevi-Brunnen - roh, es will ausgebruetet werden. */
+function treviEiGeben(p, ev, pid, k, now) {
+  const ei = { id: 'trevi-' + ev.id + '-' + pid + '-' + k, territoryId: D.FELDER[0].id, producedAt: now, startedAt: null, readyAt: null, art: 'trevi' };
+  if ((p.eggs || []).some((e) => e.id === ei.id) || (p.sonderEier || []).some((e) => e.id === ei.id)) return 'tasche';
+  if (p.eggs.length < E.BAG_LIMIT) { p.eggs.push(ei); return 'tasche'; }
+  if ((p.sonderEier || []).length < 20) { p.sonderEier = (p.sonderEier || []).concat(ei); return 'warte'; }
+  E.buchen(p, X.HAENDLER_EI_PREIS, 'rom', now);
+  return 'gold';
+}
 function berichtText(l) {
   const teile = [];
   if (l.gold) teile.push(l.gold + ' Gold');
@@ -505,6 +552,10 @@ function berichtText(l) {
   if (l.mozzarino === 'neu') teile.push('Centurio Mozzarino');
   if (l.mozzarino === 'stufe') teile.push('eine Runenstufe für Centurio Mozzarino');
   if (l.mozzarino === 'runen') teile.push('5 Legendär-Runen von Centurio Mozzarino');
+  const eier = (l.eier.tasche || 0) + (l.eier.warte || 0);
+  if (eier) teile.push(eier + (eier === 1 ? ' Ei' : ' Eier') + ' aus dem Trevi-Brunnen');
+  if (l.eier.gold) teile.push(l.eier.gold * X.HAENDLER_EI_PREIS + ' Gold für Trevi-Eier ohne Platz');
+  if (l.perle === 'neu') teile.push('eine Schimmerperle');
   return '🇮🇹 Rom-Event: ' + l.lire + ' Lire' + (teile.length ? ' · ' + teile.join(', ') : '') + '.';
 }
 function auszahlen(world, ev, alle, now) {
@@ -514,18 +565,26 @@ function auszahlen(world, ev, alle, now) {
     const p = world.players[pid];
     if (!p || !b) continue;
     const lohn = ROM.lohn(beitragSauber(b), lage, ev);
-    if (!lohn.stufen.length && !lohn.titel.length) continue;
+    /* Kaesegold und Trevi-Eier zaehlen auch unterhalb des Touristen. */
+    if (!lohn.stufen.length && !lohn.titel.length && !lohn.eier && !lohn.kaese) continue;
     anzahl++;
     const letztes = { ev: ev.id, t: now, lire: lohn.lire, gold: lohn.gold, runen: lohn.runen, stufen: lohn.stufen, titel: lohn.titel,
-      ei: null, mozzarino: null, leiste: lohn.leiste, boss: lohn.boss, abgebrochen: lohn.abgebrochen, vorschau: !!ev.vorschau };
+      ei: null, mozzarino: null, perle: null, eier: { tasche: 0, warte: 0, gold: 0 }, kaese: lohn.kaese, bossGold: lohn.bossGold,
+      leiste: lohn.leiste, boss: lohn.boss, abgebrochen: lohn.abgebrochen, vorschau: !!ev.vorschau };
     if (lohn.gold) E.buchen(p, lohn.gold, 'rom', now);
     p.runes = Array.isArray(p.runes) ? p.runes : D.SELTENHEITEN.map(() => 0);
     for (const [rang, n] of Object.entries(lohn.runen)) p.runes[rang] = Math.min(9999, (p.runes[rang] || 0) + n);
     if (lohn.romEi) letztes.ei = romEiGeben(p, ev, pid, now);
     if (lohn.mozzarino) letztes.mozzarino = ROM.monGeben(p, ROM.MOZZARINO.id);
+    for (let k = 0; k < lohn.eier; k++) letztes.eier[treviEiGeben(p, ev, pid, k, now)]++;
+    if (lohn.perle) {
+      if (p.schimmerperle) { E.buchen(p, ROM.PERLE_GOLD, 'rom', now); letztes.perle = 'gold'; }
+      else { p.schimmerperle = true; letztes.perle = 'neu'; }
+    }
     p.rom = p.rom && typeof p.rom === 'object' ? p.rom : {};
     if (lohn.titel.includes('held_von_rom')) p.rom.held = (p.rom.held || 0) + 1;
     if (lohn.titel.includes('mozzarella_bezwinger')) p.rom.boss = (p.rom.boss || 0) + 1;
+    if (lohn.titel.includes('legende_von_rom')) p.rom.legende = (p.rom.legende || 0) + 1;
     p.rom.letztes = letztes;
     world.reports.push({ id: 'rom-' + ev.id + '-' + pid, time: now, attackerId: pid, defenderId: null, territoryId: 1, text: berichtText(letztes) });
   }

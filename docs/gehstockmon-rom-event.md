@@ -1,7 +1,26 @@
 # GehstockMon-Rom-Event „ROMA È FINITA“
 
-Ein Admin-Abuse-Event: 1 Minute Countdown und 12 Minuten Rom für alle in derselben
+Ein Admin-Abuse-Event: 1 Minute Countdown und 13 Minuten Rom für alle in derselben
 GehstockMon-Welt. Starten und abbrechen kann es nur der aktuelle CEO.
+
+## Ablauf
+
+| Phase | Dauer | Was passiert |
+|---|---|---|
+| Countdown | 1 min | Kulisse wächst aus dem Boden, Kakerlaken tanzen schon |
+| Rom verliert den Verstand | 2 min | Pizzen mit Beinen schnappen |
+| Die Pizza-Rebellion | 2,5 min | Pizzen und Legionäre am Triumphwagen |
+| Die Sombrero-Invasion | 2,5 min | Tanzfolgen nachtippen, Polonaise auf der Piazza |
+| Imperatore Mozzarellus | 3,5 min | Boss; nach dem Sieg Käseregen: 2 Gold je Sekunde |
+| Espresso-Overdrive | 1 min | Musik extrem schnell (×2,2), Espresso/Tomaten/Pizza fangen |
+| Der Trevi-Brunnen explodiert | 1,5 min | Münze werfen, Münzen fangen, 6 normale Eier fangen |
+
+Das ganze Event über: Sternschnuppen (das Foto) zum Antippen und tanzende
+Kakerlaken an allen Tanzplätzen der Insel (`ROM.TANZPLAETZE`). Musik und Effekte
+lassen sich während des Events nicht abschalten – die Musik läuft auch bei
+ausgeschaltetem Hideout-Ton. Nur das Flackern wird ruhiger, wenn das Gerät
+„Bewegung reduzieren“ verlangt. Solange Rom läuft, ist die Projektleiste
+ausgeblendet und die Rom-Anzeige steht an ihrer Stelle ganz oben.
 
 ## Starten (echte Seite)
 
@@ -19,7 +38,7 @@ GehstockMon-Welt. Starten und abbrechen kann es nur der aktuelle CEO.
    im Countdown abgebrochen zählt es nicht als Event der Woche.
 
 Grenzen: ein echtes Event pro Woche, nur bei geöffneter Insel und mit mindestens
-15 Minuten bis zum Schließen. Ein manuell geöffnetes oder geschlossenes Insel-Tor
+16 Minuten bis zum Schließen. Ein manuell geöffnetes oder geschlossenes Insel-Tor
 gilt auch für das Event.
 
 ## Testen
@@ -54,12 +73,15 @@ austauschen. Fehlt die Musik, spielt eine eingebaute Tarantella.
 
 | Stufe | ab | Belohnung |
 |---|---|---|
-| Tourist | 10 Lire | 200 Gold, ein Rom-Ei (fertig ausgebrütet, mindestens Legendär) |
-| Gladiator | 40 Lire | +300 Gold, 3 Episch-Runen |
-| Held von Rom | 75 Lire | +250 Gold, Titel „Held von Rom“ |
-| Mamma-Mia-Leiste voll | – | +150 Gold für alle ab Tourist, +20 % gegen den Boss |
+| Tourist | 10 Lire | 300 Gold, ein Rom-Ei (fertig ausgebrütet, mindestens Legendär) |
+| Gladiator | 40 Lire | +500 Gold, 5 Episch-Runen |
+| Held von Rom | 75 Lire | +600 Gold, 2 Mythisch-Runen, Titel „Held von Rom“ |
+| Legende von Rom | 110 Lire | +800 Gold, Schimmerperle (schon vorhanden: 1000 Gold), Titel „Legende von Rom“ |
+| Mamma-Mia-Leiste voll | – | +300 Gold für alle ab Tourist, +20 % gegen den Boss |
 | Mozzarellus besiegt | Gladiator + 5 Schläge | Centurio Mozzarino (Legendär, nur aus dem Event) |
-| Mozzarellus besiegt | 1 Schlag | Titel „Mozzarella-Bezwinger“ |
+| Mozzarellus besiegt | 1 Schlag | 250 Siegesgold, Titel „Mozzarella-Bezwinger“ |
+| Käseregen | dabei sein | 2 Gold je echter Sekunde bis zum Ende der Boss-Phase (auch ohne Stufe) |
+| Trevi-Eier | antippen | bis zu 6 normale Eier (auch ohne Stufe; Tasche voll: Warteschlange, dann 350 Gold) |
 
 Abgerechnet wird genau einmal, drei Sekunden nach dem Ende, im selben
 Schreibvorgang wie die Welt (`world.rom.abgerechnet`).

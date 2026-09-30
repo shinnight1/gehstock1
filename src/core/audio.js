@@ -175,6 +175,14 @@
       try { if (ctx.state === 'suspended') ctx.resume(); } catch (e) { /* egal */ }
       return { ctx: ctx, ziel: master };
     },
+
+    /* Wie kontext(), aber am Tonschalter und am Regler vorbei - nur fuer
+       die Musik des Rom-Events, die sich dort nicht abschalten laesst. */
+    kontextImmer: function () {
+      if (!ensure()) return null;
+      try { if (ctx.state === 'suspended') ctx.resume(); } catch (e) { /* egal */ }
+      return { ctx: ctx, ziel: ctx.destination };
+    },
   };
 
   SG.settings.on('change:volume', function (v) { A.setVolume(v); });

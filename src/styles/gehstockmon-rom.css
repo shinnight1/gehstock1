@@ -3,14 +3,18 @@
 .gm-rom[hidden]{display:none!important}
 .gm-arena-open .gm-rom{display:none}
 .gm-rom-an .gm-target,.gm-rom-an .gm-map-legend{display:none}
+/* Waehrend Rom laeuft, gehoert der Platz der Projektleiste (Heute, Wetter,
+   Leuchtturm ...) der Rom-Anzeige. */
+.gm-rom-an .gm-projekte{display:none!important}
 
 /* Disko: ein weicher Farbschleier, hoechstens zwei Wechsel je Sekunde. */
 .gm-rom-disko{position:absolute;inset:0;opacity:0;mix-blend-mode:soft-light;transition:opacity 1.2s;background:#ff2d8a;animation:gm-rom-disko 2s steps(1,end) infinite}
 @keyframes gm-rom-disko{0%{background:#ff2d8a}25%{background:#2df0ff}50%{background:#ffe52d}75%{background:#7a2dff}100%{background:#ff2d8a}}
 .gm-rom-ruhig .gm-rom-disko{animation:none!important;background:linear-gradient(120deg,#ff2d8a,#ffe52d 50%,#2df0ff)}
 
-/* Kopf mit Phase, Uhr, Leiste oder Boss, Lire und Ton */
-.gm-rom-kopf{position:absolute;top:92px;left:50%;transform:translateX(-50%);width:min(500px,calc(100% - 160px));padding:10px 14px;border-radius:14px;
+/* Kopf mit Phase, Uhr, Leiste oder Boss und Lire - ganz oben, wo sonst
+   die Projektleiste steht. */
+.gm-rom-kopf{position:absolute;top:8px;left:50%;transform:translateX(-50%);width:min(500px,calc(100% - 640px));min-width:340px;padding:10px 14px;border-radius:14px;
   background:linear-gradient(135deg,rgba(27,110,60,.94),rgba(22,26,32,.94) 45%,rgba(22,26,32,.94) 55%,rgba(170,36,36,.94));border:1px solid #f3e3b566;
   box-shadow:0 10px 30px #0008;color:#fff8e6;pointer-events:auto;text-align:center}
 .gm-rom-marke{font-size:11px;letter-spacing:.14em;font-weight:800;color:#ffe59a;text-transform:uppercase}
@@ -22,6 +26,10 @@
 .gm-rom-balken[hidden]{display:none}
 .gm-rom-balken i{position:absolute;left:0;top:0;bottom:0;width:0;transition:width .6s;background:linear-gradient(90deg,#f7c948,#ff8a3d)}
 .gm-rom-balken.boss i{background:linear-gradient(90deg,#fff1c1,#ffd166)}
+.gm-rom-balken.kaese i{background:linear-gradient(90deg,#ffd166,#fff1c1 50%,#ffd166)}
+.gm-rom-kopf[hidden]{display:none}
+.gm-rom-turbo .gm-rom-kopf{border-color:#ff8a3d}
+.gm-rom-turbo .gm-rom-zeit{color:#ff8a3d}
 .gm-rom-balken.voll i{background:linear-gradient(90deg,#1b8a3c,#fff 50%,#c92a2a)}
 .gm-rom-balken span{position:relative;display:block;font-size:12px;font-weight:800;line-height:24px;color:#fff8e6;text-shadow:0 1px 2px #000,0 0 6px #000}
 .gm-rom-haltung{margin-top:6px;font-size:13px;font-weight:700;color:#ffd9b0}
@@ -34,11 +42,9 @@
 .gm-rom-stufen{display:flex;gap:5px;flex-basis:100%;justify-content:center}
 .gm-rom-stufe{font-size:11px;padding:2px 7px;border-radius:9px;background:#0005;border:1px solid #fff2;opacity:.75}
 .gm-rom-stufe.erreicht{background:#f3d27a;color:#2a1a0c;opacity:1;font-weight:800}
-.gm-rom-regler{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px;margin-top:8px}
 .gm-rom-mini{min-height:34px!important;padding:4px 10px!important;font-size:12px!important;border-radius:8px;border:1px solid #fff4;background:#0005;color:#fff8e6;font-weight:700}
 .gm-rom-mini[hidden]{display:none}
-.gm-rom-tonhinweis{background:#f3d27a;color:#2a1a0c;animation:gm-rom-puls 1.4s ease-in-out infinite}
-.gm-rom-laut{width:90px;accent-color:#f3d27a}
+.gm-rom-tonhinweis{margin-top:6px;background:#f3d27a;color:#2a1a0c;animation:gm-rom-puls 1.4s ease-in-out infinite}
 
 /* Aktionen unten */
 .gm-rom-aktionen{position:absolute;left:50%;bottom:calc(96px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);width:min(560px,calc(100% - 360px));min-width:300px;
@@ -70,6 +76,8 @@
 .gm-rom-ansage.an{animation:gm-rom-knall .6s cubic-bezier(.2,1.6,.4,1) both}
 .gm-rom-plus{position:absolute;left:50%;top:40%;transform:translateX(-50%);font-size:34px;font-weight:900;color:#ffe59a;text-shadow:0 2px 8px #000;opacity:0;pointer-events:none}
 .gm-rom-plus.an{animation:gm-rom-plus 1s ease-out both}
+.gm-rom-kaeseplus{position:absolute;left:50%;top:32%;transform:translateX(-50%);font-size:26px;font-weight:900;color:#ffd166;text-shadow:0 2px 8px #000;opacity:0;pointer-events:none}
+.gm-rom-kaeseplus.an{animation:gm-rom-plus .9s ease-out both}
 .gm-rom-kampf{position:absolute;left:50%;bottom:calc(230px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);width:min(420px,calc(100% - 20px));padding:12px 14px;border-radius:14px;background:#161a20f2;border:1px solid #f3e3b566;color:#fff8e6;pointer-events:auto;font-size:13px}
 .gm-rom-kampf[hidden]{display:none}
 .gm-rom-kampf strong{font-size:14px}
@@ -93,6 +101,10 @@
 .gm-rom .gm-rom-fall{position:absolute;top:-70px;min-width:56px;min-height:56px;padding:0;border:0;background:none;font-size:44px;line-height:1;pointer-events:auto;cursor:pointer;animation-name:gm-rom-fallen;animation-timing-function:linear;animation-fill-mode:forwards;touch-action:manipulation;filter:drop-shadow(0 3px 4px #0008)}
 .gm-rom-fall.vespa{left:-25vw;animation-name:gm-rom-vespa}
 .gm-rom-fall.gefangen{opacity:0;transition:opacity .3s}
+/* Die Eier aus dem Trevi bleiben liegen, bis jemand sie antippt. */
+.gm-rom .gm-rom-ei{position:absolute;width:72px;height:72px;padding:0;border:3px solid #ffe59a;border-radius:50%;background:radial-gradient(circle at 40% 35%,#fffdf5,#f3e3b5);
+  font-size:42px;line-height:1;pointer-events:auto;cursor:pointer;touch-action:manipulation;box-shadow:0 0 16px 4px #8fdcf5aa,0 6px 14px #0007;animation:gm-rom-ei 1.6s ease-in-out infinite}
+.gm-rom-ei.gefangen{opacity:0;transform:scale(1.4);transition:opacity .35s,transform .35s;animation:none}
 
 /* Abschluss */
 .gm-rom-ende{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(520px,calc(100% - 20px));max-height:calc(100% - 40px);overflow-y:auto;padding:18px 20px;border-radius:18px;
@@ -112,41 +124,54 @@
 @keyframes gm-rom-fallen{from{transform:translateY(0) rotate(-12deg)}to{transform:translateY(115vh) rotate(18deg)}}
 @keyframes gm-rom-vespa{from{transform:translateX(0)}to{transform:translateX(135vw)}}
 @keyframes gm-rom-puls{50%{transform:scale(1.06)}}
+@keyframes gm-rom-ei{0%,100%{transform:translateY(0) rotate(-8deg)}50%{transform:translateY(-10px) rotate(8deg)}}
 
 @media(max-width:1049px){.gm-rom-aktionen{width:calc(100% - 340px)}}
-/* Tablets: Spielerkarte und Projektleiste stehen oben links bzw. darunter -
-   die Rom-Anzeige kommt unter beide. */
-@media(max-width:1049px) and (min-width:651px) and (min-height:601px){.gm-rom-kopf{top:226px}}
+/* Touch-Geraete und schmale Fenster: Die Projektleiste steht dort unter der
+   Kopfzeile - genau da steht jetzt die Rom-Anzeige, kompakter, damit der
+   iPad-Bildschirm in der Mitte frei bleibt. Die Stufen stehen als
+   "noch X bis ..." in der Lire-Zeile. */
+@media (pointer:coarse),(max-width:1049px){
+  .gm-rom-kopf{top:96px;width:min(540px,calc(100% - 160px));min-width:0;padding:6px 12px}
+  .gm-rom-marke{font-size:10px}
+  .gm-rom-titel{font-size:18px}
+  .gm-rom-zeit{font-size:16px}
+  .gm-rom-unter{font-size:11px}
+  .gm-rom-balken{height:22px;margin-top:6px}
+  .gm-rom-balken span{line-height:22px}
+  .gm-rom-stufen{display:none}
+  .gm-rom-lire{margin-top:4px}
+  .gm-rom-haltung{margin-top:4px;font-size:12px}
+  .gm-rom-tanz{padding:7px 10px}
+  .gm-rom-folge{margin:4px 0;min-height:36px}
+  .gm-rom-folge span{font-size:26px}
+  .gm-rom .gm-rom-taste{min-height:54px;font-size:26px}
+}
+@media (pointer:fine) and (max-width:1049px){.gm-rom-kopf{top:118px}}
 @media(max-width:800px){.gm-rom-aktionen{left:10px;right:10px;width:auto;min-width:0;transform:none;bottom:calc(210px + env(safe-area-inset-bottom,0px))}}
 @media(max-width:650px){
-  /* Unter der Spielerkarte (Gold, Mons) und kompakter - Stufen stehen dann
-     als "noch X bis ..." in der Lire-Zeile, die Lautstaerke regelt das Geraet. */
-  .gm-rom-kopf{top:172px;left:10px;right:70px;width:auto;transform:none;padding:6px 10px}
-  .gm-rom-marke{font-size:10px}
-  .gm-rom-stufen,.gm-rom-laut{display:none}
-  .gm-rom-lire{margin-top:5px}
+  .gm-rom-kopf{top:124px;left:10px;right:58px;width:auto;transform:none;padding:6px 10px}
+  .gm-rom-titel{font-size:17px}
   .gm-rom-aktionen{right:66px}
   .gm-rom-tanz{padding:6px 8px}
   .gm-rom-tanz strong{font-size:14px}
   .gm-rom-folge{margin:4px 0;min-height:34px}
   .gm-rom-folge span{font-size:24px}
   .gm-rom .gm-rom-taste{min-height:50px;font-size:24px}
-  .gm-rom-titel{font-size:17px}
-  .gm-rom-zeit{font-size:16px}
-  .gm-rom-unter{font-size:11px}
-  .gm-rom-regler{margin-top:6px}
-  .gm-rom-laut{width:70px}
   .gm-rom-knopf{min-height:48px!important;font-size:15px!important;padding:8px 12px!important}
   .gm-rom-stern{width:72px;height:72px}
+  .gm-rom .gm-rom-ei{width:60px;height:60px;font-size:34px}
   .gm-rom-kampf{bottom:calc(330px + env(safe-area-inset-bottom,0px))}
 }
-@media(max-height:600px) and (min-width:651px){.gm-rom-kopf{top:76px;padding:6px 12px}.gm-rom-regler,.gm-rom-stufen{display:none}.gm-rom-aktionen{bottom:84px}}
+@media(max-width:500px){.gm-rom-kopf{top:138px}.gm-rom-unter{display:none}}
+/* Quer mit wenig Hoehe: noch knapper. */
+@media(max-height:600px) and (min-width:651px){.gm-rom-kopf{top:76px;padding:5px 12px}.gm-rom-unter,.gm-rom-stufen{display:none}.gm-rom-aktionen{bottom:84px}}
 /* Weniger Bewegung: kein Flackern, keine springenden Ansagen. Die globale
    Regel in gehstockmon.css setzt nur die Dauer herab - bei endlosen
    Animationen wuerde daraus ein schnelles Flimmern. */
 @media(prefers-reduced-motion:reduce){
   .gm-rom-disko{animation:none!important;background:linear-gradient(120deg,#ff2d8a,#ffe52d 50%,#2df0ff)}
-  .gm-rom-ansage.an,.gm-rom-plus.an,.gm-rom-tonhinweis{animation:none!important}
+  .gm-rom-ansage.an,.gm-rom-plus.an,.gm-rom-kaeseplus.an,.gm-rom-tonhinweis,.gm-rom .gm-rom-ei{animation:none!important}
   .gm-rom-stern,.gm-rom-fall{animation-duration:9s!important}
 }
 

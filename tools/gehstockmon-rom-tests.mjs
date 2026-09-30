@@ -84,26 +84,30 @@ async function mitSpielern(opts, liste = [anna, bo]) {
   for (const code of liste) { const r = await f.call(code, 'join', { requestId: f.id() }); assert.equal(r.status, 200, r.error); }
   return f;
 }
-/* Springt an den Anfang einer Phase (0 bis 4) eines Events. */
+/* Springt an den Anfang einer Phase (ROM.P.wahnsinn bis ROM.P.trevi) eines Events. */
 function zuPhase(f, ev, nr, plus = 1000) { f.time = ROM.plan(ev).phasen[nr].von + plus; }
 
 /* ------------------------------------------------------------ Regeln */
 
-await test('Zeitplan: Countdown, fuenf Phasen, zusammen 13 Minuten; Zeitraffer teilt alles', () => {
+await test('Zeitplan: Countdown, sechs Phasen mit Espresso-Overdrive, zusammen 14 Minuten; Zeitraffer teilt alles', () => {
   assert.equal(ROM.COUNTDOWN, 60000);
-  assert.equal(ROM.GESAMT, 13 * 60000);
+  assert.equal(ROM.GESAMT, 14 * 60000);
+  assert.deepEqual(ROM.PHASEN.map((p) => p.id), ['wahnsinn', 'rebellion', 'invasion', 'imperator', 'turbo', 'trevi']);
+  assert.equal(ROM.P.turbo, 4); assert.equal(ROM.P.trevi, 5); assert.equal(ROM.VORBEI, 6);
   const ev = { id: 'rom-a', start: 1000, faktor: 1 };
   assert.equal(ROM.phase(ev, 1000).nr, -1);
   assert.equal(ROM.phase(ev, 61000).nr, 0);
   assert.equal(ROM.phase(ev, 61000 + 120000).nr, 1);
-  assert.equal(ROM.phase(ev, 1000 + ROM.GESAMT - 1).nr, 4);
-  assert.equal(ROM.phase(ev, 1000 + ROM.GESAMT).nr, 5);
+  assert.equal(ROM.phase(ev, ROM.plan(ev).phasen[ROM.P.turbo].von).nr, ROM.P.turbo);
+  assert.equal(ROM.phase(ev, 1000 + ROM.GESAMT - 1).nr, ROM.P.trevi);
+  assert.equal(ROM.phase(ev, 1000 + ROM.GESAMT).nr, ROM.VORBEI);
+  assert.ok(!ROM.laeuft(ev, 1000 + ROM.GESAMT));
   const schnell = { ...ev, faktor: 3 };
   assert.equal(ROM.plan(schnell).ende - 1000, ROM.GESAMT / 3);
-  assert.equal(ROM.phase({ ...ev, faktor: 99 }, 1000 + ROM.GESAMT - 1).nr, 4, 'unbekannter Zeitraffer zaehlt als 1');
+  assert.equal(ROM.phase({ ...ev, faktor: 99 }, 1000 + ROM.GESAMT - 1).nr, ROM.P.trevi, 'unbekannter Zeitraffer zaehlt als 1');
   const abgebrochen = { ...ev, abgebrochenAm: 30000 };
   assert.ok(ROM.nieGelaufen(abgebrochen));
-  assert.equal(ROM.phase(abgebrochen, 30000).nr, 5);
+  assert.equal(ROM.phase(abgebrochen, 30000).nr, ROM.VORBEI);
 });
 
 await test('Pizzen, Wagen, Legion und Boss laufen nur ueber begehbares, freies Land', () => {
@@ -119,10 +123,16 @@ await test('Pizzen, Wagen, Legion und Boss laufen nur ueber begehbares, freies L
     assert.ok(frei(ROM.bossOrt(ev, t)), 'Boss bei ' + t);
     for (let i = 0; i < 6; i++) assert.ok(frei(ROM.legionaerOrt(ev, t, i)), 'Legionaer ' + i);
   }
+  for (let t = plan.phasen[ROM.P.turbo].von; t < plan.phasen[ROM.P.turbo].bis; t += 300) for (const p of ROM.pizzen(ev, t)) assert.ok(frei(p), 'Turbo-Pizza ' + p.id + ' bei ' + t);
   assert.ok(frei(ROM.PIAZZA) && frei(ROM.TREVI));
+  for (const tp of ROM.TANZPLAETZE) assert.ok(X.onLand(tp) && X.walkable(tp), 'Tanzplatz ' + tp.x + '/' + tp.z);
+  assert.ok(ROM.TANZPLAETZE.length >= 8, 'die Kakerlaken tanzen ueberall');
   assert.equal(ROM.pizzen(ev, plan.phasen[0].von + 5).length, 8);
   assert.equal(ROM.pizzen(ev, plan.phasen[1].von + 5).length, 4);
   assert.equal(ROM.pizzen(ev, plan.phasen[2].von + 5).length, 0);
+  assert.equal(ROM.pizzen(ev, plan.phasen[ROM.P.turbo].von + 5).length, 8, 'im Overdrive rasen sie wieder');
+  const turbo = ROM.pizzen(ev, plan.phasen[ROM.P.turbo].von + 5)[0];
+  assert.equal(ROM.pizza(ev, turbo.id, plan.phasen[ROM.P.turbo].von + ROM.PIZZA_ABSCHNITT_TURBO + 5), null, 'und sind viermal so schnell wieder weg');
   const p = ROM.pizzen(ev, plan.phasen[0].von + 5)[0];
   assert.deepEqual(ROM.pizza(ev, p.id, plan.phasen[0].von + 5), p, 'jede Pizza laesst sich ueber ihre Kennung nachrechnen');
   assert.equal(ROM.pizza(ev, p.id, plan.phasen[0].von + ROM.PIZZA_ABSCHNITT + 5), null, 'danach ist sie weg');
@@ -137,24 +147,28 @@ await test('Tanzfolgen sind auf jedem Geraet gleich und werden laenger', () => {
   assert.notDeepEqual(ROM.tanzFolge(ev, 1).concat(ROM.tanzFolge(ev, 2)), ROM.tanzFolge({ id: 'rom-anders' }, 1).concat(ROM.tanzFolge({ id: 'rom-anders' }, 2)));
 });
 
-await test('Belohnungsstufen: Tourist, Gladiator, Held; Leiste, Boss und Abbruch', () => {
-  const b = (lire, schlaege = 0) => ({ lire: [lire, 0, 0, 0, 0], stern: 0, schlaege });
+await test('Belohnungsstufen: Tourist, Gladiator, Held, Legende; Leiste, Boss, Kaese, Eier und Abbruch', () => {
+  const b = (lire, schlaege = 0, mehr = {}) => ({ lire: [lire, 0, 0, 0, 0, 0], stern: 0, schlaege, ...mehr });
   const ev = { id: 'rom-l', start: 0 };
   assert.deepEqual(ROM.lohn(b(9), {}, ev).stufen, []);
   const tourist = ROM.lohn(b(10), {}, ev);
-  assert.deepEqual(tourist.stufen, ['tourist']); assert.equal(tourist.gold, 200); assert.ok(tourist.romEi);
+  assert.deepEqual(tourist.stufen, ['tourist']); assert.equal(tourist.gold, 300); assert.ok(tourist.romEi);
   const gladiator = ROM.lohn(b(40), {}, ev);
-  assert.equal(gladiator.gold, 500); assert.deepEqual(gladiator.runen, { 3: 3 });
-  const held = ROM.lohn(b(120, 5), { leisteVoll: true, bossBesiegt: true }, ev);
-  assert.equal(held.gold, 200 + 300 + 250 + 150);
-  assert.deepEqual(held.titel, ['held_von_rom', 'mozzarella_bezwinger']);
-  assert.ok(held.mozzarino);
+  assert.equal(gladiator.gold, 800); assert.deepEqual(gladiator.runen, { 3: 5 });
+  const held = ROM.lohn(b(80), {}, ev);
+  assert.equal(held.gold, 1400); assert.deepEqual(held.runen, { 3: 5, 5: 2 }); assert.deepEqual(held.titel, ['held_von_rom']); assert.ok(!held.perle);
+  const legende = ROM.lohn(b(120, 5, { kaeseGold: 90, eier: [0, 1, 2] }), { leisteVoll: true, bossBesiegt: true }, ev);
+  assert.equal(legende.gold, 300 + 500 + 600 + 800 + ROM.LEISTE.gold + ROM.BOSS_GOLD + 90);
+  assert.deepEqual(legende.titel, ['held_von_rom', 'legende_von_rom', 'mozzarella_bezwinger']);
+  assert.ok(legende.mozzarino && legende.perle); assert.equal(legende.eier, 3); assert.equal(legende.kaese, 90); assert.equal(legende.bossGold, ROM.BOSS_GOLD);
   assert.ok(!ROM.lohn(b(40, 4), { bossBesiegt: true }, ev).mozzarino, 'Mozzarino braucht fuenf Schlaege');
   assert.ok(!ROM.lohn(b(39, 9), { bossBesiegt: true }, ev).mozzarino, 'Mozzarino braucht den Gladiator');
-  assert.equal(ROM.lire({ lire: [500, 500, 500, 500, 500], stern: 5 }), ROM.LIRE_MAX, 'Lire sind gedeckelt');
+  const nurKaese = ROM.lohn(b(0, 0, { kaeseGold: 40, eier: [4] }), {}, ev);
+  assert.deepEqual(nurKaese.stufen, []); assert.equal(nurKaese.gold, 40); assert.equal(nurKaese.eier, 1, 'Kaesegold und Eier auch ohne Stufe');
+  assert.equal(ROM.lire({ lire: [500, 500, 500, 500, 500, 500], stern: 5 }), ROM.LIRE_MAX, 'Lire sind gedeckelt');
   const abbruch = { ...ev, abgebrochenAm: ROM.plan(ev).phasen[1].von };
   assert.deepEqual(ROM.lohn(b(1), {}, abbruch).stufen, ['tourist'], 'nach einem Abbruch reicht eine Lira');
-  assert.equal(ROM.lohn(b(1), { leisteVoll: false }, abbruch).gold, 200);
+  assert.equal(ROM.lohn(b(1), { leisteVoll: false }, abbruch).gold, 300);
 });
 
 await test('Centurio Mozzarino: nur im Event, gleich stark wie der Aurorabaer, nie aus normalen Eiern', () => {
@@ -370,7 +384,7 @@ await test('Parallele Aktionen desselben Spielers verlieren keine Lire oder Akti
   for (const felder of [true, false]) {
     const f = await mitSpielern({ felder });
     await f.steuern(ceo, 'start');
-    const ev = await f.ev(); zuPhase(f, ev, 4);
+    const ev = await f.ev(); zuPhase(f, ev, ROM.P.trevi);
     const muenzeId = f.id(), fangId = f.id();
     const antworten = await Promise.all([
       f.aktion(anna, 'muenze', { aktionId: muenzeId }),
@@ -391,7 +405,7 @@ await test('Parallele Aktionen desselben Spielers verlieren keine Lire oder Akti
 await test('Parallele Wiederholungen derselben Aktion werden genau einmal gezaehlt', async () => {
   const f = await mitSpielern({});
   await f.steuern(ceo, 'start');
-  const ev = await f.ev(); zuPhase(f, ev, 4);
+  const ev = await f.ev(); zuPhase(f, ev, ROM.P.trevi);
   const aktionId = f.id();
   const antworten = await Promise.all(Array.from({ length: 6 }, () =>
     f.aktion(anna, 'fang', { aktionId, fang: 'muenzen', anzahl: 5 })));
@@ -405,7 +419,7 @@ await test('Aktionen warten, solange ein eigener Kampf laeuft', async () => {
   const f = await mitSpielern({});
   await f.steuern(ceo, 'start');
   const ev = await f.ev();
-  zuPhase(f, ev, 4, 1000);
+  zuPhase(f, ev, ROM.P.trevi, 1000);
   const w = (await f.store.getWithMetadata('world-v2'));
   const daten = w.data; daten.players[kennung(anna)].arena = { phase: 'choose', lastActionAt: f.time };
   await f.store.setJSON('world-v2', daten);
@@ -500,7 +514,7 @@ await test('Ein zeitgleicher erster Angriff belebt einen bereits besiegten Boss 
 
 async function spielDurch(f, ev, code, lire) {
   /* Schreibt einen Beitrag direkt, als haette der Spieler so gespielt. */
-  const b = { lire: [Math.min(20, lire), Math.min(30, Math.max(0, lire - 20)), Math.min(30, Math.max(0, lire - 50)), Math.min(40, Math.max(0, lire - 80)), 0], stern: 0, schlaege: 0, schaden: 0, hp: 0, n: code };
+  const b = { lire: [Math.min(20, lire), Math.min(30, Math.max(0, lire - 20)), Math.min(30, Math.max(0, lire - 50)), Math.min(40, Math.max(0, lire - 80)), 0, 0], stern: 0, schlaege: 0, schaden: 0, hp: 0, n: code };
   if (typeof f.store.feldSetzen === 'function') await f.store.feldSetzen('rom-b:' + ev.id, kennung(code), b);
   else { const e = await f.store.getWithMetadata('rom-b:' + ev.id); const alle = e ? e.data : {}; alle[kennung(code)] = b; await f.store.setJSON('rom-b:' + ev.id, alle); }
 }
@@ -519,17 +533,17 @@ await test('Abrechnung genau einmal: Gold, Runen, Rom-Ei, Bericht - auch bei gle
     await Promise.all([f.call(anna, 'world'), f.call(bo, 'world'), f.call(anna, 'world'), f.call(cy, 'world')]);
     await f.call(anna, 'world');
     const w = await f.welt(), a = w.players[kennung(anna)], b = w.players[kennung(bo)];
-    assert.equal(a.gold, goldAnna + 500, 'Tourist und Gladiator, genau einmal');
+    assert.equal(a.gold, goldAnna + 800, 'Tourist und Gladiator, genau einmal');
     assert.equal(b.gold, goldBo, 'unter zehn Lire gibt es nichts');
     assert.equal(a.eggs.filter((e) => e.art === 'rom').length, 1);
-    assert.equal(a.runes[3], 3);
+    assert.equal(a.runes[3], 5);
     assert.equal(a.rom.letztes.ev, ev.id); assert.equal(a.rom.letztes.ei, 'tasche');
     assert.ok(w.rom.abgerechnet[ev.id]);
     assert.equal(w.reports.filter((r) => r.id === 'rom-' + ev.id + '-' + kennung(anna)).length, 1);
     assert.ok(w.ticker.some((t) => t.text.includes('ROMA')));
-    assert.equal(a.bilanz.rein.rom, 500, 'steht in der Wochenbilanz');
+    assert.equal(a.bilanz.rein.rom, 800, 'steht in der Wochenbilanz');
     const profil = await f.call(anna, 'world');
-    assert.equal(profil.profile.rom.letztes.gold, 500, 'der Browser sieht die Zusammenfassung');
+    assert.equal(profil.profile.rom.letztes.gold, 800, 'der Browser sieht die Zusammenfassung');
   }
 });
 
@@ -544,7 +558,7 @@ await test('Abbruch: nach dem Countdown wird das Verdiente ausgezahlt, im Countd
   f.time += 5000;
   await f.call(anna, 'world');
   const a = (await f.welt()).players[kennung(anna)];
-  assert.equal(a.gold, gold + 200, 'drei Lire reichen nach einem Abbruch fuer den Touristen');
+  assert.equal(a.gold, gold + 300, 'drei Lire reichen nach einem Abbruch fuer den Touristen');
   assert.ok(a.rom.letztes.abgebrochen);
   const g = await mitSpielern({});
   await g.steuern(ceo, 'start');
@@ -567,7 +581,7 @@ await test('Boss besiegt: Mozzarino fuer Gladiatoren mit fuenf Schlaegen, Titel,
   const w0 = (await f.store.getWithMetadata('world-v2')).data;
   w0.players[kennung(bo)].eggs = Array.from({ length: E.BAG_LIMIT }, (_, i) => ({ id: 'voll' + i, territoryId: 1, producedAt: 0, startedAt: null, readyAt: null }));
   await f.store.setJSON('world-v2', w0);
-  const stark = { lire: [20, 30, 30, 40, 0], stern: 0, schlaege: 6, schaden: 999999, hp: 3000, letzter: true, n: 'A' };
+  const stark = { lire: [20, 30, 30, 40, 0, 0], stern: 0, schlaege: 6, schaden: 999999, hp: 3000, letzter: true, n: 'A' };
   await f.store.feldSetzen('rom-b:' + ev.id, kennung(anna), stark);
   await f.store.feldSetzen('rom-b:' + ev.id, kennung(bo), { ...stark, schlaege: 1, schaden: 0, hp: 3000, letzter: false });
   f.time = ROM.ende(ev) + 4000;
@@ -579,6 +593,101 @@ await test('Boss besiegt: Mozzarino fuer Gladiatoren mit fuenf Schlaegen, Titel,
   assert.equal(a.rom.held, 1);
   assert.equal(b.rom.letztes.ei, 'warte'); assert.equal(b.sonderEier.filter((e) => e.art === 'rom').length, 1);
   assert.ok(X.titelErreicht(a).includes('held_von_rom') && X.titelErreicht(a).includes('mozzarella_bezwinger'));
+  assert.equal(a.rom.letztes.perle, 'neu', '120 Lire: Legende von Rom mit Schimmerperle');
+  assert.ok(a.schimmerperle); assert.equal(a.rom.legende, 1); assert.ok(X.titelErreicht(a).includes('legende_von_rom'));
+  assert.equal(a.rom.letztes.bossGold, ROM.BOSS_GOLD);
+  const q = D.neuerStand(structuredClone(a), f.time);
+  assert.equal(q.rom.legende, 1, 'der Titel bleibt beim Laden'); assert.equal(q.rom.letztes.perle, 'neu');
+});
+
+await test('Kaeseregen: nach Mozzarellus zwei Gold je Sekunde, hoechstens acht Sekunden am Stueck, nur in seiner Phase', async () => {
+  const f = await mitSpielern({}, [anna, bo, cy]);
+  await f.steuern(ceo, 'start');
+  const ev = await f.ev();
+  zuPhase(f, ev, ROM.P.imperator, 1000);
+  const vorher = await f.aktion(anna, 'kaese');
+  assert.equal(vorher.status, 409, 'solange Mozzarellus steht, regnet es nichts'); assert.match(vorher.error, /schmelzen/);
+  await f.store.feldSetzen('rom-b:' + ev.id, kennung(cy), { ...ROM.leer(), hp: 3000, schaden: 999999, schlaege: 6, letzter: true });
+  f.time += 1500; // der Server merkt sich den Stand eine Sekunde lang
+  const erste = await f.aktion(anna, 'kaese');
+  assert.equal(erste.status, 200, erste.error); assert.equal(erste.ergebnis.gold, 0, 'die erste Meldung setzt die Uhr');
+  const besiegt = (await f.ev()).bossBesiegtAm;
+  assert.equal(besiegt, f.time, 'der Server merkt sich, wann es losging');
+  assert.equal(erste.rom.bossBesiegtAm, besiegt);
+  f.time += 4000;
+  const zwei = await f.aktion(anna, 'kaese');
+  assert.equal(zwei.ergebnis.gold, 8, 'vier Sekunden, acht Gold');
+  f.time += 4500;
+  assert.equal((await f.aktion(anna, 'kaese')).ergebnis.gold, 8, 'halbe Sekunden bleiben fuer das naechste Mal');
+  f.time += 30000;
+  const lange = await f.aktion(anna, 'kaese');
+  assert.equal(lange.ergebnis.gold, 16, 'wer weg war, bekommt hoechstens acht Sekunden');
+  assert.equal(lange.rom.ich.kaeseGold, 8 + 8 + 16);
+  const bo1 = await f.aktion(bo, 'kaese');
+  assert.equal(bo1.ergebnis.gold, 16, 'wer spaet kommt, zaehlt ab seiner ersten Meldung zurueck, hoechstens acht Sekunden');
+  f.time = ROM.plan(ev).phasen[ROM.P.imperator].bis - 1000;
+  assert.equal((await f.aktion(bo, 'kaese')).ergebnis.gold, 16);
+  zuPhase(f, ev, ROM.P.turbo, 3000);
+  const danach = await f.aktion(bo, 'kaese');
+  assert.equal(danach.status, 409, 'nach der Phase ist Schluss');
+  const vorherGold = (await f.welt()).players[kennung(bo)].gold;
+  f.time = ROM.ende(ev) + 4000;
+  await f.call(bo, 'world');
+  const b = (await f.welt()).players[kennung(bo)];
+  assert.equal(b.gold, vorherGold + 32, 'Kaesegold gibt es auch ohne Tourist-Stufe');
+  assert.equal(b.rom.letztes.kaese, 32);
+});
+
+await test('Trevi-Eier: sechs Stueck, jedes erst ab seiner Zeit und nur einmal, alle kommen an', async () => {
+  const f = await mitSpielern({}, [anna, bo]);
+  await f.steuern(ceo, 'start');
+  const ev = await f.ev();
+  zuPhase(f, ev, ROM.P.imperator, 1000);
+  assert.equal((await f.aktion(anna, 'ei', { ei: 0 })).status, 409, 'nur waehrend der Brunnen explodiert');
+  zuPhase(f, ev, ROM.P.trevi, 500);
+  assert.equal((await f.aktion(anna, 'ei', { ei: 0 })).status, 409, 'das erste Ei ist noch im Brunnen');
+  const zeiten = Array.from({ length: ROM.EIER.anzahl }, (_, k) => ROM.eiZeit(ev, k));
+  const phase = ROM.plan(ev).phasen[ROM.P.trevi];
+  assert.ok(zeiten.every((t, k) => t > phase.von && t < phase.bis && (!k || t > zeiten[k - 1])), 'ueber die ganze Explosion verteilt');
+  f.time = zeiten[2] + 100;
+  assert.equal((await f.aktion(anna, 'ei', { ei: 3 })).status, 409, 'Ei 4 kommt spaeter');
+  f.time = zeiten[5] + 100;
+  for (let k = 0; k < 6; k++) {
+    const r = await f.aktion(anna, 'ei', { ei: k });
+    assert.equal(r.status, 200, r.error); assert.equal(r.ergebnis.lire, 1);
+  }
+  assert.equal((await f.aktion(anna, 'ei', { ei: 2 })).status, 409, 'jedes Ei nur einmal');
+  assert.equal((await f.aktion(anna, 'ei', { ei: 6 })).status, 409, 'ein siebtes gibt es nicht');
+  assert.deepEqual((await f.aktion(bo, 'ei', { ei: 5 })).rom.ich.eier, [5]);
+  const w0 = await f.welt(), eierVorher = w0.players[kennung(anna)].eggs.length;
+  f.time = ROM.ende(ev) + 4000;
+  await f.call(anna, 'world');
+  const a = (await f.welt()).players[kennung(anna)];
+  assert.deepEqual(a.rom.letztes.stufen, [], 'sechs Lire reichen nicht fuer den Touristen - die Eier gibt es trotzdem');
+  const trevi = a.eggs.filter((e) => e.art === 'trevi').length + (a.sonderEier || []).filter((e) => e.art === 'trevi').length;
+  assert.equal(trevi + a.rom.letztes.eier.gold, 6);
+  assert.equal(a.rom.letztes.eier.tasche + a.rom.letztes.eier.warte + a.rom.letztes.eier.gold, 6);
+  assert.ok(a.eggs.length >= eierVorher);
+  assert.ok(a.eggs.filter((e) => e.art === 'trevi').every((e) => !e.festRang && !e.mindestens), 'ganz normale Eier');
+});
+
+await test('Espresso-Overdrive und Sternschnuppen: Turbo-Fang nur in seiner Phase, Sterne das ganze Event', async () => {
+  const f = await mitSpielern({});
+  await f.steuern(ceo, 'start');
+  const ev = await f.ev();
+  f.time = ev.start + 5000;
+  const stern = await f.aktion(anna, 'stern');
+  assert.equal(stern.status, 200, 'Sternschnuppen schon im Countdown'); assert.equal(stern.ergebnis.lire, 1);
+  assert.equal((await f.aktion(anna, 'fang', { fang: 'turbo', anzahl: 5 })).status, 409, 'im Countdown noch nichts sonst');
+  zuPhase(f, ev, ROM.P.imperator, 1000);
+  assert.equal((await f.aktion(anna, 'fang', { fang: 'turbo', anzahl: 5 })).status, 409, 'Turbo gibt es nur im Overdrive');
+  assert.equal((await f.aktion(anna, 'stern')).status, 200, 'und Sterne auch beim Boss');
+  zuPhase(f, ev, ROM.P.turbo, 1000);
+  const t = await f.aktion(anna, 'fang', { fang: 'turbo', anzahl: 5 });
+  assert.equal(t.status, 200, t.error); assert.equal(t.ergebnis.lire, 5);
+  assert.equal((await f.aktion(anna, 'zutat', { pizzaId: ROM.pizzen(ev, f.time)[0].id })).status, 409, 'die Turbo-Pizzen rasen nur vorbei');
+  zuPhase(f, ev, ROM.P.trevi, 1000);
+  assert.equal((await f.aktion(anna, 'fang', { fang: 'turbo', anzahl: 5 })).status, 409);
 });
 
 await test('Rom-Ei schluepfen: Seltenheit vom Server, fuer Dennis nur Legendaer', async () => {

@@ -11,7 +11,8 @@
    Naehe gegen genau diese Rechnung.
 
    Obergrenzen fuer iPad und Handy: 8 Pizzen, Wagen mit 6 Legionaeren,
-   12 Kakerlaken und eine Reiseleiterin, ein Boss, hoechstens 140 Partikel
+   12 Kakerlaken und eine Reiseleiterin auf der Piazza, dazu je 3 an den
+   Tanzplaetzen (ROM.TANZPLAETZE), ein Boss, hoechstens 140 Partikel
    (im ruhigen Modus 40).
    ------------------------------------------------------------------ */
 (function (SG) {
@@ -304,6 +305,11 @@
         mesh(teile.tassen, g(new T.CylinderGeometry(0.92, 0.92, 0.05, 16)), '#4a2a16', cx, 1.62, cz);
       }
       teile.kakerlaken = []; for (var k1 = 0; k1 < 12; k1++) { var ks = sprite(bild('kakerlake', 4), 2.5); ks.visible = false; teile.kakerlaken.push(ks); }
+      /* Und weil Rom kaputt ist, tanzen sie ueberall: je drei an jedem Tanzplatz. */
+      teile.tanzende = [];
+      ROM.TANZPLAETZE.forEach(function (tp, j) {
+        for (var k2 = 0; k2 < 3; k2++) { var ts = sprite(bild('kakerlake', 4), 2.3); ts.visible = false; ts.userData.platz = tp; ts.userData.nr = j * 3 + k2; teile.tanzende.push(ts); }
+      });
       teile.fuehrerin = sprite(bild('fuehrerin', 0), 2.9); teile.fuehrerin.visible = false;
       teile.fuehrerinBlase = sprite(textBild('ROMA 3 GIORNI!'), 1.2); teile.fuehrerinBlase.visible = false;
       teile.sombrero = new T.Group(); gruppe.add(teile.sombrero);
@@ -329,17 +335,19 @@
       /* Partikel aus einem Topf: Wasser, Muenzen, Nudeln, Feuerwerk, Kaese */
       teile.partikel = [];
       var kugel = g(new T.SphereGeometry(0.22, 6, 4)), stab = g(new T.CylinderGeometry(0.07, 0.07, 1.2, 4)), partikelScheibe = g(new T.CylinderGeometry(0.35, 0.35, 0.08, 10));
-      teile.pgeo = { kugel: kugel, stab: stab, scheibe: partikelScheibe };
+      teile.pgeo = { kugel: kugel, stab: stab, scheibe: partikelScheibe, ei: g(new T.SphereGeometry(0.45, 10, 8)) };
       teile.pmat = {};
-      ['#8fdcf5', '#f5c542', '#f1d27a', '#1b8a3c', '#ffffff', '#c92a2a', '#fff4cf', '#d63b27'].forEach(function (f) { teile.pmat[f] = m(new T.MeshBasicMaterial({ color: f })); });
+      ['#8fdcf5', '#f5c542', '#f1d27a', '#1b8a3c', '#ffffff', '#c92a2a', '#fff4cf', '#d63b27', '#6b3b1f'].forEach(function (f) { teile.pmat[f] = m(new T.MeshBasicMaterial({ color: f })); });
     }
 
     /* -------------------------------------------------- Partikel */
     function partikel(art, farbe, x, y, z, vx, vy, vz, leben, schwer) {
       var max = ruhig ? 40 : 140;
-      if (teile.partikel.length >= max) return;
+      /* Eier kommen immer durch - die sind zum Fangen da. */
+      if (teile.partikel.length >= max && art !== 'ei') return;
       var me = new T.Mesh(teile.pgeo[art], teile.pmat[farbe]); me.position.set(x, y, z);
       if (art === 'stab') me.rotation.set(Math.random() * 3, Math.random() * 3, 0);
+      if (art === 'ei') me.scale.set(1, 1.35, 1);
       gruppe.add(me);
       teile.partikel.push({ m: me, vx: vx, vy: vy, vz: vz, leben: leben, schwer: schwer === undefined ? 9 : schwer, dreh: Math.random() * 6 - 3 });
     }
@@ -354,24 +362,26 @@
     function allePartikelWeg() { teile.partikel.forEach(function (p) { gruppe.remove(p.m); }); teile.partikel = []; }
 
     /* ---------------------------------------------------- Takt */
-    var LICHT = { abend: ['#4a3342', '#ffd6b8', '#ffb46b', 3], boss: ['#4d2b2f', '#ffd0b0', '#ff9e6b', 2.9], fest: ['#2c2446', '#e6c8ff', '#ffc98a', 2.6] };
+    var LICHT = { abend: ['#4a3342', '#ffd6b8', '#ffb46b', 3], boss: ['#4d2b2f', '#ffd0b0', '#ff9e6b', 2.9], turbo: ['#3b2130', '#ffe0c0', '#ff7a2e', 3.1], fest: ['#2c2446', '#e6c8ff', '#ffc98a', 2.6] };
+    var P = ROM.P, VORBEI = ROM.VORBEI;
     var SPRUECHE = ['Ananas? MAI!', 'Mamma mia!', 'Dov’è il Colosseo?', 'Ich bin eine Quattro Stagioni!', 'Wo ist mein Basilikum?', 'Wer hat mich halbiert?'];
     var ANTWORTEN = ['Io sono un cartello.', 'Links. Immer links.', 'Keine Pizzen hier!', '…'];
     function aus(liste) { liste.forEach(function (s) { s.visible = false; }); }
     function sichtbarkeit(nr) {
-      teile.wagen.visible = nr === 1; teile.tassen.visible = nr === 2; teile.sombrero.visible = nr === 2; teile.boss.visible = nr === 3;
-      if (nr !== 1) aus(teile.legion);
-      if (nr !== 2) { aus(teile.kakerlaken.slice(0, nr === 4 ? 0 : 12)); teile.fuehrerin.visible = false; teile.fuehrerinBlase.visible = false; }
-      if (nr > 1) { teile.pizzen.forEach(function (p) { p.s.visible = false; p.blase.visible = false; }); teile.zielring.visible = false; teile.schilder.forEach(function (s) { s.antwort.visible = false; }); }
-      if (nr !== 3) { aus(teile.fallschirm); teile.lorbeer.visible = false; }
-      if (nr !== 4) teile.himmelspizza.visible = false;
+      teile.wagen.visible = nr === P.rebellion; teile.tassen.visible = nr === P.invasion || nr === P.turbo; teile.sombrero.visible = nr === P.invasion; teile.boss.visible = nr === P.imperator;
+      if (nr !== P.turbo) teile.tassen.position.y = 0;
+      if (nr !== P.rebellion) aus(teile.legion);
+      if (nr !== P.invasion) { teile.fuehrerin.visible = false; teile.fuehrerinBlase.visible = false; }
+      if (!ROM.PIZZA_ANZAHL[nr]) { teile.pizzen.forEach(function (p) { p.s.visible = false; p.blase.visible = false; }); teile.zielring.visible = false; teile.schilder.forEach(function (s) { s.antwort.visible = false; }); }
+      if (nr !== P.imperator) { aus(teile.fallschirm); teile.lorbeer.visible = false; }
+      if (nr !== P.trevi) teile.himmelspizza.visible = false;
     }
-    function pizzenSchritt(jetzt, zeit) {
-      var liste = ROM.pizzen(ev, jetzt);
+    function pizzenSchritt(jetzt, zeit, nr) {
+      var liste = ROM.pizzen(ev, jetzt), beine = nr === P.turbo ? 18 : 6;
       teile.pizzen.forEach(function (eintrag, i) {
         var pz = liste[i];
         if (!pz) { eintrag.s.visible = false; eintrag.blase.visible = false; return; }
-        var schritt = Math.floor(zeit * 6) % 2, b = pz.sorte * 2 + schritt;
+        var schritt = Math.floor(zeit * beine) % 2, b = pz.sorte * 2 + schritt;
         if (eintrag.bild !== b) { eintrag.s.material.map = bild('pizza', b); eintrag.s.material.needsUpdate = true; eintrag.bild = b; }
         eintrag.s.visible = true; eintrag.s.position.set(pz.x, 0.15 + Math.abs(Math.sin(zeit * 9 + i)) * 0.35, pz.z);
         eintrag.s.material.opacity = gesammelt[pz.id] ? 0.45 : 1; eintrag.id = pz.id;
@@ -404,32 +414,53 @@
         s.material.rotation = i === fall && faellt ? Math.PI / 2 : (i === 5 ? Math.sin(zeit * 4) * 0.2 : 0);
       });
     }
+    /* Die Kakerlaken tanzen das ganze Event ueber: zwoelf auf der Piazza,
+       der Rest an den Tanzplaetzen der Insel. Zeigt die Sombrero-Invasion
+       eine Tanzfolge vor, macht die ganze Insel dieselbe Pose. */
     function kakerlakenSchritt(jetzt, zeit, nr) {
-      var p = ROM.PIAZZA;
-      teile.kakerlaken.forEach(function (s, i) {
-        s.visible = true;
-        var b = jetzt < poseBis ? pose : (Math.floor(zeit * 2 + (i % 2)) % 2) + 4;
+      var p = ROM.PIAZZA, zt = zeit * (nr === P.turbo ? 2.6 : 1), zeigt = jetzt < poseBis;
+      function tanzbild(s, i) {
+        var b = zeigt ? pose : (Math.floor(zt * 2 + (i % 2)) % 2) + 4;
         if (s.userData.b !== b) { s.material.map = bild('kakerlake', b); s.material.needsUpdate = true; s.userData.b = b; }
-        if (nr === 4) {
+      }
+      teile.kakerlaken.forEach(function (s, i) {
+        s.visible = true; tanzbild(s, i);
+        if (nr === P.trevi) {
           /* Im Finale tanzen sie auf dem Beckenrand des Brunnens. */
           var fw = Math.PI + (i + 0.5) / 12 * Math.PI;
-          s.position.set(ROM.TREVI.x + Math.cos(fw) * 7.2, 1.1 + Math.abs(Math.sin(zeit * 6 + i)) * 0.5, ROM.TREVI.z + 2.5 - Math.sin(fw) * 7.2);
+          s.position.set(ROM.TREVI.x + Math.cos(fw) * 7.2, 1.1 + Math.abs(Math.sin(zt * 6 + i)) * 0.5, ROM.TREVI.z + 2.5 - Math.sin(fw) * 7.2);
           return;
         }
         if (i < 6) {
-          var cw = i / 6 * Math.PI * 2;
-          s.position.set(p.x + Math.cos(cw) * 6, 1.65 + Math.abs(Math.sin(zeit * 4 + i)) * 0.6, p.z + Math.sin(cw) * 6);
+          /* Stehen die Espressotassen da, tanzen sechs auf ihnen, sonst im Kreis. */
+          var aufTassen = nr === P.invasion || nr === P.turbo, cw = i / 6 * Math.PI * 2 + (aufTassen ? 0 : zt * 0.3);
+          s.position.set(p.x + Math.cos(cw) * 6, (aufTassen ? 1.65 : 0.15) + Math.abs(Math.sin(zt * 4 + i)) * 0.6, p.z + Math.sin(cw) * 6);
         } else {
-          var pw = zeit * 0.5 - (i - 6) * 0.28;
-          s.position.set(p.x + Math.cos(pw) * 11, 0.15 + Math.abs(Math.sin(zeit * 7 + i)) * 0.35, p.z + Math.sin(pw) * 11);
+          var pw = zt * 0.5 - (i - 6) * 0.28;
+          s.position.set(p.x + Math.cos(pw) * 11, 0.15 + Math.abs(Math.sin(zt * 7 + i)) * 0.35, p.z + Math.sin(pw) * 11);
         }
       });
-      if (nr === 2) {
-        var fw2 = zeit * 0.5 + 0.35;
+      teile.tanzende.forEach(function (s) {
+        var tp = s.userData.platz, n = s.userData.nr, a = (n % 3) / 3 * Math.PI * 2 + zt * (n % 2 ? 0.9 : -0.9);
+        s.visible = true; tanzbild(s, n);
+        s.position.set(tp.x + Math.cos(a) * tp.r, 0.15 + Math.abs(Math.sin(zt * 5 + n)) * 0.5, tp.z + Math.sin(a) * tp.r);
+      });
+      if (nr === P.invasion) {
+        var fw2 = zt * 0.5 + 0.35;
         teile.fuehrerin.visible = true; teile.fuehrerin.position.set(p.x + Math.cos(fw2) * 11, 0.15, p.z + Math.sin(fw2) * 11);
         blase(teile.fuehrerinBlase, Math.floor(zeit / 6) % 2 ? 'POLONAISE! Alle hinter mir!' : 'ROMA 3 GIORNI!', 1.2);
         teile.fuehrerinBlase.position.set(teile.fuehrerin.position.x, 4.1, teile.fuehrerin.position.z);
         teile.sombrero.position.set(X.LEUCHTTURM.x, w.leuchtturmHoehe(), X.LEUCHTTURM.z); teile.sombrero.rotation.y = zeit * 0.4;
+      }
+    }
+    /* Espresso-Overdrive: die Tassen huepfen und spritzen, Tomaten fliegen. */
+    function turboSchritt(jetzt, zeit) {
+      var p = ROM.PIAZZA;
+      teile.tassen.position.y = Math.abs(Math.sin(zeit * 10)) * 0.4;
+      if (!ruhig || Math.random() < 0.3) {
+        var cw = Math.floor(Math.random() * 6) / 6 * Math.PI * 2;
+        partikel('kugel', '#6b3b1f', p.x + Math.cos(cw) * 6, 1.8, p.z + Math.sin(cw) * 6, (Math.random() - 0.5) * 4, 8 + Math.random() * 4, (Math.random() - 0.5) * 4, 1.4);
+        if (Math.random() < 0.5) { var sp = w.spieler(); partikel('scheibe', '#d63b27', sp.x + (Math.random() - 0.5) * 26, 16, sp.z + (Math.random() - 0.5) * 26, 0, -6, 0, 2.5, 6); }
       }
     }
     function bossSchritt(jetzt, zeit, dt) {
@@ -498,8 +529,8 @@
       teile.himmelspizza.position.set(ROM.PIAZZA.x, 60 + Math.max(0, k - 0.6) * 250, ROM.PIAZZA.z);
       teile.himmelspizza.material.rotation += 0.05 + k * 0.3;
       teile.kulisse.position.y = -k * 12; teile.kulisse.scale.setScalar(Math.max(0.01, 1 - k * 0.6));
-      teile.boss.visible = teile.wagen.visible = teile.tassen.visible = teile.sombrero.visible = false;
-      aus(teile.kakerlaken); aus(teile.legion); aus(teile.fallschirm); teile.fuehrerin.visible = teile.fuehrerinBlase.visible = false;
+      teile.boss.visible = teile.wagen.visible = teile.tassen.visible = teile.sombrero.visible = false; teile.tassen.position.y = 0;
+      aus(teile.kakerlaken); aus(teile.tanzende); aus(teile.legion); aus(teile.fallschirm); teile.fuehrerin.visible = teile.fuehrerinBlase.visible = false;
       teile.pizzen.forEach(function (p) { p.s.visible = p.blase.visible = false; });
       teile.pfuetze.visible = teile.lorbeer.visible = teile.zielring.visible = false;
       aus(teile.stampede); teile.nonna.visible = teile.nonnaBlase.visible = false;
@@ -534,6 +565,10 @@
       },
       tippen: function (pt) {
         if (!ev) return;
+        /* Schnappen lassen sich nur die Pizzen der ersten beiden Phasen - die
+           im Espresso-Overdrive rasen nur vorbei. */
+        var ph = ROM.phase(ev, uhr());
+        if (!ph || (ph.nr !== P.wahnsinn && ph.nr !== P.rebellion)) return;
         var liste = ROM.pizzen(ev, uhr()), beste = null, abstand = 5;
         liste.forEach(function (pz) { var d = Math.hypot(pz.x - pt.x, pz.z - pt.z); if (d < abstand && !gesammelt[pz.id]) { abstand = d; beste = pz; } });
         zielId = beste ? beste.id : null;
@@ -555,6 +590,12 @@
         for (var i = 0; i < (ruhig ? 4 : 12); i++) partikel('kugel', '#fff4cf', o.x, 7, o.z, (Math.random() - 0.5) * 10, 6 + Math.random() * 5, (Math.random() - 0.5) * 10, 1.2);
       },
       ruhig: function (ja) { ruhig = !!ja; },
+      /* Ein Ei springt aus dem Trevi-Brunnen (die Anzeige legt es zum Fangen hin). */
+      eiSprung: function () {
+        if (!gebaut) return;
+        var tr = ROM.TREVI;
+        for (var i = 0; i < 3; i++) partikel('ei', '#fff4cf', tr.x + (Math.random() - 0.5) * 4, 2, tr.z + 2, (Math.random() - 0.5) * 6, 12 + Math.random() * 4, -3 - Math.random() * 3, 2.4);
+      },
       /* Die Uhr der Welt steht, solange keine Bilder kommen (verdeckter Tab,
          Ruckeln: core/loop.js kappt lange Bildabstaende). Pizzen, Boss und
          Server muessen aber dieselbe Zeit sehen - darum reicht die Anzeige
@@ -565,24 +606,25 @@
         if (!ev) { verbergen(jetzt); return; }
         var ph = ROM.phase(ev, jetzt), zeit = performance.now() / 1000;
         if (!ph) return;
-        var seit = ph.nr === 5 ? jetzt - ph.von : 0;
-        if (ph.nr === 5 && (seit > 8000 || ROM.nieGelaufen(ev))) { verbergen(jetzt); return; }
+        var seit = ph.nr === VORBEI ? jetzt - ph.von : 0;
+        if (ph.nr === VORBEI && (seit > 8000 || ROM.nieGelaufen(ev))) { verbergen(jetzt); return; }
         bauen(); gruppe.visible = !w.kampf();
-        if (ph.nr === 5) { if (abspannSchritt(jetzt, seit)) verbergen(jetzt); partikelSchritt(dt); return; }
+        if (ph.nr === VORBEI) { if (abspannSchritt(jetzt, seit)) verbergen(jetzt); partikelSchritt(dt); return; }
         teile.kulisse.scale.setScalar(1);
         /* Im Countdown wachsen Saeulen, Kolosseum und Brunnen aus dem Boden. */
         var k = ph.nr < 0 ? Math.max(0, Math.min(1, (jetzt - ev.start) / ROM.dauer(ev, ROM.COUNTDOWN))) : 1;
         teile.kulisse.position.y = -10 * Math.pow(1 - k, 2);
-        lichtPflegen(ph.nr === 3 ? 'boss' : ph.nr === 4 ? 'fest' : 'abend', jetzt);
+        lichtPflegen(ph.nr === P.imperator ? 'boss' : ph.nr === P.turbo ? 'turbo' : ph.nr === P.trevi ? 'fest' : 'abend', jetzt);
         sichtbarkeit(ph.nr);
-        if (ph.nr === 0 || ph.nr === 1) pizzenSchritt(jetzt, zeit);
-        if (ph.nr === 1) wagenSchritt(jetzt, zeit);
-        if (ph.nr === 2 || ph.nr === 4) kakerlakenSchritt(jetzt, zeit, ph.nr);
-        if (ph.nr === 3) bossSchritt(jetzt, zeit, dt);
-        if (ph.nr === 4) finaleSchritt(jetzt, zeit);
+        if (ROM.PIZZA_ANZAHL[ph.nr]) pizzenSchritt(jetzt, zeit, ph.nr);
+        if (ph.nr === P.rebellion) wagenSchritt(jetzt, zeit);
+        kakerlakenSchritt(jetzt, zeit, ph.nr);
+        if (ph.nr === P.imperator) bossSchritt(jetzt, zeit, dt);
+        if (ph.nr === P.turbo) turboSchritt(jetzt, zeit);
+        if (ph.nr === P.trevi) finaleSchritt(jetzt, zeit);
         /* Eine kurz vor dem Phasenwechsel gestartete Ueberraschung laeuft
            bis zu ihrem eigenen Ende weiter und wird danach ausgeblendet. */
-        if (ph.nr >= 0 && ph.nr <= 4) ueberraschungenSchritt(jetzt, zeit);
+        if (ph.nr >= 0) ueberraschungenSchritt(jetzt, zeit);
         partikelSchritt(dt);
       },
       destroy: function () {

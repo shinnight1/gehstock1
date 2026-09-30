@@ -57,8 +57,9 @@ function umgebung({ musikDatei = false, tonAn = true } = {}) {
     ui: { clear(e) { e.children.slice().forEach((c) => e.removeChild(c)); } },
     storage: { get: (k, d) => d, set() {} },
     assets: musikDatei ? { 'gm-rom-musik': 'musik.mp3' } : {},
-    audio: { play() {}, unlock() {}, note: (n) => 440 * Math.pow(2, n / 12), tone: (o) => toene.push(o),
-      kontext: () => (tonAn ? { ctx: { state: 'running', currentTime: 0 }, ziel: {} } : null) },
+    audio: { play() {}, unlock() {}, note: (n) => 440 * Math.pow(2, n / 12), tone: (o) => { if (tonAn) toene.push(o); },
+      kontext: () => (tonAn ? { ctx: { state: 'running', currentTime: 0 }, ziel: {} } : null),
+      kontextImmer: () => ({ ctx: { state: 'running', currentTime: 0 }, ziel: {} }) },
     gehstockmon: { daten: D, wirtschaft: E, abenteuer: X, online: { request: (op, daten) => { anfragen.push({ op, ...daten }); return Promise.resolve(antwort ? antwort(op, daten) : { serverTime: uhr.jetzt }); } } },
   };
   const context = vm.createContext({ SG, window: {}, document: { createElement: (t) => new Element(t) }, Date, Math, JSON, Promise, Object, Array, String, Number, isFinite, console });
@@ -93,7 +94,7 @@ function umgebung({ musikDatei = false, tonAn = true } = {}) {
 function sicht(ev, ich = {}, mehr = {}) {
   return { id: ev.id, start: ev.start, faktor: 1, abgebrochenAm: ev.abgebrochenAm || null, von: 'Chefin', vorschau: false, ueberraschungen: {}, teilnehmer: 1,
     leiste: { wert: 0, ziel: 75, voll: false }, boss: { hp: 0, max: 0, besiegt: false },
-    ich: { lire: 0, proPhase: [0, 0, 0, 0, 0], stern: 0, schlaege: 0, schaden: 0, vorrat: 3, zutaten: [], tanz: [], gefechte: { s: 0, n: 0 }, muenze: false, fang: {}, tPolonaise: 0, tGefecht: 0, tStern: 0, tZutat: 0, schlagStand: null, ...ich },
+    ich: { lire: 0, proPhase: [0, 0, 0, 0, 0, 0], stern: 0, schlaege: 0, schaden: 0, vorrat: 3, zutaten: [], tanz: [], gefechte: { s: 0, n: 0 }, muenze: false, fang: {}, tPolonaise: 0, tGefecht: 0, tStern: 0, tZutat: 0, schlagStand: null, ...ich },
     serverTime: 0, ...mehr };
 }
 
@@ -106,6 +107,11 @@ await test('Ohne Event bleibt alles verborgen, mit Event erscheint der Countdown
   assert.match(u.box.querySelector('.gm-rom-titel').textContent, /Rom zieht ein/);
   assert.match(u.box.querySelector('.gm-rom-zeit').textContent, /^1:00$/);
   assert.ok(u.box.querySelector('.gm-rom-aktionen').hidden, 'im Countdown noch keine Knoepfe');
+  assert.ok(u.root.classList.contains('gm-rom-an'), 'die Projektleiste macht Platz');
+  assert.ok(!u.box.alle().some((e) => e.tagName === 'button' && /Musik aus|Effekte|Lautst/.test(e.textContent)), 'Musik und Effekte lassen sich nicht abschalten');
+  assert.ok(!u.box.querySelector('.gm-rom-laut'), 'kein Lautstaerkeregler');
+  await u.vor(300);
+  assert.equal(u.box.querySelectorAll('.gm-rom-stern').length, 1, 'Sternschnuppen schon im Countdown');
   u.rom.presenz(null, u.uhr.jetzt);
   assert.ok(u.box.hidden, 'kommt kein Stand mehr mit, verschwindet das Event');
   u.rom.destroy();
@@ -175,7 +181,7 @@ await test('Phase 4: Zuschlagen am Boss, Haltung und Rolle stehen dabei', async 
   const p = ROM.plan({ id: 'x', start: 0 });
   const ev = { id: 'rom-ui-5', start: u.uhr.jetzt - (p.phasen[3].von - 0) - 500 };
   u.welt.ort = ROM.bossOrt(ev, u.uhr.jetzt);
-  u.setAntwort((op, d) => ({ serverTime: u.uhr.jetzt, rom: sicht(ev, { lire: 2, proPhase: [0, 0, 0, 2, 0], schlaege: 1 }, { boss: { hp: 4000, max: 5000, besiegt: false } }), ergebnis: { art: d.art, lire: 2, text: 'Treffer!' } }));
+  u.setAntwort((op, d) => ({ serverTime: u.uhr.jetzt, rom: sicht(ev, { lire: 2, proPhase: [0, 0, 0, 2, 0, 0], schlaege: 1 }, { boss: { hp: 4000, max: 5000, besiegt: false } }), ergebnis: { art: d.art, lire: 2, text: 'Treffer!' } }));
   u.rom.presenz(sicht(ev, {}, { boss: { hp: 5000, max: 5000, besiegt: false } }), u.uhr.jetzt);
   await u.vor(300);
   assert.match(u.box.querySelector('.gm-rom-haltung').textContent, /Deine Truppe passt/, 'die Start-Truppe hat jede Rolle');
@@ -188,21 +194,75 @@ await test('Phase 4: Zuschlagen am Boss, Haltung und Rolle stehen dabei', async 
   u.rom.destroy();
 });
 
-await test('Phase 5 und Abschluss: Muenze, dann ehrliche Auskunft zur Belohnung', async () => {
+await test('Kaeseregen: zwei Gold je Sekunde stehen im Balken, der Browser meldet sich', async () => {
   const u = umgebung();
   const p = ROM.plan({ id: 'x', start: 0 });
-  const ev = { id: 'rom-ui-6', start: u.uhr.jetzt - p.phasen[4].von - 500 };
+  const ev = { id: 'rom-ui-k', start: u.uhr.jetzt - p.phasen[ROM.P.imperator].von - 60000 };
+  u.rom.presenz(sicht(ev, { kaeseGold: 10, tKaese: u.uhr.jetzt - 3000 }, { boss: { hp: 0, max: 5000, besiegt: true }, bossBesiegtAm: u.uhr.jetzt - 20000 }), u.uhr.jetzt);
+  await u.vor(300);
+  const balken = u.box.querySelector('.gm-rom-balken').textContent;
+  assert.match(balken, /Käseregen! \+2 Gold pro Sekunde · 16 Gold gesammelt/, balken);
+  assert.equal(u.anfragen.filter((a) => a.art === 'kaese').length, 1, 'der Server zaehlt die Sekunden nach');
+  assert.ok(!u.knopf('Zuschlagen'), 'nach dem Sieg wird nicht mehr geschlagen');
+  u.rom.destroy();
+});
+
+await test('Espresso-Overdrive: es prasselt, gefangen wird gebuendelt gemeldet', async () => {
+  const u = umgebung();
+  const p = ROM.plan({ id: 'x', start: 0 });
+  const ev = { id: 'rom-ui-t', start: u.uhr.jetzt - p.phasen[ROM.P.turbo].von - 1000 };
+  u.rom.presenz(sicht(ev), u.uhr.jetzt);
+  await u.vor(300);
+  assert.match(u.box.querySelector('.gm-rom-titel').textContent, /Espresso-Overdrive/);
+  assert.match(u.box.querySelector('.gm-rom-unter').textContent, /Phase 5 von 6/);
+  assert.ok(u.box.classList.contains('gm-rom-turbo'));
+  const fall = u.box.querySelectorAll('.gm-rom-fall');
+  assert.ok(fall.length >= 1 && fall[0].classList.contains('turbo'));
+  fall[0].fire('pointerdown');
+  await u.vor(1300);
+  const fang = u.anfragen.filter((a) => a.art === 'fang');
+  assert.equal(fang.length, 1); assert.equal(fang[0].fang, 'turbo'); assert.equal(fang[0].anzahl, 1);
+  u.rom.destroy();
+});
+
+await test('Trevi-Eier: sie erscheinen zu ihrer Zeit, bleiben liegen und werden einzeln gemeldet', async () => {
+  const u = umgebung();
+  const probe = { id: 'rom-ui-e', start: 0 };
+  const ev = { id: 'rom-ui-e', start: u.uhr.jetzt - (ROM.eiZeit(probe, 1) + 200) };
+  u.rom.presenz(sicht(ev), u.uhr.jetzt);
+  await u.vor(300);
+  const eier = u.box.querySelectorAll('.gm-rom-ei');
+  assert.equal(eier.length, 2, 'die ersten beiden Eier liegen da');
+  eier[1].fire('pointerdown');
+  await u.vor(300);
+  const ei = u.anfragen.filter((a) => a.art === 'ei');
+  assert.equal(ei.length, 1); assert.equal(ei[0].ei, 1);
+  assert.match(u.box.querySelector('.gm-rom-hinweis').textContent, /Eier aus dem Trevi: 0\/6/);
+  u.rom.presenz(sicht(ev, { eier: [1] }), u.uhr.jetzt);
+  await u.vor(300);
+  assert.equal(u.box.querySelectorAll('.gm-rom-ei').length, 1, 'ein gefangenes Ei verschwindet');
+  u.rom.destroy();
+});
+
+await test('Phase 6 und Abschluss: Muenze, dann ehrliche Auskunft zur Belohnung', async () => {
+  const u = umgebung();
+  const p = ROM.plan({ id: 'x', start: 0 });
+  const ev = { id: 'rom-ui-6', start: u.uhr.jetzt - p.phasen[ROM.P.trevi].von - 500 };
   u.rom.presenz(sicht(ev), u.uhr.jetzt);
   await u.vor(300);
   u.knopf('Münze in den Trevi werfen').fire('click');
   assert.equal(u.anfragen.at(-1).art, 'muenze');
   /* Zu wenig Lire: keine Gutschrift, auf die man warten muesste. */
-  u.rom.presenz(sicht(ev, { lire: 5, proPhase: [0, 0, 0, 0, 5] }), u.uhr.jetzt);
-  await u.vor(ROM.PHASEN[4].dauer + 5000);
+  u.rom.presenz(sicht(ev, { lire: 5, proPhase: [0, 0, 0, 0, 0, 5] }), u.uhr.jetzt);
+  await u.vor(ROM.PHASEN[ROM.P.trevi].dauer + 5000);
   const ende = u.box.querySelector('.gm-rom-ende');
   assert.ok(!ende.hidden);
   assert.match(ende.textContent, /reicht es noch nicht/);
   assert.equal(u.anfragen.filter((a) => a.op === 'world').length, 0, 'kein Warten auf eine Abrechnung ohne Lohn');
+  assert.ok(!u.root.classList.contains('gm-rom-an'), 'nach dem Ende kommt die Projektleiste zurueck');
+  await u.vor(90000);
+  assert.ok(ende.hidden, 'die Zusammenfassung schliesst sich nach anderthalb Minuten selbst');
+  assert.ok(u.box.hidden, 'und die Admin-Abuse-Anzeige ist weg');
   u.rom.destroy();
 });
 
@@ -210,8 +270,8 @@ await test('Abschluss mit Lohn: Abrechnung wird geholt und danach aufgelistet', 
   const u = umgebung();
   const p = ROM.plan({ id: 'x', start: 0 });
   const ev = { id: 'rom-ui-7', start: u.uhr.jetzt - p.ende - 4000 };
-  u.setAntwort((op) => { if (op === 'world') u.st.value.rom.letztes = { ev: ev.id, t: 1, lire: 45, gold: 500, runen: { 3: 3 }, stufen: ['tourist', 'gladiator'], titel: [], ei: 'tasche', mozzarino: 'neu', leiste: false, boss: true, abgebrochen: false }; return { serverTime: u.uhr.jetzt }; });
-  u.rom.presenz(sicht(ev, { lire: 45, proPhase: [20, 25, 0, 0, 0], schlaege: 6 }, { boss: { hp: 0, max: 5000, besiegt: true } }), u.uhr.jetzt);
+  u.setAntwort((op) => { if (op === 'world') u.st.value.rom.letztes = { ev: ev.id, t: 1, lire: 45, gold: 1120, runen: { 3: 5 }, stufen: ['tourist', 'gladiator'], titel: [], ei: 'tasche', mozzarino: 'neu', perle: null, eier: { tasche: 6, warte: 0, gold: 0 }, kaese: 70, bossGold: 250, leiste: false, boss: true, abgebrochen: false }; return { serverTime: u.uhr.jetzt }; });
+  u.rom.presenz(sicht(ev, { lire: 45, proPhase: [20, 25, 0, 0, 0, 0], schlaege: 6, kaeseGold: 70, eier: [0, 1, 2, 3, 4, 5] }, { boss: { hp: 0, max: 5000, besiegt: true } }), u.uhr.jetzt);
   const ende = u.box.querySelector('.gm-rom-ende');
   assert.match(ende.textContent, /wird gerade gutgeschrieben/);
   assert.equal(u.anfragen.filter((a) => a.op === 'world').length, 1, 'der Browser holt die Abrechnung selbst');
@@ -220,9 +280,13 @@ await test('Abschluss mit Lohn: Abrechnung wird geholt und danach aufgelistet', 
   await u.vor(300);
   assert.match(ende.textContent, /Rom-Ei, fertig ausgebrütet/);
   assert.match(ende.textContent, /Centurio Mozzarino \(Legendär\) ist jetzt in deiner Sammlung/);
-  assert.match(ende.textContent, /500 Gold/);
+  assert.match(ende.textContent, /1120 Gold \(darin 250 Siegesgold, 70 aus dem Käseregen\)/);
+  assert.match(ende.textContent, /6 Eier aus dem Trevi-Brunnen/);
+  assert.match(ende.textContent, /5 Episch-Runen/);
   u.knopf('Schließen').fire('click');
   assert.ok(ende.hidden);
+  await u.vor(5000);
+  assert.ok(u.box.hidden, 'nach dem Schliessen und dem Abspann ist die Admin-Abuse-Anzeige weg');
   await u.vor(60000);
   assert.ok(ende.hidden, 'geschlossen bleibt geschlossen');
   assert.equal(u.anfragen.filter((a) => a.op === 'world').length, 1, 'nach der Gutschrift keine weiteren Weltabfragen');
@@ -245,8 +309,7 @@ await test('Ohne Musikdatei spielt die eingebaute Tarantella, zum Ende und beim 
   const leise = umgebung({ tonAn: false });
   leise.rom.presenz(sicht({ id: 'rom-ui-9', start: leise.uhr.jetzt - ROM.COUNTDOWN - 1000 }), leise.uhr.jetzt);
   await leise.vor(2000);
-  assert.equal(leise.toene.length, 0, 'Ton aus: keine Musik, aber alles andere laeuft');
-  assert.ok(leise.knopf('Zur nächsten Pizza'));
+  assert.ok(leise.knopf('Zur nächsten Pizza'), 'auch mit ausgeschaltetem Hideout-Ton laeuft alles');
   leise.rom.destroy();
 });
 

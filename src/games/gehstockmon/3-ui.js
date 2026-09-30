@@ -396,6 +396,7 @@
       if(egg.art==='streifzug')return 'Ei vom Streifzug';
       if(egg.art==='geschenk')return 'Geschenk-Ei';
       if(egg.art==='rom')return '🇮🇹 Rom-Ei · mindestens Legendär';
+      if(egg.art==='trevi')return '🇮🇹 Ei aus dem Trevi-Brunnen';
       if(id.indexOf('weekend-')===0)return 'Wochenend-Ei aus '+gebiet;
       if(id.indexOf('reward-')===0)return 'Trainer-Ei aus '+gebiet;
       if(id.indexOf('stolen-')===0)return 'Erbeutetes Ei'+mindestens;

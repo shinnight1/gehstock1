@@ -1,8 +1,8 @@
 /* ------------------------------------------------------------------
    GehstockMon-Event "ROMA È FINITA - Der große Pizzaputsch"
 
-   Ein Admin-Abuse-Event, das nur der CEO startet: zwoelf Minuten Rom
-   auf der Insel, in fuenf Phasen, fuer alle in derselben Spielerwelt.
+   Ein Admin-Abuse-Event, das nur der CEO startet: dreizehn Minuten Rom
+   auf der Insel, in sechs Phasen, fuer alle in derselben Spielerwelt.
 
      Regeln (hier)          Zeitplan, Wege der Figuren, Lire, Stufen
      Server                 netlify/functions/lib/gehstockmon-rom.mjs
@@ -29,8 +29,16 @@
     { id: 'rebellion', name: 'Die Pizza-Rebellion', ruf: 'LA RIBELLIONE!', dauer: 150000, lire: 30 },
     { id: 'invasion', name: 'Die Sombrero-Invasion', ruf: '¡OLÈ! … äh, OLÉ?', dauer: 150000, lire: 30 },
     { id: 'imperator', name: 'Imperatore Mozzarellus', ruf: 'AVE, MOZZARELLUS!', dauer: 210000, lire: 40 },
-    { id: 'trevi', name: 'Der Trevi-Brunnen explodiert', ruf: 'FONTANA DI TREVI: BOOM!', dauer: 90000, lire: 10 }
+    /* Mozzarellus' Espresso-Vorrat geht hoch: alles laeuft auf Turbo, die
+       Musik extrem schnell (R.ROM_ASSETS in 2-rom-ui.js). */
+    { id: 'turbo', name: 'Espresso-Overdrive', ruf: 'PRESTISSIMO!!!', dauer: 60000, lire: 20 },
+    { id: 'trevi', name: 'Der Trevi-Brunnen explodiert', ruf: 'FONTANA DI TREVI: BOOM!', dauer: 90000, lire: 20 }
   ];
+  /* Phasen beim Namen statt beim Platz: ROM.P.trevi statt einer Zahl, die
+     beim naechsten Einschub nicht mehr stimmt. VORBEI steht hinter der letzten. */
+  ROM.P = {};
+  ROM.PHASEN.forEach(function (ph, i) { ROM.P[ph.id] = i; });
+  ROM.VORBEI = ROM.PHASEN.length;
   ROM.DAUER = ROM.PHASEN.reduce(function (s, p) { return s + p.dauer; }, 0);
   ROM.GESAMT = ROM.COUNTDOWN + ROM.DAUER;
   /* Zeitraffer nur in der Testzone und am Entwicklungsserver. */
@@ -50,16 +58,16 @@
   };
   /* Wann das Event wirklich endet - beim Abbruch frueher. */
   ROM.ende = function (ev) { var e = ROM.plan(ev).ende; return ev.abgebrochenAm ? Math.min(e, ev.abgebrochenAm) : e; };
-  /* Wo das Event steht: nr -1 Countdown, 0 bis 4 die Phasen, 5 vorbei. */
+  /* Wo das Event steht: nr -1 Countdown, 0 bis 5 die Phasen, ROM.VORBEI danach. */
   ROM.phase = function (ev, now) {
     if (!ev || !Number.isFinite(ev.start)) return null;
     var p = ROM.plan(ev), ende = ROM.ende(ev);
-    if (now >= ende) return { nr: 5, von: ende, bis: null, abgebrochen: !!ev.abgebrochenAm && ev.abgebrochenAm < p.ende };
+    if (now >= ende) return { nr: ROM.VORBEI, von: ende, bis: null, abgebrochen: !!ev.abgebrochenAm && ev.abgebrochenAm < p.ende };
     if (now < p.countdownBis) return { nr: -1, von: ev.start, bis: p.countdownBis };
     for (var i = 0; i < p.phasen.length; i++) if (now < p.phasen[i].bis) return { nr: i, von: p.phasen[i].von, bis: p.phasen[i].bis };
-    return { nr: 5, von: p.ende, bis: null, abgebrochen: false };
+    return { nr: ROM.VORBEI, von: p.ende, bis: null, abgebrochen: false };
   };
-  ROM.laeuft = function (ev, now) { var ph = ROM.phase(ev, now); return !!ph && ph.nr < 5; };
+  ROM.laeuft = function (ev, now) { var ph = ROM.phase(ev, now); return !!ph && ph.nr < ROM.VORBEI; };
   /* Im Countdown abgebrochen: dann ist nichts passiert, und es zaehlt nicht. */
   ROM.nieGelaufen = function (ev) { return !!ev.abgebrochenAm && ev.abgebrochenAm < ROM.plan(ev).countdownBis; };
 
@@ -75,7 +83,7 @@
 
   /* ------------------------------------------------------- Orte */
   /* Die Piazza liegt oestlich vom Startplatz, der Trevi-Brunnen an ihrem
-     Nordrand. Aus der Arena wird fuer zwoelf Minuten das Kolosseum. */
+     Nordrand. Aus der Arena wird fuer dreizehn Minuten das Kolosseum. */
   ROM.PIAZZA = { x: 30, z: 38, radius: 14 };
   ROM.TREVI = { x: 30, z: 53 };
   ROM.KOLOSSEUM = { x: X.STADT.x, z: X.STADT.z, radius: X.STADT.radius + 3 };
@@ -91,13 +99,23 @@
     return liste;
   })();
 
+  /* Hier tanzen die Kakerlaken das ganze Event ueber (2-rom-szene.js):
+     Wegpunkte ueber die ganze Insel verteilt und zwei Plaetze im Kolosseum,
+     zwischen Arena und Mauer. */
+  ROM.TANZPLAETZE = [[-12, 10], [-12, 42], [-4, 58], [12, 18], [52, 10], [52, 50], [44, 26], [4, 34]]
+    .map(function (w) { return { x: w[0], z: w[1], r: 2.2 }; })
+    .concat([{ x: ROM.KOLOSSEUM.x, z: ROM.KOLOSSEUM.z + 16, r: 3 }, { x: ROM.KOLOSSEUM.x + 17, z: ROM.KOLOSSEUM.z, r: 3 }]);
+
   /* ------------------------------------------------------ Pizzen */
   /* Jede Pizza lebt einen Abschnitt lang und laeuft dabei von einem
      Wegpunkt zu einem nahen anderen. Danach rennt sie davon, und eine neue
      kommt. Jede hat eine eigene Kennung - geschnappt wird jede nur einmal. */
   ROM.PIZZA_ABSCHNITT = 24000;
-  ROM.PIZZA_ANZAHL = [8, 4, 0, 0, 0];
+  /* Im Espresso-Overdrive rasen sie - viermal so schnell, nur zum Ansehen. */
+  ROM.PIZZA_ABSCHNITT_TURBO = 6000;
+  ROM.PIZZA_ANZAHL = ROM.PHASEN.map(function (ph) { return { wahnsinn: 8, rebellion: 4, turbo: 8 }[ph.id] || 0; });
   ROM.PIZZA_NAEHE = 10;
+  function pizzaAbschnitt(ev, nr) { return ROM.dauer(ev, nr === ROM.P.turbo ? ROM.PIZZA_ABSCHNITT_TURBO : ROM.PIZZA_ABSCHNITT); }
   function ziel(ev, von, schluessel) {
     var nah = ROM.WEGE.filter(function (w) { var d = Math.hypot(w.x - von.x, w.z - von.z); return d > 6 && d < 24; });
     return nah[Math.floor(ROM.wurf(ev, schluessel) * nah.length)] || von;
@@ -105,10 +123,10 @@
   /* Alle Pizzen zu einem Zeitpunkt. */
   ROM.pizzen = function (ev, now) {
     var ph = ROM.phase(ev, now);
-    if (!ph || ph.nr < 0 || ph.nr > 4) return [];
+    if (!ph || ph.nr < 0 || ph.nr >= ROM.VORBEI) return [];
     var anzahl = ROM.PIZZA_ANZAHL[ph.nr];
     if (!anzahl) return [];
-    var laenge = ROM.dauer(ev, ROM.PIZZA_ABSCHNITT), abschnitt = Math.floor((now - ph.von) / laenge), liste = [];
+    var laenge = pizzaAbschnitt(ev, ph.nr), abschnitt = Math.floor((now - ph.von) / laenge), liste = [];
     for (var i = 0; i < anzahl; i++) liste.push(ROM.pizza(ev, ph.nr + '-' + abschnitt + '-' + i, now));
     return liste.filter(Boolean);
   };
@@ -118,8 +136,8 @@
     var teile = String(id).split('-').map(Number);
     if (teile.length !== 3 || teile.some(function (n) { return !Number.isInteger(n) || n < 0; })) return null;
     var nr = teile[0], abschnitt = teile[1], i = teile[2];
-    if (nr > 4 || i >= ROM.PIZZA_ANZAHL[nr]) return null;
-    var grenze = ROM.plan(ev).phasen[nr], laenge = ROM.dauer(ev, ROM.PIZZA_ABSCHNITT);
+    if (nr >= ROM.VORBEI || i >= ROM.PIZZA_ANZAHL[nr]) return null;
+    var grenze = ROM.plan(ev).phasen[nr], laenge = pizzaAbschnitt(ev, nr);
     var von = grenze.von + abschnitt * laenge, bis = Math.min(grenze.bis, von + laenge);
     if (now < von || now >= bis) return null;
     var start = ROM.WEGE[Math.floor(ROM.wurf(ev, 'pizza:' + id) * ROM.WEGE.length)];
@@ -155,7 +173,7 @@
     { id: 'schieber', name: 'Pizzaschieber-Wall', zeichen: '🛡', rolle: 0, text: 'Walls halten dagegen.' }
   ];
   ROM.haltung = function (ev, now) {
-    var von = ROM.plan(ev).phasen[3].von;
+    var von = ROM.plan(ev).phasen[ROM.P.imperator].von;
     return ROM.HALTUNGEN[Math.max(0, Math.floor((now - von) / ROM.dauer(ev, ROM.HALTUNG_DAUER))) % ROM.HALTUNGEN.length];
   };
   /* Was ein Schlag austraegt: die Zerhacker-Rechnung der eigenen Truppe,
@@ -173,11 +191,11 @@
   };
   /* Schlagvorrat: alle sechs Sekunden einer, bis zu drei gesammelt. */
   ROM.vorrat = function (b, ev, now) {
-    var B = ROM.BOSS, n = ROM.dauer(ev, B.nachschub), stand = b && Number.isFinite(b.schlagStand) ? b.schlagStand : ROM.plan(ev).phasen[3].von - B.vorrat * n;
+    var B = ROM.BOSS, n = ROM.dauer(ev, B.nachschub), stand = b && Number.isFinite(b.schlagStand) ? b.schlagStand : ROM.plan(ev).phasen[ROM.P.imperator].von - B.vorrat * n;
     return Math.max(0, Math.min(B.vorrat, Math.floor((now - stand) / n)));
   };
   ROM.schlagVerbrauchen = function (b, ev, now) {
-    var B = ROM.BOSS, n = ROM.dauer(ev, B.nachschub), stand = Number.isFinite(b.schlagStand) ? b.schlagStand : ROM.plan(ev).phasen[3].von - B.vorrat * n;
+    var B = ROM.BOSS, n = ROM.dauer(ev, B.nachschub), stand = Number.isFinite(b.schlagStand) ? b.schlagStand : ROM.plan(ev).phasen[ROM.P.imperator].von - B.vorrat * n;
     b.schlagStand = Math.max(stand, now - B.vorrat * n) + n;
   };
 
@@ -191,7 +209,7 @@
   /* Eine Tanzrunde dauert immer zehn Sekunden, auch im Zeitraffer - sonst
      liesse sich die Folge dort gar nicht mehr nachtippen. */
   ROM.TANZ_RUNDE = 10000;
-  ROM.tanzRunde = function (ev, now) { return Math.floor((now - ROM.plan(ev).phasen[2].von) / ROM.TANZ_RUNDE); };
+  ROM.tanzRunde = function (ev, now) { return Math.floor((now - ROM.plan(ev).phasen[ROM.P.invasion].von) / ROM.TANZ_RUNDE); };
   /* Die Folge wird mit jeder dritten Runde laenger - hoechstens sieben. */
   ROM.tanzFolge = function (ev, runde) {
     var laenge = Math.min(7, 4 + Math.floor(Math.max(0, runde) / 3)), folge = [];
@@ -205,20 +223,43 @@
   /* Alle Lire der ersten drei Phasen fuellen die Mamma-Mia-Leiste. Das Ziel
      waechst mit der Zahl der Mitspieler. Ueber jede Schwelle kommt eine
      Ueberraschung; ist sie voll, schlaegt die Truppe den Boss haerter. */
-  ROM.LEISTE = { je: 25, min: 75, gold: 150 };
+  ROM.LEISTE = { je: 25, min: 75, gold: 300 };
   ROM.UEBERRASCHUNGEN = [
     { id: 'spaghetti', anteil: 1 / 3, name: 'Spaghetti-Regen', text: 'Fang die Nudeln!', fang: 5, dauer: 20000 },
     { id: 'vespa', anteil: 2 / 3, name: 'Vespa-Stampede', text: 'Pizzen auf Vespas! Tipp sie an!', fang: 5, dauer: 20000 },
-    { id: 'nonna', anteil: 1, name: 'Nonna Colossale', text: 'MANGIA! Mehr Kraft gegen den Imperator und 150 Gold für alle.' }
+    { id: 'nonna', anteil: 1, name: 'Nonna Colossale', text: 'MANGIA! Mehr Kraft gegen den Imperator und 300 Gold für alle.' }
   ];
   ROM.leisteZiel = function (teilnehmer) { return Math.max(ROM.LEISTE.min, ROM.LEISTE.je * teilnehmer); };
-  ROM.FANG = { spaghetti: 5, vespa: 5, muenzen: 10 };
-  ROM.STERN = { max: 5, abstand: 6000 };
+  ROM.FANG = { spaghetti: 5, vespa: 5, muenzen: 10, turbo: 20 };
+  /* Sternschnuppen fliegen das ganze Event ueber, vom Countdown bis zum
+     Brunnen. Gefangen zaehlen hoechstens zehn. */
+  ROM.STERN = { max: 10, abstand: 6000 };
   ROM.MUENZE = 3;
 
+  /* ---------------------------------------------------- Kaeseregen */
+  /* Ist Mozzarellus geschmolzen, regnet es bis zum Ende seiner Phase Kaese:
+     zwei Gold je Sekunde fuer jeden, der dabei ist - echte Sekunden, auch im
+     Zeitraffer. Der Browser meldet sich alle paar Sekunden; mehr als acht
+     Sekunden am Stueck zaehlen nicht, wer weg ist, bekommt nichts. */
+  ROM.KAESE = { goldProSekunde: 2, takt: 4000, hoechstens: 8000 };
+  ROM.kaeseFenster = function (ev) {
+    if (!ev || !Number.isFinite(ev.bossBesiegtAm)) return null;
+    return { von: ev.bossBesiegtAm, bis: ROM.plan(ev).phasen[ROM.P.imperator].bis };
+  };
+
+  /* ------------------------------------------------ Eier im Trevi */
+  /* Waehrend der Brunnen explodiert, springen nacheinander sechs ganz normale
+     Eier heraus. Jedes bleibt bis zum Ende der Phase liegen - wer dabei ist,
+     bekommt alle sechs. */
+  ROM.EIER = { anzahl: 6 };
+  ROM.eiZeit = function (ev, k) {
+    var g = ROM.plan(ev).phasen[ROM.P.trevi];
+    return g.von + (k + 0.35) * (g.bis - g.von) / ROM.EIER.anzahl;
+  };
+
   /* ------------------------------------------- Beitrag und Lage */
-  ROM.LIRE_MAX = 120;
-  ROM.leer = function () { return { lire: [0, 0, 0, 0, 0], stern: 0, schlaege: 0, schaden: 0, hp: 0 }; };
+  ROM.LIRE_MAX = 150;
+  ROM.leer = function () { return { lire: ROM.PHASEN.map(function () { return 0; }), stern: 0, schlaege: 0, schaden: 0, hp: 0 }; };
   /* Lire eines Beitrags, gedeckelt. */
   ROM.lire = function (b) {
     if (!b) return 0;
@@ -233,7 +274,7 @@
     Object.keys(alle || {}).forEach(function (pid) {
       var b = alle[pid]; if (!b) return;
       if (ROM.lire(b) > 0) teilnehmer++;
-      leiste += [0, 1, 2].reduce(function (s, i) { return s + (Number(b.lire && b.lire[i]) || 0); }, 0);
+      leiste += [ROM.P.wahnsinn, ROM.P.rebellion, ROM.P.invasion].reduce(function (s, i) { return s + (Number(b.lire && b.lire[i]) || 0); }, 0);
       schaden += Number(b.schaden) || 0; hp += Number(b.hp) || 0; if (b.letzter) letzter = true;
     });
     var ziel = ROM.leisteZiel(teilnehmer), max = hp ? ROM.BOSS.basis + hp : 0;
@@ -247,11 +288,16 @@
 
   /* ---------------------------------------------------- Belohnungen */
   ROM.STUFEN = [
-    { id: 'tourist', name: 'Tourist', zeichen: '🧳', ab: 10, gold: 200, romEi: true, text: '200 Gold und ein Rom-Ei (mindestens Legendär)' },
-    { id: 'gladiator', name: 'Gladiator', zeichen: '⚔️', ab: 40, gold: 300, runen: { rang: 3, anzahl: 3 }, text: '300 Gold und 3 Episch-Runen' },
-    { id: 'held', name: 'Held von Rom', zeichen: '🌿', ab: 75, gold: 250, titel: 'held_von_rom', text: '250 Gold und der Titel „Held von Rom“' }
+    { id: 'tourist', name: 'Tourist', zeichen: '🧳', ab: 10, gold: 300, romEi: true, text: '300 Gold und ein Rom-Ei (mindestens Legendär)' },
+    { id: 'gladiator', name: 'Gladiator', zeichen: '⚔️', ab: 40, gold: 500, runen: { rang: 3, anzahl: 5 }, text: '500 Gold und 5 Episch-Runen' },
+    { id: 'held', name: 'Held von Rom', zeichen: '🌿', ab: 75, gold: 600, runen: { rang: 5, anzahl: 2 }, titel: 'held_von_rom', text: '600 Gold, 2 Mythisch-Runen und der Titel „Held von Rom“' },
+    { id: 'legende', name: 'Legende von Rom', zeichen: '👑', ab: 110, gold: 800, perle: true, titel: 'legende_von_rom', text: '800 Gold, eine Schimmerperle und der Titel „Legende von Rom“' }
   ];
   ROM.MOZZARINO = { id: 'mozzarino', stufe: 'gladiator', schlaege: 5 };
+  /* Wer Mozzarellus mindestens einmal getroffen hat, bekommt bei seinem Sieg
+     noch Gold obendrauf. Eine schon vorhandene Schimmerperle wird zu Gold. */
+  ROM.BOSS_GOLD = 250;
+  ROM.PERLE_GOLD = 1000;
   /* Wer was bekommt. Wird das Event nach dem Countdown abgebrochen, reicht
      fuer den Touristen eine einzige Lira - wer mitgemacht hat, soll nicht
      leer ausgehen, weil der CEO abbricht. */
@@ -259,17 +305,23 @@
     var lire = ROM.lire(b), abgebrochen = !!(ev && ev.abgebrochenAm && ev.abgebrochenAm < ROM.plan(ev).ende);
     var stufen = ROM.STUFEN.filter(function (s, i) { return lire >= (i === 0 && abgebrochen ? 1 : s.ab); });
     var ids = stufen.map(function (s) { return s.id; }), tourist = ids.indexOf('tourist') >= 0;
-    var out = { lire: lire, stufen: ids, gold: 0, runen: {}, romEi: false, mozzarino: false, titel: [], leiste: !!(lage && lage.leisteVoll && tourist),
-      boss: !!(lage && lage.bossBesiegt), schlaege: (b && b.schlaege) || 0, abgebrochen: abgebrochen };
+    var out = { lire: lire, stufen: ids, gold: 0, runen: {}, romEi: false, mozzarino: false, perle: false, titel: [], leiste: !!(lage && lage.leisteVoll && tourist),
+      boss: !!(lage && lage.bossBesiegt), schlaege: (b && b.schlaege) || 0, abgebrochen: abgebrochen,
+      /* Kaesegold und Trevi-Eier gibt es auch unterhalb des Touristen: sie
+         wurden Sekunde fuer Sekunde und Ei fuer Ei verdient. */
+      kaese: Math.max(0, Math.floor(Number(b && b.kaeseGold) || 0)),
+      eier: Math.min(ROM.EIER.anzahl, Array.isArray(b && b.eier) ? b.eier.length : 0), bossGold: 0 };
     stufen.forEach(function (s) {
       out.gold += s.gold;
       if (s.romEi) out.romEi = true;
+      if (s.perle) out.perle = true;
       if (s.runen) out.runen[s.runen.rang] = (out.runen[s.runen.rang] || 0) + s.runen.anzahl;
       if (s.titel) out.titel.push(s.titel);
     });
     if (out.leiste) out.gold += ROM.LEISTE.gold;
     if (out.boss && ids.indexOf(ROM.MOZZARINO.stufe) >= 0 && out.schlaege >= ROM.MOZZARINO.schlaege) out.mozzarino = true;
-    if (out.boss && out.schlaege >= 1) out.titel.push('mozzarella_bezwinger');
+    if (out.boss && out.schlaege >= 1) { out.titel.push('mozzarella_bezwinger'); out.bossGold = ROM.BOSS_GOLD; out.gold += ROM.BOSS_GOLD; }
+    out.gold += out.kaese;
     return out;
   };
   /* Welche Stufe als naechste kommt - fuer die Anzeige. */
@@ -308,27 +360,33 @@
   /* ------------------------------------------ Titel und Bilanz */
   X.TITEL.push(
     { id: 'held_von_rom', name: 'Held von Rom', was: 'Rom-Events als Held beendet', ziel: 1, wert: function (p) { return (p.rom && p.rom.held) || 0; } },
-    { id: 'mozzarella_bezwinger', name: 'Mozzarella-Bezwinger', was: 'Imperatore Mozzarellus besiegt', ziel: 1, wert: function (p) { return (p.rom && p.rom.boss) || 0; } }
+    { id: 'mozzarella_bezwinger', name: 'Mozzarella-Bezwinger', was: 'Imperatore Mozzarellus besiegt', ziel: 1, wert: function (p) { return (p.rom && p.rom.boss) || 0; } },
+    { id: 'legende_von_rom', name: 'Legende von Rom', was: 'Rom-Events als Legende beendet', ziel: 1, wert: function (p) { return (p.rom && p.rom.legende) || 0; } }
   );
   E.BILANZ_REIN.rom = 'Rom-Event';
 
   /* ---------------------------------------------- Spielstand */
   function ganz(v, max) { var n = Math.floor(Number(v)); return Number.isFinite(n) && n > 0 ? Math.min(max, n) : 0; }
-  var ERGEBNISSE = { ei: ['tasche', 'warte', 'gold'], mozzarino: ['neu', 'stufe', 'runen'] };
+  var ERGEBNISSE = { ei: ['tasche', 'warte', 'gold'], mozzarino: ['neu', 'stufe', 'runen'], perle: ['neu', 'gold'] };
+  var TITEL_ROM = ['held_von_rom', 'mozzarella_bezwinger', 'legende_von_rom'];
   function letztesSauber(l) {
     if (!l || typeof l !== 'object' || typeof l.ev !== 'string') return null;
     var runen = {};
     Object.keys(l.runen || {}).forEach(function (r) { var n = ganz(l.runen[r], 99); if (n && D.SELTENHEITEN[r]) runen[r] = n; });
     return { ev: l.ev.slice(0, 60), t: Number(l.t) || 0, lire: ganz(l.lire, ROM.LIRE_MAX), gold: ganz(l.gold, 100000), runen: runen,
       stufen: ROM.STUFEN.map(function (s) { return s.id; }).filter(function (id) { return (l.stufen || []).indexOf(id) >= 0; }),
-      titel: ['held_von_rom', 'mozzarella_bezwinger'].filter(function (id) { return (l.titel || []).indexOf(id) >= 0; }),
+      titel: TITEL_ROM.filter(function (id) { return (l.titel || []).indexOf(id) >= 0; }),
       ei: ERGEBNISSE.ei.indexOf(l.ei) >= 0 ? l.ei : null, mozzarino: ERGEBNISSE.mozzarino.indexOf(l.mozzarino) >= 0 ? l.mozzarino : null,
+      perle: ERGEBNISSE.perle.indexOf(l.perle) >= 0 ? l.perle : null,
+      /* Wohin die Trevi-Eier gingen: in die Tasche, in die Warteschlange oder als Gold. */
+      eier: { tasche: ganz(l.eier && l.eier.tasche, 6), warte: ganz(l.eier && l.eier.warte, 6), gold: ganz(l.eier && l.eier.gold, 6) },
+      kaese: ganz(l.kaese, 100000), bossGold: ganz(l.bossGold, 100000),
       leiste: l.leiste === true, boss: l.boss === true, abgebrochen: l.abgebrochen === true, vorschau: l.vorschau === true };
   }
   var vorher = D.neuerStand;
   D.neuerStand = function (save, now) {
     var p = vorher(save, now), r = (save && save.rom) || {};
-    p.rom = { held: ganz(r.held, 9999), boss: ganz(r.boss, 9999), letztes: letztesSauber(r.letztes) };
+    p.rom = { held: ganz(r.held, 9999), boss: ganz(r.boss, 9999), legende: ganz(r.legende, 9999), letztes: letztesSauber(r.letztes) };
     return p;
   };
 })(SG);

@@ -59,9 +59,9 @@
   RS.reiter = function (ziel) {
     var ROM = rom();
     if (!ROM) { ziel.appendChild(UI.empty('🇮🇹', 'GehstockMon fehlt', 'Ohne die Spieldaten lässt sich kein Event starten.')); return; }
-    var stand = null, uhr = null, abstand = 0;
+    var stand = null, uhr = null, abstand = 0, VORBEI = ROM.VORBEI, MINUTEN = Math.round(ROM.DAUER / 60000);
     var kasten = UI.el('div.rs-kasten');
-    ziel.appendChild(UI.el('p.small.muted', { text: 'ROMA È FINITA – der große Pizzaputsch. 12 Minuten Rom in GehstockMon für alle '
+    ziel.appendChild(UI.el('p.small.muted', { text: 'ROMA È FINITA – der große Pizzaputsch. ' + MINUTEN + ' Minuten Rom in GehstockMon für alle '
       + 'Spieler derselben Welt, egal über welche Adresse, mit echten Belohnungen. Nur du als CEO kannst es starten.' }));
     ziel.appendChild(kasten);
 
@@ -77,11 +77,11 @@
        auf dem iPad verloren - und der Stand kommt alle vier Sekunden. */
     var signatur = null, text = {};
     function zeichnen(fehler) {
-      var jetzt = Date.now() + abstand, ev = stand && stand.event, ph = ev ? ROM.phase(ev, jetzt) : null, laeuft = !!(ph && ph.nr < 5);
-      var sig = JSON.stringify([fehler || '', !!stand, stand && stand.dev, laeuft, ev && ev.id, !!(ph && ph.nr === 5), stand && stand.gesperrtBis, stand && stand.startbar, stand && stand.grund]);
+      var jetzt = Date.now() + abstand, ev = stand && stand.event, ph = ev ? ROM.phase(ev, jetzt) : null, laeuft = !!(ph && ph.nr < VORBEI);
+      var sig = JSON.stringify([fehler || '', !!stand, stand && stand.dev, laeuft, ev && ev.id, !!(ph && ph.nr === VORBEI), stand && stand.gesperrtBis, stand && stand.startbar, stand && stand.grund]);
       if (sig !== signatur) { signatur = sig; aufbauen(fehler, ev, ph, laeuft); }
       if (laeuft) {
-        text.titel.textContent = (ev.vorschau ? '🧪 Vorschau · ' : '🇮🇹 ') + (ph.nr < 0 ? 'Countdown' : 'Phase ' + (ph.nr + 1) + ' von 5: ' + ROM.PHASEN[ph.nr].name);
+        text.titel.textContent = (ev.vorschau ? '🧪 Vorschau · ' : '🇮🇹 ') + (ph.nr < 0 ? 'Countdown' : 'Phase ' + (ph.nr + 1) + ' von ' + ROM.PHASEN.length + ': ' + ROM.PHASEN[ph.nr].name);
         text.zeit.textContent = 'Noch ' + dauer(ROM.ende(ev) - jetzt) + ' · Ende gegen ' + uhrzeit(ROM.ende(ev)) + ' Uhr · gestartet von ' + (ev.von || 'CEO') + (ev.faktor > 1 ? ' · Zeitraffer ×' + ev.faktor : '');
         text.lage.textContent = '👥 ' + ev.teilnehmer + ' dabei · 🍝 Leiste ' + ev.leiste.wert + '/' + ev.leiste.ziel + (ev.leiste.voll ? ' (voll)' : '')
           + ' · 👑 ' + (ev.boss.besiegt ? 'Mozzarellus besiegt' : ev.boss.max ? 'Mozzarellus ' + ev.boss.hp + '/' + ev.boss.max : 'Mozzarellus noch unberührt');
@@ -103,7 +103,7 @@
         kasten.appendChild(UI.el('p.small.muted', { text: 'Beim Abbruch wird alles bisher Verdiente ausgezahlt. Im Countdown abgebrochen zählt das Event nicht als Event dieser Woche.' }));
         return;
       }
-      if (ev && ph && ph.nr === 5) { text.letztes = UI.el('div.rs-karte'); kasten.appendChild(text.letztes); }
+      if (ev && ph && ph.nr === VORBEI) { text.letztes = UI.el('div.rs-karte'); kasten.appendChild(text.letztes); }
       if (stand.gesperrtBis) kasten.appendChild(UI.el('div.rs-karte.bad', { text: '🔒 Zu viele falsche PINs - wieder möglich ab ' + uhrzeit(stand.gesperrtBis) + ' Uhr.' }));
       var start = UI.btn('🇮🇹 Rom-Event starten', function () { starten(false); }, 'primary rs-start');
       start.disabled = !stand.startbar;
@@ -112,9 +112,10 @@
       kasten.appendChild(UI.btn('🧪 Vorschau in der Testzone', function () { starten(true); }, 'ghost'));
       kasten.appendChild(UI.el('p.small.muted', { text: 'Die Vorschau läuft in der Developer-Testzone im Zeitraffer: dieselbe Show, aber ohne echte Belohnungen und ohne die echte Spielerwelt zu berühren.' }));
       kasten.appendChild(UI.kv([
-        ['Dauer', '1 Minute Countdown + 12 Minuten, 5 Phasen'],
-        ['Belohnung', 'ab 10 Lire: 200 Gold + Rom-Ei (mind. Legendär) · ab 40: +300 Gold, 3 Episch-Runen · ab 75: +250 Gold, Titel'],
-        ['Gemeinsam', 'volle Mamma-Mia-Leiste: +150 Gold · Mozzarellus besiegt: Centurio Mozzarino für Gladiatoren'],
+        ['Dauer', '1 Minute Countdown + ' + MINUTEN + ' Minuten, ' + ROM.PHASEN.length + ' Phasen'],
+        ['Stufen', ROM.STUFEN.map(function (st) { return 'ab ' + st.ab + ' Lire: ' + st.text; }).join(' · ')],
+        ['Dazu', 'Käseregen ' + ROM.KAESE.goldProSekunde + ' Gold pro Sekunde · ' + ROM.EIER.anzahl + ' Eier aus dem Trevi-Brunnen · ' + ROM.BOSS_GOLD + ' Siegesgold für jeden, der Mozzarellus getroffen hat'],
+        ['Gemeinsam', 'volle Mamma-Mia-Leiste: +' + ROM.LEISTE.gold + ' Gold · Mozzarellus besiegt: Centurio Mozzarino für Gladiatoren'],
         ['Grenzen', 'ein echtes Event pro Woche, nur während der Öffnungszeiten'],
       ]));
     }
@@ -124,14 +125,15 @@
       var jetzt = Date.now() + abstand;
       var pin = UI.el('input.code-input', { type: 'password', inputMode: 'numeric', autocomplete: 'off', placeholder: 'Event-PIN', maxLength: 12 });
       var faktor = UI.el('select.rs-select');
-      faktoren.forEach(function (f) { faktor.appendChild(UI.el('option', { value: String(f), text: f === 1 ? 'Echtzeit (13 Minuten)' : 'Zeitraffer ×' + f + ' (' + Math.round(13 / f * 10) / 10 + ' Minuten)' })); });
+      var gesamtMin = ROM.GESAMT / 60000;
+      faktoren.forEach(function (f) { faktor.appendChild(UI.el('option', { value: String(f), text: f === 1 ? 'Echtzeit (' + gesamtMin + ' Minuten)' : 'Zeitraffer ×' + f + ' (' + Math.round(gesamtMin / f * 10) / 10 + ' Minuten)' })); });
       var ansage = UI.el('input', { type: 'checkbox', checked: !vorschau });
       var fehler = UI.el('p.small.rs-fehler');
       var teile = [
         UI.el('p', { text: vorschau
           ? 'Startet ROMA È FINITA in der Developer-Testzone. Dort landen nur Admins, die die Testzone betreten - Belohnungen gibt es nur zum Anschauen.'
           : 'ROMA È FINITA startet in 60 Sekunden für alle Spieler der GehstockMon-Welt - egal über welche Adresse sie spielen. '
-            + 'Dauer 12 Minuten, Ende gegen ' + uhrzeit(jetzt + ROM.GESAMT) + ' Uhr. Die Belohnungen sind echt, und es zählt als Event dieser Woche.' }),
+            + 'Dauer ' + MINUTEN + ' Minuten, Ende gegen ' + uhrzeit(jetzt + ROM.GESAMT) + ' Uhr. Die Belohnungen sind echt, und es zählt als Event dieser Woche.' }),
       ];
       if (faktoren.length > 1) teile.push(UI.el('label.rs-zeile', null, [UI.el('span', { text: 'Tempo' }), faktor]));
       if (pinNoetig) teile.push(UI.el('label.rs-zeile', null, [UI.el('span', { text: 'Event-PIN' }), pin]));
