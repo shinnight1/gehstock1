@@ -23,7 +23,7 @@
       titel: 'Der Glücksautomat',
       text: function () {
         var a = X.AUTOMAT;
-        return 'Beim Händler am Arenaplatz steht jetzt ein Glücksautomat. Ein Spiel kostet ' + a.einsatz + ' Gold, drei Eier auf den Walzen bringen ein Ei - mit ' + String(a.chance * 100).replace('.', ',') + ' % Chance, höchstens ' + a.proTag + ' am Tag.';
+        return 'Beim Händler am Arenaplatz steht jetzt ein Glücksautomat. Ein Spiel kostet ' + a.einsatz + ' Gold, drei Eier auf den Walzen bringen ein Ei - höchstens ' + a.proTag + ' am Tag.';
       },
       knopf: 'Ausprobieren', ziel: 'automat' }
   ];
