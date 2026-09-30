@@ -184,6 +184,46 @@ function eigenesUebernehmen(bestand, eingang, code) {
   return ziel;
 }
 
+/* Wer CEO (intern owner) und wer Aufsichtsrat ist, entscheidet der Server
+   nach denselben Regeln wie der Browser (src/core/auth.js: A.ownerSetzen,
+   A.ownerAbsetzen, A.aufsichtSetzen, A.aufsichtUmstellen). Bis September
+   2026 durfte jeder Admin-Code die ganze Verwaltung schreiben und sich
+   damit am Browser vorbei selbst zum CEO machen. Das Rom-Event
+   (lib/gehstockmon-rom.mjs) verlaesst sich darauf, dass owner stimmt.
+
+     Aufsichtsrat   setzt den CEO ein, setzt ihn ab, gibt seinen Stuhl weiter
+     CEO            gibt seinen Stuhl weiter
+     jeder Admin    besetzt einen Stuhl, solange er frei ist - den des CEO
+                    nur, solange es auch keinen Aufsichtsrat gibt
+
+   Beide Stuehle gehen nur an Admin-Codes und nie an dieselbe Person. Was
+   nicht erlaubt ist, bleibt einfach, wie es war - wie bei einem Nicht-
+   Admin, der fremde Profile mitschickt. */
+const leitungsCode = (c) => String(c || '').replace(/\D/g, '').slice(0, 4);
+function leitungSchuetzen(bestand, daten, code) {
+  const alt = { owner: leitungsCode(bestand.owner), aufsicht: leitungsCode(bestand.aufsicht) };
+  const wunsch = { owner: leitungsCode(daten.owner), aufsicht: leitungsCode(daten.aufsicht) };
+  const admin = (c) => !!c && rolleVonCode(c) === 'A';
+  let owner = alt.owner, aufsicht = alt.aufsicht;
+  const umstellung = !bestand.aufsichtUmstellung && !!daten.aufsichtUmstellung;
+  if (umstellung && alt.owner && !alt.aufsicht && wunsch.aufsicht === alt.owner && !wunsch.owner) {
+    /* Die einmalige Umstellung: der bisherige Owner rueckt in den Aufsichtsrat. */
+    owner = ''; aufsicht = alt.owner;
+  } else {
+    if (wunsch.aufsicht !== alt.aufsicht && admin(wunsch.aufsicht) && wunsch.aufsicht !== alt.owner
+      && (!alt.aufsicht || alt.aufsicht === code)) aufsicht = wunsch.aufsicht;
+    if (wunsch.owner !== alt.owner && (!wunsch.owner || admin(wunsch.owner)) && wunsch.owner !== aufsicht) {
+      if (alt.aufsicht && alt.aufsicht === code) owner = wunsch.owner;
+      else if (wunsch.owner && !alt.owner && !alt.aufsicht) owner = wunsch.owner;
+      else if (wunsch.owner && alt.owner && alt.owner === code) owner = wunsch.owner;
+    }
+  }
+  daten.owner = owner;
+  daten.aufsicht = aufsicht;
+  if (bestand.aufsichtUmstellung) daten.aufsichtUmstellung = bestand.aufsichtUmstellung;
+  return daten;
+}
+
 function store() {
   return speicher('hgh-rooms');
 }
@@ -1018,7 +1058,7 @@ async function verwaltung(st, op, msg) {
          alle anderen duerfen ausschliesslich ihren eigenen Namen und
          ihr eigenes Geraet schreiben. */
       const daten = rolle === 'A'
-        ? verwaltungEntschaerfen(eingang)
+        ? leitungSchuetzen(bestand, verwaltungEntschaerfen(eingang), code)
         : eigenesUebernehmen(bestand, eingang, code);
       return { version: ((roh && roh.version) || 0) + 1, daten, t: Date.now() };
     });

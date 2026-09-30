@@ -10,6 +10,7 @@ import {tickern,tickerSicht,alltagSicht,alltagAction,morgenbericht} from './lib/
 import {duellAction,duelleAbrechnen,duellSicht,duellEinladung,imDuellKampf} from './lib/gehstockmon-duell.mjs';
 import {abgabeSatz,abgabeEinzahlen,kurierPflegen,handelSicht,handelAction} from './lib/gehstockmon-handel.mjs';
 import {effekt,inselWoche,inselSicht,inselAction,amtTitel} from './lib/gehstockmon-insel.mjs';
+import {romAktion,romSteuern,romPresenz,romAbrechnen,romEiRang} from './lib/gehstockmon-rom.mjs';
 
 const KEY = 'world-v2';
 /* ------------------------------------------------------------------
@@ -72,10 +73,13 @@ class GameError extends Error { constructor(message, status = 400) { super(messa
 function adminBypass(body) {
   return body && body.adminOverride === true && body.adminCode === '3141' && roleForCode(body.code) === 'A';
 }
+/* Im Entwicklungsserver ist die Insel immer offen. */
+const entwicklung = () => process.env.GEHSTOCK_DEV === '1';
 const JAHR = 365 * 24 * 60 * 60 * 1000;
 function accessFor(timestamp, bypass, tor = 'auto') {
   const access = H.access(timestamp);
   if (bypass) return { ...access, open: true, adminOverride: true, closesAt: timestamp + JAHR };
+  if (entwicklung()) return { ...access, open: true, dev: true, closesAt: timestamp + JAHR };
   /* Das Tor steht ueber den Schulzeiten - in beide Richtungen. Zu heisst
      zu, auch mitten am Schultag; auf heisst auf, auch am Wochenende. */
   if (tor === 'zu') return { ...access, open: false, torZu: true, closesAt: null, nextOpenAt: null };
@@ -369,7 +373,7 @@ async function zumStart({ world, p, id, now, presence }) {
   p.startSprungAt = now;
   return { startSprung: { ...ort }, message: 'Du stehst wieder am Start. Das nächste Mal geht es in ' + Math.round(X.START_SPRUNG_PAUSE / 60000) + ' Minuten.' };
 }
-async function updatePresence(db, world, id, position, timestamp, clock, bypass = false, bild = 0, tor = 'auto') {
+async function updatePresence(db, world, id, position, timestamp, clock, bypass = false, bild = 0, tor = 'auto', zusatz = {}) {
   const p = world.players[id];
   if (!p) throw new GameError('Betritt zuerst die Spielerwelt.',409);
   if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.z) || !Number.isFinite(position.heading)
@@ -390,13 +394,13 @@ async function updatePresence(db, world, id, position, timestamp, clock, bypass 
     if(layout.some(g=>g.ownerId!==id&&X.inside(from,g)))from=X.outside(from,layout);
     const credit=previous?Math.min(LAUF_VORRAT,(previous.credit||0)+Math.max(0,timestamp-previous.updatedAt)/1000*LAUF_TEMPO):LAUF_VORRAT,distance=Math.hypot(position.x-from.x,position.z-from.z);
     const route=distance<=credit+.05&&!(zurueckgestellt&&distance>0.5)?X.route(layout,from,position,id,credit+.05):null;
-    if(!route)return json({serverTime:timestamp,access:accessFor(timestamp,bypass,tor),position:{x:from.x,z:from.z,heading:from.heading||0},positionCorrected:true,peers:peers()});
+    if(!route)return json({serverTime:timestamp,access:accessFor(timestamp,bypass,tor),position:{x:from.x,z:from.z,heading:from.heading||0},positionCorrected:true,peers:peers(),...zusatz});
     let traveled=0,cursor=from;for(const point of route){traveled+=Math.hypot(point.x-cursor.x,point.z-cursor.z);cursor=point;}
     const eintrag=!players[id]||players[id].updatedAt<=timestamp?{ id, name:p.name, x:Math.round(position.x*100)/100, z:Math.round(position.z*100)/100,
       heading:position.heading, activity:activeArena(p)||activeDuel(p)||activeDungeon(world,p)||imDuellKampf(world,p,id)?'arena':'map', updatedAt:timestamp,spawnAt:p.lastJoinAt,credit:Math.max(0,credit-traveled),skin:p.skin,weapon:p.weapon,squad:p.truppe.slice(),protected:X.protected(p,timestamp),eier:p.eggs.length,champion:world.champion?.id===id,titel:amtTitel(world,id,timestamp)||X.titelName(p),...(bild?{bild}:{}) }:null;
     requireOpen(clock(), bypass, tor);
     /* Eine Duell-Einladung muss schnell ankommen - die Anwesenheit laeuft alle paar Sekunden, die Weltabfrage nur alle dreissig. */
-    if(await anwesenheitSchreiben(db,stand,id,eintrag,weg))return json({serverTime:timestamp,access:accessFor(timestamp,bypass,tor),peers:peers(),duellEinladung:duellEinladung(world,p,id,timestamp)});
+    if(await anwesenheitSchreiben(db,stand,id,eintrag,weg))return json({serverTime:timestamp,access:accessFor(timestamp,bypass,tor),peers:peers(),duellEinladung:duellEinladung(world,p,id,timestamp),...zusatz});
     await pause(attempt);
   }
   throw new GameError('Die Mitspieler werden gerade aktualisiert.',409);
@@ -492,8 +496,15 @@ function settleBattle(world, p, id, now, requestId) {
 }
 
 /* Each turn, egg and upgrade is authoritative and atomically persisted. */
-export function createHandler({ store, presenceStore, verwStore, now = Date.now, random = Math.random, sandbox = false } = {}) {
+/* verwaltungStore, romPin und romDev gibt es nur fuer die Tests: ohne sie
+   liest das Rom-Event den CEO aus der Verwaltung auf dem Relais, die PIN aus
+   GEHSTOCK_ROM_PIN_HASH und den Entwicklungsmodus aus GEHSTOCK_DEV. */
+export function createHandler({ store, presenceStore, verwStore, now = Date.now, random = Math.random, sandbox = false, verwaltungStore, romPin, romDev } = {}) {
   let sharedSandbox = null;
+  const romBasis = { verwaltung: verwaltungStore || { get: (...a) => speicher('hgh-rooms').get(...a) },
+    pin: romPin !== undefined ? romPin : (process.env.GEHSTOCK_ROM_PIN_HASH || ''), dev: romDev !== undefined ? !!romDev : entwicklung(),
+    sandbox, random, rolle: roleForCode };
+  const romCtx = (db) => ({ ...romBasis, db, presence: presenceStore || speicher('hgh-gehstockmon-presence') });
   /* Kurzes Gedaechtnis fuer die Anwesenheit, siehe unten bei op 'presence'. */
   let weltMerker = null;
   const WELT_FRISCH = 5000;
@@ -523,7 +534,7 @@ export function createHandler({ store, presenceStore, verwStore, now = Date.now,
   }
   function sandboxHandler(timestamp) {
     if (!sharedSandbox || timestamp - sharedSandbox.lastUsed >= SANDBOX_IDLE) {
-      sharedSandbox = { lastUsed: timestamp, handler: createHandler({ store: volatileStore(), presenceStore: volatileStore(), now, random, sandbox: true }) };
+      sharedSandbox = { lastUsed: timestamp, handler: createHandler({ store: volatileStore(), presenceStore: volatileStore(), now, random, sandbox: true, verwaltungStore, romPin, romDev }) };
     }
     sharedSandbox.lastUsed = timestamp;
     return sharedSandbox.handler;
@@ -535,7 +546,7 @@ export function createHandler({ store, presenceStore, verwStore, now = Date.now,
       const raw = await request.text(); if (raw.length > 240000) throw new GameError('Anfrage zu groß.', 413);
       let body; try { body = JSON.parse(raw); } catch { throw new GameError('Ungültige Anfrage.'); }
       if (!body || !validCode(body.code)) throw new GameError('Bitte melde dich im Hideout an.', 401);
-      if (!['join','world','presence','kampfbericht',...ADMIN_OPS,...mutations].includes(body.op)) throw new GameError('Diese Spielaktion wird nicht mehr unterstützt. Lade das Spiel neu.');
+      if (!['join','world','presence','kampfbericht','rom_steuern','rom_aktion',...ADMIN_OPS,...mutations].includes(body.op)) throw new GameError('Diese Spielaktion wird nicht mehr unterstützt. Lade das Spiel neu.');
       if (mutations.includes(body.op) && (typeof body.requestId !== 'string' || body.requestId.length < 8 || body.requestId.length > 80)) throw new GameError('Aktionskennung fehlt.');
       const id = createHash('sha256').update('gehstockmon-player:' + body.code).digest('hex').slice(0, 24), timestamp = now();
       const bypass = adminBypass(body);
@@ -572,10 +583,19 @@ export function createHandler({ store, presenceStore, verwStore, now = Date.now,
         return json({ serverTime: timestamp, tor: modus, von: neu.von, t: neu.t,
           access: accessFor(timestamp, false, modus) });
       }
-      requireOpen(timestamp, bypass || verwaltung, tor.modus);
+      requireOpen(timestamp, bypass || verwaltung || body.op === 'rom_steuern', tor.modus);
       if(body.adminOverride===true&&!bypass)throw new GameError('Die Testzone benötigt ein echtes Admin-Konto und den richtigen Testcode.',403);
       const name = typeof body.name === 'string' ? body.name.trim().replace(/[\u0000-\u001f]/g, '').slice(0, 30) : '';
       const db = store || speicher('hgh-gehstockmon'), draw = random();
+      /* Das Rom-Event (lib/gehstockmon-rom.mjs): Steuern nur fuer den CEO,
+         Aktionen schreiben nur den eigenen Beitrag - nie die ganze Welt. */
+      if (body.op === 'rom_steuern' || body.op === 'rom_aktion') {
+        try {
+          if (body.op === 'rom_steuern') return json({ serverTime: timestamp, ...await romSteuern(romCtx(db), { body, code: body.code, id, name, now: timestamp }) });
+          const welt = await presenzWelt(db, id, timestamp);
+          return json(await romAktion(romCtx(db), { body, id, world: welt, p: welt.players[id], now: timestamp }));
+        } catch (err) { if (err && err.romFehler) throw new GameError(err.message, err.status); throw err; }
+      }
       if (body.op === 'kampfbericht') {
         /* Nur lesen, und nur fuer die beiden, die gekaempft haben - genau die
            bekommen den Bericht auch in ihrer Liste. */
@@ -594,17 +614,22 @@ export function createHandler({ store, presenceStore, verwStore, now = Date.now,
            haelt es deshalb kurz fest; erst wenn der Spieler darin fehlt
            (er ist gerade erst beigetreten), wird sofort neu gelesen. */
         const welt=await presenzWelt(db,id,timestamp);
+        /* Der Stand des Rom-Events reist mit der Positionsmeldung - kein eigener Abfragetakt. */
+        const rom=await romPresenz(romCtx(db),id,timestamp);
         /* Die Version des Profilbilds (Uhrzeit des Hochladens) reist mit:
            so holen die anderen ein neues Bild genau einmal. Das Bild selbst
            liegt im Relais (room.mjs, profilbild:*). */
         const bild=Number.isSafeInteger(body.bild)&&body.bild>0?body.bild:0;
-        return await updatePresence(presenceStore||speicher('hgh-gehstockmon-presence'),welt,id,body.position,timestamp,now,bypass,bild,tor.modus);
+        return await updatePresence(presenceStore||speicher('hgh-gehstockmon-presence'),welt,id,body.position,timestamp,now,bypass,bild,tor.modus,rom?{rom}:{});
       }
       const zuletzt = body.op === 'join' ? await eigenerEintrag(presenceStore || speicher('hgh-gehstockmon-presence'), id) : null;
       for (let attempt = 0; attempt < 8; attempt++) {
         const entry = await db.getWithMetadata(KEY, { type: 'json', consistency: 'strong' });
         const world = entry ? clone(entry.data) : initialWorld(timestamp);
         migrateAndSettle(world, timestamp);
+        /* Ein beendetes Rom-Event wird im selben Schreibvorgang abgerechnet -
+           genau einmal, auch bei mehreren Tabs oder wiederholten Anfragen. */
+        try { await romAbrechnen(romCtx(db), world, timestamp); } catch (err) { console.error('Rom-Abrechnung verschoben:', err.message); }
         /* Verwaltung laeuft vor allem anderen ab: Der Admin muss die
            Spielerwelt nie selbst betreten haben, um sie zu verwalten. */
         if (body.op === 'admin_log') return json({ serverTime: timestamp, schenkungen: schenkungen(world) });
@@ -801,6 +826,9 @@ export function createHandler({ store, presenceStore, verwStore, now = Date.now,
             /* Seltenheit, Mon, Schimmer und Wesen sind vier eigene Ziehungen.
                Frueher bestimmte eine einzige Zahl Mon und Wesen zugleich, und
                dasselbe Mon kam damit fast immer mit demselben Wesen. */
+            /* Ein Rom-Ei wuerfelt seine Seltenheit erst jetzt (lib/gehstockmon-rom.mjs). */
+            const romEi = p.eggs.find((e) => e.id === body.eggId && e.art === 'rom');
+            if (romEi) romEi.festRang = romEiRang(p, random);
             const schlupf = E.hatch(p,body.eggId,timestamp,random), mon = schlupf.mon;
             /* Die Schimmerperle aus Stockhafen wirkt auf das naechste Mon, das
                noch nicht schimmert - schimmert es schon, bleibt sie liegen. */

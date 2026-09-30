@@ -303,9 +303,14 @@
     var gewuerfelt = rang, stand = E.garantieStand(st), boden = Math.max(0, Math.floor(Number(egg.mindestens) || 0));
     E.GARANTIEN.forEach(function (g, i) { if (stand[i].seit >= g.nach - 1) boden = Math.max(boden, g.ab); });
     rang = Math.max(rang, Math.min(boden, D.SELTENHEITEN.length - 1));
+    /* Ein Rom-Ei bringt seine Seltenheit schon mit: der Server wuerfelt sie
+       unmittelbar vor dem Schluepfen (lib/gehstockmon-rom.mjs). */
+    if (Number.isInteger(egg.festRang)) gewuerfelt = rang = Math.max(0, Math.min(D.SELTENHEITEN.length - 1, egg.festRang));
     st.garantie = E.GARANTIEN.map(function (g, i) { return rang >= g.ab ? 0 : stand[i].seit + 1; });
+    /* Event-Mons stehen nicht im Katalog - aus einem Rom-Ei koennen sie trotzdem kommen. */
+    var extra = egg.art === 'rom' && D.EVENT_MONS ? D.EVENT_MONS : [];
     var pool = [];
-    for (var r = rang; r >= 0 && !pool.length; r--) pool = D.KATALOG.filter(function (k) { return k.seltenheit === r; });
+    for (var r = rang; r >= 0 && !pool.length; r--) pool = D.KATALOG.concat(extra).filter(function (k) { return k.seltenheit === r; });
     var mon = pool[Math.min(pool.length - 1, Math.floor(zufall() * pool.length))];
     var ergebnis = { mon: mon, neu: st.besitz.indexOf(mon.id) < 0, stufe: 0, runen: 0, rang: mon.seltenheit,
       garantiert: mon.seltenheit > gewuerfelt, schimmernd: zufall() < E.SCHIMMER_CHANCE, schimmerNeu: false };

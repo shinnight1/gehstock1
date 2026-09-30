@@ -3,7 +3,13 @@
    auf dem Handy, sonst Upstash aus server.env. Legt nie eine Ersatzwelt an.
 
    Entwicklung am PC (leere Welt im Arbeitsspeicher, vorher npm run build):
-     node tools/handy-server.mjs --dev [port] */
+     node tools/handy-server.mjs --dev [port]
+   Dort ist GehstockMon immer geoeffnet, und das Rom-Event startet ohne PIN,
+   Wochengrenze und Oeffnungszeit, auf Wunsch im Zeitraffer.
+
+   Die Event-PIN des Rom-Events steht auf dem Handy in
+   ~/.config/gehstock1/rom.env (anlegen mit node tools/rom-pin.mjs). Fehlt
+   die Datei, laesst sich das echte Event nicht starten. */
 import http from 'node:http';
 import { createReadStream } from 'node:fs';
 import { realpath, stat, access, readFile } from 'node:fs/promises';
@@ -141,6 +147,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
       /* Entwicklung: eigene, leere Welt im Arbeitsspeicher, nie die echte. */
       for (const k of ['REDIS_URL', 'REDIS_PASS', 'UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN', 'KV_REST_API_URL', 'KV_REST_API_TOKEN']) delete process.env[k];
       process.env.GEHSTOCK_SPEICHER = 'arbeitsspeicher';
+      process.env.GEHSTOCK_DEV = '1';
     } else if (await access(path.join(dir, 'redis-live')).then(() => true, () => false)) {
       /* Das Redis auf dem Handy ist die Spielerwelt - direkt, ohne Upstash. */
       const env = parseEnv(await readFile(path.join(dir, 'redis.env'), 'utf8'));
@@ -153,6 +160,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
       const zugang = await zugangLesen(process.argv[2] || path.join(dir, 'server.env'));
       zugangSetzen(zugang);
       welt = await weltPruefen(zugang);
+    }
+    if (!dev) {
+      delete process.env.GEHSTOCK_DEV;
+      try {
+        const rom = parseEnv(await readFile(path.join(dir, 'rom.env'), 'utf8'));
+        if (rom.GEHSTOCK_ROM_PIN_HASH) process.env.GEHSTOCK_ROM_PIN_HASH = rom.GEHSTOCK_ROM_PIN_HASH;
+      } catch { /* ohne PIN startet nur das echte Rom-Event nicht */ }
     }
     const dist = path.join(ROOT, 'dist');
     await access(path.join(dist, 'index.html'));
@@ -169,7 +183,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
       process.exitCode = 1;
     });
     server.listen(port, '127.0.0.1', () => {
-      if (dev) console.log('Entwicklung: leere Testwelt im Arbeitsspeicher. http://localhost:' + port);
+      if (dev) {
+        console.log('Entwicklung: leere Testwelt im Arbeitsspeicher. http://localhost:' + port);
+        console.log('GehstockMon ist hier immer offen; das Rom-Event startet ohne PIN und auf Wunsch im Zeitraffer.');
+      }
       else {
         console.log('Verbunden: ' + welt.profile + ' Profile, ' + welt.spieler + ' GehstockMon-Spieler.');
         console.log('Hideout: http://localhost:' + port);

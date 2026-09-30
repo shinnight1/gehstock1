@@ -11,7 +11,8 @@
     "test:speicher": "node tools/speicher-tests.mjs",
     "sichern": "node tools/redis-sichern.mjs",
     "einspielen": "node tools/welt-einspielen.mjs",
-    "test:handy": "node --test tools/handy-tests.mjs tools/handy-redis-tests.mjs"
+    "test:handy": "node --test tools/handy-tests.mjs tools/handy-redis-tests.mjs",
+    "rom-pin": "node tools/rom-pin.mjs"
   },
   "dependencies": {
     "@upstash/redis": "^1.38.4"
