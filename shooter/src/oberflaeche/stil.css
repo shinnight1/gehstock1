@@ -123,6 +123,8 @@ html, body {
   white-space: nowrap;
 }
 .hud-online:empty { display: none; }
+.hud-online.warnung { color: #ff8a80; animation: ops-blinken 1s ease-in-out infinite; }
+@keyframes ops-blinken { 50% { opacity: 0.45; } }
 .p-mitte {
   display: flex;
   flex-direction: column;

@@ -13,7 +13,7 @@
      - wiederholtes Starten ohne wachsenden GPU-Speicher, sauberes
        Aufraeumen (Schleife steht, Canvas, Oberflaeche, Ton, Listener weg)
      - online mit zwei Browsern (Maus und Touch): Teams, gegenseitig
-       sehen, Schuesse, Verlassen, Verbindungsabbruch
+       sehen, Schuesse, Verlassen, Neuverbinden, Verbindungsabbruch
      - offline: Service Worker hat den Shooter, Bot-Lobby ohne Netz
 
    Vorher bauen (npm run build). Aufruf:
@@ -74,7 +74,8 @@ async function seite(kontext, einst) {
   const page = await ctx.newPage();
   const fehler = [];
   page.on('pageerror', (e) => fehler.push(e.message));
-  page.on('console', (m) => { if (m.type() === 'error') fehler.push(m.text()); });
+  // Gescheiterte Verbindungsversuche meldet der Browser selbst - kein Fehler des Spiels.
+  page.on('console', (m) => { if (m.type() === 'error' && !/^WebSocket connection to .* failed/.test(m.text())) fehler.push(m.text()); });
   await page.addInitScript((e) => {
     localStorage.setItem('gehstock-ops:einstellungen:v1', JSON.stringify(e));
     // Nur Listener zaehlen, die das Spiel selbst anmeldet (Aufruf aus
@@ -371,9 +372,29 @@ try {
     pruefe(await B.ev(() => window.__ops.zustand === 'menue' && !window.__ops.online), 'Ben verlaesst die Runde');
     await A.page.waitForFunction((id) => window.__ops.sim.akteure[id].bot, idB, { timeout: 10000 });
     pruefe(true, 'fuer Ben spielt wieder ein Bot');
-    await A.ev(() => window.__ops.online.ws.close());
-    await A.page.waitForFunction(() => /VERBINDUNG WEG/.test(document.querySelector('.ops-menues').textContent), null, { timeout: 10000 });
-    pruefe(true, 'Verbindungsabbruch: Hinweis statt Absturz');
+    // Funkloch: die Leitung reisst - Anna bleibt im Spiel und ist gleich wieder da.
+    await vorn(A);
+    await A.ev(() => {
+      const on = window.__ops.online;
+      const alt = on.o.beiStatus;
+      window.__stati = [];
+      on.o.beiStatus = (z, t) => { window.__stati.push(z); alt(z, t); };
+      on.ws.close();
+    });
+    await A.page.waitForFunction(() => window.__ops.online && window.__ops.online.zustand === 'drin' && window.__stati.includes('wieder'), null, { timeout: 15000 });
+    const wieder = await A.ev(() => ({ id: window.__ops.online.eigenId, spiel: window.__ops.zustand === 'spiel' || window.__ops.zustand === 'pause',
+      text: document.querySelector('.ops-hud').textContent }));
+    pruefe(wieder.spiel && wieder.id === idA, 'Verbindungsabbruch: verbindet selbst neu, gleicher Platz, bleibt im Spiel');
+    pruefe(/Wieder verbunden/.test(wieder.text), 'HUD sagt „Wieder verbunden“');
+    // Bleibt der Server weg, kommt nach den Versuchen der Hinweis statt eines Absturzes.
+    await A.ev((port) => {
+      const on = window.__ops.online;
+      on.o.adresse = 'ws://127.0.0.1:' + port + '/api/ops';       // dort lauscht niemand
+      on.o.neuVerbinden = [50, 100];
+      on.ws.close();
+    }, PORT + 50);
+    await A.page.waitForFunction(() => /VERBINDUNG WEG/.test(document.querySelector('.ops-menues').textContent), null, { timeout: 15000 });
+    pruefe(true, 'Server bleibt weg: Hinweis statt Absturz');
     await A.page.click('text=Bot-Lobby spielen');
     await A.page.waitForFunction(() => window.__ops.zustand === 'spiel' && !window.__ops.sim.online, null, { timeout: 30000 });
     pruefe(true, 'von dort direkt in die Bot-Lobby');

@@ -7,13 +7,16 @@
    genau diese Datei.
 
    Geraet -> Server
-     HALLO     Version, Waffe, Name
+     HALLO     Version, Waffe, Name, Schluessel (leer beim ersten Mal)
      EINGABE   Nummer des ersten Befehls, Sichtzeit, 1..n Befehle
      WAFFE     Waffe fuers naechste Leben
      ECHO      Zeitstempel (fuer die Pingzeit)
+     TSCHUESS  geht absichtlich (kein Platz wird freigehalten)
 
    Server -> Geraet
-     WILLKOMMEN  eigener Platz, aktueller Takt
+     WILLKOMMEN  eigener Platz, aktueller Takt, Schluessel zum
+                 Wiederverbinden (reisst die Leitung ab, haelt der Server
+                 den Platz samt Punkten eine Minute lang frei)
      VOLL / ALT  Runde voll bzw. Geraet hat einen alten Stand
      ROSTER      wer auf welchem Platz steht (Name, Team, Mensch/Bot)
      ZUSTAND     alle Figuren, Meldungen seit dem letzten Zustand und -
@@ -29,7 +32,7 @@
 import { FIGUR, WAFFEN_REIHE } from '../konfig.js';
 import { klemme, winkelNorm } from '../sim/mathe.js';
 
-export const VERSION = 1;
+export const VERSION = 2;
 export const PFAD = '/api/ops';
 export const MAX_MENSCHEN = 6;       // drei gegen drei, Bots fuellen auf
 export const ZUSTAND_TAKT = 3;       // alle drei Schritte ein Zustand: 20 pro Sekunde
@@ -41,6 +44,7 @@ export const C_HALLO = 1;
 export const C_EINGABE = 2;
 export const C_WAFFE = 3;
 export const C_ECHO = 4;
+export const C_TSCHUESS = 5;
 export const S_WILLKOMMEN = 10;
 export const S_VOLL = 11;
 export const S_ALT = 12;
@@ -199,12 +203,19 @@ export function befehlLesen(l, b) {
 
 /* ---------------------------------------------------- Geraet -> Server */
 
-export function halloSchreiben(s, name, waffe) {
+export function halloSchreiben(s, name, waffe, schluessel) {
   s.leeren();
   s.u8(C_HALLO);
   s.u16(VERSION);
   s.u8(waffeNr(waffe));
   s.text(name);
+  s.text(schluessel || '');
+  return s.ansicht();
+}
+
+export function tschuessSchreiben(s) {
+  s.leeren();
+  s.u8(C_TSCHUESS);
   return s.ansicht();
 }
 
@@ -235,12 +246,13 @@ export function echoSchreiben(s, zeit) {
 
 /* ---------------------------------------------------- Server -> Geraet */
 
-export function willkommenSchreiben(s, eigenId, takt) {
+export function willkommenSchreiben(s, eigenId, takt, schluessel) {
   s.leeren();
   s.u8(S_WILLKOMMEN);
   s.u16(VERSION);
   s.u8(eigenId);
   s.u32(takt);
+  s.text(schluessel || '');
   return s.ansicht();
 }
 

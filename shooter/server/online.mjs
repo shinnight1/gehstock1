@@ -18,8 +18,18 @@
 
    Nichts davon landet in Redis: das Match lebt nur im Arbeitsspeicher.
    Ohne Spieler steht der Takt still - dann kostet das Match nichts.
+
+   Mobilfunk und WLAN haben Aussetzer von mehreren Sekunden; danach kommt
+   alles Aufgestaute auf einmal. Das ist kein Angriff: Nachrichten
+   laufen durch einen Eimer mit reichlich Vorrat, Befehle haben vier
+   Sekunden Vorrat. Reisst die Leitung trotzdem ab (Hintergrund,
+   Funkloch, Neustart), haelt der Server den Platz samt Punkten eine
+   Minute lang frei - das Geraet verbindet sich mit seinem Schluessel
+   selbst wieder. Kein Fehler im Online-Teil darf den Server-Prozess
+   mitreissen: alles, was von aussen kommt, ist abgefangen.
    ------------------------------------------------------------------ */
 
+import crypto from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { TICK } from '../src/konfig.js';
 import { kraehenfeld } from '../src/karte/kraehenfeld.js';
@@ -28,15 +38,17 @@ import { Navigation } from '../src/sim/navigation.js';
 import { Simulation } from '../src/sim/simulation.js';
 import { neuerBefehl } from '../src/sim/befehl.js';
 import {
-  altSchreiben, befehlLesen, C_ECHO, C_EINGABE, C_HALLO, C_WAFFE, echoAntwort, eigenSchreiben,
+  altSchreiben, befehlLesen, C_ECHO, C_EINGABE, C_HALLO, C_TSCHUESS, C_WAFFE, echoAntwort, eigenSchreiben,
   Leser, MAX_MELDUNGEN, MAX_MENSCHEN, meldungSchreiben, rosterSchreiben, RUECKSPUL_MAX, RUNDEN_PAUSE,
   Schreiber, VERSION, vollSchreiben, waffeVon, willkommenSchreiben, ZUSTAND_TAKT, zustandKopfSchreiben,
 } from '../src/netz/protokoll.js';
 import { wsAnnehmen } from './websocket.mjs';
 
 const VERLAUF = 64;                 // gemerkte Schritte fuers Rueckspulen (gut eine Sekunde)
-const KONTINGENT_MAX = 30;          // so viele Befehle darf ein Geraet vorausschicken
-const NACHRICHTEN_MAX = 120;        // pro Sekunde und Verbindung
+const KONTINGENT_MAX = 240;         // Befehle im Vorrat: vier Sekunden (Aussetzer im Netz)
+const NACHRICHTEN_RATE = 70;        // Nachrichten pro Sekunde auf Dauer (ein Geraet schickt gut 30)
+const NACHRICHTEN_VORRAT = 900;     // Stau nach einem Aussetzer: bis rund 30 s Nachrichten auf einmal
+const RESERVIERUNG = 60000;         // Platz nach einem Abbruch so lange freihalten
 const LEER_AUFRAEUMEN = 120000;     // leere Runde nach zwei Minuten wegwerfen
 
 export function nameSaeubern(roh) {
@@ -55,6 +67,11 @@ class Raum {
     this.log = o.log;
     this.rundenPause = o.rundenPause || RUNDEN_PAUSE;
     this.kontingentMax = o.kontingentMax || KONTINGENT_MAX;
+    this.reservierungMs = o.reservierung || RESERVIERUNG;
+    this.reserviert = new Map();        // Schluessel -> freigehaltener Platz
+    this.befehle = [];
+    for (let i = 0; i < 8; i++) this.befehle.push(neuerBefehl());
+    this.simFehlerZeit = 0;
     this.sim = new Simulation({
       karte, welt, nav, online: true, schwierigkeit: 'normal',
       dauer: o.dauer, zielPunkte: o.zielPunkte, ohneVorlauf: o.ohneVorlauf,
@@ -86,7 +103,8 @@ class Raum {
   }
 
   /* Platz fuer einen neuen Menschen: Team mit weniger Menschen, bei
-     Gleichstand das zurueckliegende. */
+     Gleichstand das zurueckliegende. Plaetze, die fuer jemanden nach
+     einem Abbruch freigehalten werden, kommen zuletzt dran. */
   platzFinden() {
     const sim = this.sim;
     const h = [0, 0];
@@ -96,11 +114,21 @@ class Raum {
     if (h[0] !== h[1]) team = h[0] < h[1] ? 0 : 1;
     else if (sim.punkte[0] !== sim.punkte[1]) team = sim.punkte[0] < sim.punkte[1] ? 0 : 1;
     else team = Math.random() < 0.5 ? 0 : 1;
+    const frei = new Set();
+    const jetzt = Date.now();
+    for (const r of this.reserviert.values()) if (r.bis > jetzt) frei.add(r.id);
+    const wahl = (liste) => {
+      const offen = liste.filter((a) => !frei.has(a.id));
+      const aus = offen.length ? offen : liste;
+      // Lieber einen Bot, der gerade tot ist - dann verschwindet niemand vor Augen.
+      return aus.find((a) => !a.lebt) || aus[0] || null;
+    };
     let bots = sim.akteure.filter((a) => !a.fern && a.team === team);
-    if (!bots.length) bots = sim.akteure.filter((a) => !a.fern);
-    if (!bots.length) return null;
-    // Lieber einen Bot, der gerade tot ist - dann verschwindet niemand vor Augen.
-    return bots.find((a) => !a.lebt) || bots[0];
+    if (!bots.length || bots.every((a) => frei.has(a.id))) {
+      const alle = sim.akteure.filter((a) => !a.fern);
+      if (alle.some((a) => !frei.has(a.id))) bots = alle;
+    }
+    return wahl(bots);
   }
 
   eindeutig(name) {
@@ -114,28 +142,70 @@ class Raum {
     return name;
   }
 
-  beitreten(verbindung, name, waffe) {
-    const a = this.platzFinden();
+  /* schluessel: vom Geraet mitgebracht, wenn es sich nach einem Abbruch
+     wieder meldet - dann gibt es den alten Platz samt Punkten zurueck. */
+  beitreten(verbindung, name, waffe, schluessel) {
+    this.reservierungenAufraeumen();
+    let res = schluessel ? this.reserviert.get(schluessel) : null;
+    if (!res && schluessel) {
+      // Die alte Leitung haengt noch (halb offen): sie weicht der neuen.
+      for (const alt of this.spieler.values()) {
+        if (alt.schluessel !== schluessel) continue;
+        this.verlassen(alt, false, 'neue Leitung');
+        res = this.reserviert.get(schluessel);
+        if (alt.v.sp === alt) alt.v.sp = null;
+        alt.v.ws.schliessen(4003, 'anderswo verbunden');
+        break;
+      }
+    }
+    if (res) this.reserviert.delete(schluessel);
+    let a = null;
+    if (res) {
+      const x = this.sim.akteure[res.id];
+      if (x && !x.fern) a = x;
+    }
+    if (!a) a = this.platzFinden();
     if (!a) return null;
-    this.sim.menschSetzen(a, this.eindeutig(name), waffe);
+    this.sim.menschSetzen(a, this.eindeutig(res ? res.name : name), res && res.naechsteWaffe ? res.naechsteWaffe : waffe);
+    if (res && res.runde === this.sim.runde) Object.assign(a, res.werte);
     const sp = {
       v: verbindung, a, ack: 0, kontingent: this.kontingentMax, sicht: this.takt,
       befehl: neuerBefehl(), gedrosselt: 0,
+      schluessel: res ? schluessel : crypto.randomBytes(12).toString('base64url'),
     };
     this.spieler.set(a.id, sp);
     this.meldungenSammeln();
     this.rosterNeu = true;
-    this.log('Ops: ' + a.name + ' spielt mit (Team ' + (a.team === 0 ? 'Blau' : 'Rot') + ', ' + this.spieler.size + ' online)');
+    this.log('Ops: ' + a.name + (res ? ' ist wieder da' : ' spielt mit') + ' (Team ' + (a.team === 0 ? 'Blau' : 'Rot') + ', '
+      + this.spieler.size + ' online)');
     return sp;
   }
 
-  verlassen(sp) {
+  /* absichtlich: Tschuess vom Geraet - dann wird nichts freigehalten. */
+  verlassen(sp, absichtlich, grund) {
     if (this.spieler.get(sp.a.id) !== sp) return;
     this.spieler.delete(sp.a.id);
-    const name = sp.a.name;
-    this.sim.botSetzen(sp.a);
+    const a = sp.a;
+    if (!absichtlich && sp.schluessel) {
+      this.reserviert.set(sp.schluessel, {
+        id: a.id, name: a.name, naechsteWaffe: a.naechsteWaffe, runde: this.sim.runde,
+        bis: Date.now() + this.reservierungMs,
+        werte: {
+          abschuesse: a.abschuesse, tode: a.tode, assists: a.assists, serie: a.serie, besteSerie: a.besteSerie,
+          schuesse: a.schuesse, treffer: a.treffer, kopftreffer: a.kopftreffer,
+        },
+      });
+    }
+    const name = a.name || '?';
+    this.sim.botSetzen(a);
     this.rosterNeu = true;
-    this.log('Ops: ' + name + ' ist raus (' + this.spieler.size + ' online)');
+    this.log('Ops: ' + name + ' ist raus'
+      + (grund ? ' (' + grund + ')' : '') + (absichtlich ? '' : ', Platz eine Minute frei') + ' - ' + this.spieler.size + ' online');
+  }
+
+  reservierungenAufraeumen() {
+    const jetzt = Date.now();
+    for (const [k, r] of this.reserviert) if (r.bis <= jetzt) this.reserviert.delete(k);
   }
 
   /* Befehle eines Geraets, sofort gerechnet. */
@@ -144,21 +214,35 @@ class Raum {
     const sicht = l.f32e();
     const n = l.u8();
     if (n < 1 || n > 8) throw new Error('Befehle');
+    // Erst die ganze Nachricht lesen: ein Formfehler wirft hier, bevor
+    // irgendetwas gerechnet ist.
+    for (let i = 0; i < n; i++) befehlLesen(l, this.befehle[i]);
     sp.sicht = Math.max(this.takt - RUECKSPUL_MAX, Math.min(this.takt, sicht));
     const a = sp.a;
-    for (let i = 0; i < n; i++) {
-      befehlLesen(l, sp.befehl);
-      const nr = erste + i;
-      if (nr <= sp.ack) continue;               // doppelt
-      sp.ack = nr;
-      // Schneller als die Zeit erlaubt? Dann verfaellt der Befehl - das
-      // Geraet merkt es am naechsten Zustand und setzt neu auf.
-      if (sp.kontingent < 1) { sp.gedrosselt++; continue; }
-      sp.kontingent -= 1;
-      a.uhr = nr * TICK;
-      this.sim.fernSchritt(a, sp.befehl);
+    try {
+      for (let i = 0; i < n; i++) {
+        const nr = erste + i;
+        if (nr <= sp.ack) continue;               // doppelt
+        sp.ack = nr;
+        // Schneller als die Zeit erlaubt? Dann verfaellt der Befehl - das
+        // Geraet merkt es am naechsten Zustand und setzt neu auf.
+        if (sp.kontingent < 1) { sp.gedrosselt++; continue; }
+        sp.kontingent -= 1;
+        a.uhr = nr * TICK;
+        this.sim.fernSchritt(a, this.befehle[i]);
+      }
+    } catch (e) {
+      // Ein Fehler der Simulation ist nicht die Schuld des Geraets - melden, weiterspielen.
+      this.simFehler(e);
     }
     this.meldungenSammeln();
+  }
+
+  simFehler(e) {
+    const jetzt = Date.now();
+    if (jetzt - this.simFehlerZeit < 10000) return;
+    this.simFehlerZeit = jetzt;
+    this.log('Ops: Fehler bei einem Befehl: ' + String((e && e.stack) || e).split('\n').slice(0, 4).join(' | '));
   }
 
   /* --------------------------------------------------------- Takt */
@@ -200,6 +284,7 @@ class Raum {
         this.rosterNeu = true;
       }
     }
+    if (this.takt % 600 === 0) this.reservierungenAufraeumen();
     if (this.rosterNeu) {
       this.rosterNeu = false;
       for (const sp of this.spieler.values()) {
@@ -314,13 +399,15 @@ class Raum {
 
 export class OpsOnline {
   /* opt: { log, maxVerbindungen } - und fuer Tests: dauer, zielPunkte,
-     rundenPause, ohneVorlauf, kontingentMax, nachrichtenMax, seed */
+     rundenPause, ohneVorlauf, kontingentMax, nachrichtenRate,
+     nachrichtenVorrat, reservierung, seed */
   constructor(opt) {
     const o = opt || {};
     this.o = o;
     this.log = o.log || ((t) => console.log(t));
     this.maxVerbindungen = o.maxVerbindungen || 24;
-    this.nachrichtenMax = o.nachrichtenMax || NACHRICHTEN_MAX;
+    this.nachrichtenRate = o.nachrichtenRate || NACHRICHTEN_RATE;
+    this.nachrichtenVorrat = o.nachrichtenVorrat || NACHRICHTEN_VORRAT;
     this.verbindungen = new Set();
     this.raum = null;
     this.timer = null;
@@ -354,7 +441,7 @@ export class OpsOnline {
     }
     const ws = wsAnnehmen(req, socket, head, { maxNachricht: 2048 });
     if (!ws) return;
-    const v = { ws, sp: null, zaehler: 0, sekunde: Date.now(), leser: null };
+    const v = { ws, sp: null, eimer: this.nachrichtenVorrat, eimerZeit: Date.now(), absichtlich: false };
     this.verbindungen.add(v);
     ws.beiNachricht = (d) => this.nachricht(v, d);
     ws.beiZu = () => this.weg(v);
@@ -363,15 +450,16 @@ export class OpsOnline {
   }
 
   nachricht(v, daten) {
+    // Eimer: fuellt sich mit NACHRICHTEN_RATE pro Sekunde bis zum Vorrat.
+    // Nach einem Netzaussetzer darf alles Aufgestaute auf einmal kommen.
     const jetzt = Date.now();
-    if (jetzt - v.sekunde >= 1000) {
-      v.sekunde = jetzt;
-      v.zaehler = 0;
-    }
-    if (++v.zaehler > this.nachrichtenMax) {
+    v.eimer = Math.min(this.nachrichtenVorrat, v.eimer + (jetzt - v.eimerZeit) * this.nachrichtenRate / 1000);
+    v.eimerZeit = jetzt;
+    if (v.eimer < 1) {
       v.ws.schliessen(1008, 'zu viele Nachrichten');
       return;
     }
+    v.eimer -= 1;
     try {
       const l = new Leser(daten);
       const typ = l.u8();
@@ -388,7 +476,10 @@ export class OpsOnline {
       if (typ === C_EINGABE) raum.eingabe(v.sp, l);
       else if (typ === C_WAFFE) raum.sim.waffeWaehlen(v.sp.a, waffeVon(l.u8()));
       else if (typ === C_ECHO) v.ws.senden(echoAntwort(raum.schreiber, l.f64()));
-      else throw new Error('unbekannt');
+      else if (typ === C_TSCHUESS) {
+        v.absichtlich = true;
+        v.ws.schliessen(1000, 'tschuess');
+      } else throw new Error('unbekannt');
     } catch (e) {
       v.ws.schliessen(1008, 'kaputte Nachricht');
     }
@@ -404,12 +495,13 @@ export class OpsOnline {
     }
     const waffe = waffeVon(l.u8()) || 'sturmgewehr';
     const name = nameSaeubern(l.text());
+    const schluessel = l.rest() > 0 ? l.text().slice(0, 40) : '';
     if (!this.raum) {
       const { karte, welt, nav } = this.welt();
       this.raum = new Raum(welt, nav, karte, { ...this.o, log: this.log });
     }
     const raum = this.raum;
-    const sp = raum.beitreten(v, name, waffe);
+    const sp = raum.beitreten(v, name, waffe, schluessel);
     if (!sp) {
       v.ws.senden(vollSchreiben(s));
       v.ws.schliessen(4002, 'voll');
@@ -417,18 +509,22 @@ export class OpsOnline {
     }
     clearTimeout(v.halloTimer);
     v.sp = sp;
-    v.ws.senden(willkommenSchreiben(s, sp.a.id, raum.takt));
+    v.ws.senden(willkommenSchreiben(s, sp.a.id, raum.takt, sp.schluessel));
     v.ws.senden(rosterSchreiben(s, sp.a.id, raum.sim.akteure));
     this.laufen();
   }
 
   weg(v) {
-    this.verbindungen.delete(v);
-    clearTimeout(v.halloTimer);
-    if (v.sp && this.raum) {
-      this.raum.verlassen(v.sp);
-      v.sp = null;
-      if (!this.raum.spieler.size) this.anhalten();
+    try {
+      this.verbindungen.delete(v);
+      clearTimeout(v.halloTimer);
+      if (v.sp && this.raum) {
+        this.raum.verlassen(v.sp, v.absichtlich, v.ws.grund || 'Leitung weg');
+        v.sp = null;
+        if (!this.raum.spieler.size) this.anhalten();
+      }
+    } catch (e) {
+      this.log('Ops: Fehler beim Verlassen: ' + String((e && e.stack) || e).split('\n').slice(0, 3).join(' | '));
     }
   }
 

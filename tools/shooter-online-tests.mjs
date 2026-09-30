@@ -31,6 +31,7 @@ function pruefe(b, text) {
 }
 
 const warte = (ms) => new Promise((r) => setTimeout(r, ms));
+const STILL_TEST = 7100;          // etwas ueber der Stille, ab der das Geraet neu verbindet
 
 async function bis(f, text, ms) {
   const t0 = Date.now();
@@ -79,7 +80,7 @@ function roh(adresse, name, o) {
   c.ws.binaryType = 'arraybuffer';
   c.ws.onopen = () => {
     const s = new P.Schreiber();
-    P.halloSchreiben(s, name, opt.waffe || 'sturmgewehr');
+    P.halloSchreiben(s, name, opt.waffe || 'sturmgewehr', opt.schluessel);
     if (opt.version !== undefined) s.dv.setUint16(1, opt.version);
     c.ws.send(s.kopie());
   };
@@ -87,7 +88,7 @@ function roh(adresse, name, o) {
     const l = new P.Leser(e.data);
     const typ = l.u8();
     c.typen.push(typ);
-    if (typ === P.S_WILLKOMMEN) { l.u16(); c.id = l.u8(); }
+    if (typ === P.S_WILLKOMMEN) { l.u16(); c.id = l.u8(); l.u32(); c.schluessel = l.text(); }
     else if (typ === P.S_ROSTER) c.roster = P.rosterLesen(l, { plaetze: [] });
     else if (typ === P.S_ZUSTAND) { c.z = P.zustandLesen(l, P.neuerZustand()); c.zustaende++; }
   };
@@ -219,7 +220,7 @@ export async function shooterOnlineTests(test) {
 
   await test('Ops online: die Vorhersage auf dem Gerät rechnet Bit für Bit wie der Server', async () => {
     // Schneller als in Echtzeit - dafuer Drossel und Nachrichtenzahl hoch
-    const S = await aufbauen({ ohneVorlauf: true, kontingentMax: 100000, nachrichtenMax: 100000 });
+    const S = await aufbauen({ ohneVorlauf: true, kontingentMax: 100000, nachrichtenRate: 100000, nachrichtenVorrat: 100000 });
     try {
       const { karte, welt: w } = welt();
       const spiel = new OnlineSpiel({ karte, welt: w, name: 'Test', waffe: 'mp', adresse: S.adresse });
@@ -363,7 +364,8 @@ export async function shooterOnlineTests(test) {
       t.sock.write(rahmen(9, Buffer.from('hi')));
       t.sock.write(rahmen(0, hallo.subarray(3), true));
       await bis(() => t.daten.includes(Buffer.from([0x8a, 2])) && t.daten.includes(Buffer.from([0x82])), 'Pong und Willkommen');
-      pruefe(t.daten.indexOf(Buffer.from([0x82, 8, P.S_WILLKOMMEN])) >= 0, 'kein Willkommen nach zerteilter Nachricht');
+      const w = t.daten.indexOf(Buffer.from([P.S_WILLKOMMEN, 0, P.VERSION]));
+      pruefe(w >= 2 && t.daten[w - 2] === 0x82, 'kein Willkommen nach zerteilter Nachricht');
       // Unmaskierter Rahmen: Protokollfehler, Verbindung zu
       t.sock.write(rahmen(2, Buffer.from([P.C_ECHO, 1, 2]), true, false));
       await bis(() => t.zu, 'unmaskiert nicht getrennt');
@@ -398,7 +400,7 @@ export async function shooterOnlineTests(test) {
     }
   });
 
-  await test('Ops online: zu schnell geschickte Befehle verfallen (kein Speedhack)', async () => {
+  await test('Ops online: zu schnell geschickte Befehle verfallen (kein Speedhack), Stau nach Aussetzern trennt nicht', async () => {
     const S = await aufbauen({ ohneVorlauf: true });
     try {
       const a = roh(S.adresse, 'Hase');
@@ -409,16 +411,153 @@ export async function shooterOnlineTests(test) {
       const s = new P.Schreiber();
       const befehle = [];
       for (let i = 0; i < 8; i++) befehle.push(P.befehlQuantisieren({ yaw: 0, pitch: 0, vor: 1, seit: 0, tasten: 0 }));
-      // 400 Befehle (knapp sieben Sekunden Laufen) auf einmal
-      for (let i = 0; i < 50; i++) a.ws.send(P.eingabeSchreiben(s, 1 + i * 8, 0, befehle, 8).slice());
-      await bis(() => S.ops.raum.spieler.get(a.id).ack === 400, 'alle angekommen');
+      // 1200 Befehle (20 Sekunden Laufen) auf einmal: angenommen werden nur
+      // die vier Sekunden Vorrat, der Rest verfaellt.
+      for (let i = 0; i < 150; i++) a.ws.send(P.eingabeSchreiben(s, 1 + i * 8, 0, befehle, 8).slice());
+      await bis(() => S.ops.raum.spieler.get(a.id).ack === 1200, 'alle angekommen');
       const weg = Math.hypot(A.x - x0, A.z - z0);
-      pruefe(S.ops.raum.spieler.get(a.id).gedrosselt > 300, 'nichts gedrosselt');
-      pruefe(weg < 5, 'zu weit gelaufen: ' + weg.toFixed(1) + ' m');
+      pruefe(S.ops.raum.spieler.get(a.id).gedrosselt > 900, 'nichts gedrosselt');
+      pruefe(weg < 30, 'zu weit gelaufen: ' + weg.toFixed(1) + ' m (ohne Grenze gut 100 m)');
+      // Ein Stau von 300 Nachrichten (zehn Sekunden Funkloch) trennt nicht
+      for (let i = 0; i < 300; i++) a.ws.send(P.eingabeSchreiben(s, 1201 + i * 2, 0, befehle, 2).slice());
+      await bis(() => S.ops.raum.spieler.get(a.id).ack === 1800, 'Stau angekommen');
+      await warte(100);
+      pruefe(!a.zu, 'nach einem Stau getrennt (' + a.zu + ')');
       a.ws.close();
     } finally {
       await S.zu();
     }
+  });
+
+  await test('Ops online: wer die Leitung verliert, bekommt mit dem Schlüssel Platz und Punkte zurück, „Tschüss“ hält nichts frei', async () => {
+    const S = await aufbauen({ reservierung: 1500 });
+    try {
+      const a = roh(S.adresse, 'Anna');
+      await bis(() => a.id >= 0 && a.schluessel, 'Anna drin');
+      const b = roh(S.adresse, 'Ben');
+      await bis(() => b.id >= 0 && b.roster, 'Ben drin');
+      const raum = S.ops.raum;
+      const A = raum.sim.akteure[a.id];
+      const team = A.team;
+      A.abschuesse = 5; A.tode = 2;
+      // Funkloch: die Leitung reisst ohne Tschuess ab
+      a.ws.close();
+      await bis(() => S.ops.status().spieler === 1, 'Anna raus');
+      pruefe(raum.reserviert.has(a.schluessel), 'kein Platz freigehalten');
+      pruefe(!raum.sim.akteure[a.id].fern && raum.sim.akteure[a.id].name !== 'Anna', 'der Platz ist nicht zum Bot geworden');
+      // Wer neu dazukommt, bekommt den freigehaltenen Platz nicht
+      const c = roh(S.adresse, 'Carl');
+      await bis(() => c.id >= 0, 'Carl drin');
+      pruefe(c.id !== a.id, 'Carl sitzt auf dem freigehaltenen Platz');
+      // Mit dem Schluessel zurueck: gleicher Platz, gleiches Team, alte Punkte
+      const a2 = roh(S.adresse, 'Anna', { schluessel: a.schluessel });
+      await bis(() => a2.id >= 0, 'Anna wieder drin');
+      pruefe(a2.id === a.id && a2.schluessel === a.schluessel, 'nicht derselbe Platz');
+      pruefe(A.fern && A.team === team && A.name === 'Anna' && A.abschuesse === 5 && A.tode === 2, 'Punkte oder Team verloren');
+      pruefe(S.ops.status().spieler === 3 && !raum.reserviert.size, 'Zahl oder Reservierung falsch');
+      // Die alte Leitung haengt noch halb offen: sie weicht der neuen
+      const a3 = roh(S.adresse, 'Anna', { schluessel: a.schluessel });
+      await bis(() => a3.id >= 0 && a2.zu, 'alte Leitung nicht ersetzt');
+      pruefe(a2.zu === 4003 && a3.id === a.id && A.abschuesse === 5, 'falsch ersetzt (' + a2.zu + ')');
+      pruefe(S.ops.status().spieler === 3, 'doppelt gezaehlt');
+      // Absichtlich gehen: nichts wird freigehalten
+      a3.ws.send(P.tschuessSchreiben(new P.Schreiber()).slice());
+      await bis(() => a3.zu && S.ops.status().spieler === 2, 'Tschuess');
+      pruefe(a3.zu === 1000 && !raum.reserviert.size, 'nach Tschuess freigehalten');
+      // Die Reservierung laeuft ab
+      b.ws.close();
+      await bis(() => raum.reserviert.has(b.schluessel), 'Ben freigehalten');
+      await warte(1600);
+      const b2 = roh(S.adresse, 'Ben', { schluessel: b.schluessel });
+      await bis(() => b2.id >= 0, 'Ben wieder drin');
+      pruefe(b2.schluessel !== b.schluessel && !raum.reserviert.size, 'abgelaufene Reservierung gilt noch');
+      c.ws.close(); b2.ws.close();
+    } finally {
+      await S.zu();
+    }
+  });
+
+  await test('Ops online: das Gerät verbindet sich nach einem Abriss und nach einem Serverneustart selbst wieder', async () => {
+    const S = await aufbauen({ ohneVorlauf: true });
+    let S2 = null;
+    try {
+      const { karte, welt: w } = welt();
+      const stati = [];
+      const spiel = new OnlineSpiel({ karte, welt: w, name: 'Zaeh', waffe: 'mp', adresse: S.adresse, beiStatus: (z) => stati.push(z) });
+      spiel.verbinden();
+      await bis(() => spiel.zustand === 'drin', 'verbunden');
+      const id = spiel.eigenId;
+      S.ops.raum.sim.akteure[id].abschuesse = 3;
+      // 1. Die Leitung reisst (wie ein Funkloch): gleicher Platz, alte Punkte
+      spiel.ws.close();
+      await bis(() => spiel.zustand === 'wieder', 'merkt den Abriss nicht');
+      await bis(() => spiel.zustand === 'drin', 'nicht wieder verbunden');
+      pruefe(spiel.eigenId === id && S.ops.raum.sim.akteure[id].abschuesse === 3 && S.ops.status().spieler === 1, 'nicht derselbe Platz');
+      // 2. Die Seite hing (Hintergrund, Haenger): Liegengebliebenes bekommt
+      //    erst Nachfrist, der Waechter schlaegt nicht sofort an ...
+      spiel.stille = 6000;
+      spiel.bildUhr = performance.now() - 9000;
+      spiel.bild(0.016);
+      pruefe(spiel.zustand === 'drin', 'Waechter schlaegt nach einem Haenger der Seite zu frueh an');
+      // ... ruckelt sie aber dauernd, zaehlen die Haenger trotzdem mit.
+      spiel.ws.onmessage = null;
+      for (let i = 0; i < 20 && spiel.zustand === 'drin'; i++) {
+        spiel.bildUhr = performance.now() - 3000;
+        spiel.bild(0.016);
+      }
+      pruefe(spiel.zustand === 'wieder', 'dauerndes Ruckeln haelt den Waechter ewig auf');
+      await bis(() => spiel.zustand === 'drin', 'nach Ruckeln nicht wieder verbunden');
+      // 3. Halb offene Leitung: nichts kommt mehr an, der Browser merkt es nicht
+      const tot = spiel.ws;
+      tot.onmessage = null;
+      spiel.stille = STILL_TEST;
+      spiel.bild(0.016);
+      pruefe(spiel.zustand === 'wieder', 'Waechter schlaegt nicht an');
+      await bis(() => spiel.zustand === 'drin', 'nach Waechter nicht wieder verbunden');
+      pruefe(spiel.eigenId === id && S.ops.status().spieler === 1, 'Waechter: nicht derselbe Platz');
+      // 4. Der Server startet neu (jeder Push auf main): das Geraet kommt wieder
+      await S.zu();
+      await bis(() => spiel.zustand === 'wieder', 'merkt den Neustart nicht');
+      await warte(300);
+      S2 = await aufbauen({ ohneVorlauf: true });
+      spiel.o.adresse = S2.adresse;       // anderer Port, sonst gleich
+      await bis(() => spiel.zustand === 'drin', 'nach Neustart nicht wieder verbunden', 15000);
+      pruefe(S2.ops.status().spieler === 1 && spiel.ich === spiel.spiegel.akteure[spiel.eigenId], 'neue Runde ohne eigene Figur');
+      // Weiterspielen geht: Befehle werden bestaetigt
+      const bef = neuerBefehl();
+      bef.vor = 1;
+      for (let n = 0; n < 30; n++) spiel.schritt(bef);
+      spiel.abschicken();
+      await bis(() => spiel.ack === spiel.nr, 'Befehle nach Neustart nicht bestaetigt');
+      pruefe(stati.filter((z) => z === 'wieder').length === 4 && !stati.includes('weg') && !stati.includes('fehler'), 'Zustaende: ' + stati.join(','));
+      spiel.trennen();
+      await bis(() => S2.ops.status().spieler === 0, 'Trennen');
+      pruefe(!S2.ops.raum.reserviert.size, 'nach Trennen freigehalten');
+    } finally {
+      await S.zu().catch(() => {});
+      if (S2) await S2.zu();
+    }
+  });
+
+  await test('Ops online: bleibt der Server weg, meldet das Gerät nach den Versuchen „Verbindung weg“ statt zu hängen', async () => {
+    const S = await aufbauen({ ohneVorlauf: true });
+    const { karte, welt: w } = welt();
+    const stati = [];
+    const spiel = new OnlineSpiel({ karte, welt: w, name: 'Weg', waffe: 'mp', adresse: S.adresse,
+      neuVerbinden: [30, 60, 90], beiStatus: (z) => stati.push(z) });
+    spiel.verbinden();
+    await bis(() => spiel.zustand === 'drin', 'verbunden');
+    await S.zu();
+    // Drei Versuche gegen einen geschlossenen Port, dann ist Schluss
+    await bis(() => spiel.zustand === 'weg', 'gibt nie auf', 5000);
+    pruefe(!spiel.ws && spiel.versuch === 3, 'Leitung haengt noch oder falsch gezaehlt (' + spiel.versuch + ')');
+    pruefe(stati.join(',') === 'verbinde,warte,drin,wieder,weg', 'Zustaende: ' + stati.join(','));
+    // Der erste Versuch ohne Server scheitert schnell mit "fehler"
+    const neu = new OnlineSpiel({ karte, welt: w, name: 'Neu', waffe: 'mp', adresse: S.adresse, beiStatus: (z) => stati.push(z) });
+    const t0 = Date.now();
+    neu.verbinden();
+    await bis(() => neu.zustand === 'fehler', 'erster Versuch haengt', 8000);
+    pruefe(Date.now() - t0 < 5000 && !neu.ws, 'dauert ' + (Date.now() - t0) + ' ms');
   });
 }
 

@@ -62,17 +62,31 @@ export class WsVerbindung {
     this.beiNachricht = null;    // (daten: Buffer, binaer: boolean)
     this.beiZu = null;           // ()
     try { socket.setNoDelay(true); } catch (e) { /* egal */ }
-    socket.on('data', (d) => this.daten(d));
+    socket.on('data', (d) => {
+      try {
+        this.daten(d);
+      } catch (e) {
+        // Nichts von aussen darf den Server-Prozess umwerfen.
+        this.grund = 'Fehler beim Lesen';
+        socket.destroy();
+        this.weg();
+      }
+    });
     socket.on('close', () => this.weg());
     socket.on('end', () => this.weg());
     socket.on('error', () => this.weg());
     this.pingTimer = setInterval(() => this.pruefen(), PING_ALLE);
-    if (this.puffer.length) setImmediate(() => this.lesen());
+    if (this.puffer.length) {
+      setImmediate(() => {
+        try { this.lesen(); } catch (e) { socket.destroy(); this.weg(); }
+      });
+    }
   }
 
   pruefen() {
     if (!this.offen) return;
     if (Date.now() - this.zuletzt > STILL_MAX) {
+      this.grund = 'keine Antwort';
       this.socket.destroy();
       this.weg();
       return;
@@ -128,6 +142,7 @@ export class WsVerbindung {
       if (!fin || nutz.length > 125) return this.fehler(1002);
       if (art === 8) {
         const code = nutz.length >= 2 ? nutz.readUInt16BE(0) : 1000;
+        this.grund = 'vom Geraet geschlossen (' + code + ')';
         this.schliessen(code === 1005 || code < 1000 ? 1000 : code);
       } else if (art === 9) {
         this.rahmenSenden(10, nutz);
@@ -185,6 +200,7 @@ export class WsVerbindung {
     // Wer nicht mitliest (Funkloch, eingeschlafenes Tablet), staut nicht
     // unbegrenzt Speicher auf dem Handy auf.
     if (this.socket.writableLength > STAU_MAX) {
+      this.grund = 'liest nicht mit';
       this.socket.destroy();
       this.weg();
       return false;
@@ -200,6 +216,7 @@ export class WsVerbindung {
 
   schliessen(code, grund) {
     if (!this.offen) return;
+    if (!this.grund) this.grund = (code || 1000) + (grund ? ' ' + grund : '');
     const text = Buffer.from(String(grund || '').slice(0, 100));
     const nutz = Buffer.allocUnsafe(2 + text.length);
     nutz.writeUInt16BE(code || 1000, 0);

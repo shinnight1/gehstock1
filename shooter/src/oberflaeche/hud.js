@@ -157,6 +157,7 @@ export class Hud {
     this.klasse('eigenB', E.blauTeam, 'eigen', s.team === 0);
     this.klasse('eigenR', E.rotTeam, 'eigen', s.team === 1);
     this.setze('online', E.online, z.online || '');
+    this.klasse('onlineW', E.online, 'warnung', !!z.onlineWarnung);
 
     const w = s.waffe;
     const lebt = s.lebt;
