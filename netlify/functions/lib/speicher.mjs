@@ -29,6 +29,7 @@
      felder(key)                   -> { feld: wert } (leer: {})
      feld(key, feld)               -> wert oder null (nur dieses eine Feld)
      feldSetzen(key, feld, wert)
+     feldSetzen(key, feld, wert, { onlyIfValue }) -> { modified }; null verlangt ein neues Feld
      felderWeg(key, [feld, ...])
    ------------------------------------------------------------------ */
 
@@ -72,6 +73,20 @@ else
   if redis.sha1hex(aktuell) ~= ARGV[2] then return 0 end
 end
 redis.call('SET', KEYS[1], ARGV[1])
+return 1
+`;
+
+/* Derselbe Vergleich fuer ein einzelnes Spielerfeld; weiterhin genau ein
+   Schreibbefehl, auch wenn mehrere Tabs gleichzeitig beitragen. */
+const FELD_CAS = `
+local aktuell = redis.call('HGET', KEYS[1], ARGV[3])
+if ARGV[2] == '@neu' then
+  if aktuell then return 0 end
+else
+  if not aktuell then return 0 end
+  if redis.sha1hex(aktuell) ~= ARGV[2] then return 0 end
+end
+redis.call('HSET', KEYS[1], ARGV[3], ARGV[1])
 return 1
 `;
 
@@ -201,9 +216,13 @@ function redisStore(name, verbindung = redis) {
       try { return typeof roh === 'string' ? JSON.parse(roh) : roh; } catch { return null; }
     },
 
-    async feldSetzen(key, feld, wert) {
-      const r = await verbindung();
-      await nochmal(() => r.hset(d(key), { [feld]: JSON.stringify(wert) }));
+    async feldSetzen(key, feld, wert, opts) {
+      const r = await verbindung(), neu = JSON.stringify(wert);
+      if (!opts) { await nochmal(() => r.hset(d(key), { [feld]: neu })); return { modified: true }; }
+      if (!Object.hasOwn(opts, 'onlyIfValue') || opts.onlyIfValue === undefined) return { modified: false };
+      const bedingung = opts.onlyIfValue === null ? '@neu' : stempelVon(JSON.stringify(opts.onlyIfValue));
+      const ok = await nochmal(() => r.eval(FELD_CAS, [d(key)], [neu, bedingung, String(feld)]));
+      return { modified: Number(ok) === 1 };
     },
 
     async felderWeg(key, felder) {

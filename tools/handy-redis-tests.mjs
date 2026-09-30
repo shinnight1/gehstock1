@@ -130,15 +130,19 @@ function fakeRedis(passwort) {
         const re = new RegExp('^' + muster.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$');
         return ['0', [...daten.keys()].filter((k) => re.test(k))];
       }
+      case 'HGET': return w instanceof Map && w.has(b[2]) ? w.get(b[2]) : null;
       case 'HGETALL': return w instanceof Map ? [...w].flat() : [];
       case 'HSET': { const h = w instanceof Map ? w : new Map(); for (let i = 2; i + 1 < b.length; i += 2) h.set(b[i], b[i + 1]); daten.set(b[1], h); return 1; }
       case 'HDEL': return b.slice(2).filter((f) => w instanceof Map && w.delete(f)).length;
       case 'EVAL': {
-        const key = b[3], neu = b[4], bedingung = b[5];
-        const aktuell = daten.has(key) ? daten.get(key) : null;
+        const key = b[3], neu = b[4], bedingung = b[5], feld = b[6];
+        const hash = feld !== undefined, h = hash && daten.get(key) instanceof Map ? daten.get(key) : new Map();
+        const aktuell = hash ? (h.has(feld) ? h.get(feld) : null) : (daten.has(key) ? daten.get(key) : null);
         const passt = bedingung === '@neu' ? aktuell === null : aktuell !== null && sha1(aktuell) === bedingung;
         if (!passt) return 0;
-        daten.set(key, neu); return 1;
+        if (hash) { h.set(feld, neu); daten.set(key, h); }
+        else daten.set(key, neu);
+        return 1;
       }
       case 'PTTL': return w === undefined ? -2 : -1;
       case 'PEXPIRE': return w === undefined ? 0 : 1;
@@ -213,6 +217,15 @@ async function speicherPruefen(client) {
   await store.feldSetzen('anwesenheit-v2', 'p2', { x: 2 });
   await store.felderWeg('anwesenheit-v2', ['p1']);
   assert.deepEqual(await store.felder('anwesenheit-v2'), { p2: { x: 2 } });
+  const alt = await store.feld('anwesenheit-v2', 'p2');
+  const parallel = await Promise.all([
+    store.feldSetzen('anwesenheit-v2', 'p2', { x: 3 }, { onlyIfValue: alt }),
+    store.feldSetzen('anwesenheit-v2', 'p2', { x: 4 }, { onlyIfValue: alt }),
+  ]);
+  assert.equal(parallel.filter((r) => r.modified).length, 1, 'Feld-CAS wirkt auch ueber das Redis-Protokoll');
+  assert.equal((await store.feldSetzen('anwesenheit-v2', 'p3', { x: 5 }, { onlyIfValue: null })).modified, true);
+  assert.equal((await store.feldSetzen('anwesenheit-v2', 'p3', { x: 6 }, { onlyIfValue: null })).modified, false);
+  assert.deepEqual(await store.feld('anwesenheit-v2', 'p3'), { x: 5 });
   assert.deepEqual((await store.list()).blobs.map((b) => b.key).sort(), ['anwesenheit-v2', 'welt']);
   await store.delete('welt');
   assert.equal(await store.get('welt'), null);

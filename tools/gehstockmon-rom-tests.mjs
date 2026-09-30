@@ -58,7 +58,7 @@ function welt({ felder = true, pin = PIN_HASH, dev = false, zeit = MITTWOCH, own
   f.store = felder ? _redisStore('hgh-gehstockmon', client) : dokumentSpeicher();
   f.presence = felder ? _redisStore('hgh-gehstockmon-presence', client) : dokumentSpeicher();
   f.verwaltung = { get: async () => ({ version: 1, daten: { owner: f.owner, aufsicht: f.aufsicht } }) };
-  f.handler = createHandler({ store: f.store, presenceStore: f.presence, now: () => f.time, random: () => f.random(), verwaltungStore: f.verwaltung, romPin: pin, romDev: dev });
+  f.handler = createHandler({ store: f.store, presenceStore: f.presence, now: () => f.time, random: () => f.random(), verwStore: f.verwaltung, romPin: pin, romDev: dev });
   f.call = async (code, op, data = {}) => {
     const res = await f.handler(new Request('http://localhost/api/gehstockmon', { method: 'POST',
       body: JSON.stringify({ code, name: data.name || 'Spieler ' + code, op, ...data }) }));
@@ -293,6 +293,20 @@ await test('Oeffnungszeiten und Wochengrenze gelten fuer den echten Start', asyn
   assert.equal(status.status, 200); assert.equal(status.steuerung.startbar, false);
 });
 
+await test('Das Rom-Event beachtet ein manuell geschlossenes und geoeffnetes Insel-Tor', async () => {
+  const f = await mitSpielern({});
+  await f.store.setJSON('tor', { modus: 'zu' }); f.time += 6000;
+  const zu = await f.steuern(ceo, 'status');
+  assert.equal(zu.status, 200); assert.equal(zu.steuerung.startbar, false);
+  assert.equal((await f.steuern(ceo, 'start')).status, 423, 'tagsueber bei geschlossenem Tor kein Event');
+  assert.equal(await f.ev(), null);
+  f.time = Date.parse('2026-10-03T22:00:00+02:00');
+  await f.store.setJSON('tor', { modus: 'auf' });
+  const auf = await f.steuern(ceo, 'status');
+  assert.equal(auf.status, 200); assert.equal(auf.steuerung.startbar, true);
+  assert.equal((await f.steuern(ceo, 'start')).status, 200, 'am Wochenende bei geoeffnetem Tor erlaubt');
+});
+
 await test('Am Entwicklungsserver: kein PIN, keine Oeffnungszeit, keine Wochengrenze, Zeitraffer', async () => {
   const f = await mitSpielern({ dev: true, pin: '' });
   f.time = Date.parse('2026-10-03T22:00:00+02:00');
@@ -350,6 +364,41 @@ await test('Pizzen schnappen: nur in der Naehe, jede einmal, Aktionskennung zaeh
   assert.equal((await f.aktion(anna, 'zutat', { pizzaId: '9-9-9' })).status, 409, 'erfundene Pizza');
   const w = await f.welt();
   assert.ok(!w.rom, 'die Spielerwelt wird waehrend des Events nicht angefasst');
+});
+
+await test('Parallele Aktionen desselben Spielers verlieren keine Lire oder Aktionskennungen', async () => {
+  for (const felder of [true, false]) {
+    const f = await mitSpielern({ felder });
+    await f.steuern(ceo, 'start');
+    const ev = await f.ev(); zuPhase(f, ev, 4);
+    const muenzeId = f.id(), fangId = f.id();
+    const antworten = await Promise.all([
+      f.aktion(anna, 'muenze', { aktionId: muenzeId }),
+      f.aktion(anna, 'fang', { aktionId: fangId, fang: 'muenzen', anzahl: 5 }),
+    ]);
+    assert.ok(antworten.every((r) => r.status === 200), JSON.stringify(antworten));
+    const beitrag = felder ? await f.store.feld('rom-b:' + ev.id, kennung(anna))
+      : (await f.store.getWithMetadata('rom-b:' + ev.id)).data[kennung(anna)];
+    assert.equal(ROM.lire(beitrag), 8, 'Muenze und Fang bleiben beide erhalten');
+    assert.ok(beitrag.muenze); assert.equal(beitrag.fang.muenzen, 5);
+    assert.ok(beitrag.ids.some((v) => v.id === muenzeId) && beitrag.ids.some((v) => v.id === fangId));
+    const wieder = await f.aktion(anna, 'muenze', { aktionId: muenzeId });
+    assert.equal(wieder.status, 200); assert.ok(wieder.ergebnis.doppelt);
+    assert.equal((await f.aktion(anna, 'muenze')).status, 409, 'auch nach parallelem Fang nur eine Muenze');
+  }
+});
+
+await test('Parallele Wiederholungen derselben Aktion werden genau einmal gezaehlt', async () => {
+  const f = await mitSpielern({});
+  await f.steuern(ceo, 'start');
+  const ev = await f.ev(); zuPhase(f, ev, 4);
+  const aktionId = f.id();
+  const antworten = await Promise.all(Array.from({ length: 6 }, () =>
+    f.aktion(anna, 'fang', { aktionId, fang: 'muenzen', anzahl: 5 })));
+  assert.ok(antworten.every((r) => r.status === 200), JSON.stringify(antworten));
+  assert.equal(antworten.filter((r) => !r.ergebnis.doppelt).length, 1);
+  const beitrag = await f.store.feld('rom-b:' + ev.id, kennung(anna));
+  assert.equal(ROM.lire(beitrag), 5); assert.equal(beitrag.ids.length, 1);
 });
 
 await test('Aktionen warten, solange ein eigener Kampf laeuft', async () => {
@@ -423,6 +472,28 @@ await test('Mozzarellus: Schlagvorrat, Haltungen, gemeinsamer Sieg, danach keine
   assert.equal((await g.aktion(anna, 'schlag')).status, 429, 'dann ist der Vorrat leer');
   g.time += 6000; await g.stellen(anna, ROM.bossOrt(ev2, g.time));
   assert.equal((await g.aktion(anna, 'schlag')).status, 200, 'nach sechs Sekunden wieder einer');
+});
+
+await test('Ein zeitgleicher erster Angriff belebt einen bereits besiegten Boss nicht wieder', async () => {
+  const f = await mitSpielern({});
+  await f.steuern(ceo, 'start');
+  const ev = await f.ev(); zuPhase(f, ev, 3, 60000);
+  await f.store.feldSetzen('rom-b:' + ev.id, kennung(anna), {
+    ...ROM.leer(), hp: 3000, schaden: 4990, schlaege: 10,
+  });
+  /* Beide Anfragen sehen denselben Zustand kurz vor dem letzten Schlag. */
+  await f.call(anna, 'presence', { position: { ...X.SPAWN, heading: 0 } });
+  for (const code of [anna, bo]) await f.stellen(code, ROM.bossOrt(ev, f.time));
+  const antworten = await Promise.all([f.aktion(anna, 'schlag'), f.aktion(bo, 'schlag')]);
+  assert.ok(antworten.every((r) => r.status === 200), JSON.stringify(antworten));
+  assert.ok(antworten.some((r) => r.ergebnis.letzter), 'der Sieg wurde bereits bestaetigt');
+  const alle = await f.store.felder('rom-b:' + ev.id), lage = ROM.lage(alle, ev);
+  assert.ok(lage.bossBesiegt); assert.equal(lage.bossHp, 0); assert.equal(lage.bossSchaden, lage.bossMax);
+  f.time += 2000;
+  const nachher = await f.aktion(anna, 'schlag');
+  assert.equal(nachher.status, 409); assert.match(nachher.error, /geschmolzen/);
+  f.time = ROM.ende(ev) + 4000; await f.call(anna, 'world');
+  assert.equal((await f.welt()).players[kennung(anna)].rom.boss, 1, 'Sieg bleibt auch bei der Abrechnung erhalten');
 });
 
 /* ------------------------------------------------------- Abrechnung */
@@ -531,6 +602,24 @@ await test('Die Vorschau laeuft in der Testzone und beruehrt die echte Welt nich
   assert.equal((await f.call(admin, 'rom_steuern', { aktion: 'start', aktionId: f.id(), adminOverride: true, adminCode: '3141' })).status, 403, 'auch dort nur der CEO');
   const echt = await f.call(anna, 'presence', { position: { ...X.SPAWN, heading: 0 } });
   assert.equal(echt.rom, undefined);
+});
+
+await test('Vorschau zuerst starten, danach Insel betreten und mitspielen: Dokumente bleiben getrennt', async () => {
+  const f = welt(), sandbox = { adminOverride: true, adminCode: '3141' };
+  const start = await f.call(ceo, 'rom_steuern', { ...sandbox, aktion: 'start', aktionId: f.id(), faktor: 3 });
+  assert.equal(start.status, 200, start.error); assert.ok(start.sandbox);
+  const join = await f.call(ceo, 'join', { ...sandbox, requestId: f.id() });
+  assert.equal(join.status, 200, join.error); assert.ok(join.profile && join.sandbox);
+  const weltstand = await f.call(ceo, 'world', sandbox);
+  assert.equal(weltstand.status, 200, weltstand.error); assert.ok(weltstand.profile);
+  const status = await f.call(ceo, 'rom_steuern', { ...sandbox, aktion: 'status' });
+  assert.equal(status.status, 200, status.error); assert.equal(status.steuerung.event.id, start.gestartet);
+  f.time = ROM.plan(status.steuerung.event).phasen[0].von + 1000;
+  const aktion = await f.call(ceo, 'rom_aktion', { ...sandbox, art: 'stern', aktionId: f.id() });
+  assert.equal(aktion.status, 200, aktion.error); assert.equal(aktion.ergebnis.lire, 1);
+  assert.equal(aktion.rom.id, start.gestartet); assert.equal(aktion.rom.ich.stern, 1);
+  assert.equal(await f.ev(), null, 'kein Event in der echten Welt');
+  assert.equal(await f.store.getWithMetadata('world-v2'), null, 'auch keine Spieler in der echten Welt');
 });
 
 /* ------------------------------------------------- Leitung im Relais */

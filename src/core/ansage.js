@@ -34,7 +34,7 @@
   An.pruefen = function () {
     var a = A.ansage();
 
-    if (!a) { aktuelleId = null; weg(); return; }
+    if (!a || (a.bis && Date.now() >= a.bis)) { aktuelleId = null; weg(); return; }
     if (a.art !== 'fest' && A.ansageGelesen(a.id)) { weg(); return; }
     if (el && aktuelleId === a.id) return;      // steht schon
 
@@ -69,6 +69,8 @@
 
     wischen(el, a);
     SG.audio.play('alert');
+    /* Eine Ansage mit Ablaufzeit raeumt sich selbst ab. */
+    if (a.bis) setTimeout(function () { if (aktuelleId === a.id) An.pruefen(); }, Math.min(2147483000, Math.max(0, a.bis - Date.now()) + 500));
   }
 
   /* Nach oben wegwischen. Ein kurzer Tipp schliesst ebenfalls. */

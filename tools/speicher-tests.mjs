@@ -187,4 +187,18 @@ await pruefe('Felder: jeder schreibt nur sein eigenes, alle lesen alle', async (
   assert.deepEqual(await alt.felder('anwesenheit'), { b: { x: 2 } });
 });
 
+await pruefe('Feldvergleich schuetzt neue und bestehende Beitraege bei parallelen Schreibern', async () => {
+  const { speicherClient } = await import('../netlify/functions/lib/redis-lokal.mjs');
+  const st = _redisStore('feld-cas', speicherClient());
+  const neu = await Promise.all([st.feldSetzen('event', 'a', { lire: 3 }, { onlyIfValue: null }),
+    st.feldSetzen('event', 'a', { lire: 5 }, { onlyIfValue: null })]);
+  assert.equal(neu.filter((r) => r.modified).length, 1, 'nur einer legt dasselbe Feld an');
+  const alt = await st.feld('event', 'a');
+  await st.feldSetzen('event', 'b', { lire: 9 });
+  assert.ok((await st.feldSetzen('event', 'a', { lire: 8 }, { onlyIfValue: alt })).modified);
+  assert.equal((await st.feldSetzen('event', 'a', { lire: 99 }, { onlyIfValue: alt })).modified, false);
+  assert.equal((await st.feldSetzen('event', 'a', { lire: 99 }, {})).modified, false, 'fehlende Bedingung schreibt nicht blind');
+  assert.deepEqual(await st.felder('event'), { a: { lire: 8 }, b: { lire: 9 } });
+});
+
 console.log('\n' + bestanden + ' bestanden' + (process.exitCode ? ', Fehler siehe oben' : ', 0 durchgefallen') + '\n');

@@ -3314,8 +3314,10 @@ const SG = { rules: {} };
     { id: 2, zeichen: '⬇️', name: 'In die Knie' },
     { id: 3, zeichen: '⬅️', name: 'Hüfte links' }
   ];
+  /* Eine Tanzrunde dauert immer zehn Sekunden, auch im Zeitraffer - sonst
+     liesse sich die Folge dort gar nicht mehr nachtippen. */
   ROM.TANZ_RUNDE = 10000;
-  ROM.tanzRunde = function (ev, now) { return Math.floor((now - ROM.plan(ev).phasen[2].von) / ROM.dauer(ev, ROM.TANZ_RUNDE)); };
+  ROM.tanzRunde = function (ev, now) { return Math.floor((now - ROM.plan(ev).phasen[2].von) / ROM.TANZ_RUNDE); };
   /* Die Folge wird mit jeder dritten Runde laenger - hoechstens sieben. */
   ROM.tanzFolge = function (ev, runde) {
     var laenge = Math.min(7, 4 + Math.floor(Math.max(0, runde) / 3)), folge = [];
@@ -3362,8 +3364,11 @@ const SG = { rules: {} };
     });
     var ziel = ROM.leisteZiel(teilnehmer), max = hp ? ROM.BOSS.basis + hp : 0;
     var voll = leiste >= ziel || !!(ev && ev.ueberraschungen && ev.ueberraschungen.nonna);
+    /* Ein bestaetigter letzter Schlag bleibt ein Sieg, auch wenn ein
+       gleichzeitiger erster Angriff noch zusaetzliche Boss-HP eintraegt. */
+    var besiegt = !!max && (letzter || schaden >= max);
     return { teilnehmer: teilnehmer, leiste: voll ? ziel : Math.min(leiste, ziel), leisteZiel: ziel, leisteVoll: voll,
-      bossMax: max, bossSchaden: Math.min(schaden, max), bossHp: Math.max(0, max - schaden), bossBesiegt: !!max && schaden >= max, letzter: letzter };
+      bossMax: max, bossSchaden: besiegt ? max : Math.min(schaden, max), bossHp: besiegt ? 0 : Math.max(0, max - schaden), bossBesiegt: besiegt, letzter: letzter };
   };
 
   /* ---------------------------------------------------- Belohnungen */

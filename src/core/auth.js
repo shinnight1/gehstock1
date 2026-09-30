@@ -370,7 +370,9 @@
 
   A.ansage = function () { return V().ansage || null; };
 
-  A.ansageSetzen = function (text, art) {
+  /* bis (optional): ab da verschwindet die Ansage von selbst - etwa die
+     zum Rom-Event, die nur so lange stehen soll, wie Rom laeuft. */
+  A.ansageSetzen = function (text, art, bis) {
     var a = null;
     if (text) {
       a = {
@@ -381,6 +383,7 @@
         rolle: (A.aktuell && A.aktuell.rolle) || A.ADMIN,
         t: Date.now(),
       };
+      if (Number.isFinite(bis)) a.bis = bis;
     }
     SG.verwaltung.schreiben(function (d) { d.ansage = a; });
     return a;

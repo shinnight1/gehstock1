@@ -2,6 +2,10 @@
 (function (SG) {
   var R = SG.gehstockmon, X=R.abenteuer;
   R.orte = R.daten.BIOME;
+  /* Zusaetze, die sich in die Welt haengen (etwa die Rom-Kulisse aus
+     2-rom-szene.js): jeder bekommt Szene und Uhr, laeuft im selben Takt mit
+     und raeumt beim Beenden selbst auf. */
+  R.weltErweiterungen = R.weltErweiterungen || [];
 
   R.createWorld = function (host, container, handlers) {
     var T = window.THREE;
@@ -665,6 +669,7 @@ p.updatedAt=info.updatedAt;p.age=Math.max(0,(serverTime-info.updatedAt)/1000);p.
         var pt = groundAt(e.clientX, e.clientY);
         if (!pt || !X.walkable(pt)) return;
         walkToPoint(pt);
+        erweiterungen.forEach(function (ew) { if (ew.tippen) ew.tippen(pt); });
         var nearest = -1, best = 9;
         R.orte.forEach(function (o, i) { var d = Math.hypot(o.x - pt.x, o.z - pt.z); if (d < best) { best = d; nearest = i; } });
         if (nearest >= 0) { select(nearest + 1, false); if (handlers.select) handlers.select(nearest + 1); }
@@ -689,10 +694,25 @@ p.updatedAt=info.updatedAt;p.age=Math.max(0,(serverTime-info.updatedAt)/1000);p.
       var p = new T.Vector3(at.x, at.y || 0, at.z).project(camera);
       return { x: (p.x + 1) * width / 2, y: (-p.y + 1) * height / 2, near: Math.hypot(at.x - focus.x, at.z - focus.z) < 32, visible: p.z > -1 && p.z < 1 && Math.abs(p.x) < 1.15 && Math.abs(p.y) < 1.15 };
     }
+    /* Das Licht einer Erweiterung, oder null fuer das Wetter der Woche. */
+    function lichtSetzen(l) {
+      if (!l) { wetterFaerben(wetterJetzt); return; }
+      scene.background.set(l[0]); scene.fog.color.set(l[0]); ambient.color.set(l[1]); sun.color.set(l[2]); sun.intensity = l[3];
+    }
+    var erweiterungen = R.weltErweiterungen.map(function (fabrik) {
+      try {
+        return fabrik({ T: T, scene: scene, mat: mat, geo: geo, licht: lichtSetzen, renderer: renderer,
+          uhr: function () { return encounterClock + time * 1000; },
+          spieler: function () { return explorer.group.position; },
+          kampf: function () { return !!battle; },
+          leuchtturmHoehe: function () { return leuchtturmGebaut ? 21 : 5.2; } });
+      } catch (e) { return null; }
+    }).filter(Boolean);
     var loop = host.loop({
       update: function (dt) {
         if (dead || contextLost) return; time += dt;
         figurenSchritt(dt);
+        for (var ew = 0; ew < erweiterungen.length; ew++) { try { if (erweiterungen[ew].update) erweiterungen[ew].update(dt, encounterClock + time * 1000); } catch (e) { /* ein Zusatz darf die Welt nie anhalten */ } }
         waters.update(time);
         if (zerhacker.lebt) {
           var jetzt = encounterClock + time * 1000, bahn = X.zerhackerOrt(jetzt);
@@ -800,6 +820,7 @@ p.updatedAt=info.updatedAt;p.age=Math.max(0,(serverTime-info.updatedAt)/1000);p.
         }
       },
       zerhackerOrt:function(){return {x:zerhacker.gruppe.position.x,z:zerhacker.gruppe.position.z,lebt:zerhacker.lebt};},
+      erweiterung:function(name){return erweiterungen.find(function(ew){return ew.name===name;})||null;},
       setEncounters:function(list,serverTime){encounterClock=serverTime-time*1000;var keep={};list.filter(function(e){return e.kind==='trainer';}).forEach(function(e){keep[e.id]=true;var p=trainers[e.id];if(!p){var g=creature(0,0,false,'player'),texture=spriteTexture('skin-'+e.skinIndex,'#ffffff');g.userData.portrait.material.map=texture;g.userData.portrait.scale.set(4.5,4.5,1);g.name='trainer-'+e.id;scene.add(g);anziehen(g,skinName(e.skinIndex));p=trainers[e.id]={group:g};}p.info=e;});Object.keys(trainers).forEach(function(id){if(!keep[id]){disposeUnit(trainers[id]);delete trainers[id];}});},
       zoom: function (delta) { desiredZoom = T.MathUtils.clamp(desiredZoom + delta, 20, MAX_ZOOM); },
       rotate: function (delta) { yaw += delta; },
@@ -812,6 +833,7 @@ p.updatedAt=info.updatedAt;p.age=Math.max(0,(serverTime-info.updatedAt)/1000);p.
       pause: function (yes) { if (yes) loop.pause(true); else loop.resume(true); },
       destroy: function () {
         if (dead) return; dead = true; loop.destroy(); off.forEach(function (f) { f(); }); if (observer) observer.disconnect();
+        erweiterungen.forEach(function (ew) { try { if (ew.destroy) ew.destroy(); } catch (e) { /* weiter aufraeumen */ } });
         Object.keys(peers).forEach(removePeer);Object.keys(trainers).forEach(function(id){disposeUnit(trainers[id]);});influence.destroy();walls.destroy();waters.destroy();destroyIsland();destroyBiomes();shadowTexture.dispose();shadowMaterial.dispose();if(sun.shadow.map)sun.shadow.map.dispose();
         var seen = new Set(); scene.traverse(function (m) { if (m.geometry && !seen.has(m.geometry)) { seen.add(m.geometry); m.geometry.dispose(); } });
         Object.keys(geometries).forEach(function (key) { if (!seen.has(geometries[key])) geometries[key].dispose(); });

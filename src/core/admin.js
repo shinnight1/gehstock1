@@ -8,6 +8,7 @@
      Ansage    eine Meldung, die oben im Hub steht
      Sperren   wer gesperrt ist und wie man es wieder aufhebt
      Konto     wer man ist, Werkzeuge, abmelden
+     Rom-Event das GehstockMon-Event starten (nur der CEO, core/rom-steuerung.js)
      Sitzung   Aufsichtsrat, CEO und der Vertrag
 
    Der Reiter 'Sitzung' ist die Leitungsebene und steht nur dem CEO
@@ -45,6 +46,9 @@
     /* Die Leitungsebene sieht nur, wer ihr angehoert. */
     var leitung = A.binOwner() || A.binAufsicht();
     if (reiter === 'sitzung' && !leitung) reiter = 'konto';
+    /* Das Rom-Event steuert nur der CEO - nicht der Aufsichtsrat, kein Admin.
+       Der Server prueft das bei jeder Aktion selbst noch einmal. */
+    if (reiter === 'rom' && !A.binOwner()) reiter = 'konto';
 
     var body = UI.el('div');
     var inhalt = UI.el('div');
@@ -58,6 +62,7 @@
       { id: 'banne', label: '⛔ Sperren' },
       { id: 'konto', label: '🛡 Konto' },
     ];
+    if (A.binOwner() && SG.romSteuerung) reiterListe.push({ id: 'rom', label: '🇮🇹 Rom-Event' });
     if (leitung) reiterListe.push({ id: 'sitzung', label: '⚖️ Sitzung' });
 
     body.appendChild(UI.tabs(reiterListe, function (id) {
@@ -82,6 +87,7 @@
       else if (reiter === 'ansage') ansage(ziel);
       else if (reiter === 'banne') banne(ziel);
       else if (reiter === 'sitzung' && leitung) sitzung(ziel);
+      else if (reiter === 'rom' && A.binOwner() && SG.romSteuerung) SG.romSteuerung.reiter(ziel, neu);
       else konto(ziel);
     }
 
@@ -1018,6 +1024,9 @@
           : 'Kein Relais erreichbar. Alles, was du hier änderst, gilt nur auf '
             + 'diesem Gerät, bis die Verbindung wieder steht.',
       }));
+      /* Am Entwicklungsserver (leere Welt) gibt es noch keine Leitung - ohne
+         CEO liesse sich das Rom-Event dort nicht ausprobieren. */
+      if (SG.romSteuerung && SG.romSteuerung.devHilfe) SG.romSteuerung.devHilfe(ziel, neu);
 
       ziel.appendChild(UI.el('div.sec-head', null, [
         UI.el('h2', { text: 'Werkzeuge' }),

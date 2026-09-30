@@ -83,6 +83,7 @@ const CORE_ORDER = [
   'core/credits.js',
   'core/gate.js',
   'core/geschenke.js',
+  'core/rom-steuerung.js',
   'core/kroenung.js',
   'core/vertrag.js',
   'core/admin.js',

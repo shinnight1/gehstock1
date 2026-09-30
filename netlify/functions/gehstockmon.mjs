@@ -54,12 +54,20 @@ const clone = (value) => JSON.parse(JSON.stringify(value));
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' } });
 const SANDBOX_IDLE = 5 * 60 * 1000;
 function volatileStore() {
-  let value = null, version = 0;
+  /* Welt, Rom-Event und Spielerbeitraege bleiben auch in der Testzone
+     getrennte Dokumente. Ein Event darf vor dem ersten Beitritt starten. */
+  const values = new Map();
   return {
-    async getWithMetadata() { return value ? { data: clone(value), etag: String(version) } : null; },
+    async get(key) { const entry = values.get(key); return entry ? clone(entry.data) : null; },
+    async getWithMetadata(key) {
+      const entry = values.get(key);
+      return entry ? { data: clone(entry.data), etag: String(entry.version) } : null;
+    },
     async setJSON(key, next, options) {
-      if ((options?.onlyIfMatch !== undefined && options.onlyIfMatch !== String(version)) || (options?.onlyIfNew && value)) return { modified: false };
-      value = clone(next); version++; return { modified: true };
+      const entry = values.get(key);
+      if ((options?.onlyIfMatch !== undefined && (!entry || options.onlyIfMatch !== String(entry.version))) || (options?.onlyIfNew && entry)) return { modified: false };
+      values.set(key, { data: clone(next), version: (entry?.version || 0) + 1 });
+      return { modified: true };
     },
   };
 }
@@ -496,15 +504,15 @@ function settleBattle(world, p, id, now, requestId) {
 }
 
 /* Each turn, egg and upgrade is authoritative and atomically persisted. */
-/* verwaltungStore, romPin und romDev gibt es nur fuer die Tests: ohne sie
+/* verwStore, romPin und romDev gibt es nur fuer die Tests: ohne sie
    liest das Rom-Event den CEO aus der Verwaltung auf dem Relais, die PIN aus
    GEHSTOCK_ROM_PIN_HASH und den Entwicklungsmodus aus GEHSTOCK_DEV. */
-export function createHandler({ store, presenceStore, verwStore, now = Date.now, random = Math.random, sandbox = false, verwaltungStore, romPin, romDev } = {}) {
+export function createHandler({ store, presenceStore, verwStore, now = Date.now, random = Math.random, sandbox = false, romPin, romDev } = {}) {
   let sharedSandbox = null;
-  const romBasis = { verwaltung: verwaltungStore || { get: (...a) => speicher('hgh-rooms').get(...a) },
+  const romBasis = { verwaltung: verwStore || { get: (...a) => speicher('hgh-rooms').get(...a) },
     pin: romPin !== undefined ? romPin : (process.env.GEHSTOCK_ROM_PIN_HASH || ''), dev: romDev !== undefined ? !!romDev : entwicklung(),
     sandbox, random, rolle: roleForCode };
-  const romCtx = (db) => ({ ...romBasis, db, presence: presenceStore || speicher('hgh-gehstockmon-presence') });
+  const romCtx = (db, access) => ({ ...romBasis, db, access, presence: presenceStore || speicher('hgh-gehstockmon-presence') });
   /* Kurzes Gedaechtnis fuer die Anwesenheit, siehe unten bei op 'presence'. */
   let weltMerker = null;
   const WELT_FRISCH = 5000;
@@ -534,7 +542,7 @@ export function createHandler({ store, presenceStore, verwStore, now = Date.now,
   }
   function sandboxHandler(timestamp) {
     if (!sharedSandbox || timestamp - sharedSandbox.lastUsed >= SANDBOX_IDLE) {
-      sharedSandbox = { lastUsed: timestamp, handler: createHandler({ store: volatileStore(), presenceStore: volatileStore(), now, random, sandbox: true, verwaltungStore, romPin, romDev }) };
+      sharedSandbox = { lastUsed: timestamp, handler: createHandler({ store: volatileStore(), presenceStore: volatileStore(), now, random, sandbox: true, verwStore, romPin, romDev }) };
     }
     sharedSandbox.lastUsed = timestamp;
     return sharedSandbox.handler;
@@ -591,9 +599,9 @@ export function createHandler({ store, presenceStore, verwStore, now = Date.now,
          Aktionen schreiben nur den eigenen Beitrag - nie die ganze Welt. */
       if (body.op === 'rom_steuern' || body.op === 'rom_aktion') {
         try {
-          if (body.op === 'rom_steuern') return json({ serverTime: timestamp, ...await romSteuern(romCtx(db), { body, code: body.code, id, name, now: timestamp }) });
+          if (body.op === 'rom_steuern') return json({ serverTime: timestamp, ...await romSteuern(romCtx(db, accessFor(timestamp, bypass, tor.modus)), { body, code: body.code, id, name, now: timestamp }) });
           const welt = await presenzWelt(db, id, timestamp);
-          return json(await romAktion(romCtx(db), { body, id, world: welt, p: welt.players[id], now: timestamp }));
+          return json(await romAktion(romCtx(db, accessFor(timestamp, bypass, tor.modus)), { body, id, world: welt, p: welt.players[id], now: timestamp }));
         } catch (err) { if (err && err.romFehler) throw new GameError(err.message, err.status); throw err; }
       }
       if (body.op === 'kampfbericht') {
@@ -615,7 +623,7 @@ export function createHandler({ store, presenceStore, verwStore, now = Date.now,
            (er ist gerade erst beigetreten), wird sofort neu gelesen. */
         const welt=await presenzWelt(db,id,timestamp);
         /* Der Stand des Rom-Events reist mit der Positionsmeldung - kein eigener Abfragetakt. */
-        const rom=await romPresenz(romCtx(db),id,timestamp);
+        const rom=await romPresenz(romCtx(db, accessFor(timestamp, bypass, tor.modus)),id,timestamp);
         /* Die Version des Profilbilds (Uhrzeit des Hochladens) reist mit:
            so holen die anderen ein neues Bild genau einmal. Das Bild selbst
            liegt im Relais (room.mjs, profilbild:*). */
@@ -629,7 +637,7 @@ export function createHandler({ store, presenceStore, verwStore, now = Date.now,
         migrateAndSettle(world, timestamp);
         /* Ein beendetes Rom-Event wird im selben Schreibvorgang abgerechnet -
            genau einmal, auch bei mehreren Tabs oder wiederholten Anfragen. */
-        try { await romAbrechnen(romCtx(db), world, timestamp); } catch (err) { console.error('Rom-Abrechnung verschoben:', err.message); }
+        try { await romAbrechnen(romCtx(db, accessFor(timestamp, bypass, tor.modus)), world, timestamp); } catch (err) { console.error('Rom-Abrechnung verschoben:', err.message); }
         /* Verwaltung laeuft vor allem anderen ab: Der Admin muss die
            Spielerwelt nie selbst betreten haben, um sie zu verwalten. */
         if (body.op === 'admin_log') return json({ serverTime: timestamp, schenkungen: schenkungen(world) });

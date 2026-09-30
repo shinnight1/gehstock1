@@ -120,10 +120,15 @@ async function alleBeitraege(db, evId) {
 async function beitragAendern(db, evId, pid, fn) {
   const key = beitragSchluessel(evId);
   if (mitFeldern(db)) {
-    const alt = beitragSauber(await db.feld(key, pid));
-    const neu = fn(clone(alt));
-    if (neu) await db.feldSetzen(key, pid, neu);
-    return neu || alt;
+    for (let versuch = 0; versuch < 8; versuch++) {
+      const gelesen = await db.feld(key, pid), alt = beitragSauber(gelesen);
+      const neu = fn(clone(alt));
+      if (!neu) return alt;
+      const w = await db.feldSetzen(key, pid, neu, { onlyIfValue: gelesen });
+      if (w.modified) return neu;
+      await pause(versuch);
+    }
+    fail('Auf der Piazza ist gerade zu viel los. Bitte gleich noch einmal.', 409);
   }
   for (let versuch = 0; versuch < 8; versuch++) {
     const e = await db.getWithMetadata(key, { type: 'json', consistency: 'strong' });
@@ -170,7 +175,8 @@ function eigenSicht(b, ev, now) {
   return { lire: ROM.lire(x), proPhase: x.lire, stern: x.stern, schlaege: x.schlaege, schaden: x.schaden,
     vorrat: ROM.vorrat(x, ev, now), zutaten: (x.zutaten || []).slice(-40), tanz: (x.tanz || []).slice(-20),
     gefechte: x.gefechte || { s: 0, n: 0 }, muenze: !!x.muenze, fang: x.fang || {},
-    tPolonaise: x.tPolonaise || 0, tGefecht: x.tGefecht || 0, tStern: x.tStern || 0, tZutat: x.tZutat || 0 };
+    tPolonaise: x.tPolonaise || 0, tGefecht: x.tGefecht || 0, tStern: x.tStern || 0, tZutat: x.tZutat || 0,
+    schlagStand: Number.isFinite(x.schlagStand) ? x.schlagStand : null };
 }
 function sicht(ev, alle, id, now) {
   if (!ev || !sichtbar(ev, now)) return null;
@@ -378,7 +384,7 @@ export async function romAktion(ctx, { body, id, world, p, now }) {
 /* ---------------------------------------------------------- Steuerung */
 
 function steuerSicht(ctx, s, now) {
-  const ev = s.ev, zugang = H.access(now), frei = ctx.dev || ctx.sandbox;
+  const ev = s.ev, zugang = ctx.access || H.access(now), frei = ctx.dev || ctx.sandbox;
   const woche = E.woche(now), wocheBelegt = !frei && !!s.dok.wochen[woche];
   const reicht = frei || (zugang.open && zugang.closesAt - now >= ROM.GESAMT + ROM.PUFFER);
   const laeuft = !!ev && ROM.laeuft(ev, now);
@@ -424,7 +430,7 @@ export async function romSteuern(ctx, { body, code, id, name, now }) {
   if (aktion === 'start') {
     const faktor = frei && ROM.ZEITRAFFER.includes(Number(body.faktor)) ? Number(body.faktor) : 1;
     if (!frei) {
-      const zugang = H.access(now);
+      const zugang = ctx.access || H.access(now);
       if (!zugang.open) fail('GehstockMon ist gerade geschlossen - das Event startet nur während der Öffnungszeiten.', 423);
       if (zugang.closesAt - now < ROM.GESAMT + ROM.PUFFER) fail('Bis zum Schließen um ' + uhrzeit(zugang.closesAt) + ' Uhr reicht die Zeit nicht mehr für 13 Minuten Rom.', 409);
     }
@@ -524,10 +530,10 @@ function auszahlen(world, ev, alle, now) {
     world.reports.push({ id: 'rom-' + ev.id + '-' + pid, time: now, attackerId: pid, defenderId: null, territoryId: 1, text: berichtText(letztes) });
   }
   world.reports = world.reports.slice(-150);
-  tickern(world, '🇮🇹 ROMA È FINITA ist vorbei: ' + anzahl + (anzahl === 1 ? ' Held' : ' Helden') + ' - '
+  tickern(world, '🇮🇹 ROMA È FINITA ist vorbei: ' + lage.teilnehmer + ' in Rom, ' + anzahl + ' mit Belohnung - '
     + (lage.bossBesiegt ? 'Imperatore Mozzarellus ist geschmolzen!' : 'Mozzarellus ist auf der Vespa entkommen.'), 'boss', now);
   world.rom.archiv = (Array.isArray(world.rom.archiv) ? world.rom.archiv : []).concat({ id: ev.id, start: ev.start, ende: ROM.ende(ev),
-    von: (ev.von && ev.von.name) || 'CEO', teilnehmer: anzahl, boss: lage.bossBesiegt, leiste: lage.leisteVoll, abgebrochen: !!ev.abgebrochenAm }).slice(-10);
+    von: (ev.von && ev.von.name) || 'CEO', teilnehmer: lage.teilnehmer, belohnt: anzahl, boss: lage.bossBesiegt, leiste: lage.leisteVoll, abgebrochen: !!ev.abgebrochenAm }).slice(-10);
 }
 /* Laeuft bei jedem Weltzugriff mit. Rechnet jedes beendete Event genau
    einmal ab - drei Sekunden nach dem Ende, damit eine Aktion, die kurz vor

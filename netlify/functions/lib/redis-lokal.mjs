@@ -166,12 +166,16 @@ export function speicherClient() {
     get: async (k) => { const w = daten.get(k); if (w instanceof Map) throw new Error('WRONGTYPE'); return w ?? null; },
     set: async (k, w) => { daten.set(k, String(w)); return 'OK'; },
     del: async (...keys) => keys.filter((k) => daten.delete(k)).length,
-    /* Nur das Vergleichen-und-Schreiben aus lib/speicher.mjs. */
-    eval: async (skript, [key], [neu, bedingung]) => {
-      const aktuell = daten.has(key) ? daten.get(key) : null;
+    /* Nur die beiden Vergleichen-und-Schreiben-Skripte aus lib/speicher.mjs. */
+    eval: async (skript, [key], [neu, bedingung, feld]) => {
+      const hash = feld !== undefined;
+      const h = hash && daten.get(key) instanceof Map ? daten.get(key) : new Map();
+      const aktuell = hash ? (h.has(feld) ? h.get(feld) : null) : (daten.has(key) ? daten.get(key) : null);
       const passt = bedingung === '@neu' ? aktuell === null : aktuell !== null && sha1(aktuell) === bedingung;
       if (!passt) return 0;
-      daten.set(key, neu); return 1;
+      if (hash) { h.set(feld, neu); daten.set(key, h); }
+      else daten.set(key, neu);
+      return 1;
     },
     scan: async (cursor, { match = '*' } = {}) => ['0', [...daten.keys()].filter((k) => muster(match).test(k))],
     hgetall: async (k) => Object.fromEntries(daten.get(k) instanceof Map ? daten.get(k) : []),

@@ -94,6 +94,10 @@
     function kampfSchliessen(){joyEnd();arenaBox.hidden=true;root.classList.remove('gm-arena-open');if(world){world.pause(false);world.follow();}update();}
     var duellUi=R.mountDuell({el:el,button:button,arenaBox:arenaBox,openCombat:kampfOeffnen,closeCombat:kampfSchliessen,request:requestOnline,apply:applyOnline,error:onlineError,notify:notify,busy:function(){return busy;},now:now,after:host.after,cancel:host.cancel,sofort:function(){lastPoll=0;}});
     function dueling(){return !!(adventures&&adventures.active())||!!(duellUi&&duellUi.aktiv());}
+    /* Das Rom-Event (2-rom-ui.js): sein Stand kommt mit der Positionsmeldung. */
+    var rom=R.mountRom({el:el,button:button,root:root,world:function(){return world;},now:now,notify:notify,state:function(){return st;},busy:function(){return busy;},apply:applyOnline,after:host.after,cancel:host.cancel,
+      imKampf:function(){return !!battle||dueling()||!!(adventures&&adventures.dungeonActive&&adventures.dungeonActive())||!!(online&&online.arena&&online.arena.phase!=='finished');},
+      eier:function(){showEggs();},gemeldet:function(){return lastPresencePos&&lastPresenceReply?{x:lastPresencePos.x,z:lastPresencePos.z,t:lastPresenceReply}:null;},sofortMelden:function(){lastPresence=0;}});
     function syncInput(){if(world)world.blockInput(!connected||busy||!!battle||dueling()||!drawer.hidden);root.setAttribute('aria-busy',String(busy));}
     function territories(){return online?online.territories:[];}
     function own(t){return !!(online&&t&&t.ownerId===online.playerId);}
@@ -201,7 +205,7 @@
        ['Kampfberichte','Unter Spielerwelt stehen die letzten Gebietskämpfe. Einer mit Verlauf lässt sich Runde für Runde nachlesen.'],
        ['Spielerwelt','Echte Spieler und Computergegner kämpfen um dieselben Gebiete. Deine gespeicherte Truppe verteidigt, wenn du offline bist.']].forEach(function(v){drawer.appendChild(el('h3',v[0]));drawer.appendChild(el('p',v[1]));});
     }
-    function showCollection(){if(!openDrawer('Deine Mons · '+st.besitz.length+'/'+D.KATALOG.length+'','mons'))return;drawer.appendChild(el('p','Deine Truppe · Das erste Mon beginnt jeden Arenakampf.'));
+    function showCollection(){var eventMons=(D.EVENT_MONS||[]).filter(function(k){return st.besitz.indexOf(k.id)>=0;});if(!openDrawer('Deine Mons · '+(st.besitz.length-eventMons.length)+'/'+D.KATALOG.length+(eventMons.length?' · +'+eventMons.length+' Event':''),'mons'))return;drawer.appendChild(el('p','Deine Truppe · Das erste Mon beginnt jeden Arenakampf.'));
       var squad=el('div',undefined,'gm-squad-preview');st.truppe.forEach(function(id,i){var k=X.mon(st,id),b=button('',function(){showMon(id);},'gm-party-card');b.style.setProperty('--rarity',D.SELTENHEITEN[k.seltenheit].farbe);b.appendChild(art(k));b.appendChild(el('strong',(i+1)+'. '+k.name));squad.appendChild(b);});drawer.appendChild(squad);
       /* Filter. Seit jeder Aussenposten eine eigene Besatzung hat, ist "wer ist
          noch frei" die haeufigste Frage vor dem Aufstellen - deshalb steht sie
@@ -212,7 +216,8 @@
         leiste.appendChild(b);
       });
       drawer.appendChild(leiste);
-      var grid=el('div',undefined,'gm-collection'),gezeigt=0;D.KATALOG.slice().sort(function(a,b){return b.seltenheit-a.seltenheit||a.name.localeCompare(b.name,'de');}).filter(function(k){
+      /* Event-Mons (etwa Centurio Mozzarino aus dem Rom-Event) stehen nur da, wer sie hat. */
+      var grid=el('div',undefined,'gm-collection'),gezeigt=0;D.KATALOG.concat(eventMons).sort(function(a,b){return b.seltenheit-a.seltenheit||a.name.localeCompare(b.name,'de');}).filter(function(k){
         var hat=st.besitz.indexOf(k.id)>=0,imDienst=X.einsatzOrte(st,k.id).length>0;
         if(sammlungFilter==='frei')return hat&&!imDienst;
         if(sammlungFilter==='dienst')return hat&&imDienst;
@@ -390,6 +395,7 @@
       if(egg.art==='handel')return 'Ei vom Händler'+mindestens;
       if(egg.art==='streifzug')return 'Ei vom Streifzug';
       if(egg.art==='geschenk')return 'Geschenk-Ei';
+      if(egg.art==='rom')return '🇮🇹 Rom-Ei · mindestens Legendär';
       if(id.indexOf('weekend-')===0)return 'Wochenend-Ei aus '+gebiet;
       if(id.indexOf('reward-')===0)return 'Trainer-Ei aus '+gebiet;
       if(id.indexOf('stolen-')===0)return 'Erbeutetes Ei'+mindestens;
@@ -506,9 +512,9 @@
        Geraet), wird an den gemeldeten Ort gesetzt. */
     var ortGesetzt=false;
     function ortUebernehmen(ort){if(!world||!ort||!world.setPosition)return;var hier=world.position&&world.position();if(ortGesetzt&&hier&&Math.hypot(hier.x-ort.x,hier.z-ort.z)<40)return;ortGesetzt=true;world.setPosition(ort);}
-    function applyOnline(res){if(dead)return;if(res&&res.neueTitel&&res.neueTitel.length){var neu=res.neueTitel.slice();host.after(function(){notify('🏅 Neuer Titel: '+neu.join(', ')+'. In der Ausrüstung kannst du ihn tragen.');},3000);}var wasConnected=connected;if(!res.territories||res.territories.length!==D.FELDER.length)throw new Error('Die Karte wurde aktualisiert. Bitte lade die Website neu.');setAccess(res.access);online=res;connected=true;lastPoll=Date.now();timeOffset=res.serverTime-Date.now();st=D.neuerStand(res.profile,res.serverTime);worldButton.textContent=lastPresenceReply?'Spielerwelt · '+(peerList.length+1)+' online':'Spielerwelt';connectionBox.hidden=true;root.classList.remove('gm-disconnected');adventures.apply(res);stadt.apply(res);heute.apply(res);duellUi.apply(res);if(world)world.pause(!!battle||dueling());update();if(!wasConnected)ortUebernehmen(res.spawn);if(dueling())adventures.showDuel();if(res.dailyDelivery&&!res.duplicate)notify(res.dailyDelivery+' tägliches Gebietsgold wurde gutgeschrieben.');if(res.weekendDelivery&&!res.duplicate)notify(res.weekendDelivery+' Wochenend-Eier sind in deiner Bruttasche angekommen.');}
+    function applyOnline(res){if(dead)return;if(res&&res.neueTitel&&res.neueTitel.length){var neu=res.neueTitel.slice();host.after(function(){notify('🏅 Neuer Titel: '+neu.join(', ')+'. In der Ausrüstung kannst du ihn tragen.');},3000);}var wasConnected=connected;if(!res.territories||res.territories.length!==D.FELDER.length)throw new Error('Die Karte wurde aktualisiert. Bitte lade die Website neu.');setAccess(res.access);online=res;connected=true;lastPoll=Date.now();timeOffset=res.serverTime-Date.now();st=D.neuerStand(res.profile,res.serverTime);worldButton.textContent=lastPresenceReply?'Spielerwelt · '+(peerList.length+1)+' online':'Spielerwelt';connectionBox.hidden=true;root.classList.remove('gm-disconnected');adventures.apply(res);stadt.apply(res);heute.apply(res);duellUi.apply(res);if(rom)rom.apply(res);if(world)world.pause(!!battle||dueling());update();if(!wasConnected)ortUebernehmen(res.spawn);if(dueling())adventures.showDuel();if(res.dailyDelivery&&!res.duplicate)notify(res.dailyDelivery+' tägliches Gebietsgold wurde gutgeschrieben.');if(res.weekendDelivery&&!res.duplicate)notify(res.weekendDelivery+' Wochenend-Eier sind in deiner Bruttasche angekommen.');}
     function applyPeers(peers,serverTime){if(dead)return;peerList=peers;var keep={};peers.forEach(function(p){keep[p.id]=true;var label=peerLabels[p.id];if(!label){label=button('',function(){var peer=peerList.find(function(v){return v.id===p.id;});if(peer)adventures.rival(peer);},'gm-peer-label mit-bild');label.pbKreis=SG.profilbild.fremderKreis(p.id,p.bild||0,p.name,'pb-gm');label.pbText=el('span','','gm-peer-text');label.appendChild(label.pbKreis);label.appendChild(label.pbText);peerLayer.appendChild(label);peerLabels[p.id]=label;}label.pbKreis.laden(p.id,p.bild||0,p.name);label.pbText.textContent=(p.champion?'♛ ':'')+p.name+(p.activity==='arena'?' · ⚔':'');if(p.titel)label.pbText.appendChild(el('small',p.titel,'gm-peer-titel'));label.hidden=true;label.title=p.champion?'Gehstock-Champion':p.activity==='arena'?'Kämpft gerade in einer Arena':'Auf der Insel unterwegs';});Object.keys(peerLabels).forEach(function(id){if(!keep[id]){peerLabels[id].remove();delete peerLabels[id];}});if(world&&world.setPeers)world.setPeers(peers,serverTime);worldButton.textContent='Spielerwelt · '+(peers.length+1)+' online';}
-    function syncPresence(){if(dead||!connected||presenceBusy||busy||document.hidden||!world||!world.position)return;presenceBusy=true;lastPresence=Date.now();var position=world.position();R.online.request('presence',{position:position,bild:SG.profilbild.version()}).then(function(res){if(dead||!connected)return;presenceFailed=false;lastPresencePos=res.positionCorrected&&res.position?res.position:position;setAccess(res.access);if(res.positionCorrected&&world.setPosition)world.setPosition(res.position);lastPresenceReply=Date.now();applyPeers(res.peers||[],res.serverTime);if(res.duellEinladung)duellUi.einladung(res.duellEinladung);}).catch(function(err){presenceFailed=true;if(err.status===423){onlineError(err);return;}if(!dead&&Date.now()-lastPresenceReply>15000){applyPeers([],now());worldButton.textContent='Spielerwelt · Verbindung prüfen';}}).finally(function(){presenceBusy=false;});}
+    function syncPresence(){if(dead||!connected||presenceBusy||busy||document.hidden||!world||!world.position)return;presenceBusy=true;lastPresence=Date.now();var position=world.position();R.online.request('presence',{position:position,bild:SG.profilbild.version()}).then(function(res){if(dead||!connected)return;presenceFailed=false;lastPresencePos=res.positionCorrected&&res.position?res.position:position;setAccess(res.access);if(res.positionCorrected&&world.setPosition)world.setPosition(res.position);lastPresenceReply=Date.now();applyPeers(res.peers||[],res.serverTime);if(rom)rom.presenz(res.rom||null,res.serverTime);if(res.duellEinladung)duellUi.einladung(res.duellEinladung);}).catch(function(err){presenceFailed=true;if(err.status===423){onlineError(err);return;}if(!dead&&Date.now()-lastPresenceReply>15000){applyPeers([],now());worldButton.textContent='Spielerwelt · Verbindung prüfen';}}).finally(function(){presenceBusy=false;});}
     /* Wie oft die eigene Position zum Server geht. Frueher stur alle zwei
        Sekunden (allein alle sechs) - auch wer nur in einem Menue stand. Das
        war der teuerste Takt im ganzen Hideout. Jetzt:
@@ -522,7 +528,7 @@
       if(!next)return;
       if(access&&!access.open&&next.open&&next.serverTime<access.serverTime){var err=new Error('GehstockMon ist gerade geschlossen.');err.status=423;err.access=access;throw err;}
       access=next;timeOffset=next.serverTime-Date.now();if(closeTimer)host.cancel(closeTimer);
-      hoursLabel.textContent=next.adminOverride?'Developer-Testzone · ungespeichert geöffnet':next.open?'Heute geöffnet bis '+new Intl.DateTimeFormat('de-DE',{timeZone:H.ZONE,hour:'2-digit',minute:'2-digit'}).format(new Date(next.closesAt))+' Uhr':'';
+      hoursLabel.textContent=next.adminOverride?'Developer-Testzone · ungespeichert geöffnet':next.dev?'Entwicklung · immer geöffnet':next.open?'Heute geöffnet bis '+new Intl.DateTimeFormat('de-DE',{timeZone:H.ZONE,hour:'2-digit',minute:'2-digit'}).format(new Date(next.closesAt))+' Uhr':'';
       if(next.open&&!next.adminOverride)closeTimer=host.after(function(){if(!dead)showClosed(H.access(Math.max(now(),next.closesAt)));},Math.max(0,next.closesAt-next.serverTime));
     }
     function showAdminMenu(card,message){
@@ -651,7 +657,7 @@
       host.after(tick,1000);
     }
     update();connectWorld();host.after(tick,1000);
-    return {get state(){return st;},selftest:function(){var ohneBild=D.KATALOG.filter(function(k){return !SG.assets[k.bild];});if(ohneBild.length)throw new Error('Mon ohne Bild: '+ohneBild.map(function(k){return k.id;}).join(', '));},destroy:function(){dead=true;requestEpoch++;animationToken++;if(closeTimer)host.cancel(closeTimer);window.removeEventListener('blur',joyEnd);window.removeEventListener('offline',connectionLost);window.removeEventListener('online',connectionRestored);document.removeEventListener('visibilitychange',joyEnd);if(world)world.destroy();}};
+    return {get state(){return st;},selftest:function(){var ohneBild=D.KATALOG.concat(D.EVENT_MONS||[]).filter(function(k){return !SG.assets[k.bild];});if(ohneBild.length)throw new Error('Mon ohne Bild: '+ohneBild.map(function(k){return k.id;}).join(', '));},destroy:function(){dead=true;requestEpoch++;animationToken++;if(closeTimer)host.cancel(closeTimer);window.removeEventListener('blur',joyEnd);window.removeEventListener('offline',connectionLost);window.removeEventListener('online',connectionRestored);document.removeEventListener('visibilitychange',joyEnd);if(rom)rom.destroy();if(world)world.destroy();}};
   }
   SG.register({id:'gehstockmon',name:'GehstockMon',category:'gehstockmon',onlineOnly:true,heavy:true,credit:{icon:'🐉',text:'Handgemacht von Louis entwickelt.'},desc:'Gemeinsame Online-Welt: 57 Mons, 9 Biome, Quests, Duelle und Überfälle',tags:['3d','monster','arena','eier','revier','spielerwelt'],
     preview:function(c,w,h){
