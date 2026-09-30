@@ -81,6 +81,11 @@
     var bautenEbene=el('div',undefined,'gm-bauten-ebene');root.appendChild(bautenEbene);
     var bauten=R.mountBauten({el:el,button:button,layer:bautenEbene,oeffnen:{stadt:stadt.menu,hafen:stadt.hafen,haendler:stadt.haendler,tausch:stadt.tausch,schmiede:stadt.schmiede,
       rathaus:function(){adventures.rathaus();},streifzug:function(){adventures.streifzuege();}}});
+    /* Neu seit dem Update (2-neu-ui.js): einmal je Person, sobald nichts anderes offen ist. */
+    var neu=R.mountNeu({el:el,button:button,root:root,state:function(){return online?st:null;},hinfuehren:hinfuehren});
+    function hinfuehren(ziel){
+      if(ziel==='automat'){stadt.haendler();var karte=drawer.querySelector('.gm-automat');if(karte&&karte.scrollIntoView)karte.scrollIntoView({block:'center'});}
+    }
     var heute=R.mountHeute({revanche:zurRevanche,kampfbericht:berichtOeffnen,el:el,button:button,drawer:drawer,root:root,open:openDrawer,closeDrawer:closeDrawer,request:requestOnline,apply:applyOnline,error:onlineError,notify:notify,busy:function(){return busy;},now:now,sfx:host.sfx,after:host.after,cancel:host.cancel,playerId:function(){return online&&online.playerId;}});
     /* Das Live-Duell nutzt denselben Kasten wie die Arena. */
     /* Der Joystick wird dabei jedes Mal losgelassen: ging ein Fenster auf, waehrend man ihn hielt,
@@ -184,6 +189,7 @@
        ['Ohne Gebiet','Dann gibt es im Hafenkontor Tagwerk für Gold und jede geöffnete Stunde ein Ei aus dem Findelhaus. Kurieraufträge zahlen dir den vollen Lohn. Sobald du wieder ein Gebiet hältst, kommen deine Eier von dort.'],
        ['Kurierdienst','Im Hafenkontor liegen Pakete: abholen, vor das Tor eines Außenpostens tragen, 12 bis 35 Gold kassieren. Eilaufträge bringen in der Frist die Hälfte mehr. Wer Gebiete hält, bekommt weniger Lohn.'],
        ['Goldwaren','Der Händler verkauft ein Ei pro Tag für '+X.HAENDLER_EI_PREIS+' Gold und eine Schimmerperle für '+X.SCHIMMERPERLE_PREIS+' Gold. Steht die Markthalle, handelt er auch Runen und Rohstoffe, mit Wochengrenzen. In der Runenschmiede zerlegst oder verschmilzt du Runen.'],
+       ['Glücksautomat','Beim Händler steht ein Glücksautomat: Ein Spiel kostet '+X.AUTOMAT.einsatz+' Gold, drei Eier auf den Walzen bringen ein Ei. Mehr als '+X.AUTOMAT.proTag+' Eier am Tag gibt er nicht her.'],
        ['Tauschbrett','Im Tauschhaus hängst du ein Mon aus und sagst, was du dafür suchst. Getauscht wird nur in derselben Seltenheit, samt Runenstufe und Wesen.'],
        ['Bürgermeister','Im Rathaus wählt die Insel jede Woche einen Bürgermeister, ausgezählt wird am Montag. Wer kandidiert, verspricht einen Erlass für die nächste Woche. Der Sieger bekommt '+X.WAHL.gehalt+' Gold Amtsgehalt und eine Woche den Titel Bürgermeister. '+(X.WAHL.offen?'Wählen und kandidieren darf gerade jeder.':'Wählen und Kandidieren gehen erst ab einem bestimmten Trainerrang und Kontoalter.')],
        ['Inselwetter','Jede Woche hat ihr Wetter, das eine Woche vorher feststeht. Es ändert Gold, Streifzüge, Runen oder den Händler, aber nie das Schlüpfen. Die Kachel über der Karte zeigt es samt Vorhersage.'],
@@ -488,7 +494,9 @@
       requestOnline('arena_turn',{battleId:battle.id,revision:battle.revision,action:action}).then(function(res){if(dead)return;applyOnline(res);animateTurn(res.arena,before);}).catch(onlineError);
     }
     function fleeBattle(){if(!connected||busy||animating||!battle)return;requestOnline('arena_flee',{battleId:battle.id,revision:battle.revision}).then(function(res){applyOnline(res);showArena(res.arena,false);}).catch(onlineError);}
-    function requestOnline(op,data){if(dead||busy)return Promise.reject(new Error('Bitte warte auf die aktuelle Aktion.'));requestEpoch++;busy=true;joyEnd();syncInput();if(battle)renderArena(false);else closeDrawer();return (leise||Promise.resolve()).then(function(){return R.online.request(op,data);}).finally(function(){busy=false;if(!dead){syncInput();if(battle&&!animating)renderArena(false);drawTarget();}});}
+    /* opts.fensterBleibt: das offene Fenster waehrend der Anfrage stehen lassen
+       (Gluecksautomat) - sonst verschwindet es bei jedem Tipp kurz. */
+    function requestOnline(op,data,opts){if(dead||busy)return Promise.reject(new Error('Bitte warte auf die aktuelle Aktion.'));requestEpoch++;busy=true;joyEnd();syncInput();if(battle)renderArena(false);else if(!(opts&&opts.fensterBleibt))closeDrawer();return (leise||Promise.resolve()).then(function(){return R.online.request(op,data);}).finally(function(){busy=false;if(!dead){syncInput();if(battle&&!animating)renderArena(false);drawTarget();}});}
     /* Wo die Figur nach dem Verbinden steht. Beim ersten Mal genau dort, wo
        der Server einen zuletzt gesehen hat - das ist nach dem Neuladen der
        Ort von vorhin, nicht mehr der Start. Nach einem kurzen Aussetzer
@@ -635,6 +643,7 @@
       var duellPoll=duellUi.pollNoetig();
       if(connected&&(adventures.dungeonActive()||duellPoll)&&!busy&&!polling&&!document.hidden&&Date.now()-lastPoll>(duellPoll?duellUi.pollIntervall():2500)){lastPoll=Date.now();polling=true;var dungeonEpoch=requestEpoch;R.online.request('world',duellPoll?duellUi.pollDaten():undefined).then(function(res){if(dead||!connected||dungeonEpoch!==requestEpoch||busy)return;applyOnline(res);}).catch(function(err){if(dungeonEpoch===requestEpoch)onlineError(err);}).finally(function(){polling=false;});}
       if(peerList.length&&Date.now()-lastPresenceReply>15000)applyPeers([],now());
+      if(connected&&online)neu.pruefen(!busy&&!battle&&!dueling()&&!animating&&drawer.hidden&&!!access&&access.open);
       root.querySelectorAll('[data-until]').forEach(function(node){var until=Number(node.getAttribute('data-until'));node.textContent=until<=now()?node.getAttribute('data-ready'):duration(until-now());});
       root.querySelectorAll('[data-enable-at]').forEach(function(node){node.disabled=busy||Number(node.getAttribute('data-enable-at'))>now();});
       if(connected&&tickCount%15===0&&!battle&&!dueling()){drawTarget();if(drawerView==='posts'||drawerView&&drawerView.indexOf('post:')===0)refreshDrawer(drawerView);}

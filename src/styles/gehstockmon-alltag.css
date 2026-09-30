@@ -70,3 +70,13 @@
 .gm-duell-warte{font-size:14px;color:#ffd27a;text-align:center;margin:6px 0}
 .gm-duell-zuschauer{font-size:12px;color:#9fb5c2;text-align:center}
 .gm-duell-einladung{border:1px solid #66f5df88;background:linear-gradient(140deg,#1d4147,#13303a)}
+
+/* Neu seit dem Update (2-neu-ui.js): klein, mittig, einmal je Person */
+.gm-neu{position:absolute;inset:0;z-index:9;display:grid;place-items:center;padding:16px;background:#050d1099;animation:gm-neu-ein .25s ease-out}
+.gm-neu-karte{width:min(380px,100%);padding:20px 20px 16px;border:1px solid #e8c58899;border-radius:16px;background:linear-gradient(160deg,#1d4147,#13303a);box-shadow:0 18px 50px #000a;text-align:center}
+.gm-neu-karte h2{margin:6px 0 8px;font-size:22px;color:#fff3d6}
+.gm-neu-karte p{margin:0 0 14px;color:#cfe3e7;font-size:15px;line-height:1.45}
+.gm-neu-bild{display:block;width:64px;height:64px;margin:10px auto 2px;filter:drop-shadow(0 4px 6px #0009)}
+.gm-neu-knoepfe{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+@keyframes gm-neu-ein{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.gm-neu{animation:none}}
