@@ -92,3 +92,8 @@
 .gm-chance small{font-size:11px;opacity:.6}
 .gm-chance strong{font-variant-numeric:tabular-nums;font-size:13px}
 .gm-chancen-fuss{font-size:12px;opacity:.72}
+/* Warnung unter dem Startsprung: klein wie eine Fussnote, aber rot.
+   Der zweite Selektor ist noetig, nicht schoen: .gm-drawer p setzt Farbe
+   und Groesse und ist spezifischer als eine blosse Klasse. */
+.gm-sprung-warnung,
+.gm-drawer p.gm-sprung-warnung{color:#ff8a92;font-size:13px;line-height:1.5;margin:8px 0 0;opacity:.95}

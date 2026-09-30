@@ -572,9 +572,12 @@
     function showOnline(){if(!openDrawer('Die Spielerwelt','online'))return;drawer.appendChild(el('p','Du teilst diese Welt mit allen Hideout-Spielern. Erobere Gebiete von Spielern und Computergegnern. Deine gespeicherten Mons verteidigen auch, wenn du offline bist.'));
       if(R.adminOverride){drawer.appendChild(el('p','GEMEINSAME TESTZONE · Andere Tester sind sichtbar und können mit dir spielen. Alles bleibt flüchtig: Kein Gold, kein Kauf und kein Kampf verändert die echte Spielerwelt.'));drawer.appendChild(button('Testzone verlassen',function(){R.adminOverride=false;saveAdmin(false);R.online.resetTest();online=null;battle=null;connectWorld();}));}/* Live-Duelle: wer gerade kämpft, und wer zusehen will. */
       var duelle=duellUi.laufend();if(duelle.length){drawer.appendChild(el('h3','Live-Duelle'));duelle.forEach(function(x){drawer.appendChild(button('👀 Zuschauen: '+x.namen[0]+' gegen '+x.namen[1]+' · Runde '+x.runde,function(){closeDrawer();duellUi.zuschauen(x.id);}));});}
-      /* Zurueck zum Start (2-startsprung.js): einmal alle dreissig Minuten. */
+      /* Zurueck zum Start (2-startsprung.js). Die Minutenzahl kommt aus
+         X.START_SPRUNG_PAUSE, damit Text und Wartezeit nicht auseinanderlaufen. */
+      var sprungMin=Math.round(X.START_SPRUNG_PAUSE/60000);
       var sprungAb=X.startSprungAb(st),sprungWarten=sprungAb>now(),sprung=button(sprungWarten?'⌂ Wieder in '+Math.ceil((sprungAb-now())/60000)+' Min. möglich':'⌂ Zurück zum Start',zumStart,sprungWarten?'gm-button':'gm-button gm-primary');sprung.disabled=sprungWarten||busy||!!battle||dueling();
-      drawer.appendChild(el('h3','Zurück zum Start'));drawer.appendChild(el('p','Bringt dich sofort zum Startplatz in der Inselmitte. Geht alle 30 Minuten einmal.'));drawer.appendChild(sprung);
+      drawer.appendChild(el('h3','Zurück zum Start'));drawer.appendChild(el('p','Bringt dich sofort zum Startplatz in der Inselmitte. Geht alle '+sprungMin+' Minuten einmal.'));drawer.appendChild(sprung);
+      drawer.appendChild(el('p','⚠ Missbrauch wird bestraft. Wer den Sprung nutzt, um Mitspielern zu entwischen oder sie zu ärgern, muss mit einer Sperre rechnen.','gm-sprung-warnung'));
       drawer.appendChild(el('h3','Auf der Insel'));drawer.appendChild(el('p',peerList.length?peerList.map(function(p){return p.name+(p.activity==='arena'?' (in der Arena)':'');}).join(' · '):'Gerade sind keine anderen Spieler sichtbar.'));
       peerList.forEach(function(p){drawer.appendChild(button(p.name+' · '+(p.protected?'geschützt':X.weapon(p.weapon).name),function(){adventures.rival(p);}));});
       if(R.online.pending())drawer.appendChild(button('Offene Aktion prüfen',resumeOnline,'gm-button gm-primary'));

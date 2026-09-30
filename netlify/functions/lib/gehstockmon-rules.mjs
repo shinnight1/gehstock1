@@ -2974,7 +2974,7 @@ const SG = { rules: {} };
 
    Wer sich auf der Insel verlaufen hat oder schnell wieder in die Mitte
    will, springt unter "Spielerwelt" an den Startplatz - einmal alle
-   dreissig Minuten. Umgesetzt wird die Figur vom Server (Zug 'zum_start'
+   fuenf Minuten. Umgesetzt wird die Figur vom Server (Zug 'zum_start'
    in netlify/functions/gehstockmon.mjs): die Wegpruefung liesse einen so
    weiten Satz sonst nicht gelten und stellte die Figur zurueck.
 
@@ -2984,7 +2984,7 @@ const SG = { rules: {} };
 (function (SG) {
   var R = SG.gehstockmon, D = R.daten, X = R.abenteuer;
 
-  X.START_SPRUNG_PAUSE = 30 * 60000;
+  X.START_SPRUNG_PAUSE = 5 * 60000;
   X.SPIELZUEGE.push('zum_start');
 
   /* Ab wann es wieder geht; 0 heisst: sofort. */

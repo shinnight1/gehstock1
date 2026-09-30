@@ -315,7 +315,7 @@ function startpunkt(eintrag, world, id, timestamp) {
 async function eigenerEintrag(db, id) {
   try { return (await anwesenheitLesen(db)).eintraege[id] || null; } catch (err) { return null; }
 }
-/* Zug 'zum_start' (unter Spielerwelt): alle dreissig Minuten zurueck an den
+/* Zug 'zum_start' (unter Spielerwelt): alle fuenf Minuten zurueck an den
    Startplatz. Die Wegpruefung in updatePresence rechnet vom zuletzt
    gemeldeten Ort aus - deshalb traegt der Zug den neuen Ort selbst in die
    Anwesenheit ein. Das geschieht vor dem Schreiben der Welt: scheitert
@@ -336,7 +336,7 @@ async function zumStart({ world, p, id, now, presence }) {
   }
   p.spawn = { ...ort };
   p.startSprungAt = now;
-  return { startSprung: { ...ort }, message: 'Du stehst wieder am Start. Das nächste Mal geht es in 30 Minuten.' };
+  return { startSprung: { ...ort }, message: 'Du stehst wieder am Start. Das nächste Mal geht es in ' + Math.round(X.START_SPRUNG_PAUSE / 60000) + ' Minuten.' };
 }
 async function updatePresence(db, world, id, position, timestamp, clock, bypass = false, bild = 0) {
   const p = world.players[id];

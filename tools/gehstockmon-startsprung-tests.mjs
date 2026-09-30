@@ -1,4 +1,4 @@
-/* Zurueck zum Start (Zug 'zum_start'): alle dreissig Minuten an den
+/* Zurueck zum Start (Zug 'zum_start'): alle fuenf Minuten an den
    Startplatz, und die Wegpruefung laesst den Sprung gelten.
    Aufruf: node tools/gehstockmon-startsprung-tests.mjs */
 import assert from 'node:assert/strict';
@@ -27,9 +27,9 @@ const weit=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
 
 await test('Beide Seiten kennen den Zug und die Wartezeit',()=>{
   assert.ok(X.SPIELZUEGE.includes('zum_start'),'der Browser haengt eine Aktionskennung an');
-  assert.equal(X.START_SPRUNG_PAUSE,30*60000);
+  assert.equal(X.START_SPRUNG_PAUSE,5*60000);
   assert.equal(X.startSprungAb({}),0);
-  assert.equal(X.startSprungAb({startSprungAt:1000}),1000+30*60000);
+  assert.equal(X.startSprungAb({startSprungAt:1000}),1000+5*60000);
   assert.equal(D.neuerStand({startSprungAt:mon},mon).startSprungAt,mon,'bleibt im Spielstand');
   assert.equal(D.neuerStand({startSprungAt:'x'},mon).startSprungAt,0);
 });
@@ -60,11 +60,11 @@ await test('Der Sprung setzt die Figur an den Start, und von dort geht es ohne K
   const anna=sicht.peers.find((p)=>p.id===a.playerId);assert.ok(anna&&weit(anna,start)<0.5,'fuer Ben am Start');
 });
 
-await test('Nur alle dreissig Minuten',async()=>{
+await test('Nur alle fuenf Minuten',async()=>{
   const w=welt(),a=await w.call(ca,'join');
   await w.call(ca,'presence',{position:{...a.spawn,heading:0}});
   assert.equal((await w.call(ca,'zum_start')).status,200);
-  w.uhr.t+=29*60000;
+  w.uhr.t+=4*60000;
   const zu=await w.call(ca,'zum_start');
   assert.equal(zu.status,409);assert.match(zu.error,/erst wieder in 1 Minuten/);
   w.uhr.t+=60000;
