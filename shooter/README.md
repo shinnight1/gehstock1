@@ -1,16 +1,51 @@
 # Gehstock Ops
 
-3D-Ego-Shooter für das Hideout: Team-Deathmatch drei gegen drei auf dem
-„Übungsgelände Krähenfeld“. Ein Match endet nach fünf Minuten oder bei 30
+3D-Ego-Shooter für das Hideout: Team-Deathmatch drei gegen drei auf vier
+Karten mit sieben Waffen. Ein Match endet nach fünf Minuten oder bei 30
 Team-Punkten. Gebaut fürs iPad (10. Generation, Safari, quer), spielbar auch
 am Rechner mit Maus und Tastatur. Zwei Arten zu spielen:
 
 - **Online**: eine einzige Runde für alle, ohne Lobby und ohne Codes. Wer
   dazukommt, landet im Team mit weniger Menschen; freie Plätze spielen Bots.
-  Höchstens drei gegen drei Menschen. Der Handy-Server rechnet das Match
-  (siehe „Online-Match“ unten).
-- **Bot-Lobby**: du und zwei Bots gegen drei Bots, komplett im Browser, ohne
-  eine einzige Serveranfrage - läuft auch, wenn das Internet weg ist.
+  Höchstens drei gegen drei Menschen. Nach jeder Runde kommt die nächste
+  Karte. Der Handy-Server rechnet das Match (siehe „Online-Match“ unten).
+- **Bot-Lobby**: du und zwei Bots gegen drei Bots auf der Karte, die du im
+  Menü wählst, komplett im Browser, ohne eine einzige Serveranfrage - läuft
+  auch, wenn das Internet weg ist.
+
+## Waffen
+
+| Waffe | Art | Stärke |
+|---|---|---|
+| Sturmgewehr „Falke“ | Dauerfeuer | Allround, präzise auf Distanz |
+| Maschinenpistole „Wiesel“ | Dauerfeuer | schnell, stark aus der Nähe |
+| Schrotflinte „Keiler“ | Pumpe, Patrone für Patrone | ein Schuss aus der Nähe genügt |
+| Maschinengewehr „Bär“ | Dauerfeuer, 75 Schuss | hält lange drauf, langsam im Anlegen und Nachladen |
+| Präzisionsgewehr „Habicht“ | halbautomatisch, kleines Zielfernrohr | drei Rumpftreffer genügen |
+| Scharfschützengewehr „Bussard“ | Repetierer, Zielfernrohr | ein Treffer am Oberkörper genügt |
+| Pistole „Spatz“ | halbautomatisch | am schnellsten unterwegs und am schnellsten im Ziel |
+
+Halbautomatisch heißt: ein Schuss je Druck auf den Abzug, gehalten kommt kein
+zweiter. Das Scharfschützengewehr zeigt im vollen Visier das Bild durch das
+Fernrohr und schießt erst angelegt genau; ein Schnappschuss aus der Bewegung
+streut. Alle Werte stehen in `konfig.js` unter `WAFFEN`, wie oft Bots welche
+Waffe nehmen unter `BOT_WAFFEN`.
+
+## Karten
+
+| Karte | Wege (Nord · Mitte · Süd) | Eigenart |
+|---|---|---|
+| Übungsgelände Krähenfeld | Containerhof · Appellplatz · Werkhalle | die erste Karte, ausgewogen |
+| Hafen Möwenkai | Kaikante · Containerlager · Lagerhaus | Kaikante offen unter dem Portalkran, im Lager enge Gassen |
+| Dorf Birkenhain | Hauptstraße · Marktplatz · Scheune | begehbare Häuser, Obstgärten mit Zäunen, später Nachmittag |
+| Wüstenposten Sandgrube | Pipeline · Ruinen · Bunker | Tanks und Rohre (drüberspringen), Lehmruinen, dunkle Bunkergänge |
+
+Jede Karte ist spiegelgleich, hat sieben Spawns je Team und drei Wege mit je
+sieben Punkten für die Bots. Die Tests prüfen für jede Karte: Kein Spawn und
+kein Wegpunkt steckt in einer Wand, jeder Spawn erreicht jeden gegnerischen
+Spawn und jeden Wegpunkt, die Karte ist rundum geschlossen, zwischen den
+Spawns gibt es höchstens drei freie Sichtlinien, und ein ganzes Bot-Match
+läuft durch, ohne dass jemand festsitzt.
 
 Ausgeliefert wird das Spiel als eigene Seite unter `/games/shooter/`. Die
 Kachel im Hub steht in `src/games/shooter.js`; Code und Grafik lädt der
@@ -74,7 +109,7 @@ Server).
 | Visier (antippen schaltet, einstellbar auf Halten) | rechte Maustaste (halten) |
 | ⟳ nachladen, ▲ springen, ▼ ducken, im Sprint ▼ = rutschen | R, Leertaste, C |
 | Punktestand antippen = Tabelle, ‖ = Pause | Tab, Esc oder P |
-| im Todesbildschirm Waffe fürs nächste Leben antippen | 1, 2, 3 |
+| im Todesbildschirm Waffe fürs nächste Leben antippen | 1 bis 7 |
 
 Einstellungen (im Menü und in der Pause): Blick- und Mausempfindlichkeit,
 Empfindlichkeit im Visier, dezente Zielhilfe (nur Touch), Visierknopf
@@ -105,7 +140,7 @@ shooter/
       bots.js          Bot-KI
       mathe.js         Winkel, Kegelstreuung, geseedeter Zufall
     netz/              Online: Protokoll (Gerät und Server) und Vorhersage auf dem Gerät
-    karte/             Kartenbeschreibung (Quader, Deko, Spawns, Wege)
+    karte/             Karten (Quader, Deko, Spawns, Wege); karten.js ist das Verzeichnis
     darstellung/       three.js: Renderer, Welt, Figuren, Waffenmodell, Effekte, Texturen
     eingabe/           Tastatur/Maus, Touch, Zielhilfe, gemeinsamer Eingabezustand
     klang/             synthetisierte Geräusche (Web Audio)
@@ -139,12 +174,17 @@ Navigationsraster, das beim Laden aus den Quadern entsteht (Treppen und
 Podest ergeben sich von selbst). Drei Stufen: Rekrut, Soldat, Veteran - alle
 Werte in `konfig.js` unter `BOT_STUFEN`.
 
-**Karte.** `karte/kraehenfeld.js`, beschrieben mit den Helfern aus
-`karte/bauer.js`. Drei Wege (A Containerhof mit Nordgang als Flanke, B
-Appellplatz mit erhöhtem Leitstand, C Werkhalle), verbunden über zwei Lücken
-in der Trennmauer, zwei Hallentüren und den Vorplatz. Die Basen sind durch
-Hesco-Wände gegen Sichtlinien geschützt, gespawnt wird dort, wo gerade kein
-Gegner hinsieht, mit 2,5 s Schutz, der beim eigenen Schuss endet.
+**Karten.** Je Karte eine Datei in `karte/` (`kraehenfeld.js`,
+`moewenkai.js`, `birkenhain.js`, `sandgrube.js`), beschrieben mit den Helfern
+aus `karte/bauer.js`: Quader, Wände mit Türen und Fenstern, Häuser mit
+Satteldach, Zylinder (Tanks, Poller), Rohre, Bäume, Wasser,
+Bodenmarkierungen. Jede Karte bringt ein Thema mit (Himmel, Licht, Nebel,
+Sonne, Bäume ringsum). Beim Wechsel baut die Darstellung die alte Welt ganz
+ab (Geometrien, Materialien, Instanzpuffer, eigene Texturen); die
+Oberflächen-Texturen sind gemeinsam und bleiben. Gespawnt wird dort, wo
+gerade kein Gegner hinsieht, mit 2,5 s Schutz, der beim eigenen Schuss
+endet. Eine neue Karte kommt hinten in `karte/karten.js` dazu - die Stelle
+ist ihre Nummer im Netz.
 
 **Grafik.** Alle Texturen werden beim Start auf Canvas gemalt, alle
 Geräusche per Web Audio synthetisiert - es gibt keine Bild- oder Tondateien,
@@ -233,6 +273,11 @@ gestellt. Das Online-Match ist ein eigener Weg:
   jeder Runde (5 Minuten oder 30 Punkte) folgen zwölf Sekunden Auswertung,
   dann die nächste; stehen dann zwei Menschen mehr in einem Team, wechselt
   einer die Seite.
+- **Kartenfolge.** Jede Runde spielt auf der nächsten Karte (Krähenfeld,
+  Möwenkai, Birkenhain, Sandgrube, dann von vorn). Die Auswertung sagt schon,
+  wohin es geht. Jeder Zustand trägt die Nummer der Karte; das Gerät baut
+  die neue Welt, sobald sie wechselt. Der Server baut alle vier Karten mit
+  Wegenetz einmal, wenn der erste online spielt.
 - **Der Server entscheidet.** Er rechnet dieselbe `Simulation` wie die
   Bot-Lobby (60 Schritte pro Sekunde). Geräte schicken nur Befehle (30
   Nachrichten pro Sekunde mit je zwei Befehlen), der Server schickt 20-mal
@@ -287,8 +332,11 @@ auf freiem Port, die echte Runde bleibt unberührt).
   getestet, nicht auf echter Hardware. Die Absturzursachen oben sind aus
   Code und Messungen in Chromium abgeleitet - ob sie die Abstürze auf dem
   iPad erklären, zeigt erst das Gerät (Einstellungen → Diagnose).
-- Nur eine Karte, ein Modus, drei Waffen, kein Waffenwechsel im Leben
-  (gewählt wird im Menü oder im Todesbildschirm fürs nächste Leben).
+- Ein Modus, kein Waffenwechsel im Leben (gewählt wird im Menü oder im
+  Todesbildschirm fürs nächste Leben).
+- Die neuen Karten und Waffen sind in Chromium (ohne Grafikkarte) und mit
+  Bot-Matches getestet, nicht auf dem iPad: Bildrate, Lesbarkeit im Licht der
+  Karten und wie sich die neuen Waffen anfühlen, zeigt erst das Gerät.
 - Bots springen nur, um sich zu befreien; auf Kisten klettern sie nicht.
 - Offline gibt es den Shooter nur, wenn das Hideout (oder der Shooter) vorher
   einmal online geöffnet wurde (Service Worker).
@@ -302,9 +350,9 @@ auf freiem Port, die echte Runde bleibt unberührt).
   Ping, Rückspulen und Vorhersage sind für normale Heim- und Mobilnetze
   ausgelegt (bis etwa 150 ms); darüber trifft man spürbar schlechter.
 - Pausieren hält online nichts an: die eigene Figur steht dann einfach.
-- Nach einem Update mit geändertem Protokoll (zuletzt Version 2:
-  Schlüssel zum Wiederverbinden) bekommen Geräte mit altem Stand „Neue
-  Version – bitte neu laden“.
+- Nach einem Update mit geändertem Protokoll (zuletzt Version 3: Karte im
+  Zustand, neue Waffen) bekommen Geräte mit altem Stand „Neue Version –
+  bitte neu laden“.
 - Neuverbinden, Funklöcher (1,5 s, 4 s, 10 s) und Server-Neustarts sind mit
   drei Browsern hinter einer künstlich verzögerten Leitung (55 ± 35 ms)
   getestet, nicht auf echten iPads im Mobilfunk. Wie iOS offene

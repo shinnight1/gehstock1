@@ -25,7 +25,7 @@ import { Effekte } from './effekte.js';
 import { Figuren } from './figuren.js';
 import { texturenErzeugen } from './texturen.js';
 import { feuerSpriteMaterial, Waffenmodell } from './waffenmodell.js';
-import { weltBauen } from './weltmodell.js';
+import { thema, weltBauen } from './weltmodell.js';
 
 export function webglVerfuegbar() {
   try {
@@ -116,7 +116,7 @@ export class Darstellung {
       }
     }
     const aniso = Math.min(q.kantenglaettung ? 8 : 4, renderer.capabilities.getMaxAnisotropy());
-    for (const k of ['kies', 'asphalt', 'platten', 'estrich', 'halle', 'container', 'mauer']) {
+    for (const k of ['kies', 'asphalt', 'platten', 'estrich', 'halle', 'container', 'mauer', 'sand', 'gras', 'pflaster', 'holzboden']) {
       this.texturen[k].anisotropy = aniso;
       this.texturen[k].needsUpdate = true;
     }
@@ -233,11 +233,47 @@ export class Darstellung {
   }
 
   weltAufbauen(karte) {
-    if (this.welt) return;
+    if (this.welt && this.karte === karte) return;
+    this.weltAbbauen();
+    this.karte = karte;
+    this.themaSetzen(karte);
     this.welt = weltBauen(karte, this.texturen, this.qualitaet);
     this.szene.add(this.welt.gruppe);
     this.animiert = this.welt.animiert;
+    this.effekte.leeren();
     this.renderer.shadowMap.needsUpdate = true;
+  }
+
+  /* Alte Welt ganz freigeben (Geometrien, Materialien, eigene Texturen) -
+     beim Kartenwechsel darf auf dem iPad nichts liegen bleiben. */
+  weltAbbauen() {
+    if (!this.welt) return;
+    this.szene.remove(this.welt.gruppe);
+    this.welt.entsorgen();
+    this.welt = null;
+    this.animiert = [];
+  }
+
+  /* Himmel, Nebel, Licht und Schattenausschnitt je Karte. */
+  themaSetzen(karte) {
+    const T = thema(karte);
+    const horizont = new Color(T.horizont);
+    this.szene.background = horizont;
+    this.szene.fog.color.copy(horizont);
+    this.szene.fog.near = T.nebelNah;
+    this.himmelLicht.color.set(T.licht);
+    this.himmelLicht.groundColor.set(T.lichtBoden);
+    this.himmelLicht.intensity = T.lichtStaerke;
+    this.sonne.color.set(T.sonne);
+    this.sonne.intensity = T.sonnenStaerke;
+    this.sonne.position.set(T.sonnenRichtung[0], T.sonnenRichtung[1], T.sonnenRichtung[2]);
+    const g = karte.grenzen;
+    const sc = this.sonne.shadow.camera;
+    const bx = Math.max(Math.abs(g.minX), Math.abs(g.maxX)) + 10;
+    const bz = Math.max(Math.abs(g.minZ), Math.abs(g.maxZ)) + 12;
+    sc.left = -bx; sc.right = bx; sc.top = bz; sc.bottom = -bz;
+    sc.far = 140;
+    sc.updateProjectionMatrix();
   }
 
   /* Figuren zu den Akteuren eines neuen Matchs - und online, wenn
@@ -295,8 +331,9 @@ export class Darstellung {
       case 'schuss': {
         if (!a) break;
         const eigen = a.id === spielerId;
-        // Nicht jede Kugel zeigt eine Spur - das waere zu unruhig.
-        if (a.waffe.def.kugeln === 1 && a.waffe.schuesse % 2 === 1) break;
+        // Bei Dauerfeuer zeigt nicht jede Kugel eine Spur - das waere zu
+        // unruhig. Einzelschuesse (Scharfschuetze, Praezision) immer.
+        if (a.waffe.def.kugeln === 1 && a.waffe.def.rpm > 400 && a.waffe.schuesse % 2 === 1) break;
         let sx, sy, sz;
         if (eigen) {
           const k = kamera;
@@ -387,11 +424,7 @@ export class Darstellung {
 
   entsorgen() {
     this.rendererEntfernen();
-    if (this.welt) {
-      this.szene.remove(this.welt.gruppe);
-      this.welt.entsorgen();
-      this.welt = null;
-    }
+    this.weltAbbauen();
     this.figuren.entsorgen();
     this.effekte.entsorgen();
     this.waffenmodell.entsorgen();

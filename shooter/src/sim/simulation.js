@@ -15,7 +15,7 @@
    Geraet seine eigene Figur vorhersagt (akteurSchritt).
    ------------------------------------------------------------------ */
 
-import { BOT_STUFEN, FIGUR, LEBEN, MATCH, NAMEN, TICK, WAFFEN_REIHE } from '../konfig.js';
+import { BOT_STUFEN, BOT_WAFFEN, FIGUR, LEBEN, MATCH, NAMEN, TICK, WAFFEN_REIHE } from '../konfig.js';
 import { neuerBefehl } from './befehl.js';
 import { augenhoehe, bewegeFigur, schiebeWaagerecht } from './bewegung.js';
 import { GRAD, kegelRichtung, klemme, startwert, zufallsquelle } from './mathe.js';
@@ -26,6 +26,17 @@ import { botGespawnt, botGetroffen, botsHoeren, denkeBots, neueKi } from './bots
 const RICHTUNG = { x: 0, y: 0, z: 0 };
 const ZONE = { zone: 0 };
 const STILL = neuerBefehl();
+
+/* Waffe eines Bots nach den Anteilen in BOT_WAFFEN; r zwischen 0 und 1. */
+const BOT_WAFFEN_SUMME = WAFFEN_REIHE.reduce((n, id) => n + (BOT_WAFFEN[id] || 0), 0);
+export function botWaffe(r) {
+  let x = r * BOT_WAFFEN_SUMME;
+  for (const id of WAFFEN_REIHE) {
+    x -= BOT_WAFFEN[id] || 0;
+    if (x < 0) return id;
+  }
+  return WAFFEN_REIHE[0];
+}
 
 /* Namen der Bots je Platz: 0-2 Blau, 3-5 Rot. */
 export const BOT_NAMEN = ['Luchs', NAMEN.verbuendete[0], NAMEN.verbuendete[1], NAMEN.gegner[0], NAMEN.gegner[1], NAMEN.gegner[2]];
@@ -64,6 +75,7 @@ export class Simulation {
     this.karte = o.karte;
     this.welt = o.welt;
     this.nav = o.nav;
+    this.naechsteKarte = '';       // online: Karte der naechsten Runde (Anzeige)
     this.zufall = zufallsquelle((o.seed >>> 0) || 1);
     this.stufe = BOT_STUFEN[o.schwierigkeit] || BOT_STUFEN.normal;
     this.zeit = 0;
@@ -90,10 +102,7 @@ export class Simulation {
        Schuss dorthin, wo der Schuetze sie gesehen hat (und wieder zurueck). */
     this.rueckspulen = null;
 
-    const waffeZufall = () => {
-      const r = this.zufall();
-      return r < 0.45 ? 'sturmgewehr' : r < 0.8 ? 'mp' : 'schrotflinte';
-    };
+    const waffeZufall = () => botWaffe(this.zufall());
     const plaetze = [];
     const nurBots = o.nurBots || o.online;
     if (nurBots) plaetze.push([0, BOT_NAMEN[0], 0, true]);
@@ -246,6 +255,20 @@ export class Simulation {
   }
 
   /* Naechste Runde im Online-Match: Punkte auf null, alle neu herein. */
+  /* Online: die naechste Runde spielt auf einer anderen Karte. Muss vor
+     neueRunde() gerufen werden - die Spawns kommen dann von der neuen. */
+  karteSetzen(k) {
+    this.karte = k.karte;
+    this.welt = k.welt;
+    this.nav = k.nav;
+    this.naechsteKarte = '';
+    for (const a of this.akteure) {
+      if (!a.ki) continue;
+      a.ki.pfadN = 0;
+      a.ki.planNoetig = true;
+    }
+  }
+
   neueRunde() {
     this.runde++;
     this.phase = 'vorlauf';

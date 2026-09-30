@@ -38,6 +38,8 @@ export function neueKi(sim, a) {
     fehlerPitch: 0,
     kopf: false,
     salveRest: 0,
+    abzugVorher: false,
+    druckBis: 0,
     pauseBis: 0,
     schussStand: 0,
     strafe: 1,
@@ -69,6 +71,8 @@ export function botGespawnt(sim, a) {
   k.zielSicht = false;
   k.zielGesehen = -99;
   k.salveRest = 0;
+  k.abzugVorher = false;
+  k.druckBis = 0;
   k.pauseBis = 0;
   k.duckenBis = 0;
   k.hoerZeit = -99;
@@ -435,6 +439,9 @@ function denke(sim, a, dt) {
   }
 
   /* ---------------------------------------------------------- Feuer */
+  const fernrohr = !!w.def.zielfernrohr;
+  // Mit Zielfernrohr schon im Gefecht anlegen - aus der Huefte trifft es kaum.
+  if (kampf && fernrohr && dist > 6) bef.tasten |= T_VISIER;
   if (kampf && sim.zeit >= k.reaktionBis && dist <= rw.feuer) {
     const wahrYaw = yawZu(ziel.x - a.x, ziel.z - a.z);
     const wahrPitch = Math.atan2(ziel.y + ziel.hoehe * 0.6 - auge, Math.max(dist, 0.1));
@@ -443,18 +450,23 @@ function denke(sim, a, dt) {
       bef.pitch + w.rueckHoch * GRAD - wahrPitch);
     const groesse = Math.atan2(0.45, Math.max(dist, 0.5));
     if (abw < S.feuerWinkel * GRAD + groesse) {
-      if (w.magazin > 0 && sim.zeit >= k.pauseBis && (w.laden <= 0 || w.def.einzelnLaden)) {
+      const bereit = !fernrohr || dist <= 6 || w.visier > 0.85;
+      if (bereit && w.magazin > 0 && sim.zeit >= k.pauseBis && (w.laden <= 0 || w.def.einzelnLaden)) {
         if (k.salveRest <= 0) {
           k.salveRest = S.salve[0] + sim.zufall.ganz(S.salve[1] - S.salve[0] + 1);
           if (dist < 7 || w.def.kugeln > 1) k.salveRest += 6;
           k.schussStand = w.schuesse;
         }
-        bef.tasten |= T_FEUER;
+        // Halbautomatisch: zwischen zwei Schuessen den Abzug loslassen,
+        // in einem Takt, den auch ein Mensch schafft.
+        if (!w.def.halbautomatisch || (!k.abzugVorher && sim.zeit >= k.druckBis)) bef.tasten |= T_FEUER;
       }
       if (dist > 11 && w.def.kugeln === 1) bef.tasten |= T_VISIER;
     }
   }
+  k.abzugVorher = (bef.tasten & T_FEUER) !== 0;
   if (w.schuesse !== k.schussStand) {
+    if (w.def.halbautomatisch) k.druckBis = sim.zeit + sim.zufall.zwischen(0.14, 0.26);
     k.salveRest -= w.schuesse - k.schussStand;
     k.schussStand = w.schuesse;
     if (k.salveRest <= 0) {

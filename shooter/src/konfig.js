@@ -79,12 +79,17 @@ export const NAMEN = {
    rpm           Schuss pro Minute
    streuung      halber Kegelwinkel in Grad
    rueckstoss    Grad pro Schuss; erholung in Grad pro Sekunde
-   visier        zoom = Faktor auf das Sichtfeld, zeit = bis voll im Visier
+   visier        zoom = Faktor auf das Sichtfeld, zeit = bis voll im Visier,
+                 tempo = Faktor auf das Lauftempo im vollen Visier
+   halbautomatisch  ein Schuss je Druck auf den Abzug (sonst Dauerfeuer)
+   zielfernrohr  im vollen Visier zeigt das Bild das Fernrohr statt der Waffe
+   zielAnteil    so genau schiesst ein Mensch, sobald er zielt (Standard 0,9)
    ------------------------------------------------------------------ */
 export const WAFFEN = {
   sturmgewehr: {
     id: 'sturmgewehr',
     name: 'Sturmgewehr',
+    kurzname: 'Sturmgewehr',
     modell: 'K7 „Falke“',
     kurz: 'Allround, präzise auf Distanz',
     schaden: 26,
@@ -111,6 +116,7 @@ export const WAFFEN = {
   mp: {
     id: 'mp',
     name: 'Maschinenpistole',
+    kurzname: 'MP',
     modell: 'MP9 „Wiesel“',
     kurz: 'Schnell, stark auf kurze Distanz',
     schaden: 22,
@@ -136,6 +142,7 @@ export const WAFFEN = {
   schrotflinte: {
     id: 'schrotflinte',
     name: 'Schrotflinte',
+    kurzname: 'Schrot',
     modell: 'SF12 „Keiler“',
     kurz: 'Ein Schuss aus der Nähe genügt',
     schaden: 17,
@@ -159,9 +166,126 @@ export const WAFFEN = {
     hoerweite: 42,
     werte: { schaden: 0.98, feuerrate: 0.15, reichweite: 0.2, kontrolle: 0.4 },
   },
+  mg: {
+    id: 'mg',
+    name: 'Maschinengewehr',
+    kurzname: 'MG',
+    modell: 'MG5 „Bär“',
+    kurz: 'Großes Magazin, hält lange drauf',
+    schaden: 24,
+    schadenMin: 19,
+    reichweite: { voll: 26, min: 55, max: 160 },
+    kopf: 1.4,
+    bein: 0.9,
+    kugeln: 1,
+    rpm: 700,
+    magazin: 75,
+    reserve: 225,
+    nachladen: 4.2,
+    nachladenLeer: 4.8,
+    streuung: { hueft: 4.2, visier: 0.3, bewegung: 2.2, luft: 5.5, bloom: 0.2, bloomVisier: 0.05, bloomMax: 2.8, bloomAbbau: 6 },
+    rueckstoss: { hoch: 0.5, seite: 0.36, visierFaktor: 0.6, erholung: 9, max: 5 },
+    visier: { zoom: 0.7, zeit: 0.34, tempo: 0.45 },
+    tempo: 0.88,
+    sprintAus: 0.28,
+    lautstaerke: 1.1,
+    hoerweite: 42,
+    werte: { schaden: 0.6, feuerrate: 0.7, reichweite: 0.8, kontrolle: 0.5 },
+  },
+  praezision: {
+    id: 'praezision',
+    name: 'Präzisionsgewehr',
+    kurzname: 'Präzision',
+    modell: 'PG8 „Habicht“',
+    kurz: 'Halbautomatisch, drei Treffer genügen',
+    schaden: 42,
+    schadenMin: 36,
+    reichweite: { voll: 40, min: 80, max: 190 },
+    kopf: 1.6,
+    bein: 0.85,
+    kugeln: 1,
+    rpm: 320,
+    halbautomatisch: true,
+    magazin: 15,
+    reserve: 75,
+    nachladen: 2.3,
+    nachladenLeer: 2.8,
+    streuung: { hueft: 4.0, visier: 0.06, bewegung: 2.0, luft: 5.0, bloom: 0.7, bloomVisier: 0.12, bloomMax: 2.5, bloomAbbau: 7 },
+    rueckstoss: { hoch: 1.5, seite: 0.3, visierFaktor: 0.6, erholung: 11, max: 5 },
+    visier: { zoom: 0.52, zeit: 0.27, tempo: 0.55 },
+    tempo: 0.94,
+    sprintAus: 0.2,
+    lautstaerke: 1.15,
+    hoerweite: 45,
+    werte: { schaden: 0.78, feuerrate: 0.35, reichweite: 0.95, kontrolle: 0.7 },
+  },
+  scharfschuetze: {
+    id: 'scharfschuetze',
+    name: 'Scharfschützengewehr',
+    kurzname: 'Scharfschütze',
+    modell: 'SSG3 „Bussard“',
+    kurz: 'Ein Treffer am Oberkörper genügt',
+    schaden: 100,
+    schadenMin: 80,
+    reichweite: { voll: 60, min: 110, max: 220 },
+    kopf: 1.5,
+    bein: 0.7,
+    kugeln: 1,
+    rpm: 46,
+    halbautomatisch: true,
+    magazin: 5,
+    reserve: 25,
+    nachladen: 2.9,
+    nachladenLeer: 3.4,
+    streuung: { hueft: 7.5, visier: 0.02, bewegung: 3.5, luft: 9, bloom: 0, bloomVisier: 0, bloomMax: 0, bloomAbbau: 1 },
+    rueckstoss: { hoch: 4.2, seite: 0.6, visierFaktor: 0.7, erholung: 9, max: 7 },
+    visier: { zoom: 0.3, zeit: 0.4, tempo: 0.4 },
+    zielfernrohr: true,
+    zielAnteil: 0.4,        // Visierfeuer trifft erst mit angelegtem Fernrohr genau
+    repetierer: true,       // nach jedem Schuss den Kammerstengel ziehen (Klang, Bild)
+    tempo: 0.9,
+    sprintAus: 0.3,
+    lautstaerke: 1.35,
+    hoerweite: 60,
+    werte: { schaden: 1.0, feuerrate: 0.06, reichweite: 1.0, kontrolle: 0.35 },
+  },
+  pistole: {
+    id: 'pistole',
+    name: 'Pistole',
+    kurzname: 'Pistole',
+    modell: 'P8 „Spatz“',
+    kurz: 'Leicht und schnell, schnell im Ziel',
+    schaden: 34,
+    schadenMin: 22,
+    reichweite: { voll: 10, min: 28, max: 100 },
+    kopf: 1.6,
+    bein: 0.9,
+    kugeln: 1,
+    rpm: 420,
+    halbautomatisch: true,
+    magazin: 12,
+    reserve: 84,
+    nachladen: 1.3,
+    nachladenLeer: 1.6,
+    streuung: { hueft: 1.9, visier: 0.35, bewegung: 0.6, luft: 2.5, bloom: 0.5, bloomVisier: 0.2, bloomMax: 2.2, bloomAbbau: 9 },
+    rueckstoss: { hoch: 1.1, seite: 0.35, visierFaktor: 0.7, erholung: 14, max: 4 },
+    visier: { zoom: 0.86, zeit: 0.12, tempo: 0.8 },
+    tempo: 1.1,
+    sprintAus: 0.06,
+    lautstaerke: 0.7,
+    hoerweite: 26,
+    werte: { schaden: 0.52, feuerrate: 0.55, reichweite: 0.35, kontrolle: 0.8 },
+  },
 };
 
-export const WAFFEN_REIHE = ['sturmgewehr', 'mp', 'schrotflinte'];
+/* Reihenfolge in Menue, HUD und Protokoll (Tasten 1 bis 7). Neue Waffen
+   nur hinten anhaengen: die Stelle ist ihre Nummer im Netz. */
+export const WAFFEN_REIHE = ['sturmgewehr', 'mp', 'schrotflinte', 'mg', 'praezision', 'scharfschuetze', 'pistole'];
+
+/* So oft greifen Bots zu einer Waffe (Anteile, Summe egal). */
+export const BOT_WAFFEN = {
+  sturmgewehr: 24, mp: 20, schrotflinte: 12, mg: 13, praezision: 12, scharfschuetze: 8, pistole: 11,
+};
 
 /* ------------------------------------------------------------------
    Bot-Stufen
@@ -206,6 +330,10 @@ export const BOT_REICHWEITE = {
   sturmgewehr: { wunsch: [12, 30], feuer: 70 },
   mp: { wunsch: [5, 14], feuer: 36 },
   schrotflinte: { wunsch: [2, 7], feuer: 15 },
+  mg: { wunsch: [10, 28], feuer: 65 },
+  praezision: { wunsch: [14, 36], feuer: 80 },
+  scharfschuetze: { wunsch: [18, 45], feuer: 95 },
+  pistole: { wunsch: [4, 12], feuer: 30 },
 };
 
 /* ------------------------------------------------------------------

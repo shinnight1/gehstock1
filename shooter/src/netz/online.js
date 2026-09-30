@@ -115,6 +115,7 @@ class Spiegel {
 
 export class OnlineSpiel {
   /* o: { karte, welt, name, waffe, adresse, beiStatus(zustand, text), beiRoster(alt, neu),
+     karteHolen(id) -> { karte, welt } (der Server wechselt die Karte je Runde),
      neuVerbinden (Wartezeiten in ms, nur fuer Tests) } */
   constructor(o) {
     this.o = o;
@@ -139,6 +140,7 @@ export class OnlineSpiel {
     this.kor = { x: 0, y: 0, z: 0 };
     this.korrekturen = 0;
     this.welt = o.welt;
+    this.karteId = o.karte ? o.karte.id : '';
 
     // Zustaende zum Verschieben der anderen Figuren
     this.puffer = [];
@@ -338,6 +340,17 @@ export class OnlineSpiel {
     }
   }
 
+  /* Neue Runde auf einer anderen Karte: Kollision (fuer die Vorhersage)
+     und Bild wechseln. Ohne karteHolen bleibt die alte Welt. */
+  karteWechseln(id) {
+    const k = this.o.karteHolen ? this.o.karteHolen(id) : null;
+    if (!k) return;
+    this.karteId = id;
+    this.welt = k.welt;
+    this.spiegel.karte = k.karte;
+    this.spiegel.welt = k.welt;
+  }
+
   rosterEmpfangen(l) {
     const alt = this.roster.map((p) => ({ ...p }));
     rosterLesen(l, this.rosterDaten);
@@ -376,6 +389,8 @@ export class OnlineSpiel {
     else this.versatz += (probe - this.versatz) * 0.03;
 
     const S = this.spiegel;
+    if (z.karte && z.karte !== this.karteId) this.karteWechseln(z.karte);
+    S.naechsteKarte = z.naechsteKarte;
     const neueRunde = z.runde !== S.runde;
     S.runde = z.runde;
     S.phase = z.phase;

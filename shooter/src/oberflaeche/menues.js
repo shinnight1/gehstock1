@@ -8,6 +8,7 @@
    ------------------------------------------------------------------ */
 
 import { BOT_REIHE, BOT_STUFEN, MATCH, QUALITAET, QUALITAET_REIHE, TEAMS, WAFFEN, WAFFEN_REIHE } from '../konfig.js';
+import { KARTEN, KARTEN_REIHE } from '../karte/karten.js';
 import { nameSaeubern } from '../einstellungen.js';
 import { diagnoseText, fehlerLeeren, fehlerListe } from '../diagnose.js';
 import { MAX_MENSCHEN, PFAD } from '../netz/protokoll.js';
@@ -106,7 +107,8 @@ export class Menues {
         el('div', 'w-balken', [(() => { const i = el('i'); i.style.transform = 'scaleX(' + wert + ')'; return i; })()]),
       ]);
       const k = el('button', 'm-waffe' + (E.waffe === id ? ' gewaehlt' : ''), [
-        el('div', 'w-name', null, w.name),
+        // Weiche Trennstelle: lange Namen brechen an der Wortfuge um
+        el('div', 'w-name', null, w.name.replace(/^(Maschinen|Präzisions|Scharfschützen)/, '$1\u00ad')),
         el('div', 'w-modell', null, w.modell),
         el('div', 'w-kurz', null, w.kurz),
         balken('Schaden', w.werte.schaden),
@@ -138,6 +140,24 @@ export class Menues {
         app.klang.spielen('klick', 0.6);
       });
       stufen.appendChild(b);
+    }
+
+    // Karte der Bot-Lobby (online waehlt der Server reihum)
+    const kartenWahl = el('div', 'm-chips m-kartenwahl');
+    for (const id of KARTEN_REIHE) {
+      const d = KARTEN[id];
+      const b = el('button', 'm-chip' + (E.karte === id ? ' gewaehlt' : ''), [
+        el('span', 'c-name', null, d.kurz),
+        el('span', 'c-kurz', null, d.text),
+      ]);
+      b.type = 'button';
+      b.addEventListener('click', () => {
+        app.einstellungSetzen('karte', id);
+        for (const c of kartenWahl.children) c.classList.toggle('gewaehlt', c === b);
+        app.klang.spielen('klick', 0.6);
+        app.kartenVorschau(id);
+      });
+      kartenWahl.appendChild(b);
     }
 
     const st = app.statistik;
@@ -174,7 +194,7 @@ export class Menues {
     const inhalt = el('div', 'ops-menue haupt', [
       el('div', 'm-kopf', [
         el('div', 'm-logo', null, 'GEHSTOCK OPS'),
-        el('div', 'm-unter', null, 'Team-Deathmatch · 3 gegen 3 · Übungsgelände Krähenfeld'),
+        el('div', 'm-unter', null, 'Team-Deathmatch · 3 gegen 3 · ' + KARTEN_REIHE.length + ' Karten · ' + WAFFEN_REIHE.length + ' Waffen'),
       ]),
       el('div', 'm-rumpf', [
         el('div', 'm-spalte', [
@@ -183,13 +203,14 @@ export class Menues {
           el('div', 'm-regeln', null,
             'Drei gegen drei. Wer zuerst ' + MATCH.zielPunkte + ' Abschüsse hat oder nach '
             + Math.round(MATCH.dauer / 60) + ' Minuten vorn liegt, gewinnt. Online spielen echte Leute zusammen – '
-            + 'freie Plätze übernehmen Bots. Die Bot-Lobby läuft auch ohne Internet.'),
+            + 'freie Plätze übernehmen Bots, nach jeder Runde kommt die nächste Karte. Die Bot-Lobby läuft auch ohne Internet.'),
         ]),
         el('div', 'm-spalte schmal', [
           el('h2', '', null, 'Online'),
           el('div', 'm-online', [onlineStatus, name, onlineKnopf]),
           el('h2', '', null, 'Bot-Lobby'),
           stufen,
+          kartenWahl,
           knopf('BOT-LOBBY', 'm-start zweit', () => app.matchStarten()),
           el('div', 'm-leiste', [
             knopf('Steuerung', 'klein', () => this.steuerung()),
@@ -472,7 +493,8 @@ export class Menues {
       ]),
       eigen && eigen.rekord ? el('div', 'r-rekord', null, 'Neuer Rekord: ' + eigen.rekord) : null,
       el('div', 'r-tabelle', [tabelleBauen(sim)]),
-      online ? el('div', 'r-naechste', null, 'Nächste Runde gleich …') : null,
+      online ? el('div', 'r-naechste', null, 'Nächste Runde gleich'
+        + (sim.naechsteKarte && KARTEN[sim.naechsteKarte] ? ' – auf ' + KARTEN[sim.naechsteKarte].name : '') + ' …') : null,
       online
         ? el('div', 'm-leiste', [
           knopf('Online verlassen', 'klein', () => app.zumMenue()),

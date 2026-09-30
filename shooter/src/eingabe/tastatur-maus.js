@@ -95,9 +95,10 @@ export class TastaturMaus {
       if (SPIELTASTEN.has(code)) e.preventDefault();
       if (e.repeat) return;
       this.eingabe.tasten.add(code);
-      if (code === 'Digit1' || code === 'Digit2' || code === 'Digit3') {
+      const nr = code.length === 6 && code.startsWith('Digit') ? Number(code.slice(5)) : 0;
+      if (nr >= 1 && nr <= WAFFEN_REIHE.length) {
         // Waffe fuers naechste Leben (vor allem im Todesbildschirm)
-        this.app.naechsteWaffe(WAFFEN_REIHE[Number(code.slice(5)) - 1]);
+        this.app.naechsteWaffe(WAFFEN_REIHE[nr - 1]);
         return;
       }
       if (code === 'Space') this.eingabe.springen();

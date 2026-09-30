@@ -14,9 +14,10 @@
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { kraehenfeld } from '../shooter/src/karte/kraehenfeld.js';
+import { karteBauen, KARTEN_REIHE } from '../shooter/src/karte/karten.js';
 import { Welt } from '../shooter/src/sim/welt.js';
 import { Navigation } from '../shooter/src/sim/navigation.js';
-import { Simulation } from '../shooter/src/sim/simulation.js';
+import { botWaffe, Simulation } from '../shooter/src/sim/simulation.js';
 import { augenhoehe, bewegeFigur, steckt } from '../shooter/src/sim/bewegung.js';
 import { T_DUCKEN, T_FEUER, T_NACHLADEN, T_SPRINGEN, T_SPRINT, T_VISIER, neuerBefehl } from '../shooter/src/sim/befehl.js';
 import { neueWaffe, streuungBerechnen } from '../shooter/src/sim/waffen.js';
@@ -260,14 +261,58 @@ export function shooterTests(test) {
     pruefe(f.rutschZeit <= 0 && f.geduckt, 'nach dem Rutschen nicht geduckt');
   });
 
-  test('Ops: auf der Karte steckt kein Spawn und kein Wegpunkt in einer Wand', () => {
-    for (const team of [0, 1]) {
-      for (const p of karte.spawns[team]) {
-        pruefe(!steckt(welt, figur(p.x, 0, p.z)), 'Spawn steckt: ' + p.x + ',' + p.z);
+  // Alle Karten einmal bauen (Kollision und Wegenetz)
+  const alle = KARTEN_REIHE.map((id) => {
+    const k = karteBauen(id);
+    const w = new Welt(k.quader.filter((q) => q.kollision));
+    return { id, karte: k, welt: w, nav: new Navigation(w, k.grenzen) };
+  });
+
+  test('Ops: auf keiner Karte steckt ein Spawn oder Wegpunkt in einer Wand', () => {
+    for (const { id, karte: k, welt: w, nav: n } of alle) {
+      pruefe(k.spawns[0].length >= 7 && k.spawns[1].length >= 7, id + ': zu wenig Spawns');
+      pruefe(k.wege.length === 3 && k.wege.every((x) => x.punkte.length === 7), id + ': Bots brauchen drei Wege mit sieben Punkten');
+      for (const team of [0, 1]) {
+        for (const p of k.spawns[team]) {
+          pruefe(!steckt(w, figur(p.x, 0, p.z)), id + ': Spawn steckt: ' + p.x + ',' + p.z);
+          pruefe(n.begehbar(p.x, p.z), id + ': Spawn nicht begehbar: ' + p.x + ',' + p.z);
+        }
+      }
+      for (const x of k.wege) {
+        for (const p of x.punkte) pruefe(n.begehbar(p[0], p[1]), id + ': Wegpunkt ' + x.name + ' ' + p);
       }
     }
-    for (const w of karte.wege) {
-      for (const p of w.punkte) pruefe(nav.begehbar(p[0], p[1]), 'Wegpunkt ' + w.name + ' ' + p);
+  });
+
+  test('Ops: jede Karte ist rundum geschlossen und die Spawns sehen sich kaum', () => {
+    for (const { id, karte: k, welt: w } of alle) {
+      const g = k.grenzen;
+      // Von der Mitte in 64 Richtungen: ueberall kommt vor dem Rand eine Wand
+      for (let i = 0; i < 64; i++) {
+        const a = (i / 64) * Math.PI * 2;
+        const t = w.strahl(0, 1.0, 0, Math.cos(a), 0, Math.sin(a), 200);
+        pruefe(t < 200, id + ': offen in Richtung ' + Math.round(a * 57.3) + ' Grad');
+      }
+      // Freie Sicht von Spawn zu Spawn: hoechstens wie auf Kraehenfeld
+      let frei = 0;
+      for (const p of k.spawns[0]) {
+        for (const q of k.spawns[1]) {
+          const dx = q.x - p.x, dz = q.z - p.z, l = Math.hypot(dx, dz);
+          if (w.strahl(p.x, 1.62, p.z, dx / l, 0, dz / l, l) >= l - 0.01) frei++;
+        }
+      }
+      pruefe(frei <= 3, id + ': ' + frei + ' freie Sichtlinien zwischen den Spawns');
+      pruefe(g.maxX - g.minX >= 50 && g.maxZ - g.minZ >= 36, id + ': zu klein');
+    }
+  });
+
+  test('Ops: Navigation verbindet auf allen Karten alle Spawns und Wegpunkte', () => {
+    const aus2 = new Float32Array(200);
+    for (const { id, karte: k, nav: n } of alle) {
+      for (const s0 of k.spawns[0]) {
+        const ziele = k.spawns[1].map((p) => [p.x, p.z]).concat(...k.wege.map((w) => w.punkte));
+        for (const z of ziele) pruefe(n.pfad(s0.x, s0.z, 0, z[0], z[1], aus2, 80) > 0, id + ': kein Weg von ' + s0.x + ',' + s0.z + ' nach ' + z);
+      }
     }
   });
 
@@ -471,7 +516,8 @@ export function shooterTests(test) {
       const def = WAFFEN[id];
       pruefe(s.waffe.schuesse === 1, id + ': kein sofortiger Schuss');
       pruefe(s.waffe.visier < 0.2, id + ': Visier schon oben?');
-      const soll = def.streuung.hueft + (def.streuung.visier - def.streuung.hueft) * 0.9;
+      const anteil = def.zielAnteil !== undefined ? def.zielAnteil : 0.9;
+      const soll = def.streuung.hueft + (def.streuung.visier - def.streuung.hueft) * anteil;
       // streuung enthaelt schon den Aufschlag dieses Schusses (bloom) - der Schuss selbst flog ohne
       const erster = s.waffe.streuung - s.waffe.bloom;
       pruefe(erster <= soll + 1e-9, id + ': erster Schuss streut ' + erster.toFixed(2) + ' Grad');
@@ -642,6 +688,114 @@ export function shooterTests(test) {
       pruefe(nachladen > 0, stufe + ': niemand laedt nach');
       for (let i = 0; i < 6; i++) pruefe(weg[i] > 60, stufe + ': ' + sim.akteure[i].name + ' bewegt sich kaum (' + weg[i].toFixed(0) + ' m)');
       pruefe(ms < 1.5, stufe + ': Simulationsschritt zu langsam (' + ms.toFixed(3) + ' ms)');
+    }
+  });
+
+  test('Ops: Bot-Matches auf den neuen Karten laufen sauber durch, niemand sitzt fest', () => {
+    for (const { id, karte: k, welt: w, nav: n } of alle) {
+      if (id === 'kraehenfeld') continue;
+      const sim = new Simulation({ karte: k, welt: w, nav: n, seed: 4321, schwierigkeit: 'normal', nurBots: true });
+      const weg = new Float64Array(6);
+      let abschuesse = 0, schuesse = 0;
+      let i = 0;
+      while (sim.phase !== 'ende' && i < (MATCH.dauer + MATCH.vorlauf + 1) / TICK) {
+        const vorher = sim.akteure.map((a) => [a.x, a.z, a.lebt]);
+        sim.schritt(TICK);
+        i++;
+        for (const m of sim.meldungen) {
+          if (m.typ === 'abschuss') abschuesse++;
+          if (m.typ === 'schuss') schuesse++;
+        }
+        sim.meldungenLeeren();
+        sim.akteure.forEach((a, j) => {
+          if (a.lebt && vorher[j][2]) weg[j] += Math.hypot(a.x - vorher[j][0], a.z - vorher[j][1]);
+          if (a.lebt) pruefe(!steckt(w, a), id + ': ' + a.name + ' steckt bei ' + a.x.toFixed(1) + ',' + a.z.toFixed(1));
+        });
+      }
+      pruefe(sim.phase === 'ende', id + ': Match endet nicht');
+      pruefe(abschuesse >= 15, id + ': zu wenig Action (' + abschuesse + ' Abschuesse)');
+      for (let j = 0; j < 6; j++) pruefe(weg[j] > 60, id + ': ' + sim.akteure[j].name + ' bewegt sich kaum (' + weg[j].toFixed(0) + ' m)');
+    }
+  });
+
+  /* --- Neue Waffen --- */
+
+  test('Ops: halbautomatische Waffen schiessen einmal je Druck, gehalten nicht weiter', () => {
+    for (const id of WAFFEN_REIHE.filter((x) => WAFFEN[x].halbautomatisch)) {
+      const sim = stilleSim(karte, welt, nav, { spielerWaffe: id });
+      const s = sim.spieler;
+      setze(s, -26, 0, 0);
+      s.befehl.tasten = T_FEUER;
+      schritte(sim, 90);
+      pruefe(s.waffe.schuesse === 1, id + ': gehalten ' + s.waffe.schuesse + ' Schuesse statt 1');
+      // Loslassen und wieder druecken: der naechste Schuss
+      s.befehl.tasten = 0;
+      schritte(sim, 1);
+      s.befehl.tasten = T_FEUER;
+      schritte(sim, 1);
+      pruefe(s.waffe.schuesse === 2, id + ': zweiter Druck ohne Schuss');
+      // Schnell tippen: nie schneller als die Feuerrate erlaubt
+      const n0 = s.waffe.schuesse;
+      for (let k = 0; k < 120; k++) {
+        s.befehl.tasten = k % 2 ? 0 : T_FEUER;
+        schritte(sim, 1);
+      }
+      const max = Math.floor(2 * WAFFEN[id].rpm / 60) + 1;
+      pruefe(s.waffe.schuesse - n0 <= Math.min(max, WAFFEN[id].magazin), id + ': zu schnell (' + (s.waffe.schuesse - n0) + ')');
+    }
+    // Dauerfeuerwaffen feuern gehalten weiter
+    const sim = stilleSim(karte, welt, nav, { spielerWaffe: 'mg' });
+    sim.spieler.befehl.tasten = T_FEUER;
+    setze(sim.spieler, -26, 0, 0);
+    schritte(sim, 60);
+    pruefe(sim.spieler.waffe.schuesse > 8, 'MG feuert gehalten nicht weiter');
+  });
+
+  test('Ops: Scharfschuetzengewehr - Oberkoerper toedlich, Beine nicht, Fernrohr braucht Zeit', () => {
+    const d = WAFFEN.scharfschuetze;
+    pruefe(schadenBerechnen(d, 50, ZONE_RUMPF) >= LEBEN.max, 'Rumpftreffer auf 50 m toetet nicht');
+    pruefe(schadenBerechnen(d, 20, ZONE_BEINE) < LEBEN.max, 'Beintreffer toetet');
+    pruefe(schadenBerechnen(WAFFEN.praezision, 20, ZONE_RUMPF) * 3 >= LEBEN.max && schadenBerechnen(WAFFEN.praezision, 20, ZONE_RUMPF) * 2 < LEBEN.max,
+      'Praezisionsgewehr: nicht genau drei Rumpftreffer');
+    pruefe(schadenBerechnen(WAFFEN.pistole, 8, ZONE_RUMPF) * 3 >= LEBEN.max, 'Pistole braucht mehr als drei Treffer aus der Naehe');
+    const sim = stilleSim(karte, welt, nav, { spielerWaffe: 'scharfschuetze' });
+    const s = sim.spieler;
+    const z = sim.akteure.find((a) => a.team === 1);
+    setze(s, -5, 0, -18.2);
+    setze(z, 5, 0, -18.2);
+    s.waffe.visier = 1;
+    zielen(s, z);
+    s.befehl.tasten = T_FEUER | T_VISIER;
+    schritte(sim, 1);
+    pruefe(!z.lebt, 'Rumpftreffer mit dem Scharfschuetzengewehr ueberlebt (' + z.leben + ')');
+    // Aus der Huefte: grosse Streuung - erst angelegt ist es genau
+    const w = neueWaffe('scharfschuetze');
+    const f = { vx: 0, vz: 0, amBoden: true, geduckt: false, rutschZeit: 0 };
+    w.menschZielt = true;
+    w.visier = 0;
+    const huefte = streuungBerechnen(f, w);
+    w.visier = 1;
+    const voll = streuungBerechnen(f, w);
+    pruefe(huefte > 3 && voll < 0.1, 'Streuung Huefte ' + huefte.toFixed(2) + ', im Fernrohr ' + voll.toFixed(2));
+  });
+
+  test('Ops: Bots nehmen alle Waffen und schiessen mit jeder', () => {
+    const gesehen = new Set();
+    for (let i = 0; i < 1000; i++) gesehen.add(botWaffe(i / 1000));
+    pruefe(WAFFEN_REIHE.every((id) => gesehen.has(id)), 'nicht jede Waffe kommt vor: ' + [...gesehen].join(','));
+    for (const id of WAFFEN_REIHE) {
+      const sim = new Simulation({ karte, welt, nav, seed: 99, schwierigkeit: 'normal', nurBots: true, ohneVorlauf: true });
+      for (const a of sim.akteure) { a.waffe = neueWaffe(id); a.naechsteWaffe = id; }
+      let schuesse = 0, treffer = 0;
+      for (let i = 0; i < 60 / TICK && treffer < 3; i++) {
+        sim.schritt(TICK);
+        for (const m of sim.meldungen) {
+          if (m.typ === 'schuss') schuesse++;
+          if (m.typ === 'treffer') treffer++;
+        }
+        sim.meldungenLeeren();
+      }
+      pruefe(schuesse > 0 && treffer >= 3, id + ': Bots schiessen ' + schuesse + ' mal, ' + treffer + ' Treffer');
     }
   });
 

@@ -45,6 +45,7 @@ const FARBEN = {
 
 export function kraehenfeld() {
   const k = new KartenBauer('Übungsgelände Krähenfeld');
+  k.id = 'kraehenfeld';
   k.grenzen = { minX: -32, maxX: 32, minZ: -22, maxZ: 22 };
 
   /* ---------------------------------------------------- Boden, Mauer */

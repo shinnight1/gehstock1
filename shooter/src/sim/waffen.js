@@ -28,7 +28,10 @@ const RUECK = zufallsquelle(1);
 const ZIEL_ANTEIL = 0.9;
 
 function zielAnteil(w) {
-  return w.menschZielt ? Math.max(w.visier, ZIEL_ANTEIL) : w.visier;
+  if (!w.menschZielt) return w.visier;
+  // Mit Zielfernrohr muss das Visier wirklich oben sein (kein Schnappschuss).
+  const a = w.def.zielAnteil !== undefined ? w.def.zielAnteil : ZIEL_ANTEIL;
+  return Math.max(w.visier, a);
 }
 
 export function neueWaffe(id) {
@@ -49,6 +52,7 @@ export function neueWaffe(id) {
     rueckSeite: 0,
     sprintAus: 0,      // nach dem Sprint kurz keine Schuesse
     klickGesperrt: false,
+    abzugGesperrt: false, // halbautomatisch: erst loslassen, dann der naechste Schuss
     schuesse: 0,       // laufender Zaehler, fuer Darstellung und Bots
     letzterSchuss: -99,
     streuung: 0,       // aktuelle Streuung (Grad), fuer das Fadenkreuz
@@ -69,6 +73,7 @@ export function waffeAuffuellen(w) {
   w.rueckSeite = 0;
   w.sprintAus = 0;
   w.klickGesperrt = false;
+  w.abzugGesperrt = false;
 }
 
 export function kannNachladen(w) {
@@ -169,6 +174,7 @@ export function waffeTick(sim, a, tasten, neu, dt, darfSchiessen, jetzt) {
   if (!abzug) {
     if (w.abkling < 0) w.abkling = 0;
     w.klickGesperrt = false;
+    w.abzugGesperrt = false;
   }
 
   if (w.laden > 0) nachladenFortschritt(sim, a, w, dt);
@@ -186,7 +192,7 @@ export function waffeTick(sim, a, tasten, neu, dt, darfSchiessen, jetzt) {
       }
     } else {
       let n = 0;
-      while (w.abkling <= 0 && w.magazin > 0 && w.sprintAus <= 0 && n < 3) {
+      while (w.abkling <= 0 && w.magazin > 0 && w.sprintAus <= 0 && n < 3 && !w.abzugGesperrt) {
         if (w.laden > 0) {
           // Schrot laesst sich unterbrechen, Magazinwaffen nicht.
           if (def.einzelnLaden) nachladenAbbrechen(w);
@@ -198,6 +204,9 @@ export function waffeTick(sim, a, tasten, neu, dt, darfSchiessen, jetzt) {
         w.letzterSchuss = jetzt;
         w.abkling += 60 / def.rpm;
         n++;
+        // Halbautomatisch: der Abzug muss erst wieder los. Wer waehrend
+        // der Sperrzeit drueckt und haelt, schiesst, sobald sie um ist.
+        if (def.halbautomatisch) w.abzugGesperrt = true;
       }
     }
   }
