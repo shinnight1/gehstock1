@@ -51,6 +51,75 @@
 
   /* ---------------------------------------------------------- Der Reiter */
 
+  /* ------------------------------------------------------------------
+     Das Inseltor.
+
+     'auto' folgt den Schulzeiten (Mo-Fr ab 7 Uhr, siehe 1-zeiten.js),
+     'auf' und 'zu' setzen sie ausser Kraft. Durchgesetzt wird das auf
+     dem Spielserver, nicht hier: ein Riegel, den nur der Browser kennt,
+     ist keiner. Der Server laesst den Zug 'admin_tor' nur durch, wenn
+     der Code in der Verwaltung als CEO oder Aufsichtsrat steht.
+     ------------------------------------------------------------------ */
+
+  function inseltor(ziel, neu) {
+    var kasten = UI.el('div');
+    ziel.appendChild(UI.el('div.sec-head', null, [UI.el('h2', { text: 'Die Insel' })]));
+    ziel.appendChild(kasten);
+    kasten.appendChild(UI.el('p.small.muted', { text: 'Stand wird geholt…' }));
+
+    G.senden('admin_tor', {}).then(function (r) { malen(r && r.tor); }, function (err) {
+      UI.clear(kasten);
+      kasten.appendChild(UI.el('div.notice.warn', {
+        html: '<b>Der Spielserver antwortet nicht.</b><br>' + U.esc(err.message || ''),
+      }));
+    });
+
+    function malen(modus) {
+      UI.clear(kasten);
+      var zu = modus === 'zu', auf = modus === 'auf';
+      kasten.appendChild(UI.el('div.notice' + (zu ? '.warn' : ''), {
+        html: zu
+          ? '<b>🔒 Die Insel ist geschlossen.</b><br>Niemand kommt in die '
+            + 'Spielerwelt, auch nicht während der Schulzeiten.'
+          : auf
+            ? '<b>🔓 Die Insel ist offen.</b><br>Auch außerhalb der Schulzeiten '
+              + 'und am Wochenende.'
+            : '<b>🕖 Nach Schulzeiten.</b><br>Montag bis Freitag ab 7 Uhr, '
+              + 'danach von selbst zu. Das ist der Normalfall.',
+      }));
+      kasten.appendChild(UI.el('div', { style: { height: '8px' } }));
+      if (!auf) knopf('🔓 Insel öffnen', 'auf', 'wide primary');
+      if (!zu) knopf('🔒 Insel schließen', 'zu', 'wide bad');
+      if (modus === 'auf' || modus === 'zu') knopf('🕖 Zurück zu den Schulzeiten', 'auto', 'wide ghost');
+    }
+
+    function knopf(text, modus, cls) {
+      kasten.appendChild(UI.btn(text, function () { stellen(modus); }, cls));
+      kasten.appendChild(UI.el('div', { style: { height: '8px' } }));
+    }
+
+    function stellen(modus) {
+      var frage = modus === 'zu' ? 'Insel schließen?'
+        : modus === 'auf' ? 'Insel öffnen?' : 'Zurück zu den Schulzeiten?';
+      var text = modus === 'zu'
+        ? 'Alle werden aus der Spielerwelt ausgesperrt, bis du sie wieder öffnest. '
+          + 'Laufende Kämpfe brechen ab.'
+        : modus === 'auf'
+          ? 'Die Insel bleibt offen, bis du sie wieder schließt — auch nachts '
+            + 'und am Wochenende.'
+          : 'Ab dann entscheiden wieder die Schulzeiten: Montag bis Freitag ab 7 Uhr.';
+      UI.confirm(frage, text, 'Ja', modus === 'zu').then(function (ok) {
+        if (!ok) return;
+        G.senden('admin_tor', { modus: modus }).then(function (r) {
+          SG.protokoll.schreiben('insel', modus === 'zu' ? 'Insel geschlossen'
+            : modus === 'auf' ? 'Insel geöffnet' : 'Insel folgt wieder den Schulzeiten');
+          UI.toast('Erledigt.', 'good');
+          malen(r && r.tor);
+        }, function (err) { UI.toast(err.message || 'Ging nicht.', 'bad', 5000); });
+      });
+    }
+  }
+
   G.reiter = function (ziel, neu) {
     var D = spiel();
     if (!D) {
@@ -74,6 +143,12 @@
           + 'beschenken — ihr Stand verfällt nach fünf Minuten.',
       }));
     }
+
+    /* Das Inseltor steht ueber diesem Reiter, weil es hier hingehoert:
+       beides greift in die echte Spielerwelt ein. Sehen darf es nur, wer
+       es auch stellen darf - alles andere waere ein Knopf, der einem
+       Admin nur erklaert, dass er ihn nicht druecken kann. */
+    if (A.binOwner() || A.binAufsicht()) inseltor(ziel, neu);
 
     var liste = A.liste();
     ziel.appendChild(UI.el('div.sec-head', null, [

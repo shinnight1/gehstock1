@@ -29,6 +29,10 @@ const KEY = 'world-v2';
    Tests und die Testzone - behalten ihn wie bisher im Dokument.
    ------------------------------------------------------------------ */
 const VERLAEUFE = 'kampfverlaeufe';
+/* Das Inseltor: 'auto' folgt den Schulzeiten, 'auf' und 'zu' setzen sie
+   ausser Kraft. Gestellt wird es im Admin-Menue unter Geben, und nur
+   vom CEO oder vom Aufsichtsrat. */
+const TOR = 'tor';
 async function verlaeufeAuslagern(db, world) {
   if (typeof db.feldSetzen !== 'function') return;
   for (const r of world.reports || []) {
@@ -63,20 +67,47 @@ function volatileStore() {
 const mutations = X.SPIELZUEGE;
 /* Verschenken und Nachlesen sind Verwaltung, kein Spielzug: sie brauchen
    keinen eigenen Spielstand und richten sich nicht nach den Oeffnungszeiten. */
-const ADMIN_OPS = ['admin_grant', 'admin_release', 'admin_log'];
+const ADMIN_OPS = ['admin_grant', 'admin_release', 'admin_log', 'admin_tor'];
 class GameError extends Error { constructor(message, status = 400) { super(message); this.status = status; } }
 function adminBypass(body) {
   return body && body.adminOverride === true && body.adminCode === '3141' && roleForCode(body.code) === 'A';
 }
-function accessFor(timestamp, bypass) {
+const JAHR = 365 * 24 * 60 * 60 * 1000;
+function accessFor(timestamp, bypass, tor = 'auto') {
   const access = H.access(timestamp);
-  if (bypass) return { ...access, open: true, adminOverride: true, closesAt: timestamp + 365 * 24 * 60 * 60 * 1000 };
+  if (bypass) return { ...access, open: true, adminOverride: true, closesAt: timestamp + JAHR };
+  /* Das Tor steht ueber den Schulzeiten - in beide Richtungen. Zu heisst
+     zu, auch mitten am Schultag; auf heisst auf, auch am Wochenende. */
+  if (tor === 'zu') return { ...access, open: false, torZu: true, closesAt: null, nextOpenAt: null };
+  if (tor === 'auf') return { ...access, open: true, torAuf: true, closesAt: timestamp + JAHR };
   return access;
 }
-function requireOpen(timestamp, bypass = false) {
-  const access = accessFor(timestamp, bypass);
-  if (!access.open) { const error = new GameError('GehstockMon ist gerade geschlossen.', 423); error.access = access; throw error; }
+function requireOpen(timestamp, bypass = false, tor = 'auto') {
+  const access = accessFor(timestamp, bypass, tor);
+  if (!access.open) {
+    const error = new GameError(access.torZu
+      ? 'Die Insel ist geschlossen. Der CEO oder der Aufsichtsrat macht sie wieder auf.'
+      : 'GehstockMon ist gerade geschlossen.', 423);
+    error.access = access;
+    throw error;
+  }
   return access;
+}
+/* Wer das Tor stellen darf: der CEO oder der Aufsichtsrat. Beide stehen
+   in der Verwaltung des Hideouts (room.mjs, Schluessel 'verwaltung') -
+   derselbe Redis, anderer Name. Intern heisst der CEO dort weiterhin
+   owner, siehe src/core/auth.js.
+
+   Geht der Griff daneben, ist die Antwort nein: ein Rechtepruefer, der
+   im Zweifel ja sagt, ist keiner. */
+async function darfTorStellen(verwStore, code) {
+  try {
+    const d = await verwStore.get('verwaltung', { type: 'json' });
+    if (!d) return false;
+    const ceo = String(d.owner || '').replace(/\D/g, '');
+    const aufsicht = String(d.aufsicht || '').replace(/\D/g, '');
+    return (!!ceo && ceo === code) || (!!aufsicht && aufsicht === code);
+  } catch (err) { return false; }
 }
 function validCode(value) {
   return roleForCode(value) !== null;
@@ -266,7 +297,7 @@ function protectedOwner(world, t, now) {
 }
 function publicResult(world, id, now, extra = {}) {
   const p = world.players[id];
-  return { playerId: id, serverTime: now, access: accessFor(now, extra.adminOverride === true), mapVersion: world.mapVersion, dailyDelivery:extra.joining?p.dailyDelivery||0:0,profile: D.neuerStand(p, now), arena: p.arena || null,duel:p.duel||null,spawn:p.spawn,encounters:X.encounters(now,world.territories).filter(e=>!p.encounterClaims.includes(e.id)),
+  return { playerId: id, serverTime: now, access: accessFor(now, extra.adminOverride === true, extra.tor || 'auto'), mapVersion: world.mapVersion, dailyDelivery:extra.joining?p.dailyDelivery||0:0,profile: D.neuerStand(p, now), arena: p.arena || null,duel:p.duel||null,spawn:p.spawn,encounters:X.encounters(now,world.territories).filter(e=>!p.encounterClaims.includes(e.id)),
     ...dungeonResult(world,p), ...duellSicht(world,p,id,extra.zuschauen), ...weltprojekte(world,id,now), ...arenaStand(world,id,now), ...handelSicht(world,p,id,now), ...inselSicht(world,id,now), territories: world.territories.map((t) => ({ id: t.id, ownerId: t.ownerId, ownerName: world.players[t.ownerId]?.name || t.ownerName, version: t.version, level: t.level,
       /* Plan und Wesen gehoeren dazu: Aufklaeren soll zeigen, wie die Truppe
          kaempft. Frueher fehlten beide, und bei jedem Spielergebiet stand
@@ -338,7 +369,7 @@ async function zumStart({ world, p, id, now, presence }) {
   p.startSprungAt = now;
   return { startSprung: { ...ort }, message: 'Du stehst wieder am Start. Das nächste Mal geht es in ' + Math.round(X.START_SPRUNG_PAUSE / 60000) + ' Minuten.' };
 }
-async function updatePresence(db, world, id, position, timestamp, clock, bypass = false, bild = 0) {
+async function updatePresence(db, world, id, position, timestamp, clock, bypass = false, bild = 0, tor = 'auto') {
   const p = world.players[id];
   if (!p) throw new GameError('Betritt zuerst die Spielerwelt.',409);
   if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.z) || !Number.isFinite(position.heading)
@@ -359,13 +390,13 @@ async function updatePresence(db, world, id, position, timestamp, clock, bypass 
     if(layout.some(g=>g.ownerId!==id&&X.inside(from,g)))from=X.outside(from,layout);
     const credit=previous?Math.min(LAUF_VORRAT,(previous.credit||0)+Math.max(0,timestamp-previous.updatedAt)/1000*LAUF_TEMPO):LAUF_VORRAT,distance=Math.hypot(position.x-from.x,position.z-from.z);
     const route=distance<=credit+.05&&!(zurueckgestellt&&distance>0.5)?X.route(layout,from,position,id,credit+.05):null;
-    if(!route)return json({serverTime:timestamp,access:accessFor(timestamp,bypass),position:{x:from.x,z:from.z,heading:from.heading||0},positionCorrected:true,peers:peers()});
+    if(!route)return json({serverTime:timestamp,access:accessFor(timestamp,bypass,tor),position:{x:from.x,z:from.z,heading:from.heading||0},positionCorrected:true,peers:peers()});
     let traveled=0,cursor=from;for(const point of route){traveled+=Math.hypot(point.x-cursor.x,point.z-cursor.z);cursor=point;}
     const eintrag=!players[id]||players[id].updatedAt<=timestamp?{ id, name:p.name, x:Math.round(position.x*100)/100, z:Math.round(position.z*100)/100,
       heading:position.heading, activity:activeArena(p)||activeDuel(p)||activeDungeon(world,p)||imDuellKampf(world,p,id)?'arena':'map', updatedAt:timestamp,spawnAt:p.lastJoinAt,credit:Math.max(0,credit-traveled),skin:p.skin,weapon:p.weapon,squad:p.truppe.slice(),protected:X.protected(p,timestamp),eier:p.eggs.length,champion:world.champion?.id===id,titel:amtTitel(world,id,timestamp)||X.titelName(p),...(bild?{bild}:{}) }:null;
-    requireOpen(clock(), bypass);
+    requireOpen(clock(), bypass, tor);
     /* Eine Duell-Einladung muss schnell ankommen - die Anwesenheit laeuft alle paar Sekunden, die Weltabfrage nur alle dreissig. */
-    if(await anwesenheitSchreiben(db,stand,id,eintrag,weg))return json({serverTime:timestamp,access:accessFor(timestamp,bypass),peers:peers(),duellEinladung:duellEinladung(world,p,id,timestamp)});
+    if(await anwesenheitSchreiben(db,stand,id,eintrag,weg))return json({serverTime:timestamp,access:accessFor(timestamp,bypass,tor),peers:peers(),duellEinladung:duellEinladung(world,p,id,timestamp)});
     await pause(attempt);
   }
   throw new GameError('Die Mitspieler werden gerade aktualisiert.',409);
@@ -461,11 +492,27 @@ function settleBattle(world, p, id, now, requestId) {
 }
 
 /* Each turn, egg and upgrade is authoritative and atomically persisted. */
-export function createHandler({ store, presenceStore, now = Date.now, random = Math.random, sandbox = false } = {}) {
+export function createHandler({ store, presenceStore, verwStore, now = Date.now, random = Math.random, sandbox = false } = {}) {
   let sharedSandbox = null;
   /* Kurzes Gedaechtnis fuer die Anwesenheit, siehe unten bei op 'presence'. */
   let weltMerker = null;
   const WELT_FRISCH = 5000;
+  /* Dasselbe kurze Gedaechtnis fuers Tor. Ohne das laege bei jeder
+     Anwesenheitsmeldung ein zusaetzlicher Lesevorgang an - dreissigmal
+     je Minute und Spieler, und genau der war hier schon einmal der
+     groesste Posten in der Datenbank. */
+  let torMerker = null;
+  const TOR_FRISCH = 5000;
+  async function torLesen(db, jetzt) {
+    if (torMerker && jetzt - torMerker.at < TOR_FRISCH) return torMerker.wert;
+    let wert = { modus: 'auto' };
+    try {
+      const d = await db.get(TOR, { type: 'json' });
+      if (d && (d.modus === 'auf' || d.modus === 'zu')) wert = d;
+    } catch (err) { /* ohne Eintrag gelten die Schulzeiten */ }
+    torMerker = { wert, at: jetzt };
+    return wert;
+  }
   async function presenzWelt(db, id, jetzt) {
     const frisch = weltMerker && jetzt - weltMerker.at < WELT_FRISCH && weltMerker.data.players[id];
     if (frisch) return weltMerker.data;
@@ -502,7 +549,30 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
       const verwaltung = ADMIN_OPS.includes(body.op);
       if (verwaltung && roleForCode(body.code) !== 'A') throw new GameError('Das darf nur ein Administrator.', 403);
       if (body.op === 'admin_grant' && !validCode(body.zielCode)) throw new GameError('Diesen Zugangscode gibt es nicht.');
-      requireOpen(timestamp, bypass || verwaltung);
+      const torStore = store || speicher('hgh-gehstockmon');
+      const tor = await torLesen(torStore, timestamp);
+      /* Das Tor stellen: nur CEO und Aufsichtsrat, und das Weltdokument
+         wird dafuer nicht gebraucht. Lesen darf jeder Admin - der Knopf
+         im Admin-Menue muss ja wissen, wie er dasteht. */
+      if (body.op === 'admin_tor') {
+        const modus = body.modus === 'auf' || body.modus === 'zu' ? body.modus
+          : body.modus === 'auto' ? 'auto' : null;
+        if (modus === null) {
+          return json({ serverTime: timestamp, tor: tor.modus, von: tor.von || '', t: tor.t || 0,
+            access: accessFor(timestamp, false, tor.modus) });
+        }
+        if (!(await darfTorStellen(verwStore || speicher('hgh-rooms'), body.code))) {
+          throw new GameError('Die Insel öffnet und schließt nur der CEO oder der Aufsichtsrat.', 403);
+        }
+        const wer = typeof body.name === 'string'
+          ? body.name.trim().replace(/[\u0000-\u001f]/g, '').slice(0, 30) : '';
+        const neu = { modus, von: wer || 'Leitung', t: timestamp };
+        await torStore.setJSON(TOR, neu);
+        torMerker = { wert: neu, at: timestamp };
+        return json({ serverTime: timestamp, tor: modus, von: neu.von, t: neu.t,
+          access: accessFor(timestamp, false, modus) });
+      }
+      requireOpen(timestamp, bypass || verwaltung, tor.modus);
       if(body.adminOverride===true&&!bypass)throw new GameError('Die Testzone benötigt ein echtes Admin-Konto und den richtigen Testcode.',403);
       const name = typeof body.name === 'string' ? body.name.trim().replace(/[\u0000-\u001f]/g, '').slice(0, 30) : '';
       const db = store || speicher('hgh-gehstockmon'), draw = random();
@@ -528,7 +598,7 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
            so holen die anderen ein neues Bild genau einmal. Das Bild selbst
            liegt im Relais (room.mjs, profilbild:*). */
         const bild=Number.isSafeInteger(body.bild)&&body.bild>0?body.bild:0;
-        return await updatePresence(presenceStore||speicher('hgh-gehstockmon-presence'),welt,id,body.position,timestamp,now,bypass,bild);
+        return await updatePresence(presenceStore||speicher('hgh-gehstockmon-presence'),welt,id,body.position,timestamp,now,bypass,bild,tor.modus);
       }
       const zuletzt = body.op === 'join' ? await eigenerEintrag(presenceStore || speicher('hgh-gehstockmon-presence'), id) : null;
       for (let attempt = 0; attempt < 8; attempt++) {
@@ -602,7 +672,7 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
         X.aktivMerken(p, timestamp);
         if(body.op==='join'){p.dailyDelivery=E.deliverDaily(p,timestamp);p.lastJoinAt=timestamp;p.spawn=startpunkt(zuletzt,world,id,timestamp);}
         const receipts = p.actionReceipts || [], receipt = receipts.find((r) => r.id === body.requestId && r.op === body.op);
-        if (receipt) return json(publicResult(world, id, timestamp, { ...receipt.extra, duplicate: true, adminOverride: bypass }));
+        if (receipt) return json(publicResult(world, id, timestamp, { ...receipt.extra, duplicate: true, adminOverride: bypass, tor: tor.modus }));
         let extra = {joining:body.op==='join',zuschauen:typeof body.zuschauen==='string'?body.zuschauen.slice(0,120):null};
         /* Welche Titel schon erreicht waren - danach wird verglichen. */
         const titelVorher = X.titelErreicht(p);
@@ -776,14 +846,14 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
            fragt gleich danach nach. Fuenfzehn reichen; vierzig machten ein
            Siebtel der Welt aus. */
         if (mutations.includes(body.op)) p.actionReceipts = receipts.concat({ id: body.requestId, op: body.op, extra }).slice(-15);
-        if (body.op === 'world' && entry && nurUhrGestellt(entry.data, world, id, timestamp)) return json(publicResult(world, id, timestamp, { ...extra, adminOverride: bypass }));
+        if (body.op === 'world' && entry && nurUhrGestellt(entry.data, world, id, timestamp)) return json(publicResult(world, id, timestamp, { ...extra, adminOverride: bypass, tor: tor.modus }));
         await verlaeufeAuslagern(db, world);
         world.version++;
-        requireOpen(now(), bypass);
+        requireOpen(now(), bypass, tor.modus);
         const write = await db.setJSON(KEY, world, entry ? { onlyIfMatch: entry.etag } : { onlyIfNew: true });
         if (write.modified) {
           await verlaeufeAufraeumen(db, entry && entry.data, world);
-          return json(publicResult(world, id, timestamp, { ...extra, adminOverride: bypass }));
+          return json(publicResult(world, id, timestamp, { ...extra, adminOverride: bypass, tor: tor.modus }));
         }
         await pause(attempt);
       }

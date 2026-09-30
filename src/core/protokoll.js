@@ -32,6 +32,7 @@
     profilbild: { icon: '🖼', name: 'Profilbild' },
     owner: { icon: '👑', name: 'CEO' },
     aufsicht: { icon: '⚖️', name: 'Aufsichtsrat' },
+    insel: { icon: '🏝', name: 'Inseltor' },
     sperre: { icon: '🚫', name: 'Spielsperre' },
     wartung: { icon: '🔧', name: 'Wartung' },
     ansage: { icon: '📣', name: 'Ansage' },
