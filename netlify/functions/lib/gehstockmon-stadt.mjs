@@ -212,18 +212,27 @@ export async function stadtAction({world,p,id,body,now,presence,random=Math.rand
      zeigen nur das Ergebnis. Geht von ueberall, wie der Eierkauf. */
   if(op==='automat_spielen'){
     const A2=X.AUTOMAT,stand=X.automatStand(p,now);
-    if(!stand.frei)fail('Der Automat hat dir heute schon '+A2.proTag+' Eier gegeben. Morgen läuft er wieder.');
-    if(p.eggs.length>=E.BAG_LIMIT)fail('Deine Bruttasche ist voll. Brüte erst ein Ei aus.');
     if(p.gold<A2.einsatz)fail('Ein Spiel kostet '+A2.einsatz+' Gold.');
-    const zufall=E.zufallsfolge(random()),gewonnen=zufall()<A2.chance;
+    const zufall=E.zufallsfolge(random());
+    const gewinn=X.automatZiehung(zufall(),(g)=>X.automatErreichbar(g,p,now));
     E.buchen(p,-A2.einsatz,'automat',now);
-    p.automat={tag:H.day(now),gewinne:stand.gewinne+(gewonnen?1:0),spiele:stand.spiele+1};
-    if(gewonnen){
+    let meldung=gewinn?gewinn.meldung:'Leider nichts. −'+A2.einsatz+' Gold.';
+    if(gewinn&&gewinn.symbol==='eier'){
       p.eggs.push({id:'automat-'+now+'-'+(++p.eggSerial),territoryId:X.FINDELEI_FELD,producedAt:now,startedAt:null,readyAt:null,art:'automat'});
       tickern(world,'🎰 '+p.name+' gewinnt am Glücksautomaten ein Ei','automat',now,id);
+    }else if(gewinn&&gewinn.gold)E.buchen(p,gewinn.gold,'automat',now);
+    else if(gewinn&&gewinn.rohstoff){
+      const kam=E.einlagern(p,gewinn.rohstoff,gewinn.menge);
+      if(kam<gewinn.menge)meldung+=' Dein Lager ist voll, es passte nur '+kam+' hinein.';
+    }else if(gewinn&&gewinn.rune!==undefined){
+      p.runes[gewinn.rune]=Math.min(9999,(p.runes[gewinn.rune]||0)+gewinn.menge);
+    }else if(gewinn&&gewinn.perle){
+      p.schimmerperle=true;
+      tickern(world,'🎰 '+p.name+' gewinnt am Glücksautomaten eine Schimmerperle','automat',now,id);
     }
-    extra.automat={walzen:X.automatWalzen(gewonnen,zufall),gewonnen};
-    extra.message=gewonnen?'Drei Eier! Ein Ei liegt in deiner Bruttasche.':'Leider nichts. −'+A2.einsatz+' Gold.';
+    p.automat={tag:H.day(now),gewinne:stand.gewinne+(gewinn&&gewinn.symbol==='eier'?1:0),spiele:stand.spiele+1};
+    extra.automat={walzen:X.automatWalzen(gewinn,zufall),gewonnen:!!gewinn,gewinn:gewinn?gewinn.symbol:null};
+    extra.message=meldung;
     return extra;
   }
   if(op==='runen_zerlegen'||op==='runen_verschmelzen'){

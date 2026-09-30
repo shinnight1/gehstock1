@@ -156,13 +156,17 @@
       var s=state(),A2=X.AUTOMAT,st=X.automatStand(s,c.now()),voll=s.eggs.length>=R.wirtschaft.BAG_LIMIT;
       var karte=el('article',undefined,'gm-quest-card gm-automat');
       karte.appendChild(titel('Glücksautomat','truhe'));
-      karte.appendChild(el('p','Drei Eier auf den Walzen bringen ein Ei. Höchstens '+A2.proTag+' Eier am Tag.'));
+      karte.appendChild(el('p','Drei gleiche Bilder gewinnen.'));
       var walzen=el('div',undefined,'gm-walzen');
       walzenZuletzt.forEach(function(sym){var f=el('div',undefined,'gm-walze');f.appendChild(walzenBild(sym));walzen.appendChild(f);});
       karte.appendChild(walzen);
-      karte.appendChild(el('p',st.frei?'Heute noch '+st.frei+(st.frei===1?' Ei':' Eier')+' zu gewinnen.':'Für heute leergespielt. Morgen läuft er wieder.','gm-plan-hinweis'));
-      var knopf=button(!st.frei?'Leergespielt':voll?'Bruttasche voll':'Spielen · '+A2.einsatz+' Gold',spielen,'gm-button gm-primary');
-      knopf.disabled=dreht||c.busy()||!st.frei||voll||s.gold<A2.einsatz;
+      /* Was es gibt - ohne Chancen. */
+      var liste=el('div',undefined,'gm-gewinnliste');
+      A2.gewinne.forEach(function(g){var z=el('div',undefined,'gm-gewinn'+(X.automatErreichbar(g,s,c.now())?'':' aus'));z.appendChild(walzenBild(g.symbol));z.appendChild(el('span','×3'));z.appendChild(el('strong',g.name));liste.appendChild(z);});
+      karte.appendChild(liste);
+      karte.appendChild(el('p',!st.frei?'Die Eier sind für heute ausgespielt - alles andere läuft weiter.':voll?'Deine Bruttasche ist voll - gerade ist kein Ei drin.':'Heute noch '+st.frei+(st.frei===1?' Ei':' Eier')+' zu gewinnen.','gm-plan-hinweis'));
+      var knopf=button('Spielen · '+A2.einsatz+' Gold',spielen,'gm-button gm-primary');
+      knopf.disabled=dreht||c.busy()||s.gold<A2.einsatz;
       karte.appendChild(knopf);drawer.appendChild(karte);
     }
     function spielen(e){

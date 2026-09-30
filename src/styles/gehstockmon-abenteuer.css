@@ -163,6 +163,12 @@
 .gm-walze.dreht .gm-walze-bild{animation:gm-walze-dreht .09s linear infinite;opacity:.75}
 @keyframes gm-walze-dreht{from{transform:translateY(-35%)}to{transform:translateY(35%)}}
 .gm-walzen.gewonnen .gm-walze{border-color:#f0ca80;box-shadow:0 0 18px #f0ca8088}
+.gm-gewinnliste{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 12px;margin:4px 0 10px}
+.gm-gewinn{display:flex;align-items:center;gap:6px;font-size:13px;color:#cfe3e7}
+.gm-gewinn .gm-walze-bild{width:26px;height:26px}
+.gm-gewinn span{color:#93aeb5;font-size:12px}
+.gm-gewinn strong{font-weight:700;color:#e9f3f5}
+.gm-gewinn.aus{opacity:.4}
 @media (prefers-reduced-motion:reduce){.gm-walze.dreht .gm-walze-bild{animation:none}}
 .gm-titel-symbol{width:30px;height:30px;vertical-align:middle;margin-right:8px}
 /* Auf Tablets ist die Projektleiste schmal - dort bleibt es beim Text. */
