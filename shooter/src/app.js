@@ -23,7 +23,7 @@
 
 import { MATCH, QUALITAET, QUALITAET_REIHE, TEAMS, TICK, WAFFEN } from './konfig.js';
 import { absturzPruefen, fehlerMerken, herzschlag, sitzungEnde } from './diagnose.js';
-import { kraehenfeld } from './karte/kraehenfeld.js';
+import { karteBauen } from './karte/karten.js';
 import { Welt } from './sim/welt.js';
 import { Navigation } from './sim/navigation.js';
 import { Simulation } from './sim/simulation.js';
@@ -123,14 +123,10 @@ export class App {
         this.startHinweis = 'Das Spiel wurde zuletzt unerwartet beendet. Details: Einstellungen → Diagnose.';
       }
     }
-    this.karte = kraehenfeld();
-    this.welt = new Welt(this.karte.quader.filter((q) => q.kollision));
-    this.nav = new Navigation(this.welt, this.karte.grenzen);
-
     this.darstellung = new Darstellung(this.wurzel, this.einst.qualitaet);
     this.darstellung.dynamisch = this.einst.dynamisch;
     this.darstellung.beiKontext = (ok) => this.kontext(ok);
-    this.darstellung.weltAufbauen(this.karte);
+    this.karteLaden(this.einst.karte);
 
     this.eingabe = new Eingabe(this.einst);
     this.hud = new Hud(this.wurzel, this);
@@ -301,6 +297,27 @@ export class App {
     this.klang.spielen('klick', 0.6);
   }
 
+  /* ------------------------------------------------------------ Karte */
+
+  /* Karte bauen (Kollision, Bild) - nur wenn es eine andere ist. Das
+     Wegenetz der Bots entsteht erst, wenn eine Bot-Lobby es braucht. */
+  karteLaden(id) {
+    if (!this.karte || this.karte.id !== id) {
+      this.karte = karteBauen(id);
+      this.welt = new Welt(this.karte.quader.filter((q) => q.kollision));
+      this.nav = null;
+    }
+    this.darstellung.weltAufbauen(this.karte);
+    return { karte: this.karte, welt: this.welt };
+  }
+
+  /* Im Menue: die gewaehlte Karte gleich im Hintergrund zeigen. */
+  kartenVorschau(id) {
+    if (this.sim && this.zustand !== 'menue') return;
+    this.karteLaden(id);
+    this.neuZeichnen = true;
+  }
+
   /* ------------------------------------------------------------ Match */
 
   matchStarten() {
@@ -313,7 +330,10 @@ export class App {
     this.menues.schliessen();
     this.hud.feedLeeren();
     this.hud.tabelle(null, false);
-    const seed = ((Date.now() & 0xffffffff) ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
+    // festerSeed: nur fuer Tests (gleiche Bots, gleiche Waffen in jedem Match)
+    const seed = this.festerSeed || ((Date.now() & 0xffffffff) ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
+    this.karteLaden(this.einst.karte);
+    if (!this.nav) this.nav = new Navigation(this.welt, this.karte.grenzen);
     this.sim = new Simulation({
       karte: this.karte, welt: this.welt, nav: this.nav, seed,
       schwierigkeit: this.einst.schwierigkeit, spielerWaffe: this.einst.waffe,
@@ -352,6 +372,7 @@ export class App {
     this.menues.verbinden(() => this.zumMenue());
     const on = new OnlineSpiel({
       karte: this.karte, welt: this.welt, name: this.einst.name || 'Gast', waffe: this.einst.waffe,
+      karteHolen: (id) => (this.online === on ? this.karteLaden(id) : null),
       beiStatus: (z, text) => { if (this.online === on) this.onlineStatus(z, text); },
       beiRoster: (alt, neu) => { if (this.online === on) this.onlineRoster(alt, neu); },
     });
@@ -536,6 +557,7 @@ export class App {
   zumMenue() {
     this.onlineBeenden();
     this.spielAufraeumen();
+    this.karteLaden(this.einst.karte);
     this.menues.haupt();
   }
 
@@ -787,6 +809,7 @@ export class App {
           if (eigen) {
             this.klang.spielen(def.id, 0.85 * def.lautstaerke, rate);
             if (def.einzelnLaden) this.klang.spielen('pumpe', 0.5, 1, 0, 0, 0.28);
+            if (def.repetierer && a.waffe.magazin > 0) this.klang.spielen('verschluss', 0.55, 0.9, 0, 0, 0.32);
           } else {
             this.klang.raeumlich(def.id, a.x - s.x, a.z - s.z, this.eingabe.yaw, 1.1 * def.lautstaerke, rate);
           }
@@ -939,6 +962,7 @@ export class App {
         const z2 = this.wz;
         z2.waffe = w.id;
         z2.visier = w.visier;
+        z2.fernrohr = !!w.def.zielfernrohr;
         z2.sprint = s.sprintet;
         z2.amBoden = s.amBoden;
         z2.tempo = Math.hypot(s.vx, s.vz);
@@ -985,8 +1009,9 @@ export class App {
     } else {
       // Menue und Auswertung: langsamer Rundflug ueber das Gelaende
       const t = this.zeit * 0.045;
-      a.x = Math.sin(t) * 27;
-      a.z = Math.cos(t) * 17;
+      const g = this.karte.grenzen;
+      a.x = Math.sin(t) * g.maxX * 0.84;
+      a.z = Math.cos(t) * g.maxZ * 0.77;
       a.y = 10.5;
       a.yaw = yawZu(-a.x, -a.z);
       a.pitch = -0.36;

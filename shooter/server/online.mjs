@@ -32,7 +32,7 @@
 import crypto from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { TICK } from '../src/konfig.js';
-import { kraehenfeld } from '../src/karte/kraehenfeld.js';
+import { karteBauen, KARTEN_REIHE } from '../src/karte/karten.js';
 import { Welt } from '../src/sim/welt.js';
 import { Navigation } from '../src/sim/navigation.js';
 import { Simulation } from '../src/sim/simulation.js';
@@ -62,9 +62,15 @@ export function nameSaeubern(roh) {
 /* ------------------------------------------------------------ Die Runde */
 
 class Raum {
-  /* o: Einstellungen von OpsOnline (Tests verkuerzen damit die Runden) */
-  constructor(welt, nav, karte, o) {
+  /* karten: { id: { karte, welt, nav } } fuer alle Karten.
+     o: Einstellungen von OpsOnline (Tests verkuerzen damit die Runden) */
+  constructor(karten, o) {
     this.log = o.log;
+    this.karten = karten;
+    // Reihum: nach jeder Runde die naechste Karte
+    this.kartenFolge = (o.kartenFolge || KARTEN_REIHE).filter((id) => karten[id]);
+    this.karteI = 0;
+    const { karte, welt, nav } = karten[this.kartenFolge[0]];
     this.rundenPause = o.rundenPause || RUNDEN_PAUSE;
     this.kontingentMax = o.kontingentMax || KONTINGENT_MAX;
     this.reservierungMs = o.reservierung || RESERVIERUNG;
@@ -273,11 +279,21 @@ class Raum {
     this.meldungenSammeln();
     this.verlaufMerken();
     if (sim.phase === 'ende') {
-      if (this.endeZeit < 0) this.endeZeit = 0;
+      if (this.endeZeit < 0) {
+        this.endeZeit = 0;
+        // Schon in der Auswertung zeigen, wohin es als Naechstes geht
+        sim.naechsteKarte = this.kartenFolge[(this.karteI + 1) % this.kartenFolge.length];
+      }
       this.endeZeit += TICK;
       if (this.endeZeit >= this.rundenPause) {
         this.endeZeit = -1;
         this.ausgleichen();
+        this.karteI = (this.karteI + 1) % this.kartenFolge.length;
+        const naechste = this.karten[this.kartenFolge[this.karteI]];
+        if (naechste.karte !== sim.karte) {
+          sim.karteSetzen(naechste);
+          this.log('Ops: neue Runde auf ' + naechste.karte.name);
+        }
         sim.neueRunde();
         this.meldungenSammeln();
         this.verlaufMerken();
@@ -400,7 +416,7 @@ class Raum {
 export class OpsOnline {
   /* opt: { log, maxVerbindungen } - und fuer Tests: dauer, zielPunkte,
      rundenPause, ohneVorlauf, kontingentMax, nachrichtenRate,
-     nachrichtenVorrat, reservierung, seed */
+     nachrichtenVorrat, reservierung, seed, kartenFolge */
   constructor(opt) {
     const o = opt || {};
     this.o = o;
@@ -415,14 +431,17 @@ export class OpsOnline {
     this.gebaut = null;
   }
 
-  /* Karte, Kollision und Wegenetz einmal bauen - erst, wenn jemand
-     wirklich online spielt. */
-  welt() {
+  /* Alle Karten mit Kollision und Wegenetz einmal bauen - erst, wenn
+     jemand wirklich online spielt. */
+  karten() {
     if (!this.gebaut) {
-      const karte = kraehenfeld();
-      const welt = new Welt(karte.quader.filter((q) => q.kollision));
-      const nav = new Navigation(welt, karte.grenzen);
-      this.gebaut = { karte, welt, nav };
+      this.gebaut = {};
+      for (const id of KARTEN_REIHE) {
+        const karte = karteBauen(id);
+        const welt = new Welt(karte.quader.filter((q) => q.kollision));
+        const nav = new Navigation(welt, karte.grenzen);
+        this.gebaut[id] = { karte, welt, nav };
+      }
     }
     return this.gebaut;
   }
@@ -496,10 +515,7 @@ export class OpsOnline {
     const waffe = waffeVon(l.u8()) || 'sturmgewehr';
     const name = nameSaeubern(l.text());
     const schluessel = l.rest() > 0 ? l.text().slice(0, 40) : '';
-    if (!this.raum) {
-      const { karte, welt, nav } = this.welt();
-      this.raum = new Raum(welt, nav, karte, { ...this.o, log: this.log });
-    }
+    if (!this.raum) this.raum = new Raum(this.karten(), { ...this.o, log: this.log });
     const raum = this.raum;
     const sp = raum.beitreten(v, name, waffe, schluessel);
     if (!sp) {

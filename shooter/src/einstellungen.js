@@ -8,6 +8,7 @@
    ------------------------------------------------------------------ */
 
 import { BOT_REIHE, QUALITAET_REIHE, WAFFEN_REIHE } from './konfig.js';
+import { KARTEN_REIHE } from './karte/karten.js';
 
 const SCHLUESSEL = 'gehstock-ops:einstellungen:v1';
 const STATISTIK = 'gehstock-ops:statistik:v1';
@@ -39,6 +40,7 @@ export function standard() {
     sichtfeld: 66,           // senkrecht; auf dem iPad quer rund 85° waagerecht
     schwierigkeit: 'normal',
     waffe: 'sturmgewehr',
+    karte: 'kraehenfeld',     // Bot-Lobby; online wechselt der Server die Karte
     hilfeGesehen: false,
     name: '',                // fuers Online-Match; kommt aus dem Hideout mit
   };
@@ -70,6 +72,8 @@ export function einstellungenLaden() {
           if (BOT_REIHE.indexOf(v) >= 0) s[k] = v;
         } else if (k === 'waffe') {
           if (WAFFEN_REIHE.indexOf(v) >= 0) s[k] = v;
+        } else if (k === 'karte') {
+          if (KARTEN_REIHE.indexOf(v) >= 0) s[k] = v;
         } else if (k === 'visierModus') {
           if (v === 'umschalten' || v === 'halten') s[k] = v;
         } else if (k === 'name') {

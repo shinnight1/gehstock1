@@ -10,6 +10,8 @@
        kein Scrollen oder Zoomen, Hochformat-Hinweis
      - Maus und Tastatur: Pointer Lock, Pause bei Verlust, P und Escape,
        Tabelle, Matchende, Auswertung, Nochmal
+     - alle Karten ueber das Menue, dreimal reihum ohne wachsenden
+       Grafikspeicher; jede Waffe feuert, Halbautomatik, Zielfernrohr
      - wiederholtes Starten ohne wachsenden GPU-Speicher, sauberes
        Aufraeumen (Schleife steht, Canvas, Oberflaeche, Ton, Listener weg)
      - online mit zwei Browsern (Maus und Touch): Teams, gegenseitig
@@ -254,6 +256,10 @@ try {
   console.log('\nMaus und Tastatur, Ablauf, Aufraeumen');
   {
     const { ctx, page, fehler, ev } = await seite({ viewport: { width: 900, height: 620 } });
+    // Gleiche Bots mit gleichen Waffen in jedem Match: sonst laedt jede
+    // Waffe, die zum ersten Mal auftaucht, ihr Modell nach und die
+    // Speicherpruefung unten sieht Wachstum, wo keins ist.
+    await ev(() => { window.__ops.festerSeed = 4711; });
     await page.click('.m-start.zweit');
     await page.waitForFunction(() => window.__ops.zustand === 'spiel', null, { timeout: 30000 });
     pruefe(await ev(() => !!document.pointerLockElement), 'Maus nach Klick gefangen');
@@ -296,6 +302,88 @@ try {
     }));
     pruefe(rest.canvas === 0 && rest.ui === 0 && rest.ton, 'Verlassen raeumt Canvas, Oberflaeche und Ton ab');
     pruefe(rest.listener === 0 && lauscher > 5, 'Verlassen meldet alle ' + lauscher + ' Listener des Spiels ab (' + rest.listener + ' uebrig)');
+    pruefe(fehler.length === 0, 'keine Fehler in der Konsole' + (fehler.length ? ': ' + fehler[0] : ''));
+    await ctx.close();
+  }
+
+  /* ---------------------------------------------------- Karten, Waffen */
+  console.log('\nKarten und Waffen');
+  {
+    const { ctx, page, fehler, ev } = await seite({ viewport: { width: 1000, height: 660 } });
+    const botsStill = () => ev(() => { for (const a of window.__ops.sim.akteure) if (a.bot) { a.ki = null; a.befehl.tasten = 0; a.befehl.vor = 0; a.befehl.seit = 0; } });
+    const chips = await ev(() => Array.from(document.querySelectorAll('.m-kartenwahl .m-chip .c-name')).map((e) => e.textContent));
+    pruefe(chips.length === 4, 'Menue bietet vier Karten (' + chips.join(', ') + ')');
+    // Jede Karte ueber das Menue waehlen und spielen - viermal reihum,
+    // Kraehenfeld jeweils zuletzt. Gemessen wird dort nach einem Rundumblick
+    // (die Grafikkarte bekommt nur, was einmal im Bild war): ab der dritten
+    // Runde darf nichts mehr dazukommen.
+    const speicher = [];
+    let kartenOk = true;
+    for (let runde = 0; runde < 4; runde++) {
+      for (const i of [1, 2, 3, 0]) {
+        await page.click('.m-kartenwahl .m-chip:nth-child(' + (i + 1) + ')');
+        await page.click('.m-start.zweit');
+        await page.waitForFunction(() => window.__ops.zustand === 'spiel', null, { timeout: 30000 });
+        const k = await ev(() => {
+          const a = window.__ops, s = a.sim.spieler, g = a.karte.grenzen;
+          return { wahl: a.einst.karte, karte: a.karte.id, sim: a.sim.karte.id, drin: s.x > g.minX && s.x < g.maxX && s.z > g.minZ && s.z < g.maxZ };
+        });
+        if (!(k.wahl === k.karte && k.karte === k.sim && k.drin)) kartenOk = false;
+        if (i === 0) {
+          speicher.push(await ev(() => {
+            const a = window.__ops;
+            for (let r = 0; r < 8; r++) {
+              a.eingabe.yaw = r * Math.PI / 4;
+              a.bild(performance.now());
+            }
+            const m = a.darstellung.renderer.info.memory;
+            return m.geometries + '/' + m.textures;
+          }));
+        }
+        await ev(() => { document.exitPointerLock(); window.__ops.zumMenue(); });
+        await warten(200);
+      }
+    }
+    pruefe(kartenOk, 'jede Karte laesst sich waehlen und startet mit dem Spieler auf der Karte');
+    console.log('       Grafikspeicher nach jeder Runde durch alle Karten (Geometrien/Texturen): ' + speicher.join('  '));
+    // Nicht mehr als nach der zweiten Runde (weniger ist in Ordnung: was
+    // zuletzt nicht im Bild war, liegt nicht auf der Grafikkarte).
+    const zahlen = speicher.map((x) => x.split('/').map(Number));
+    pruefe(zahlen[2][0] <= zahlen[1][0] && zahlen[3][0] <= zahlen[1][0] && zahlen[2][1] <= zahlen[1][1] && zahlen[3][1] <= zahlen[1][1],
+      'Kartenwechsel gibt den Speicher der alten Karte frei');
+    // Jede Waffe ueber ihre Karte waehlen, im Spiel abfeuern
+    await page.click('.m-kartenwahl .m-chip:nth-child(1)');
+    const waffen = await ev(() => document.querySelectorAll('.m-karten .m-waffe').length);
+    pruefe(waffen === 7, 'Menue zeigt sieben Waffen');
+    const probleme = [];
+    for (let i = 0; i < waffen; i++) {
+      await page.click('.m-karten .m-waffe:nth-child(' + (i + 1) + ')');
+      await page.click('.m-start.zweit');
+      await page.waitForFunction(() => window.__ops.zustand === 'spiel' && window.__ops.sim.phase === 'laeuft', null, { timeout: 30000 });
+      await botsStill();
+      const r = await ev(async () => {
+        const a = window.__ops, w = a.sim.spieler.waffe;
+        a.eingabe.mausFeuer = true;
+        await new Promise((ok) => setTimeout(ok, 400));
+        a.eingabe.mausFeuer = false;
+        await new Promise((ok) => setTimeout(ok, 100));
+        const r = { id: w.id, schuesse: w.schuesse, halb: !!w.def.halbautomatisch, modell: a.darstellung.waffenmodell.aktiv };
+        if (w.def.zielfernrohr) {
+          a.eingabe.visierAn = true;
+          const t0 = performance.now();
+          while (w.visier < 0.99 && performance.now() - t0 < 5000) await new Promise((ok) => setTimeout(ok, 50));
+          await new Promise((ok) => setTimeout(ok, 150));
+          r.fernrohr = document.querySelector('.hud-fernrohr').classList.contains('an') && !a.darstellung.waffenmodell.halter.visible;
+          a.eingabe.visierAn = false;
+        }
+        return r;
+      });
+      if (r.schuesse < 1 || (r.halb && r.schuesse !== 1) || r.modell !== r.id || r.fernrohr === false) probleme.push(JSON.stringify(r));
+      await ev(() => { document.exitPointerLock(); window.__ops.zumMenue(); });
+      await warten(200);
+    }
+    pruefe(probleme.length === 0, 'jede Waffe schiesst, zeigt ihr Modell, halbautomatisch nur einmal je Druck, Fernrohr blendet ein'
+      + (probleme.length ? ': ' + probleme.join(' ') : ''));
     pruefe(fehler.length === 0, 'keine Fehler in der Konsole' + (fehler.length ? ': ' + fehler[0] : ''));
     await ctx.close();
   }

@@ -225,6 +225,20 @@ html, body {
   transition: opacity 0.12s;
 }
 .hud-kreuz.weg { opacity: 0; }
+/* Zielfernrohr: runder Ausschnitt, ringsum schwarz, feines Absehen */
+.hud-fernrohr {
+  position: absolute; inset: 0; display: none; pointer-events: none;
+  background: radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, 0) 40vmin,
+    rgba(0, 0, 0, 0.6) 41vmin, #050607 43vmin);
+}
+.hud-fernrohr.an { display: block; }
+.hud-fernrohr i { position: absolute; background: rgba(8, 10, 12, 0.88); }
+.hud-fernrohr .f-h { left: calc(50% - 43vmin); right: calc(50% - 43vmin); top: calc(50% - 1px); height: 2px; }
+.hud-fernrohr .f-v { top: calc(50% - 43vmin); bottom: calc(50% - 43vmin); left: calc(50% - 1px); width: 2px; }
+.hud-fernrohr b {
+  position: absolute; left: calc(50% - 2.5px); top: calc(50% - 2.5px); width: 5px; height: 5px;
+  border-radius: 50%; background: #ff3b30; box-shadow: 0 0 4px rgba(255, 59, 48, 0.8);
+}
 .hud-kreuz i {
   position: absolute;
   background: rgba(255, 255, 255, 0.92);
@@ -412,7 +426,7 @@ html, body {
 .t-titel { font-size: 24px; font-weight: 900; letter-spacing: 0.16em; color: #ff8a7a; }
 .t-von { font-size: 15px; margin-top: 4px; color: var(--text); }
 .t-zeit { font-size: 13px; margin-top: 4px; color: var(--gedaempft); font-variant-numeric: tabular-nums; }
-.t-waffen { display: flex; gap: 8px; margin-top: 12px; justify-content: center; }
+.t-waffen { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; justify-content: center; max-width: min(88vw, 560px); }
 .t-waffe {
   font: inherit;
   font-size: 13px;
@@ -634,7 +648,7 @@ html, body {
 .m-spalte.schmal { flex: 1; display: flex; flex-direction: column; gap: 10px; }
 .m-spalte.schmal h2 { margin-bottom: 0; }
 
-.m-karten { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.m-karten { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .m-waffe {
   font: inherit;
   text-align: left;
@@ -647,7 +661,7 @@ html, body {
   transition: border-color 0.12s, background 0.12s;
 }
 .m-waffe.gewaehlt { border-color: var(--gold); background: rgba(229, 185, 76, 0.1); }
-.w-name { font-weight: 800; font-size: 16px; }
+.w-name { font-weight: 800; font-size: 15px; -webkit-hyphens: manual; hyphens: manual; }
 .w-modell { font-size: 12px; color: var(--gold-hell); margin-top: 1px; }
 .w-kurz { font-size: 12px; color: var(--gedaempft); margin: 6px 0 8px; min-height: 32px; }
 .w-wert { display: grid; grid-template-columns: 70px 1fr; align-items: center; gap: 6px; font-size: 11px; color: var(--gedaempft); margin-top: 4px; }
@@ -670,6 +684,9 @@ html, body {
   cursor: pointer;
 }
 .m-chip.gewaehlt { border-color: var(--gold); background: rgba(229, 185, 76, 0.1); }
+.m-chips.m-kartenwahl { display: grid; grid-template-columns: 1fr 1fr; }
+.m-kartenwahl .m-chip { flex-direction: column; align-items: flex-start; gap: 1px; padding: 6px 10px; }
+.m-kartenwahl .c-kurz { font-size: 10.5px; line-height: 1.25; }
 .c-name { font-weight: 800; }
 .c-kurz { font-size: 12px; color: var(--gedaempft); }
 .m-regeln { font-size: 12px; color: var(--gedaempft); line-height: 1.45; }

@@ -19,7 +19,7 @@ import {
   MeshLambertMaterial, Object3D, PlaneGeometry, Quaternion, Sprite, SpriteMaterial, Vector3,
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { FIGUR, TEAMS } from '../konfig.js';
+import { FIGUR, TEAMS, WAFFEN_REIHE } from '../konfig.js';
 import { namensTextur, schattenTextur } from './texturen.js';
 import { gefaerbt } from './verschmelzen.js';
 
@@ -154,7 +154,31 @@ export class Figuren {
       quader(0.065, 0.06, 0.17, 0, -0.035, -0.34, F.holz),
       quader(0.05, 0.09, 0.26, 0, -0.02, 0.28, F.holz),
     ]);
-    g.muendung = { sturmgewehr: -0.55, mp: -0.3, schrotflinte: -0.7 };
+    g.mg = verschmelzen([
+      quader(0.07, 0.1, 0.46, 0, 0, 0, F.waffe),
+      quader(0.075, 0.075, 0.24, 0, -0.005, -0.34, F.waffeHell),
+      quader(0.085, 0.13, 0.12, -0.01, -0.12, -0.05, F.waffeHell),
+      quader(0.035, 0.035, 0.32, 0, 0.012, -0.6, F.waffe),
+      quader(0.05, 0.08, 0.24, 0, -0.015, 0.33, F.waffe),
+    ]);
+    g.praezision = verschmelzen([
+      quader(0.055, 0.08, 0.44, 0, 0, 0, F.waffe),
+      quader(0.045, 0.06, 0.26, 0, -0.005, 0.33, F.waffeHell),
+      quader(0.04, 0.12, 0.07, 0, -0.09, -0.06, F.waffe),
+      quader(0.028, 0.028, 0.36, 0, 0.01, -0.4, F.waffe),
+      quader(0.045, 0.045, 0.2, 0, 0.075, -0.04, F.waffe),
+    ]);
+    g.scharfschuetze = verschmelzen([
+      quader(0.055, 0.08, 0.42, 0, 0, 0, F.waffe),
+      quader(0.05, 0.1, 0.3, 0, -0.02, 0.34, F.waffeHell),
+      quader(0.03, 0.03, 0.56, 0, 0.012, -0.48, F.waffe),
+      quader(0.055, 0.055, 0.32, 0, 0.085, -0.04, F.waffe),
+    ]);
+    g.pistole = verschmelzen([
+      quader(0.04, 0.05, 0.2, 0, 0.02, -0.08, F.waffe),
+      quader(0.036, 0.12, 0.05, 0, -0.05, 0.0, F.waffeHell),
+    ]);
+    g.muendung = { sturmgewehr: -0.55, mp: -0.3, schrotflinte: -0.7, mg: -0.78, praezision: -0.6, scharfschuetze: -0.78, pistole: -0.2 };
     return g;
   }
 
@@ -208,7 +232,7 @@ export class Figuren {
     waffe.position.set(0.06, 0.37, -0.32);
     rumpf.add(waffe);
     const waffen = {};
-    for (const k of ['sturmgewehr', 'mp', 'schrotflinte']) {
+    for (const k of WAFFEN_REIHE) {
       waffen[k] = mesh(G[k]);
       waffen[k].visible = false;
       waffe.add(waffen[k]);

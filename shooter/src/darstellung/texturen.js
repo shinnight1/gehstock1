@@ -620,6 +620,212 @@ export function namensTextur(text, farbe) {
 }
 
 /* Alle Flaechentexturen einer Sitzung. */
+/* ------------------------------------------- Weitere Karten (Hafen,
+   Dorf, Wueste). Eigener Zufall: die alten Texturen bleiben gleich. */
+
+function sand(r) {
+  const c = leinwand(256);
+  const g = c.getContext('2d');
+  g.fillStyle = '#c7a676';
+  g.fillRect(0, 0, 256, 256);
+  flecken(g, 256, 256, r, 16, 'rgba(160,125,80,1)', 0.25, 50);
+  flecken(g, 256, 256, r, 10, 'rgba(230,205,160,1)', 0.25, 40);
+  // Windrippeln
+  g.strokeStyle = 'rgba(120,92,58,0.18)';
+  g.lineWidth = 2;
+  for (let i = 0; i < 14; i++) {
+    const y0 = (i / 14) * 256 + r() * 8;
+    g.beginPath();
+    for (let x = 0; x <= 256; x += 16) g.lineTo(x, y0 + Math.sin(x * 0.045 + i) * 4);
+    g.stroke();
+  }
+  rauschen(g, 256, 256, r, 4200, '#ecd9b0', '#8a6c44', 1.3);
+  return alsTextur(c);
+}
+
+function gras(r) {
+  const c = leinwand(256);
+  const g = c.getContext('2d');
+  g.fillStyle = '#56733a';
+  g.fillRect(0, 0, 256, 256);
+  flecken(g, 256, 256, r, 18, 'rgba(70,95,40,1)', 0.35, 44);
+  flecken(g, 256, 256, r, 12, 'rgba(130,140,70,1)', 0.25, 34);
+  for (let i = 0; i < 5200; i++) {
+    const x = r() * 256, y = r() * 256, l = 2 + r() * 4;
+    const t = r();
+    g.strokeStyle = t < 0.35 ? 'rgba(40,62,26,0.55)' : t < 0.8 ? 'rgba(110,145,62,0.5)' : 'rgba(160,170,90,0.45)';
+    g.lineWidth = 1;
+    g.beginPath();
+    g.moveTo(x, y);
+    g.lineTo(x + (r() - 0.5) * 2, y - l);
+    g.stroke();
+  }
+  return alsTextur(c);
+}
+
+function pflaster(r) {
+  const c = leinwand(256);
+  const g = c.getContext('2d');
+  g.fillStyle = '#4d4a44';
+  g.fillRect(0, 0, 256, 256);
+  const n = 8, s = 256 / n;
+  for (let y = 0; y < n; y++) {
+    const off = (y % 2) * s / 2;
+    for (let x = -1; x < n + 1; x++) {
+      const t = 118 + Math.floor(r() * 40);
+      g.fillStyle = 'rgb(' + t + ',' + (t - 6) + ',' + (t - 16) + ')';
+      const px = x * s + off + 2, py = y * s + 2, w = s - 4, h = s - 4;
+      g.beginPath();
+      if (g.roundRect) g.roundRect(px, py, w, h, 7);
+      else g.rect(px, py, w, h);
+      g.fill();
+    }
+  }
+  flecken(g, 256, 256, r, 12, 'rgba(50,46,40,1)', 0.2, 30);
+  rauschen(g, 256, 256, r, 2600, '#d0c8b8', '#3a3630', 1.4);
+  return alsTextur(c);
+}
+
+function holzboden(r) {
+  const c = leinwand(256);
+  const g = c.getContext('2d');
+  g.fillStyle = '#3a2c1e';
+  g.fillRect(0, 0, 256, 256);
+  const n = 8, h = 256 / n;
+  for (let i = 0; i < n; i++) {
+    const t = r();
+    g.fillStyle = t < 0.33 ? '#8b6a45' : t < 0.66 ? '#7d5d3b' : '#94734c';
+    g.fillRect(0, i * h + 1.5, 256, h - 3);
+    g.strokeStyle = 'rgba(60,40,22,0.35)';
+    g.lineWidth = 1;
+    for (let k = 0; k < 4; k++) {
+      const y = i * h + 4 + r() * (h - 8);
+      g.beginPath();
+      g.moveTo(0, y);
+      for (let x = 0; x <= 256; x += 32) g.lineTo(x, y + Math.sin(x * 0.04 + k + i) * 1.5);
+      g.stroke();
+    }
+    // Stoesse und Naegel
+    const stoss = r() * 256;
+    g.fillStyle = 'rgba(30,20,12,0.8)';
+    g.fillRect(stoss, i * h + 1.5, 2, h - 3);
+    g.fillStyle = 'rgba(40,40,40,0.8)';
+    g.fillRect(stoss + 5, i * h + 5, 2, 2);
+    g.fillRect(stoss + 5, i * h + h - 7, 2, 2);
+  }
+  rauschen(g, 256, 256, r, 1200, '#c8a878', '#2a1c10', 1.3);
+  return alsTextur(c);
+}
+
+function ziegel(r) {
+  const c = leinwand(256);
+  const g = c.getContext('2d');
+  g.fillStyle = '#b8ab98';
+  g.fillRect(0, 0, 256, 256);
+  const reihen = 16, h = 256 / reihen, b = 32;
+  for (let y = 0; y < reihen; y++) {
+    const off = (y % 2) * b / 2;
+    for (let x = -1; x < 256 / b + 1; x++) {
+      const t = r();
+      g.fillStyle = t < 0.3 ? '#8f4332' : t < 0.7 ? '#9c4d38' : '#a85a42';
+      g.fillRect(x * b + off + 1.5, y * h + 1.5, b - 3, h - 3);
+    }
+  }
+  flecken(g, 256, 256, r, 12, 'rgba(60,40,30,1)', 0.18, 40);
+  rauschen(g, 256, 256, r, 2400, '#e0b8a0', '#40241a', 1.4);
+  return alsTextur(c);
+}
+
+function putz(r) {
+  const c = leinwand(256);
+  const g = c.getContext('2d');
+  g.fillStyle = '#e2dccf';
+  g.fillRect(0, 0, 256, 256);
+  flecken(g, 256, 256, r, 16, 'rgba(160,150,130,1)', 0.16, 60);
+  flecken(g, 256, 256, r, 6, 'rgba(120,110,95,1)', 0.12, 26);
+  rauschen(g, 256, 256, r, 3200, '#ffffff', '#8a8272', 1.6);
+  // ein paar Risse
+  g.strokeStyle = 'rgba(90,82,70,0.35)';
+  g.lineWidth = 1;
+  for (let i = 0; i < 4; i++) {
+    let x = r() * 256, y = r() * 256;
+    g.beginPath();
+    g.moveTo(x, y);
+    for (let k = 0; k < 5; k++) {
+      x += (r() - 0.5) * 30; y += r() * 18;
+      g.lineTo(x, y);
+    }
+    g.stroke();
+  }
+  return alsTextur(c);
+}
+
+function lehm(r) {
+  const c = leinwand(256);
+  const g = c.getContext('2d');
+  g.fillStyle = '#cfb28e';
+  g.fillRect(0, 0, 256, 256);
+  flecken(g, 256, 256, r, 18, 'rgba(160,128,94,1)', 0.28, 50);
+  flecken(g, 256, 256, r, 10, 'rgba(232,214,186,1)', 0.3, 40);
+  rauschen(g, 256, 256, r, 3800, '#eee0c4', '#7a624a', 1.8);
+  g.strokeStyle = 'rgba(100,78,56,0.4)';
+  g.lineWidth = 1.2;
+  for (let i = 0; i < 7; i++) {
+    let x = r() * 256, y = r() * 256;
+    g.beginPath();
+    g.moveTo(x, y);
+    for (let k = 0; k < 4; k++) {
+      x += (r() - 0.5) * 34; y += (r() - 0.5) * 34;
+      g.lineTo(x, y);
+    }
+    g.stroke();
+  }
+  return alsTextur(c);
+}
+
+function heu(r) {
+  const c = leinwand(256);
+  const g = c.getContext('2d');
+  g.fillStyle = '#c9ad5c';
+  g.fillRect(0, 0, 256, 256);
+  flecken(g, 256, 256, r, 14, 'rgba(150,120,50,1)', 0.3, 40);
+  for (let i = 0; i < 4200; i++) {
+    const x = r() * 256, y = r() * 256, l = 3 + r() * 8, w = (r() - 0.5) * 1.6;
+    const t = r();
+    g.strokeStyle = t < 0.3 ? 'rgba(120,92,36,0.5)' : t < 0.8 ? 'rgba(230,205,120,0.55)' : 'rgba(250,235,170,0.5)';
+    g.lineWidth = 1;
+    g.beginPath();
+    g.moveTo(x, y);
+    g.lineTo(x + l * w, y + l);
+    g.stroke();
+  }
+  return alsTextur(c);
+}
+
+function dachziegel(r) {
+  const c = leinwand(256);
+  const g = c.getContext('2d');
+  g.fillStyle = '#5e2a1e';
+  g.fillRect(0, 0, 256, 256);
+  const reihen = 10, h = 256 / reihen, b = 26;
+  for (let y = 0; y < reihen; y++) {
+    const off = (y % 2) * b / 2;
+    for (let x = -1; x < 256 / b + 1; x++) {
+      const t = r();
+      g.fillStyle = t < 0.4 ? '#9a3e2a' : t < 0.8 ? '#a8492f' : '#8a3624';
+      g.beginPath();
+      g.moveTo(x * b + off + 1, y * h);
+      g.lineTo(x * b + off + b - 1, y * h);
+      g.lineTo(x * b + off + b - 1, y * h + h * 0.7);
+      g.quadraticCurveTo(x * b + off + b / 2, y * h + h + 3, x * b + off + 1, y * h + h * 0.7);
+      g.fill();
+    }
+  }
+  flecken(g, 256, 256, r, 10, 'rgba(40,30,20,1)', 0.2, 40);
+  rauschen(g, 256, 256, r, 1800, '#e0a080', '#301410', 1.3);
+  return alsTextur(c);
+}
+
 export function texturenErzeugen() {
   const r = zufallsquelle(20260928);
   return {
@@ -639,5 +845,21 @@ export function texturenErzeugen() {
     asphalt: asphalt(r),
     platten: platten(r),
     estrich: estrich(r),
+    ...weitereTexturen(),
+  };
+}
+
+function weitereTexturen() {
+  const r = zufallsquelle(20260930);
+  return {
+    sand: sand(r),
+    gras: gras(r),
+    pflaster: pflaster(r),
+    holzboden: holzboden(r),
+    ziegel: ziegel(r),
+    putz: putz(r),
+    lehm: lehm(r),
+    dachziegel: dachziegel(r),
+    heu: heu(r),
   };
 }

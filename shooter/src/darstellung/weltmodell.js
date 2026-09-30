@@ -40,6 +40,12 @@ const MATERIALIEN = {
   halle: { tex: 'halle', skala: 2.4, uv: 'welt', farbe: '#ffffff' },
   regal: { tex: 'regal', skala: 2.3, uv: 'wv', farbe: '#ffffff' },
   dach: { tex: 'dach', skala: 1.5, uv: 'welt', farbe: '#ffffff' },
+  ziegel: { tex: 'ziegel', skala: 2, uv: 'welt', farbe: '#ffffff' },
+  putz: { tex: 'putz', skala: 2.5, uv: 'welt', farbe: '#ffffff' },
+  lehm: { tex: 'lehm', skala: 2.6, uv: 'welt', farbe: '#ffffff' },
+  dachziegel: { tex: 'dachziegel', skala: 1.6, uv: 'welt', farbe: '#ffffff' },
+  holzboden: { tex: 'holzboden', skala: 2, uv: 'welt', farbe: '#ffffff' },
+  heu: { tex: 'heu', skala: 1.4, uv: 'welt', farbe: '#ffffff' },
 };
 
 const BODEN = {
@@ -47,6 +53,10 @@ const BODEN = {
   asphalt: { skala: 4.5 },
   platten: { skala: 4 },
   estrich: { skala: 5 },
+  sand: { skala: 5 },
+  gras: { skala: 3.5 },
+  pflaster: { skala: 2.2 },
+  holzboden: { skala: 2.4 },
 };
 
 const FLAECHEN = [
@@ -231,7 +241,7 @@ export function weltBauen(karte, tex, qualitaet) {
     const s = (BODEN[f.mat] || BODEN.kies).skala;
     const b = boeden[f.mat] || (boeden[f.mat] = new Bau(false));
     const weiss = [1, 1, 1, 1];
-    b.viereck([f.x0, 0, f.z1], [f.x1 - f.x0, 0, 0], [0, 0, -(f.z1 - f.z0)], [0, 1, 0],
+    b.viereck([f.x0, f.y || 0, f.z1], [f.x1 - f.x0, 0, 0], [0, 0, -(f.z1 - f.z0)], [0, 1, 0],
       [f.x0 / s, -f.z1 / s, f.x1 / s, -f.z1 / s, f.x1 / s, -f.z0 / s, f.x0 / s, -f.z0 / s],
       weiss, weiss, weiss, weiss);
   }
@@ -319,15 +329,26 @@ function markierungenBauen(karte, gruppe, merken) {
 
   for (const d of karte.deko) {
     if (d.typ !== 'markierung') continue;
-    if (d.form === 'basis') {
+    if (d.form === 'linie') {
+      if (d.strich > 0) gestrichelt(d.x0, d.z0, d.x1, d.z1, d.breite, d.farbe, d.strich, d.luecke);
+      else streifen(d.x0, d.z0, d.x1, d.z1, d.breite, d.farbe);
+    } else if (d.form === 'ring') {
+      ring(d.x, d.z, d.r, d.breite, d.farbe, Math.max(16, Math.round(d.r * 7)));
+    } else if (d.form === 'schraffur') {
+      schraffur(d.x0, d.z0, d.x1, d.z1, d.farbe);
+    } else if (d.form === 'basis') {
+      // Linie an der Basisgrenze, Pfeile Richtung Front. Ohne Angaben
+      // die Masse von Kraehenfeld.
       const farbe = d.team === 0 ? '#3f7fe8' : '#e0473d';
       const s = d.x < 0 ? -1 : 1;
-      streifen(s * 23.7, -20, s * 23.7, 20, 0.25, farbe);
-      streifen(s * 24.2, -20, s * 24.2, 20, 0.1, farbe);
-      for (let z = -18; z <= 18; z += 6) {
-        // Pfeile Richtung Front
-        streifen(s * 27.5, z - 0.8, s * 26.2, z, 0.2, '#e8e8e0');
-        streifen(s * 27.5, z + 0.8, s * 26.2, z, 0.2, '#e8e8e0');
+      const lx = d.linie !== undefined ? d.linie : 23.7;
+      const z0 = d.z0 !== undefined ? d.z0 : -20, z1 = d.z1 !== undefined ? d.z1 : 20;
+      const px = d.pfeil !== undefined ? d.pfeil : 27.5;
+      streifen(s * lx, z0, s * lx, z1, 0.25, farbe);
+      streifen(s * (lx + 0.5), z0, s * (lx + 0.5), z1, 0.1, farbe);
+      for (let z = z0 + 2; z <= z1 - 2; z += 6) {
+        streifen(s * px, z - 0.8, s * (px - 1.3), z, 0.2, '#e8e8e0');
+        streifen(s * px, z + 0.8, s * (px - 1.3), z, 0.2, '#e8e8e0');
       }
     } else if (d.form === 'hof') {
       gestrichelt(-21, -10.1, 21, -10.1, 0.14, '#d8b030', 1.4, 1.0);
@@ -388,7 +409,9 @@ function dekoBauen(karte, tex, gruppe, merken, animiert) {
   if (faesser.length) {
     const geo = merken(new CylinderGeometry(0.3, 0.3, 0.92, 14));
     const mat = merken(new MeshLambertMaterial({ map: tex.metall, color: '#ffffff' }));
-    const inst = new InstancedMesh(geo, mat, faesser.length);
+    // InstancedMesh ueber merken: dispose() gibt beim Kartenwechsel auch
+    // die Instanzpuffer auf der Grafikkarte frei.
+    const inst = merken(new InstancedMesh(geo, mat, faesser.length));
     faesser.forEach((d, i) => {
       M4.makeRotationY(i * 1.7);
       M4.setPosition(d.x, 0.46, d.z);
@@ -401,13 +424,15 @@ function dekoBauen(karte, tex, gruppe, merken, animiert) {
     gruppe.add(inst);
   }
 
-  /* Zeltdaecher */
-  const zelte = new Bau(false);
+  /* Zeltdaecher und Giebeldaecher (First entlang X), je Material ein Aufruf */
+  const daecher = {};
   const weiss = [1, 1, 1, 1];
   for (const d of karte.deko) {
     if (d.typ !== 'zeltdach') continue;
+    const schluessel = (d.mat || 'plane') + '|' + (d.farbe || '');
+    const zelte = daecher[schluessel] || (daecher[schluessel] = new Bau(false));
     const x0 = Math.min(d.x0, d.x1) - 0.2, x1 = Math.max(d.x0, d.x1) + 0.2;
-    const z0 = d.z0 - 0.2, z1 = d.z1 + 0.2, zm = (d.z0 + d.z1) / 2, y = d.y, h = 1.1;
+    const z0 = d.z0 - 0.2, z1 = d.z1 + 0.2, zm = (d.z0 + d.z1) / 2, y = d.y, h = d.h || 1.1;
     const l = Math.hypot(zm - z0, h);
     const nN = [0, (zm - z0) / l, -h / l], nS = [0, (zm - z0) / l, h / l];
     // Nordhang zeigt nach oben und Norden, Suedhang nach oben und Sueden.
@@ -415,11 +440,22 @@ function dekoBauen(karte, tex, gruppe, merken, animiert) {
       [x1 / 2, 0, x0 / 2, 0, x0 / 2, l / 2, x1 / 2, l / 2], weiss, weiss, weiss, weiss);
     zelte.viereck([x0, y, z1], [x1 - x0, 0, 0], [0, h, zm - z1], nS,
       [x0 / 2, 0, x1 / 2, 0, x1 / 2, l / 2, x0 / 2, l / 2], weiss, weiss, weiss, weiss);
-    zelte.dreieck([x0, y, z0], [x0, y, z1], [x0, y + h, zm], [-1, 0, 0], [0, 0, 1, 0, 0.5, 0.5], weiss);
-    zelte.dreieck([x1, y, z1], [x1, y, z0], [x1, y + h, zm], [1, 0, 0], [0, 0, 1, 0, 0.5, 0.5], weiss);
+    // Giebel: beim Haus aus Putz (eigene Sammlung), beim Zelt aus Plane.
+    // Die Giebelflaeche sitzt an der Hauswand, nicht am Dachueberstand.
+    const gs = d.giebel ? d.giebel + '|' + (d.giebelFarbe || '') : schluessel;
+    const giebel = daecher[gs] || (daecher[gs] = new Bau(false));
+    const gx0 = d.giebel ? Math.min(d.x0, d.x1) : x0, gx1 = d.giebel ? Math.max(d.x0, d.x1) : x1;
+    const gz0 = d.giebel ? d.z0 : z0, gz1 = d.giebel ? d.z1 : z1;
+    const gh = d.giebel ? h * (zm - gz0) / (zm - z0) : h;
+    const gu = d.giebel ? (gz1 - gz0) / 2.5 : 1, gv = d.giebel ? gh / 2.5 : 0.5;
+    giebel.dreieck([gx0, y, gz0], [gx0, y, gz1], [gx0, y + gh, zm], [-1, 0, 0], [0, 0, gu, 0, gu / 2, gv], weiss);
+    giebel.dreieck([gx1, y, gz1], [gx1, y, gz0], [gx1, y + gh, zm], [1, 0, 0], [0, 0, gu, 0, gu / 2, gv], weiss);
   }
-  if (!zelte.leer()) {
-    const m = new Mesh(merken(zelte.geometrie()), merken(new MeshLambertMaterial({ map: tex.plane, vertexColors: true, color: '#d8dcc8' })));
+  for (const schluessel of Object.keys(daecher)) {
+    const [mat, farbe] = schluessel.split('|');
+    const m = new Mesh(merken(daecher[schluessel].geometrie()), merken(new MeshLambertMaterial({
+      map: tex[mat] || tex.plane, vertexColors: true, color: farbe || (mat === 'plane' ? '#d8dcc8' : '#ffffff'), side: DoubleSide,
+    })));
     m.castShadow = true;
     m.receiveShadow = true;
     gruppe.add(m);
@@ -467,7 +503,7 @@ function dekoBauen(karte, tex, gruppe, merken, animiert) {
   const raeder = karte.deko.filter((d) => d.typ === 'lkw');
   if (raeder.length) {
     const radGeo = merken(new CylinderGeometry(0.46, 0.46, 0.34, 14));
-    const inst = new InstancedMesh(radGeo, gummi, raeder.length * 6);
+    const inst = merken(new InstancedMesh(radGeo, gummi, raeder.length * 6));
     let i = 0;
     for (const d of raeder) {
       const s = d.richtung;
@@ -537,17 +573,98 @@ function dekoBauen(karte, tex, gruppe, merken, animiert) {
     }
   }
 
+  /* Zylinder (Tanks, Rohre, Poller): je Material ein Aufruf */
+  const zylinder = karte.deko.filter((d) => d.typ === 'zylinder');
+  const zylMats = {};
+  for (const d of zylinder) (zylMats[d.mat] || (zylMats[d.mat] = [])).push(d);
+  if (zylinder.length) {
+    const geo = merken(new CylinderGeometry(1, 1, 1, 16));
+    for (const name of Object.keys(zylMats)) {
+      const liste = zylMats[name];
+      const def = MATERIALIEN[name] || MATERIALIEN.metall;
+      const mat = merken(new MeshLambertMaterial({ map: tex[def.tex], color: '#ffffff' }));
+      const inst = merken(new InstancedMesh(geo, mat, liste.length));
+      liste.forEach((d, i) => {
+        if (d.achse === 'x') Q.setFromAxisAngle(V1.set(0, 0, 1), Math.PI / 2);
+        else if (d.achse === 'z') Q.setFromAxisAngle(V1.set(1, 0, 0), Math.PI / 2);
+        else Q.identity();
+        M4.compose(V1.set(d.x, d.y, d.z), Q, V2.set(d.r, d.l, d.r));
+        inst.setMatrixAt(i, M4);
+        inst.setColorAt(i, new Color(d.farbe || '#8a9096'));
+      });
+      V2.set(1, 1, 1);
+      inst.castShadow = true;
+      inst.receiveShadow = true;
+      inst.name = 'zylinder-' + name;
+      gruppe.add(inst);
+    }
+  }
+
+  /* Baeume auf der Karte: Stamm plus Krone (Laub rund, Nadel spitz) */
+  const baeume = karte.deko.filter((d) => d.typ === 'baum');
+  if (baeume.length) {
+    const stammMat = merken(new MeshLambertMaterial({ color: '#5a4430' }));
+    const stamm = merken(new InstancedMesh(merken(new CylinderGeometry(0.16, 0.24, 1, 7)), stammMat, baeume.length));
+    const laub = baeume.filter((d) => d.art !== 'nadel');
+    const nadel = baeume.filter((d) => d.art === 'nadel');
+    const kroneMat = merken(new MeshLambertMaterial({ color: '#ffffff' }));
+    const laubInst = laub.length ? merken(new InstancedMesh(merken(new SphereGeometry(1, 10, 7)), kroneMat, laub.length)) : null;
+    const nadelInst = nadel.length ? merken(new InstancedMesh(merken(new ConeGeometry(1, 1, 8)), kroneMat, nadel.length)) : null;
+    const rz = zufallsquelle(99);
+    baeume.forEach((d, i) => {
+      Q.identity();
+      M4.compose(V1.set(d.x, 1.6 * d.g, d.z), Q, V2.set(d.g, 3.2 * d.g, d.g));
+      stamm.setMatrixAt(i, M4);
+    });
+    laub.forEach((d, i) => {
+      Q.setFromAxisAngle(V1.set(0, 1, 0), rz() * 6);
+      M4.compose(V1.set(d.x, 4.3 * d.g, d.z), Q, V2.set(2.3 * d.g, 2.0 * d.g, 2.2 * d.g));
+      laubInst.setMatrixAt(i, M4);
+      laubInst.setColorAt(i, new Color().setHSL(0.24 + rz() * 0.07, 0.38, 0.26 + rz() * 0.08));
+    });
+    nadel.forEach((d, i) => {
+      Q.identity();
+      M4.compose(V1.set(d.x, 4.6 * d.g, d.z), Q, V2.set(1.9 * d.g, 5.4 * d.g, 1.9 * d.g));
+      nadelInst.setMatrixAt(i, M4);
+      nadelInst.setColorAt(i, new Color().setHSL(0.3 + rz() * 0.05, 0.3, 0.2 + rz() * 0.06));
+    });
+    V2.set(1, 1, 1);
+    for (const m of [stamm, laubInst, nadelInst]) {
+      if (!m) continue;
+      m.castShadow = true;
+      m.receiveShadow = true;
+      gruppe.add(m);
+    }
+  }
+
+  /* Wasser: ruhige Flaeche mit sanftem Wellenschimmer */
+  for (const d of karte.deko) {
+    if (d.typ !== 'wasser') continue;
+    const geo = merken(new PlaneGeometry(d.x1 - d.x0, d.z1 - d.z0, 1, 1));
+    geo.rotateX(-Math.PI / 2);
+    const mat = merken(new MeshLambertMaterial({ color: d.farbe, emissive: d.farbe, emissiveIntensity: 0.18 }));
+    const w = new Mesh(geo, mat);
+    w.position.set((d.x0 + d.x1) / 2, d.y, (d.z0 + d.z1) / 2);
+    w.receiveShadow = true;
+    w.name = 'wasser';
+    gruppe.add(w);
+    const basis = mat.emissiveIntensity;
+    animiert.push((zeit) => { mat.emissiveIntensity = basis + Math.sin(zeit * 0.8 + d.x0) * 0.04; });
+  }
+
   /* Stacheldraht auf der Umfassungsmauer */
   const g = karte.grenzen;
+  const T = karte.thema || {};
   const draht = new Bau(false);
+  const mh = T.mauerHoehe || 4.2;
   const drahtKante = (x0, z0, x1, z1) => {
     const l = Math.hypot(x1 - x0, z1 - z0);
     const n = Math.max(1, Math.round(l / 3));
     for (let i = 0; i <= n; i++) {
       const x = x0 + (x1 - x0) * i / n, z = z0 + (z1 - z0) * i / n;
-      quaderEintragen(draht, { min: [x - 0.03, 4.2, z - 0.03], max: [x + 0.03, 4.75, z + 0.03], farbe: '#2e3134' }, MATERIALIEN.metall);
+      quaderEintragen(draht, { min: [x - 0.03, mh, z - 0.03], max: [x + 0.03, mh + 0.55, z + 0.03], farbe: '#2e3134' }, MATERIALIEN.metall);
     }
-    for (const h of [4.38, 4.56, 4.72]) {
+    for (const h of [mh + 0.18, mh + 0.36, mh + 0.52]) {
       const dx = x1 - x0, dz = z1 - z0;
       const qx = dx === 0 ? 0.012 : 0, qz = dz === 0 ? 0.012 : 0;
       quaderEintragen(draht, {
@@ -556,10 +673,12 @@ function dekoBauen(karte, tex, gruppe, merken, animiert) {
       }, MATERIALIEN.metall);
     }
   };
-  drahtKante(g.minX - 0.5, g.minZ - 0.5, g.maxX + 0.5, g.minZ - 0.5);
-  drahtKante(g.minX - 0.5, g.maxZ + 0.5, g.maxX + 0.5, g.maxZ + 0.5);
-  drahtKante(g.minX - 0.5, g.minZ - 0.5, g.minX - 0.5, g.maxZ + 0.5);
-  drahtKante(g.maxX + 0.5, g.minZ - 0.5, g.maxX + 0.5, g.maxZ + 0.5);
+  if (T.draht !== false) {
+    drahtKante(g.minX - 0.5, g.minZ - 0.5, g.maxX + 0.5, g.minZ - 0.5);
+    drahtKante(g.minX - 0.5, g.maxZ + 0.5, g.maxX + 0.5, g.maxZ + 0.5);
+    drahtKante(g.minX - 0.5, g.minZ - 0.5, g.minX - 0.5, g.maxZ + 0.5);
+    drahtKante(g.maxX + 0.5, g.minZ - 0.5, g.maxX + 0.5, g.maxZ + 0.5);
+  }
   if (!draht.leer()) {
     const m = new Mesh(merken(draht.geometrie()), merken(new MeshLambertMaterial({ vertexColors: true })));
     gruppe.add(m);
@@ -570,31 +689,103 @@ function dekoBauen(karte, tex, gruppe, merken, animiert) {
 }
 
 /* Draussen: Baeume, Wachtuerme, Huegel und Himmel. */
+/* Thema einer Karte mit den Werten von Kraehenfeld als Vorgabe. */
+export function thema(karte) {
+  const T = (karte && karte.thema) || {};
+  return {
+    himmelOben: T.himmelOben || '#5b8dc2',
+    horizont: T.horizont || '#cfdbe3',
+    himmelUnten: T.himmelUnten || '#8f9a9e',
+    nebelNah: T.nebelNah || 38,
+    licht: T.licht || '#dfe9f4',
+    lichtBoden: T.lichtBoden || '#86765f',
+    lichtStaerke: T.lichtStaerke || 2.15,
+    sonne: T.sonne || '#fff0da',
+    sonnenStaerke: T.sonnenStaerke || 2.3,
+    sonnenRichtung: T.sonnenRichtung || [-26, 46, 20],
+    baeume: T.baeume || 'nadel',          // 'nadel', 'laub', 'palme' oder 'keine'
+    baumZahl: T.baumZahl !== undefined ? T.baumZahl : 90,
+    ohneBaeume: T.ohneBaeume || [],        // Rechtecke [x0, z0, x1, z1] ohne Baeume
+    tuerme: T.tuerme !== false,
+    huegel: T.huegel || '#7f959c',
+  };
+}
+
 function umgebungBauen(karte, tex, gruppe, merken, metallDunkel, v) {
   const r = zufallsquelle(4711);
   const g = karte.grenzen;
+  const T = thema(karte);
 
   // Baeume in einem Guertel um die Anlage
   const orte = [];
-  for (let i = 0; i < 400 && orte.length < 90; i++) {
+  const frei = (x, z) => !T.ohneBaeume.some((b) => x > b[0] && x < b[2] && z > b[1] && z < b[3]);
+  for (let i = 0; i < 400 && orte.length < T.baumZahl; i++) {
     const x = (r() * 2 - 1) * 75, z = (r() * 2 - 1) * 60;
     if (Math.abs(x) < g.maxX + 6 && Math.abs(z) < g.maxZ + 6) continue;
+    if (!frei(x, z)) continue;
     orte.push([x, z, 0.8 + r() * 0.7]);
   }
-  const kronen = new InstancedMesh(merken(new ConeGeometry(2.1, 6.5, 7)), merken(new MeshLambertMaterial({ color: '#3d5a34' })), orte.length);
-  const staemme = new InstancedMesh(merken(new CylinderGeometry(0.22, 0.3, 1.8, 6)), merken(new MeshLambertMaterial({ color: '#4a3a2a' })), orte.length);
-  orte.forEach(([x, z, s], i) => {
-    Q.identity();
-    M4.compose(V1.set(x, 1.8 * s + 3.0 * s, z), Q, V2.set(s, s, s));
-    kronen.setMatrixAt(i, M4);
-    M4.compose(V1.set(x, 0.9 * s, z), Q, V2.set(s, s, s));
-    staemme.setMatrixAt(i, M4);
-    kronen.setColorAt(i, new Color().setHSL(0.27 + r() * 0.06, 0.32, 0.22 + r() * 0.08));
-  });
-  V2.set(1, 1, 1);
-  gruppe.add(kronen, staemme);
+  if (orte.length && T.baeume !== 'keine') {
+    const laub = T.baeume === 'laub';
+    const kronenGeo = laub ? new SphereGeometry(2.4, 9, 6) : new ConeGeometry(2.1, 6.5, 7);
+    const kronen = merken(new InstancedMesh(merken(kronenGeo), merken(new MeshLambertMaterial({ color: '#ffffff' })), orte.length));
+    const staemme = merken(new InstancedMesh(merken(new CylinderGeometry(0.22, 0.3, 1.8, 6)), merken(new MeshLambertMaterial({ color: '#4a3a2a' })), orte.length));
+    orte.forEach(([x, z, s], i) => {
+      Q.identity();
+      M4.compose(V1.set(x, laub ? 4.2 * s : 1.8 * s + 3.0 * s, z), Q, V2.set(s, laub ? s * 0.9 : s, s));
+      kronen.setMatrixAt(i, M4);
+      M4.compose(V1.set(x, 0.9 * s, z), Q, V2.set(s, laub ? s * 1.6 : s, s));
+      staemme.setMatrixAt(i, M4);
+      kronen.setColorAt(i, new Color().setHSL(0.27 + r() * 0.06, laub ? 0.4 : 0.32, 0.22 + r() * 0.08));
+    });
+    V2.set(1, 1, 1);
+    gruppe.add(kronen, staemme);
+  }
 
   // Wachtuerme an den Ecken, ausserhalb der Mauer
+  if (T.tuerme) turmeBauen(g, tex, merken, metallDunkel, v);
+
+  // Himmel: Kuppel mit Verlauf, dazu die Sonne
+  const himmelGeo = merken(new SphereGeometry(460, 24, 14));
+  const farben = [];
+  const oben = new Color(T.himmelOben), horizont = new Color(T.horizont), unten = new Color(T.himmelUnten);
+  const pos = himmelGeo.attributes.position;
+  const c = new Color();
+  for (let i = 0; i < pos.count; i++) {
+    const h = pos.getY(i) / 460;
+    if (h >= 0) c.copy(horizont).lerp(oben, Math.pow(h, 0.55));
+    else c.copy(horizont).lerp(unten, Math.min(1, -h * 4));
+    farben.push(c.r, c.g, c.b);
+  }
+  himmelGeo.setAttribute('color', new Float32BufferAttribute(farben, 3));
+  const himmel = new Mesh(himmelGeo, merken(new MeshBasicMaterial({ vertexColors: true, side: BackSide, fog: false, depthWrite: false })));
+  himmel.renderOrder = -10;
+  himmel.name = 'himmel';
+  himmel.frustumCulled = false;
+  gruppe.add(himmel);
+
+  const sr = T.sonnenRichtung;
+  const sl = Math.hypot(sr[0], sr[1], sr[2]) || 1;
+  const sonne = new Sprite(merken(new SpriteMaterial({ map: merken(weichTextur()), color: T.sonne, fog: false, depthWrite: false, transparent: true })));
+  sonne.position.set(sr[0] / sl * 400, sr[1] / sl * 400, sr[2] / sl * 400);
+  sonne.scale.set(70, 70, 1);
+  sonne.renderOrder = -9;
+  gruppe.add(sonne);
+
+  // Ferne Huegel ohne Nebel, damit sie als blasse Silhouette bleiben
+  const huegelMat = merken(new MeshBasicMaterial({ color: T.huegel, fog: false }));
+  const huegelGeo = merken(new SphereGeometry(1, 16, 8));
+  for (let i = 0; i < 9; i++) {
+    const w = (i / 9) * Math.PI * 2 + r() * 0.4;
+    const d = 230 + r() * 60;
+    const h = new Mesh(huegelGeo, huegelMat);
+    h.position.set(Math.cos(w) * d, -8, Math.sin(w) * d);
+    h.scale.set(70 + r() * 60, 26 + r() * 22, 70 + r() * 50);
+    v.add(h);
+  }
+}
+
+function turmeBauen(g, tex, merken, metallDunkel, v) {
   const holzMat = merken(new MeshLambertMaterial({ map: tex.holz, color: '#9c8466' }));
   const bein = merken(new BoxGeometry(0.28, 7.2, 0.28));
   const boden = merken(new BoxGeometry(3.2, 0.3, 3.2));
@@ -633,42 +824,5 @@ function umgebungBauen(karte, tex, gruppe, merken, metallDunkel, v) {
       t.position.set(sx * (g.maxX + 4.5), 0, sz * (g.maxZ + 4.5));
       v.gruppe(t);
     }
-  }
-
-  // Himmel: Kuppel mit Verlauf, dazu die Sonne
-  const himmelGeo = merken(new SphereGeometry(460, 24, 14));
-  const farben = [];
-  const oben = new Color('#5b8dc2'), horizont = new Color('#cfdbe3'), unten = new Color('#8f9a9e');
-  const pos = himmelGeo.attributes.position;
-  const c = new Color();
-  for (let i = 0; i < pos.count; i++) {
-    const h = pos.getY(i) / 460;
-    if (h >= 0) c.copy(horizont).lerp(oben, Math.pow(h, 0.55));
-    else c.copy(horizont).lerp(unten, Math.min(1, -h * 4));
-    farben.push(c.r, c.g, c.b);
-  }
-  himmelGeo.setAttribute('color', new Float32BufferAttribute(farben, 3));
-  const himmel = new Mesh(himmelGeo, merken(new MeshBasicMaterial({ vertexColors: true, side: BackSide, fog: false, depthWrite: false })));
-  himmel.renderOrder = -10;
-  himmel.name = 'himmel';
-  himmel.frustumCulled = false;
-  gruppe.add(himmel);
-
-  const sonne = new Sprite(merken(new SpriteMaterial({ map: merken(weichTextur()), color: '#fff3d6', fog: false, depthWrite: false, transparent: true })));
-  sonne.position.set(-190, 330, 150);
-  sonne.scale.set(70, 70, 1);
-  sonne.renderOrder = -9;
-  gruppe.add(sonne);
-
-  // Ferne Huegel ohne Nebel, damit sie als blasse Silhouette bleiben
-  const huegelMat = merken(new MeshBasicMaterial({ color: '#7f959c', fog: false }));
-  const huegelGeo = merken(new SphereGeometry(1, 16, 8));
-  for (let i = 0; i < 9; i++) {
-    const w = (i / 9) * Math.PI * 2 + r() * 0.4;
-    const d = 230 + r() * 60;
-    const h = new Mesh(huegelGeo, huegelMat);
-    h.position.set(Math.cos(w) * d, -8, Math.sin(w) * d);
-    h.scale.set(70 + r() * 60, 26 + r() * 22, 70 + r() * 50);
-    v.add(h);
   }
 }

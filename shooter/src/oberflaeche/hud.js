@@ -28,6 +28,7 @@ export class Hud {
     this.el = h;
     h.innerHTML = [
       '<div class="hud-vignette"></div>',
+      '<div class="hud-fernrohr"><i class="f-h"></i><i class="f-v"></i><b></b></div>',
       '<div class="hud-schutz-rand"></div>',
       '<div class="hud-punkte">',
       '  <div class="p-team blau"><span class="p-name">BLAU</span><span class="p-zahl">0</span><div class="p-balken"><i></i></div></div>',
@@ -60,6 +61,7 @@ export class Hud {
     const q = (s) => h.querySelector(s);
     this.e = {
       vignette: q('.hud-vignette'),
+      fernrohr: q('.hud-fernrohr'),
       schutzRand: q('.hud-schutz-rand'),
       blauTeam: q('.p-team.blau'),
       rotTeam: q('.p-team.rot'),
@@ -107,7 +109,7 @@ export class Hud {
 
     // Waffenwahl im Todesbildschirm
     WAFFEN_REIHE.forEach((id, i) => {
-      const b = el('button', 't-waffe', WAFFEN[id].name);
+      const b = el('button', 't-waffe', WAFFEN[id].kurzname);
       b.type = 'button';
       b.dataset.waffe = id;
       b.dataset.taste = String(i + 1);
@@ -177,6 +179,9 @@ export class Hud {
     const laden = w.laden > 0 ? 1 - w.laden / Math.max(0.01, w.ladenGesamt) : 0;
     this.setze('laden', E.laden, laden.toFixed(2), 'breite');
     this.klasse('laden', E.muni, 'laedt', w.laden > 0);
+
+    // Zielfernrohr: im vollen Visier liegt das Rohr vor dem Auge.
+    this.klasse('fernrohr', E.fernrohr, 'an', lebt && !!w.def.zielfernrohr && w.visier > 0.9 && sim.phase !== 'ende');
 
     // Fadenkreuz: Abstand aus der Streuung, weg im Visier und im Sprint
     const kreuzWeg = !lebt || w.visier > 0.55 || s.sprintet || sim.phase === 'ende';

@@ -19,7 +19,8 @@
                  den Platz samt Punkten eine Minute lang frei)
      VOLL / ALT  Runde voll bzw. Geraet hat einen alten Stand
      ROSTER      wer auf welchem Platz steht (Name, Team, Mensch/Bot)
-     ZUSTAND     alle Figuren, Meldungen seit dem letzten Zustand und -
+     ZUSTAND     Runde, Karte (und die naechste), alle Figuren, Meldungen
+                 seit dem letzten Zustand und -
                  nur fuer den Empfaenger - der volle Zustand seiner Figur
                  samt Nummer des letzten verarbeiteten Befehls
      ECHO        der Zeitstempel zurueck
@@ -30,9 +31,10 @@
    ------------------------------------------------------------------ */
 
 import { FIGUR, WAFFEN_REIHE } from '../konfig.js';
+import { karteNr, karteVon } from '../karte/karten.js';
 import { klemme, winkelNorm } from '../sim/mathe.js';
 
-export const VERSION = 2;
+export const VERSION = 3;
 export const PFAD = '/api/ops';
 export const MAX_MENSCHEN = 6;       // drei gegen drei, Bots fuellen auf
 export const ZUSTAND_TAKT = 3;       // alle drei Schritte ein Zustand: 20 pro Sekunde
@@ -312,6 +314,8 @@ export function zustandKopfSchreiben(s, sim, takt) {
   s.u8(Math.min(255, sim.punkte[1]));
   s.i8(sim.sieger);
   s.u8(Math.min(255, sim.zielPunkte));
+  s.u8(karteNr(sim.karte ? sim.karte.id : ''));
+  s.u8(karteNr(sim.naechsteKarte || (sim.karte ? sim.karte.id : '')));
   s.u8(sim.akteure.length);
   for (const a of sim.akteure) {
     const w = a.waffe;
@@ -364,7 +368,7 @@ export function eigenSchreiben(s, a, ack) {
   s.u32(ack);
   s.u8(a.id);
   s.u8((a.lebt ? 1 : 0) | (a.amBoden ? 2 : 0) | (a.geduckt ? 4 : 0) | (a.sprintet ? 8 : 0)
-    | (w.klickGesperrt ? 16 : 0));
+    | (w.klickGesperrt ? 16 : 0) | (w.abzugGesperrt ? 32 : 0));
   s.u8(a.tastenVorher & 63);
   s.u8(a.lebenNr & 255);
   for (const k of EIGEN_F64) s.f64(a[k]);
@@ -399,7 +403,7 @@ export function neuerZustand() {
   const eigen = { x: 0, y: 0, z: 0, waffe: { } };
   return {
     takt: 0, runde: 0, phase: 'vorlauf', phasenZeit: 0, restzeit: 0, punkte: [0, 0], sieger: -1,
-    zielPunkte: 30, n: 0, akteure, meldungen: [], m: 0, ack: 0, eigenId: -1, eigen,
+    zielPunkte: 30, karte: '', naechsteKarte: '', n: 0, akteure, meldungen: [], m: 0, ack: 0, eigenId: -1, eigen,
   };
 }
 
@@ -418,6 +422,8 @@ export function zustandLesen(l, z) {
   z.punkte[1] = l.u8();
   z.sieger = l.i8();
   z.zielPunkte = l.u8();
+  z.karte = karteVon(l.u8());
+  z.naechsteKarte = karteVon(l.u8());
   const n = l.u8();
   if (n > 6) throw new Error('Figuren');
   z.n = n;
@@ -478,6 +484,7 @@ export function zustandLesen(l, z) {
   E.geduckt = (f & 4) !== 0;
   E.sprintet = (f & 8) !== 0;
   E.klickGesperrt = (f & 16) !== 0;
+  E.abzugGesperrt = (f & 32) !== 0;
   E.tastenVorher = l.u8();
   E.lebenNr = l.u8();
   for (const k of EIGEN_F64) E[k] = l.f64();
@@ -517,5 +524,6 @@ export function eigenUebernehmen(E, a) {
   w.ladenPhase = E.waffe.ladenPhase;
   w.schuesse = E.waffe.schuesse;
   w.klickGesperrt = E.klickGesperrt;
+  w.abzugGesperrt = E.abzugGesperrt;
   for (const k of WAFFE_F64) w[k] = E.waffe[k];
 }

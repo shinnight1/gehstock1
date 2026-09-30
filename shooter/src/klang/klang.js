@@ -94,6 +94,30 @@ const REZEPTE = {
     { art: 'sinus', laut: 1.0, zerfall: 0.09, von: 110, bis: 38, gleit: 0.05 },
     { art: 'rauschen', laut: 0.3, zerfall: 0.28, tp: 0.05, start: 0.03 },
   ], 13],
+  mg: [0.46, [
+    { art: 'rauschen', laut: 1.0, zerfall: 0.012, hp: 0.75 },
+    { art: 'rauschen', laut: 0.9, zerfall: 0.06, tp: 0.2 },
+    { art: 'sinus', laut: 1.0, zerfall: 0.06, von: 120, bis: 45, gleit: 0.035 },
+    { art: 'rauschen', laut: 0.25, zerfall: 0.18, tp: 0.07, start: 0.02 },
+  ], 14],
+  praezision: [0.55, [
+    { art: 'rauschen', laut: 1.0, zerfall: 0.01, hp: 0.85 },
+    { art: 'rauschen', laut: 0.85, zerfall: 0.06, tp: 0.22 },
+    { art: 'sinus', laut: 0.9, zerfall: 0.07, von: 135, bis: 48, gleit: 0.04 },
+    { art: 'rauschen', laut: 0.3, zerfall: 0.25, tp: 0.06, start: 0.025 },
+  ], 15],
+  scharfschuetze: [0.95, [
+    { art: 'rauschen', laut: 1.0, zerfall: 0.014, hp: 0.8 },
+    { art: 'rauschen', laut: 1.0, zerfall: 0.1, tp: 0.15 },
+    { art: 'sinus', laut: 1.0, zerfall: 0.12, von: 95, bis: 34, gleit: 0.06 },
+    { art: 'rauschen', laut: 0.35, zerfall: 0.4, tp: 0.04, start: 0.04 },
+  ], 16],
+  pistole: [0.24, [
+    { art: 'rauschen', laut: 1.0, zerfall: 0.006, hp: 0.9 },
+    { art: 'rauschen', laut: 0.55, zerfall: 0.025, tp: 0.4 },
+    { art: 'sinus', laut: 0.5, zerfall: 0.025, von: 230, bis: 100, gleit: 0.015 },
+    { art: 'rauschen', laut: 0.12, zerfall: 0.08, tp: 0.12, start: 0.012 },
+  ], 17],
   magRaus: [0.16, [
     { art: 'rauschen', laut: 0.6, zerfall: 0.012, hp: 0.6 },
     { art: 'sinus', laut: 0.35, zerfall: 0.03, von: 1900 },

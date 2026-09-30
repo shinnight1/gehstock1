@@ -18,6 +18,7 @@ import { OpsOnline } from '../shooter/server/online.mjs';
 import { OnlineSpiel } from '../shooter/src/netz/online.js';
 import * as P from '../shooter/src/netz/protokoll.js';
 import { kraehenfeld } from '../shooter/src/karte/kraehenfeld.js';
+import { karteBauen, KARTEN_REIHE } from '../shooter/src/karte/karten.js';
 import { Welt } from '../shooter/src/sim/welt.js';
 import { Navigation } from '../shooter/src/sim/navigation.js';
 import { Simulation } from '../shooter/src/sim/simulation.js';
@@ -558,6 +559,82 @@ export async function shooterOnlineTests(test) {
     neu.verbinden();
     await bis(() => neu.zustand === 'fehler', 'erster Versuch haengt', 8000);
     pruefe(Date.now() - t0 < 5000 && !neu.ws, 'dauert ' + (Date.now() - t0) + ' ms');
+  });
+  await shooterOnlineKartenTests(test);
+}
+
+async function shooterOnlineKartenTests(test) {
+  await test('Ops online: nach jeder Runde kommt die nächste Karte, das Gerät wechselt mit', async () => {
+    const S = await aufbauen({ ohneVorlauf: true, dauer: 0.5, rundenPause: 0.3 });
+    try {
+      const geholt = [];
+      const spiel = new OnlineSpiel({
+        ...welt(), name: 'Reisend', waffe: 'mp', adresse: S.adresse,
+        karteHolen: (id) => {
+          geholt.push(id);
+          const k = karteBauen(id);
+          return { karte: k, welt: new Welt(k.quader.filter((q) => q.kollision)) };
+        },
+      });
+      spiel.verbinden();
+      await bis(() => spiel.zustand === 'drin', 'verbunden');
+      pruefe(S.ops.raum.sim.karte.id === KARTEN_REIHE[0] && spiel.spiegel.karte.id === KARTEN_REIHE[0], 'erste Runde nicht auf ' + KARTEN_REIHE[0]);
+      // In der Auswertung steht schon die naechste Karte fest
+      await bis(() => spiel.spiegel.phase === 'ende', 'Runde endet nicht');
+      await bis(() => spiel.spiegel.naechsteKarte === KARTEN_REIHE[1], 'naechste Karte nicht angekuendigt');
+      await bis(() => spiel.spiegel.karte.id === KARTEN_REIHE[1], 'Geraet wechselt die Karte nicht', 8000);
+      pruefe(S.ops.raum.sim.karte.id === KARTEN_REIHE[1] && spiel.welt === spiel.spiegel.welt && geholt[0] === KARTEN_REIHE[1], 'Server und Geraet uneins');
+      // Die eigene Figur steht auf einem Spawn der neuen Karte
+      await bis(() => spiel.ich && spiel.ich.lebt && spiel.spiegel.phase === 'laeuft', 'nicht wieder im Spiel');
+      const k = spiel.spiegel.karte;
+      pruefe(spiel.ich.x > k.grenzen.minX && spiel.ich.x < k.grenzen.maxX, 'Figur ausserhalb der neuen Karte');
+      // Und weiter geht es reihum bis zur ersten zurueck
+      await bis(() => S.ops.raum.sim.karte.id === KARTEN_REIHE[2], 'dritte Karte', 8000);
+      spiel.trennen();
+    } finally {
+      await S.zu();
+    }
+  });
+
+  await test('Ops online: Vorhersage stimmt auch mit halbautomatischen Waffen Bit für Bit', async () => {
+    const S = await aufbauen({ ohneVorlauf: true, kontingentMax: 100000, nachrichtenRate: 100000, nachrichtenVorrat: 100000 });
+    try {
+      for (const waffe of ['praezision', 'scharfschuetze']) {
+        const { karte, welt: w } = welt();
+        const spiel = new OnlineSpiel({ karte, welt: w, name: 'Tipp', waffe, adresse: S.adresse });
+        spiel.verbinden();
+        await bis(() => spiel.zustand === 'drin', 'verbunden');
+        for (const b of S.ops.raum.sim.akteure) if (b.bot) b.ki = null;
+        const bef = neuerBefehl();
+        let yaw = spiel.ich.yaw;
+        for (let n = 1; n <= 300; n++) {
+          yaw += 0.01;
+          bef.yaw = yaw;
+          bef.pitch = Math.sin(n / 30) * 0.2;
+          bef.vor = n % 120 < 80 ? 1 : 0;
+          bef.seit = 0;
+          // Tippen: mal kurz, mal gehalten, dazu Visier
+          bef.tasten = (n % 9 < 3 ? T_FEUER : 0) | (n > 100 ? T_VISIER : 0);
+          spiel.schritt(bef);
+          if (n % 12 === 0) {
+            await warte(2);
+            spiel.bild(0.016);
+          }
+        }
+        spiel.abschicken();
+        await bis(() => spiel.ack === spiel.nr, 'alle Befehle bestaetigt');
+        await warte(80);
+        const ich = spiel.ich;
+        const srv = S.ops.raum.sim.akteure[spiel.eigenId];
+        pruefe(spiel.korrekturen === 0, waffe + ': ' + spiel.korrekturen + ' Korrekturen');
+        pruefe(ich.waffe.schuesse === srv.waffe.schuesse && ich.waffe.schuesse >= 3, waffe + ': Schuesse ' + ich.waffe.schuesse + '/' + srv.waffe.schuesse);
+        pruefe(ich.waffe.abzugGesperrt === srv.waffe.abzugGesperrt && ich.x === srv.x && ich.z === srv.z, waffe + ': Zustand weicht ab');
+        spiel.trennen();
+        await bis(() => S.ops.status().spieler === 0, 'weg');
+      }
+    } finally {
+      await S.zu();
+    }
   });
 }
 

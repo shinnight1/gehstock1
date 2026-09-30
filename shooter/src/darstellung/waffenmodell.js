@@ -17,7 +17,7 @@
 
 import {
   AdditiveBlending, BoxGeometry, CylinderGeometry, DirectionalLight, Group, HemisphereLight,
-  Mesh, MeshBasicMaterial, MeshLambertMaterial, PerspectiveCamera, PlaneGeometry, Scene,
+  Mesh, MeshBasicMaterial, MeshLambertMaterial, PerspectiveCamera, PlaneGeometry, RingGeometry, Scene,
   SphereGeometry, Sprite, SpriteMaterial,
 } from 'three';
 import { feuerTextur } from './texturen.js';
@@ -62,6 +62,10 @@ export class Waffenmodell {
       sturmgewehr: this.sturmgewehr(),
       mp: this.mp(),
       schrotflinte: this.schrotflinte(),
+      mg: this.mg(),
+      praezision: this.praezision(),
+      scharfschuetze: this.scharfschuetze(),
+      pistole: this.pistole(),
     };
     for (const k of Object.keys(this.modelle)) {
       this.modelle[k].gruppe.visible = false;
@@ -101,6 +105,7 @@ export class Waffenmodell {
     this.schuesse = -1;
     this.pumpe = 1;
     this.ducken = 0;
+    this.fernrohr = false;       // Zielfernrohr im Auge: Waffe ausblenden
   }
 
   geo(g) {
@@ -162,7 +167,7 @@ export class Waffenmodell {
     this.rotpunkt(g, 0.08, -0.03);
     const rechts = this.arm(g, [0.012, -0.085, 0.1], [0.16, -0.26, 0.42]);
     const links = this.arm(g, [-0.004, -0.045, -0.3], [-0.2, -0.24, -0.02]);
-    return { gruppe: g, visier: [0, 0.08, -0.05], muendung: [0, 0.004, -0.64], magazin, magazinY: magazin.position.y, links, linksPos: links.position.clone(), rechts, auswurf: true, typ: 'magazin', abstand: 0.27, huefte: [0.2, -0.2, -0.43] };
+    return { gruppe: g, visier: [0, 0.08, -0.05], muendung: [0, 0.004, -0.64], magazin, magazinY: magazin.position.y, links, linksPos: links.position.clone(), rechts, auswurf: true, typ: 'magazin', abstand: 0.27, huefte: [0.2, -0.2, -0.43], rueck: 1, feuer: 1.1 };
   }
 
   mp() {
@@ -185,7 +190,7 @@ export class Waffenmodell {
     this.teil(g, 0.004, 0.004, 0.004, 0, 0.075, -0.12, M.punkt);
     const rechts = this.arm(g, [0.012, -0.078, 0.09], [0.16, -0.26, 0.4]);
     const links = this.arm(g, [-0.006, -0.12, -0.03], [-0.19, -0.26, 0.1]);
-    return { gruppe: g, visier: [0, 0.075, 0.09], muendung: [0, 0.008, -0.28], magazin, magazinY: magazin.position.y, links, linksPos: links.position.clone(), rechts, auswurf: true, typ: 'magazin', abstand: 0.3, huefte: [0.165, -0.165, -0.35] };
+    return { gruppe: g, visier: [0, 0.075, 0.09], muendung: [0, 0.008, -0.28], magazin, magazinY: magazin.position.y, links, linksPos: links.position.clone(), rechts, auswurf: true, typ: 'magazin', abstand: 0.3, huefte: [0.165, -0.165, -0.35], rueck: 0.75, feuer: 0.9 };
   }
 
   schrotflinte() {
@@ -221,7 +226,142 @@ export class Waffenmodell {
     const links = this.arm(g, [0, -0.045, -0.3], [-0.2, -0.24, -0.05]);
     const patrone = this.teil(g, 0.018, 0.018, 0.06, 0, -0.08, -0.02, M.messing);
     patrone.visible = false;
-    return { gruppe: g, visier: [0, 0.07, 0.08], muendung: [0, 0.018, -0.68], pumpe, pumpeZ: pumpe.position.z, links, linksPos: links.position.clone(), rechts, patrone, auswurf: false, typ: 'einzeln', abstand: 0.14, huefte: [0.2, -0.215, -0.44] };
+    return { gruppe: g, visier: [0, 0.07, 0.08], muendung: [0, 0.018, -0.68], pumpe, pumpeZ: pumpe.position.z, pumpeWeg: 0.075, pumpeHand: true, pumpeDauer: 0.55, links, linksPos: links.position.clone(), rechts, patrone, auswurf: false, typ: 'einzeln', abstand: 0.14, huefte: [0.2, -0.215, -0.44], rueck: 2.2, feuer: 1.6 };
+  }
+
+  /* Zielfernrohr: Rohr mit Linsen, innen ein Leuchtpunkt. Beim
+     Scharfschuetzengewehr blendet im vollen Visier das Bild ueber
+     (HUD), hier zaehlt nur die Haltung davor. */
+  fernrohr(g, y, z, laenge, r, punkt) {
+    const M = this.M;
+    const rohr = new Mesh(this.geo(new CylinderGeometry(r, r, laenge, 14, 1, true)), M.stahl);
+    rohr.rotation.x = Math.PI / 2;
+    rohr.position.set(0, y, z);
+    g.add(rohr);
+    for (const e of [-1, 1]) {
+      const ring = new Mesh(this.geo(new CylinderGeometry(r * 1.28, r * 1.28, 0.03, 14, 1, true)), M.polymer);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.set(0, y, z + e * (laenge / 2 - 0.012));
+      g.add(ring);
+      const glas = new Mesh(this.geo(new PlaneGeometry(r * 2, r * 2)), M.glas);
+      glas.position.set(0, y, z + e * (laenge / 2 - 0.02));
+      g.add(glas);
+    }
+    // Rand der hinteren Linse als dunkler Ring: man sieht, wo man hineinschaut.
+    const blende = new Mesh(this.geo(new RingGeometry(r * 0.8, r * 1.05, 18)), M.polymer);
+    blende.position.set(0, y, z + laenge / 2 - 0.004);
+    g.add(blende);
+    // Halterungen enden unter dem Rohr - nichts ragt in die Visierlinie
+    const hh = y - r - 0.03;
+    this.teil(g, 0.014, hh, 0.024, 0, 0.03 + hh / 2, z - laenge * 0.28, M.stahl);
+    this.teil(g, 0.014, hh, 0.024, 0, 0.03 + hh / 2, z + laenge * 0.28, M.stahl);
+    if (punkt) {
+      const p = new Mesh(this.geo(new SphereGeometry(0.0012, 8, 6)), M.punkt);
+      p.position.set(0, y, z - laenge / 2 + 0.03);
+      g.add(p);
+    }
+  }
+
+  mg() {
+    const g = new Group();
+    const M = this.M;
+    this.teil(g, 0.058, 0.078, 0.38, 0, 0, 0, M.stahl);
+    this.teil(g, 0.064, 0.064, 0.24, 0, 0.004, -0.31, M.oliv);
+    const lauf = new Mesh(this.geo(new CylinderGeometry(0.013, 0.013, 0.32, 10)), M.stahlHell);
+    lauf.rotation.x = Math.PI / 2;
+    lauf.position.set(0, 0.004, -0.57);
+    g.add(lauf);
+    this.teil(g, 0.036, 0.032, 0.07, 0, 0.004, -0.75, M.stahl);
+    this.teil(g, 0.028, 0.012, 0.42, 0, 0.045, -0.2, M.stahlHell);
+    // Tragegriff seitlich (frei fuer die Visierlinie), eingeklapptes Zweibein
+    this.teil(g, 0.012, 0.024, 0.012, -0.04, 0.03, -0.33, M.stahl);
+    this.teil(g, 0.012, 0.024, 0.012, -0.04, 0.03, -0.19, M.stahl);
+    this.teil(g, 0.014, 0.012, 0.16, -0.04, 0.046, -0.26, M.polymer);
+    this.teil(g, 0.008, 0.008, 0.2, -0.018, -0.042, -0.46, M.stahl);
+    this.teil(g, 0.008, 0.008, 0.2, 0.018, -0.042, -0.46, M.stahl);
+    const griff = this.teil(g, 0.034, 0.095, 0.044, 0, -0.072, 0.09, M.polymer);
+    griff.rotation.x = -0.35;
+    // Gurtkasten
+    const magazin = this.teil(g, 0.074, 0.11, 0.11, -0.012, -0.094, -0.06, M.oliv);
+    this.teil(g, 0.048, 0.08, 0.22, 0, -0.014, 0.29, M.polymer);
+    this.rotpunkt(g, 0.085, -0.1);
+    const rechts = this.arm(g, [0.012, -0.088, 0.1], [0.17, -0.27, 0.43]);
+    const links = this.arm(g, [-0.004, -0.05, -0.32], [-0.21, -0.25, -0.03]);
+    return { gruppe: g, visier: [0, 0.085, -0.12], muendung: [0, 0.004, -0.79], magazin, magazinY: magazin.position.y, links, linksPos: links.position.clone(), rechts, auswurf: true, typ: 'magazin', abstand: 0.27, huefte: [0.21, -0.225, -0.46], rueck: 0.9, feuer: 1.2 };
+  }
+
+  praezision() {
+    const g = new Group();
+    const M = this.M;
+    this.teil(g, 0.044, 0.064, 0.36, 0, 0, 0, M.stahl);
+    this.teil(g, 0.048, 0.054, 0.3, 0, -0.004, -0.32, M.polymer);
+    const lauf = new Mesh(this.geo(new CylinderGeometry(0.011, 0.011, 0.3, 10)), M.stahlHell);
+    lauf.rotation.x = Math.PI / 2;
+    lauf.position.set(0, 0.004, -0.6);
+    g.add(lauf);
+    this.teil(g, 0.026, 0.026, 0.05, 0, 0.004, -0.76, M.stahl);
+    this.teil(g, 0.024, 0.01, 0.3, 0, 0.037, -0.12, M.stahlHell);
+    const griff = this.teil(g, 0.032, 0.095, 0.042, 0, -0.07, 0.1, M.polymer);
+    griff.rotation.x = -0.35;
+    const magazin = this.teil(g, 0.03, 0.1, 0.06, 0, -0.078, -0.07, M.polymer);
+    magazin.rotation.x = 0.12;
+    this.teil(g, 0.042, 0.075, 0.24, 0, -0.016, 0.29, M.oliv);
+    this.fernrohr(g, 0.078, -0.06, 0.2, 0.019, true);
+    const rechts = this.arm(g, [0.012, -0.085, 0.11], [0.16, -0.26, 0.43]);
+    const links = this.arm(g, [-0.004, -0.045, -0.32], [-0.2, -0.24, -0.03]);
+    return { gruppe: g, visier: [0, 0.078, 0.02], muendung: [0, 0.004, -0.8], magazin, magazinY: magazin.position.y, links, linksPos: links.position.clone(), rechts, auswurf: true, typ: 'magazin', abstand: 0.13, huefte: [0.2, -0.205, -0.44], rueck: 1.5, feuer: 1.2 };
+  }
+
+  scharfschuetze() {
+    const g = new Group();
+    const M = this.M;
+    this.teil(g, 0.046, 0.066, 0.32, 0, 0, 0, M.stahl);
+    this.teil(g, 0.056, 0.06, 0.36, 0, -0.01, -0.3, M.oliv);
+    const lauf = new Mesh(this.geo(new CylinderGeometry(0.012, 0.014, 0.46, 10)), M.stahl);
+    lauf.rotation.x = Math.PI / 2;
+    lauf.position.set(0, 0.006, -0.66);
+    g.add(lauf);
+    this.teil(g, 0.034, 0.03, 0.08, 0, 0.006, -0.92, M.stahl);
+    this.teil(g, 0.05, 0.09, 0.3, 0, -0.03, 0.29, M.oliv);
+    this.teil(g, 0.036, 0.036, 0.1, 0, 0.03, 0.22, M.oliv);
+    const griff = this.teil(g, 0.032, 0.09, 0.04, 0, -0.07, 0.1, M.polymer);
+    griff.rotation.x = -0.3;
+    const magazin = this.teil(g, 0.03, 0.06, 0.07, 0, -0.058, -0.06, M.polymer);
+    // Kammerstengel rechts - er faehrt nach jedem Schuss zurueck
+    const verschluss = new Group();
+    this.teil(verschluss, 0.05, 0.012, 0.012, 0.03, 0, 0, M.stahlHell);
+    const knopf = new Mesh(this.geo(new SphereGeometry(0.011, 8, 6)), M.stahl);
+    knopf.position.set(0.058, -0.004, 0);
+    verschluss.add(knopf);
+    verschluss.position.set(0, 0.02, 0.06);
+    g.add(verschluss);
+    this.fernrohr(g, 0.085, -0.04, 0.3, 0.024, false);
+    const rechts = this.arm(g, [0.012, -0.08, 0.11], [0.16, -0.26, 0.44]);
+    const links = this.arm(g, [-0.004, -0.05, -0.33], [-0.2, -0.24, -0.05]);
+    return { gruppe: g, visier: [0, 0.085, 0.08], muendung: [0, 0.006, -0.97], magazin, magazinY: magazin.position.y, links, linksPos: links.position.clone(), rechts, pumpe: verschluss, pumpeZ: verschluss.position.z, pumpeWeg: 0.07, pumpeHand: false, pumpeDauer: 0.8, auswurf: false, typ: 'magazin', abstand: 0.12, huefte: [0.22, -0.25, -0.5], rueck: 2.4, feuer: 1.5 };
+  }
+
+  pistole() {
+    const g = new Group();
+    const M = this.M;
+    // Schlitten faehrt beim Schuss zurueck
+    const schlitten = new Group();
+    this.teil(schlitten, 0.032, 0.034, 0.19, 0, 0, 0, M.stahl);
+    this.teil(schlitten, 0.02, 0.012, 0.012, 0, 0.022, 0.085, M.stahl);
+    this.teil(schlitten, 0.006, 0.014, 0.01, -0.007, 0.034, 0.085, M.stahl);
+    this.teil(schlitten, 0.006, 0.014, 0.01, 0.007, 0.034, 0.085, M.stahl);
+    this.teil(schlitten, 0.004, 0.016, 0.008, 0, 0.026, -0.085, M.stahl);
+    this.teil(schlitten, 0.004, 0.004, 0.004, 0, 0.035, -0.085, M.punkt);
+    g.add(schlitten);
+    this.teil(g, 0.03, 0.022, 0.17, 0, -0.026, -0.01, M.polymer);
+    const griff = this.teil(g, 0.032, 0.11, 0.048, 0, -0.085, 0.06, M.polymer);
+    griff.rotation.x = -0.28;
+    const magazin = this.teil(g, 0.024, 0.1, 0.036, 0, -0.1, 0.064, M.stahlHell);
+    magazin.rotation.x = -0.28;
+    this.teil(g, 0.012, 0.012, 0.03, 0, 0.004, -0.1, M.stahlHell);
+    const rechts = this.arm(g, [0.014, -0.09, 0.07], [0.15, -0.27, 0.36]);
+    const links = this.arm(g, [-0.016, -0.095, 0.065], [-0.17, -0.28, 0.33]);
+    return { gruppe: g, visier: [0, 0.035, 0.085], muendung: [0, 0.004, -0.11], magazin, magazinY: magazin.position.y, links, linksPos: links.position.clone(), rechts, pumpe: schlitten, pumpeZ: 0, pumpeWeg: 0.035, pumpeHand: false, pumpeDauer: 0.1, pumpeSofort: true, auswurf: true, typ: 'magazin', abstand: 0.34, huefte: [0.14, -0.15, -0.36], rueck: 0.9, feuer: 0.8 };
   }
 
   waehlen(id) {
@@ -259,11 +399,11 @@ export class Waffenmodell {
       this.schuesse = z.schuesse;
     }
     if (neuerSchuss) {
-      const staerke = z.waffe === 'schrotflinte' ? 2.2 : z.waffe === 'mp' ? 0.75 : 1;
+      const staerke = m.rueck;
       this.rueck = Math.min(2.5, this.rueck + staerke * (1 - 0.45 * z.visier));
       this.rueckDreh = Math.min(2.5, this.rueckDreh + staerke);
       this.feuerBis = this.zeit + 0.045;
-      const s = (0.07 + Math.random() * 0.05) * (z.waffe === 'schrotflinte' ? 1.6 : z.waffe === 'mp' ? 0.9 : 1.1);
+      const s = (0.07 + Math.random() * 0.05) * m.feuer;
       this.feuer.scale.set(s, s, 1);
       if (m.auswurf) this.huelseAuswerfen(m);
       if (m.pumpe) this.pumpe = 0;
@@ -350,12 +490,13 @@ export class Waffenmodell {
       m.links.position.set(m.linksPos.x - links * 0.03, m.linksPos.y - links * 0.1, m.linksPos.z + links * 0.12);
     }
 
-    // Pumpe der Schrotflinte
+    // Pumpe der Schrotflinte, Kammerstengel, Pistolenschlitten
     if (m.pumpe) {
-      this.pumpe = Math.min(1, this.pumpe + dt / 0.55);
-      const zurueck = this.pumpe < 0.35 ? 0 : Math.sin(Math.min(1, (this.pumpe - 0.35) / 0.65) * Math.PI);
-      m.pumpe.position.z = m.pumpeZ + zurueck * 0.075;
-      if (!(z.laden >= 0)) m.links.position.z = m.linksPos.z + zurueck * 0.075;
+      this.pumpe = Math.min(1, this.pumpe + dt / m.pumpeDauer);
+      const start = m.pumpeSofort ? 0 : 0.35;
+      const zurueck = this.pumpe < start ? 0 : Math.sin(Math.min(1, (this.pumpe - start) / (1 - start)) * Math.PI);
+      m.pumpe.position.z = m.pumpeZ + zurueck * m.pumpeWeg;
+      if (m.pumpeHand && !(z.laden >= 0)) m.links.position.z = m.linksPos.z + zurueck * m.pumpeWeg;
     }
 
     // Hochnehmen und Landung
@@ -372,6 +513,9 @@ export class Waffenmodell {
     py += this.rueck * 0.004 * frei;
     rx += this.rueckDreh * 0.045 * frei;
 
+    // Mit Zielfernrohr im Auge sieht man durch das Rohr, nicht die Waffe.
+    this.fernrohr = !!z.fernrohr && this.visier > 0.9;
+    this.halter.visible = !this.fernrohr;
     this.halter.position.set(px + bobX + this.swayX * frei, py + bobY + atmen + this.swayY * frei, pz);
     this.halter.rotation.set(rx + this.swayY * 0.6 * frei, ry - this.swayX * 0.5 * frei, rz + bobX * 2);
 
