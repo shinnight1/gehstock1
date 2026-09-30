@@ -81,6 +81,11 @@
     var bautenEbene=el('div',undefined,'gm-bauten-ebene');root.appendChild(bautenEbene);
     var bauten=R.mountBauten({el:el,button:button,layer:bautenEbene,oeffnen:{stadt:stadt.menu,hafen:stadt.hafen,haendler:stadt.haendler,tausch:stadt.tausch,schmiede:stadt.schmiede,
       rathaus:function(){adventures.rathaus();},streifzug:function(){adventures.streifzuege();}}});
+    /* Neu seit dem Update (2-neu-ui.js): einmal je Person, sobald nichts anderes offen ist. */
+    var neu=R.mountNeu({el:el,button:button,root:root,state:function(){return online?st:null;},hinfuehren:hinfuehren});
+    function hinfuehren(ziel){
+      if(ziel==='automat'){stadt.haendler();var karte=drawer.querySelector('.gm-automat');if(karte&&karte.scrollIntoView)karte.scrollIntoView({block:'center'});}
+    }
     var heute=R.mountHeute({revanche:zurRevanche,kampfbericht:berichtOeffnen,el:el,button:button,drawer:drawer,root:root,open:openDrawer,closeDrawer:closeDrawer,request:requestOnline,apply:applyOnline,error:onlineError,notify:notify,busy:function(){return busy;},now:now,sfx:host.sfx,after:host.after,cancel:host.cancel,playerId:function(){return online&&online.playerId;}});
     /* Das Live-Duell nutzt denselben Kasten wie die Arena. */
     /* Der Joystick wird dabei jedes Mal losgelassen: ging ein Fenster auf, waehrend man ihn hielt,
@@ -636,6 +641,7 @@
       var duellPoll=duellUi.pollNoetig();
       if(connected&&(adventures.dungeonActive()||duellPoll)&&!busy&&!polling&&!document.hidden&&Date.now()-lastPoll>(duellPoll?duellUi.pollIntervall():2500)){lastPoll=Date.now();polling=true;var dungeonEpoch=requestEpoch;R.online.request('world',duellPoll?duellUi.pollDaten():undefined).then(function(res){if(dead||!connected||dungeonEpoch!==requestEpoch||busy)return;applyOnline(res);}).catch(function(err){if(dungeonEpoch===requestEpoch)onlineError(err);}).finally(function(){polling=false;});}
       if(peerList.length&&Date.now()-lastPresenceReply>15000)applyPeers([],now());
+      if(connected&&online)neu.pruefen(!busy&&!battle&&!dueling()&&!animating&&drawer.hidden&&!!access&&access.open);
       root.querySelectorAll('[data-until]').forEach(function(node){var until=Number(node.getAttribute('data-until'));node.textContent=until<=now()?node.getAttribute('data-ready'):duration(until-now());});
       root.querySelectorAll('[data-enable-at]').forEach(function(node){node.disabled=busy||Number(node.getAttribute('data-enable-at'))>now();});
       if(connected&&tickCount%15===0&&!battle&&!dueling()){drawTarget();if(drawerView==='posts'||drawerView&&drawerView.indexOf('post:')===0)refreshDrawer(drawerView);}
