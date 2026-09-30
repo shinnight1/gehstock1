@@ -57,7 +57,8 @@ Hochformat), Maus und Tastatur (Pointer Lock, Pause, Escape, Tabelle),
 Matchende und Neustart, dass der GPU-Speicher über viele Matches nicht wächst,
 dass beim Verlassen alle Listener, der Ton und die Grafik abgebaut werden,
 online mit zwei Browsern (Teams, gegenseitig sehen, Schüsse, Verlassen,
-Verbindungsabbruch) und offline (Seite aus dem Service Worker, Bot-Lobby ohne
+selbst neu verbinden nach einem Abriss, Hinweis, wenn der Server wegbleibt)
+und offline (Seite aus dem Service Worker, Bot-Lobby ohne
 Server).
 
 ## Steuerung
@@ -248,10 +249,26 @@ gestellt. Das Online-Match ist ein eigener Weg:
   Zuständen verschoben. Mit jedem Befehl geht mit, welchen Zeitpunkt man
   sieht; der Server rechnet Schüsse dort, wo der Schütze die Gegner gesehen
   hat - höchstens 250 ms zurück, und nur im selben Leben des Ziels.
-- **Abgesichert**: Nachrichten höchstens 2 KB und 120 pro Sekunde, kaputte
-  Nachrichten trennen nur den Absender, mehr Befehle als Zeit vergangen ist
-  verfallen (kein Speedhack), Namen werden gesäubert und eindeutig gemacht,
-  ein Fehler in der Runde setzt nur die Runde neu auf, nie den Server.
+- **Abgesichert**: Nachrichten höchstens 2 KB; im Schnitt 70 pro Sekunde,
+  nach einem Funkloch dürfen bis zu 900 aufgestaute auf einmal kommen.
+  Kaputte Nachrichten trennen nur den Absender. Mehr Befehle als Zeit
+  vergangen ist verfallen (kein Speedhack, höchstens vier Sekunden Vorrat).
+  Namen werden gesäubert und eindeutig gemacht. Ein Fehler beim Rechnen
+  eines Befehls wird gemeldet und übersprungen, ein Fehler in der Runde
+  setzt nur die Runde neu auf, nie den Server.
+- **Abbrüche überstehen.** Reißt die Leitung (Funkloch, WLAN-Wechsel,
+  iPad kurz im Hintergrund, Server-Neustart nach einem Update), bleibt man
+  im Spiel und das Gerät verbindet selbst neu: nach 0,4, 1, 2, 3 … 10
+  Sekunden, zusammen rund 40 Sekunden, erst dann heißt es „Verbindung weg“.
+  Kommt 7 Sekunden lang nichts an, gilt die Leitung als tot, auch wenn der
+  Browser nichts meldet. Gezählt wird dabei nur, solange die Seite läuft.
+  Der Server hält den Platz samt Punkten eine Minute frei (ein Bot spielt
+  ihn so lange); das Gerät bekommt dafür beim Beitreten einen Schlüssel.
+  Hängt die alte Leitung noch halb offen, weicht sie der neuen. Wer über
+  „Online verlassen“ geht, gibt den Platz sofort frei.
+- **Jeder Push auf `main` startet den Server neu** (Update auf dem Handy,
+  einige Sekunden). Die Runde beginnt dann neu, die Geräte verbinden sich
+  selbst wieder und spielen als neue Teilnehmer weiter.
 - **Name** kommt aus dem Hideout mit (Anker `#name=` beim Öffnen der Kachel)
   und lässt sich im Menü ändern.
 
@@ -285,5 +302,10 @@ auf freiem Port, die echte Runde bleibt unberührt).
   Ping, Rückspulen und Vorhersage sind für normale Heim- und Mobilnetze
   ausgelegt (bis etwa 150 ms); darüber trifft man spürbar schlechter.
 - Pausieren hält online nichts an: die eigene Figur steht dann einfach.
-- Nach einem Update mit geändertem Protokoll bekommen Geräte mit altem Stand
-  „Neue Version – bitte neu laden“.
+- Nach einem Update mit geändertem Protokoll (zuletzt Version 2:
+  Schlüssel zum Wiederverbinden) bekommen Geräte mit altem Stand „Neue
+  Version – bitte neu laden“.
+- Neuverbinden, Funklöcher (1,5 s, 4 s, 10 s) und Server-Neustarts sind mit
+  drei Browsern hinter einer künstlich verzögerten Leitung (55 ± 35 ms)
+  getestet, nicht auf echten iPads im Mobilfunk. Wie iOS offene
+  Verbindungen im Hintergrund behandelt, zeigt erst das Gerät.

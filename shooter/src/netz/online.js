@@ -21,6 +21,16 @@
 
    Nach aussen sieht das Spiel eine "Simulation" (this.spiegel) mit
    denselben Feldern wie im Bot-Match: Figuren, Punkte, Phase, Meldungen.
+
+   Leitung weg (Funkloch, Hintergrund, Neustart des Servers)? Dann wird
+   nicht abgebrochen, sondern neu verbunden - mit dem Schluessel vom
+   Server, der den Platz samt Punkten eine Minute freihaelt. Erst wenn
+   rund 40 Sekunden lang nichts geht, gilt die Verbindung als verloren.
+   Kommt eine Weile gar nichts mehr an (halb offene Leitung nach dem
+   Aufwachen des iPads), wird ebenfalls neu verbunden.
+
+   Zustaende: aus -> verbinde -> warte -> drin, dazwischen wieder
+   (verbindet neu); am Ende fehler, voll, alt oder weg.
    ------------------------------------------------------------------ */
 
 import { FIGUR, MATCH, TICK } from '../konfig.js';
@@ -31,15 +41,19 @@ import { akteurSchritt, BOT_NAMEN, kugelRichtung, neuerAkteur } from '../sim/sim
 import { strahlFigur } from '../sim/treffer.js';
 import { nachSchuss, neueWaffe, streuungBerechnen } from '../sim/waffen.js';
 import {
-  BUENDEL, befehlQuantisieren, C_ECHO, echoSchreiben, eigenUebernehmen, eingabeSchreiben, halloSchreiben,
+  BUENDEL, befehlQuantisieren, echoSchreiben, eigenUebernehmen, eingabeSchreiben, halloSchreiben,
   Leser, neuerZustand, PFAD, rosterLesen, S_ALT, S_ECHO, S_ROSTER, S_VOLL, S_WILLKOMMEN, S_ZUSTAND,
-  Schreiber, waffeSchreiben, zustandLesen,
+  Schreiber, tschuessSchreiben, waffeSchreiben, zustandLesen,
 } from './protokoll.js';
 
 const OFFEN = 256;             // gemerkte unbestaetigte Befehle (gut vier Sekunden)
 const PUFFER = 24;             // gemerkte Zustaende fuer das Verschieben
 const VERZUG = 0.1;            // andere Figuren so weit hinter dem Server
 const GLAETTEN = 12;           // 1/s - Korrektur der eigenen Figur klingt so ab
+const STILL = 7000;            // ms laufende Seite ohne Nachricht: die Leitung ist tot
+const NACHFRIST = 3000;        // nach einem Haenger der Seite: so lange auf Liegengebliebenes warten
+const NEU_VERBINDEN = [400, 1000, 2000, 3000, 4000, 5000, 6000, 8000, 10000];   // Wartezeiten der Versuche
+const ERSTER_VERSUCH = [800, 2000];           // beim ersten Verbinden (Server startet vielleicht gerade neu)
 
 /* Diese Meldungen der eigenen Figur hat das Geraet schon selbst erzeugt. */
 const EIGENE_VORHERSAGE = new Set(['schuss', 'einschlag', 'sprung', 'landung', 'schritt', 'rutschen', 'schutzEnde']);
@@ -100,7 +114,8 @@ class Spiegel {
 }
 
 export class OnlineSpiel {
-  /* o: { karte, welt, name, waffe, adresse, beiStatus(zustand, text), beiRoster(alt, neu) } */
+  /* o: { karte, welt, name, waffe, adresse, beiStatus(zustand, text), beiRoster(alt, neu),
+     neuVerbinden (Wartezeiten in ms, nur fuer Tests) } */
   constructor(o) {
     this.o = o;
     this.spiegel = new Spiegel(o.karte, o.welt);
@@ -139,67 +154,152 @@ export class OnlineSpiel {
     this.ping = 0;
     this.echoUhr = 0;
     this.empfangen = 0;
+    this.schluessel = '';         // vom Server, zum Wiederverbinden
+    this.versuch = 0;
+    this.warWeg = false;          // nach einem Abbruch wieder verbunden?
+    this.neuVerbindungen = 0;
+    this.stille = 0;              // ms, die die Seite lief, ohne dass etwas ankam
+    this.bildUhr = 0;
   }
 
   /* ------------------------------------------------------ Verbindung */
 
   verbinden() {
+    this.versuch = 0;
+    this.warWeg = false;
+    this.status('verbinde');
+    this.leitungOeffnen();
+  }
+
+  /* Eine Leitung aufbauen (erstes Mal oder erneut). */
+  leitungOeffnen() {
+    clearTimeout(this.wecker);
+    clearTimeout(this.nochmalTimer);
     const adresse = this.o.adresse
       || (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + PFAD;
-    this.status('verbinde');
     let ws;
     try {
       ws = new WebSocket(adresse);
     } catch (e) {
-      this.status('fehler', 'Keine Verbindung zum Server möglich.');
+      this.fehlschlag('Keine Verbindung zum Server möglich.');
       return;
     }
     ws.binaryType = 'arraybuffer';
     this.ws = ws;
+    this.begruesst = false;
+    // Antwortet der Server nicht, gilt der Versuch als gescheitert.
     this.wecker = setTimeout(() => {
-      if (this.zustand === 'verbinde') {
-        this.status('fehler', 'Der Server antwortet nicht.');
-        this.trennen();
+      if (this.ws === ws && !this.begruesst) {
+        this.leitungWeg(ws);
+        this.fehlschlag('Der Server antwortet nicht.');
       }
     }, 8000);
     ws.onopen = () => {
-      ws.send(halloSchreiben(this.schreiber, this.o.name, this.o.waffe).slice());
+      ws.send(halloSchreiben(this.schreiber, this.o.name, this.o.waffe, this.schluessel).slice());
     };
     ws.onmessage = (e) => {
+      if (this.ws !== ws) return;
+      this.stille = 0;
       try {
         this.nachricht(e.data);
       } catch (err) {
-        this.status('fehler', 'Unverständliche Antwort vom Server.');
-        this.trennen();
+        // Kaputte Nachricht: diese Leitung aufgeben, neu verbinden.
+        this.leitungWeg(ws);
+        this.abgerissen('Unverständliche Antwort vom Server.');
       }
     };
-    ws.onclose = () => {
+    const zu = () => {
       if (this.ws !== ws) return;
-      this.ws = null;
-      if (this.zustand === 'verbinde') this.status('fehler', navigator.onLine === false
+      this.leitungWeg(ws);
+      this.abgerissen(navigator.onLine === false
         ? 'Kein Internet. Die Bot-Lobby geht auch ohne.' : 'Der Server ist gerade nicht erreichbar.');
-      else if (this.zustand === 'drin' || this.zustand === 'warte') this.status('weg', 'Verbindung verloren.');
     };
-    ws.onerror = () => { /* onclose folgt */ };
+    ws.onclose = zu;
+    // Nicht jede Umgebung schickt nach einem Fehler noch "close".
+    ws.onerror = zu;
+  }
+
+  leitungWeg(ws) {
+    if (!ws) return;
+    ws.onclose = null;
+    ws.onerror = null;
+    ws.onmessage = null;
+    ws.onopen = null;
+    try { ws.close(); } catch (e) { /* egal */ }
+    if (this.ws === ws) this.ws = null;
+  }
+
+  /* Die Leitung ist unerwartet weg. Im Spiel: neu verbinden. */
+  abgerissen(text) {
+    clearTimeout(this.wecker);
+    if (this.zustand === 'drin' || this.zustand === 'warte' || this.zustand === 'wieder') {
+      if (this.zustand !== 'wieder') {
+        this.versuch = 0;
+        this.neuVerbindungen++;
+        this.status('wieder', 'Verbindung weg – verbinde neu …');
+      }
+      this.warWeg = true;
+      this.nochmal(this.o.neuVerbinden || NEU_VERBINDEN, 'Verbindung verloren.');
+    } else if (this.zustand === 'verbinde') {
+      this.nochmal(ERSTER_VERSUCH, text);
+    }
+  }
+
+  fehlschlag(text) {
+    this.abgerissen(text);
+  }
+
+  /* Naechster Versuch - oder aufgeben, wenn alle Wartezeiten verbraucht sind. */
+  nochmal(plan, text) {
+    if (this.versuch >= plan.length) {
+      this.status(this.zustand === 'verbinde' ? 'fehler' : 'weg', text);
+      this.trennen();
+      return;
+    }
+    const warten = plan[this.versuch++];
+    clearTimeout(this.nochmalTimer);
+    this.nochmalTimer = setTimeout(() => {
+      if (this.zustand === 'verbinde' || this.zustand === 'wieder') this.leitungOeffnen();
+    }, warten);
+  }
+
+  /* Alles, was an einer Leitung haengt, zuruecksetzen (neue Leitung,
+     neue Befehlsnummern). Die Figuren im Spiegel bleiben stehen. */
+  leitungZuruecksetzen() {
+    this.nr = 0;
+    this.ack = 0;
+    this.ausgangN = 0;
+    this.pufferN = 0;
+    this.letzterTakt = -1;
+    this.versatz = null;
+    this.sichtTakt = 0;
+    this.warteMeldungen.length = 0;
+    this.kor.x = 0; this.kor.y = 0; this.kor.z = 0;
+    this.echoUhr = 0;
+    this.roster = [];
+    this.stille = 0;
+    this.bildUhr = performance.now();
   }
 
   status(z, text) {
     if (this.zustand === z) return;
     this.zustand = z;
-    if (z !== 'verbinde') clearTimeout(this.wecker);
     if (this.o.beiStatus) this.o.beiStatus(z, text || '');
   }
 
+  /* Absichtlich gehen: der Server haelt dann keinen Platz frei. */
   trennen() {
     clearTimeout(this.wecker);
+    clearTimeout(this.nochmalTimer);
     const ws = this.ws;
     this.ws = null;
     if (ws) {
-      ws.onclose = null;
-      ws.onmessage = null;
-      try { ws.close(1000); } catch (e) { /* egal */ }
+      if (ws.readyState === 1) {
+        try { ws.send(tschuessSchreiben(this.schreiber).slice()); } catch (e) { /* egal */ }
+      }
+      this.leitungWeg(ws);
     }
-    if (this.zustand !== 'fehler' && this.zustand !== 'voll' && this.zustand !== 'alt') this.zustand = 'aus';
+    if (this.zustand !== 'fehler' && this.zustand !== 'voll' && this.zustand !== 'alt' && this.zustand !== 'weg') this.zustand = 'aus';
   }
 
   senden(bytes) {
@@ -219,6 +319,11 @@ export class OnlineSpiel {
     else if (typ === S_WILLKOMMEN) {
       l.u16();
       this.eigenId = l.u8();
+      l.u32();
+      if (l.rest() > 0) this.schluessel = l.text();
+      this.begruesst = true;
+      clearTimeout(this.wecker);
+      this.leitungZuruecksetzen();
       this.ich = this.spiegel.akteure[this.eigenId];
       this.spiegel.spieler = this.ich;
       this.status('warte');
@@ -302,7 +407,7 @@ export class OnlineSpiel {
       else this.warteMeldungen.push([z.takt, this.kopie(e)]);
     }
 
-    if (this.zustand === 'warte' && this.ich) this.status('drin');
+    if (this.zustand === 'warte' && this.ich) this.status('drin', this.warWeg ? 'wieder' : '');
   }
 
   kopie(e) {
@@ -496,6 +601,20 @@ export class OnlineSpiel {
 
     const f = Math.exp(-GLAETTEN * dt);
     this.kor.x *= f; this.kor.y *= f; this.kor.z *= f;
+
+    // Waechter: kommt lange nichts mehr an, ist die Leitung tot, auch
+    // wenn der Browser es (noch) nicht meldet - etwa nach dem Aufwachen.
+    // Gezaehlt wird nur, solange die Seite laeuft: stand sie (Hintergrund,
+    // Haenger), liegen die Nachrichten vielleicht nur in der Warteschlange.
+    // Dann bleibt noch die Nachfrist.
+    const uhr = performance.now();
+    const luecke = uhr - this.bildUhr;
+    this.bildUhr = uhr;
+    this.stille = luecke > 1000 ? Math.max(this.stille + 250, STILL - NACHFRIST) : this.stille + luecke;
+    if ((this.zustand === 'drin' || this.zustand === 'warte') && this.ws && this.stille > STILL) {
+      this.leitungWeg(this.ws);
+      this.abgerissen('Verbindung verloren.');
+    }
 
     if (this.versatz === null || !this.pufferN) return;
     const jetzt = performance.now() / 1000;

@@ -89,7 +89,7 @@ export class App {
       waffe: 'sturmgewehr', visier: 0, sprint: false, amBoden: true, tempo: 0, geduckt: false, rutschen: false,
       laden: -1, ladenPhase: 0, schuesse: 0, landung: 0, blickDx: 0, blickDy: 0,
     };
-    this.hz = { sim: null, zeit: 0, fov: 72, hoehe: 800, touch: false, yaw: 0, fps: undefined, online: '', zielName: '', zielFreund: false };
+    this.hz = { sim: null, zeit: 0, fov: 72, hoehe: 800, touch: false, yaw: 0, fps: undefined, online: '', onlineWarnung: false, zielName: '', zielFreund: false };
     this.laden = { p: -1 };
     this.countdownZahl = 0;
     this.zielTakt = 0;
@@ -366,8 +366,13 @@ export class App {
   }
 
   onlineStatus(z, text) {
+    const imSpielNoch = this.online && this.sim === this.online.spiegel;
     if (z === 'drin') {
-      this.onlineDrin();
+      if (imSpielNoch) this.onlineWiederDrin();
+      else this.onlineDrin();
+    } else if (z === 'wieder') {
+      // Nicht rauswerfen: das Bild bleibt stehen, im Hintergrund wird neu verbunden.
+      if (imSpielNoch) this.hud.meldung('Verbindung weg – verbinde neu …', 'hilfe', this.zeit);
     } else if (z === 'fehler' || z === 'voll' || z === 'alt' || z === 'weg') {
       const imSpiel = this.online && this.sim === this.online.spiegel;
       this.onlineBeenden();
@@ -406,6 +411,14 @@ export class App {
     this.klang.fortsetzen();
     this.hud.meldung('Online · du spielst für Team ' + TEAMS[sim.spieler.team].name, 'hilfe', this.zeit);
     if (sim.phase === 'ende') this.hud.ansage('GLEICH GEHT’S LOS', this.zeit, 2.5, 'zahl');
+  }
+
+  /* Nach einem Abbruch wieder verbunden: weiter, wo man war. */
+  onlineWiederDrin() {
+    const sim = this.sim;
+    this.darstellung.figurenVerbinden(sim, false);
+    this.akku = 0;
+    this.hud.meldung('Wieder verbunden', 'hilfe', this.zeit);
   }
 
   /* Wer kam, wer ging, wer wechselt fuer den Ausgleich das Team. */
@@ -999,7 +1012,8 @@ export class App {
     z.yaw = this.eingabe.yaw;
     z.fps = this.einst.fps ? this.fpsText : undefined;
     const on = this.online && sim === this.online.spiegel ? this.online : null;
-    z.online = on ? 'ONLINE · ' + Math.round(on.ping) + ' MS' : '';
+    z.online = !on ? '' : on.zustand === 'drin' ? 'ONLINE · ' + Math.round(on.ping) + ' MS' : 'VERBINDE NEU …';
+    z.onlineWarnung = !!on && on.zustand !== 'drin';
     // Name unter dem Fadenkreuz, zehnmal pro Sekunde
     this.zielTakt -= dt;
     if (this.zielTakt <= 0) {

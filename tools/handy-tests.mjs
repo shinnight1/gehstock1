@@ -9,7 +9,7 @@ import { once } from 'node:events';
 import net from 'node:net';
 import { serverErstellen } from './handy-server.mjs';
 import { OpsOnline } from '../shooter/server/online.mjs';
-import { halloSchreiben, Schreiber, S_WILLKOMMEN } from '../shooter/src/netz/protokoll.js';
+import { halloSchreiben, Schreiber, S_WILLKOMMEN, VERSION } from '../shooter/src/netz/protokoll.js';
 import { zugangPruefen, zugangSpeichern, zugangLesen, zugangSetzen, weltPruefen } from './handy-zugang.mjs';
 
 const zugang = { url: 'https://example-test.upstash.io', token: 'test-only-token-1234567890' };
@@ -195,7 +195,7 @@ test('Online-Match von Gehstock Ops: Status unter /api/ops, WebSocket nur dort u
   const base = 'http://127.0.0.1:' + port;
   let res = await fetch(base + '/api/ops');
   assert.equal(res.status, 200);
-  assert.deepEqual(await res.json(), { spieler: 0, max: 6, version: 1 });
+  assert.deepEqual(await res.json(), { spieler: 0, max: 6, version: VERSION });
   assert.equal(res.headers.get('cache-control'), 'no-store');
   res = await fetch(base + '/api/ops', { method: 'POST' });
   assert.equal(res.status, 405);
