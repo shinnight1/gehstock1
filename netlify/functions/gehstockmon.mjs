@@ -416,6 +416,13 @@ function nurUhrGestellt(vorher, welt, id, jetzt) {
   if (!unterschiede(vorher, welt, '', pfade)) return false;
   return pfade.every((pfad) => pfad === 'players.' + id + '.lastSeen' || NUR_UHR.some((muster) => muster.test(pfad)));
 }
+/* Der Verlauf fuer den Kampfbericht: oben je Verteidiger, wie oft welche
+   Zeile seines Plans griff, darunter der Kampf selbst - zusammen hoechstens
+   sechzig Zeilen. */
+function berichtVerlauf(b) {
+  const bilanz = A.planBilanz(b);
+  return bilanz.concat((b.verlauf || []).slice(-(60 - bilanz.length)));
+}
 function settleBattle(world, p, id, now, requestId) {
   if(finishEncounter(world,p,id,now))return;
   const b = p.arena; if (b.phase !== 'finished' || b.settled) return;
@@ -449,7 +456,7 @@ function settleBattle(world, p, id, now, requestId) {
        nicht dabei war. Beide Aufstellungen stehen dabei, sonst ist der
        Verlauf spaeter nicht mehr zu deuten. */
     runden: b.round, angreifer: b.teams[0].map((u) => u.name), verteidiger: b.teams[1].map((u) => u.name),
-    verlauf: (b.verlauf || []).slice(-60) });
+    verlauf: berichtVerlauf(b) });
   world.reports = world.reports.slice(-150);
 }
 

@@ -45,12 +45,15 @@ export function morgenbericht(world, p, id, seit, now, extra = {}) {
   for (const r of kaempfe) {
     const angreifer = world.players[r.attackerId], feld = D.FELDER[r.territoryId - 1];
     if (!angreifer || !feld) continue;
+    /* Der Kampfbericht dazu: dort steht, welche Regel deines Plans griff,
+       und von dort geht es direkt in den Plan. */
+    const bericht = r.hatVerlauf || r.verlauf ? { bericht: r.id } : {};
     if (r.winner === 'wir') {
       const t = world.territories[r.territoryId - 1], rache = X.revanche(p, t, now);
       zeilen.push({ art: 'schlecht', text: '⚔️ ' + angreifer.name + ' hat dir ' + feld.name + ' abgenommen.'
         + (rache ? ' Revanche möglich: +' + Math.round(X.REVANCHE_BONUS * 100) + ' %, noch ' + Math.max(1, Math.round((rache.bis - now) / 3600000)) + ' Std.' : ''),
-        ...(rache ? { revanche: r.territoryId } : {}) });
-    } else if (r.winner !== 'stale') zeilen.push({ art: 'gut', text: '🛡️ Deine Verteidigung auf ' + feld.name + ' hielt gegen ' + angreifer.name + '.' });
+        ...(rache ? { revanche: r.territoryId } : {}), ...bericht });
+    } else if (r.winner !== 'stale') zeilen.push({ art: 'gut', text: '🛡️ Deine Verteidigung auf ' + feld.name + ' hielt gegen ' + angreifer.name + '.', ...bericht });
   }
   const raub = (world.reports || []).filter((r) => r.defenderId === id && r.time > seit && /erbeutet ein Ei/.test(r.text || ''));
   for (const r of raub) zeilen.push({ art: 'schlecht', text: '🥚 ' + (world.players[r.attackerId]?.name || 'Jemand') + ' hat dir ein Ei gestohlen.' });

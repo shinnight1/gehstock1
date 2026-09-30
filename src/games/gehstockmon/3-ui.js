@@ -81,7 +81,7 @@
     var bautenEbene=el('div',undefined,'gm-bauten-ebene');root.appendChild(bautenEbene);
     var bauten=R.mountBauten({el:el,button:button,layer:bautenEbene,oeffnen:{stadt:stadt.menu,hafen:stadt.hafen,haendler:stadt.haendler,tausch:stadt.tausch,schmiede:stadt.schmiede,
       rathaus:function(){adventures.rathaus();},streifzug:function(){adventures.streifzuege();}}});
-    var heute=R.mountHeute({revanche:function(id){closeDrawer();selectField(id,true);if(world&&world.distanceTo(id)>=10)world.walkTo(id);},el:el,button:button,drawer:drawer,root:root,open:openDrawer,closeDrawer:closeDrawer,request:requestOnline,apply:applyOnline,error:onlineError,notify:notify,busy:function(){return busy;},now:now,sfx:host.sfx,after:host.after,cancel:host.cancel,playerId:function(){return online&&online.playerId;}});
+    var heute=R.mountHeute({revanche:zurRevanche,kampfbericht:berichtOeffnen,el:el,button:button,drawer:drawer,root:root,open:openDrawer,closeDrawer:closeDrawer,request:requestOnline,apply:applyOnline,error:onlineError,notify:notify,busy:function(){return busy;},now:now,sfx:host.sfx,after:host.after,cancel:host.cancel,playerId:function(){return online&&online.playerId;}});
     /* Das Live-Duell nutzt denselben Kasten wie die Arena. */
     /* Der Joystick wird dabei jedes Mal losgelassen: ging ein Fenster auf, waehrend man ihn hielt,
        merkte er sich den alten Finger und nahm danach keinen neuen mehr an. */
@@ -224,7 +224,7 @@
        du nicht selbst am Zug bist - beim Verteidigen deiner Gebiete, in der
        Arena und in jedem Kampf, den ein anderer gegen dich fuehrt. */
     function planTeil(id,k){
-      drawer.appendChild(el('h3','Kampfplan'));
+      drawer.appendChild(el('h3','Kampfplan','gm-plan-kopf'));
       drawer.appendChild(el('p','Diese drei Regeln gelten, wenn '+k.name+' ohne dich kämpft: beim Verteidigen deiner Außenposten und wenn dich jemand in der Arena herausfordert. Von oben nach unten wird die erste Regel genommen, die passt und gerade möglich ist.'));
       var plan=A.planOder(st.plaene&&st.plaene[id]),felder=[];
       plan.forEach(function(zeile,i){
@@ -247,7 +247,9 @@
       drawer.appendChild(speichern);
       if(!(st.plaene&&st.plaene[id]))drawer.appendChild(el('p','Noch kein eigener Plan gespeichert - bis dahin kämpft '+k.name+' nach der Faustregel seiner Rolle. Die Regeln oben sind nur ein Vorschlag, bis du sie speicherst.','gm-plan-hinweis'));
     }
-    function showMon(id){var k=X.mon(st,id);if(!k||!openDrawer(k.name))return;drawer.style.setProperty('--rarity',D.SELTENHEITEN[k.seltenheit].farbe);var hero=el('div',undefined,'gm-mon-hero');hero.appendChild(artGross(k));hero.appendChild(el('span',D.SELTENHEITEN[k.seltenheit].name,'gm-rarity-label'));drawer.appendChild(hero);drawer.appendChild(el('p',k.lore));var s=A.stats(k);drawer.appendChild(el('p',s.hp+' KP · '+s.ang+' Angriff · '+s.tempo+' Tempo','gm-mon-stats'));
+    /* zumPlan: aus dem Kampfbericht - dann steht der Kampfplan gleich oben,
+       statt unter Portrait, Werten und Runenstufe zu liegen. */
+    function showMon(id,zumPlan){var k=X.mon(st,id);if(!k||!openDrawer(k.name))return;drawer.style.setProperty('--rarity',D.SELTENHEITEN[k.seltenheit].farbe);var hero=el('div',undefined,'gm-mon-hero');hero.appendChild(artGross(k));hero.appendChild(el('span',D.SELTENHEITEN[k.seltenheit].name,'gm-rarity-label'));drawer.appendChild(hero);drawer.appendChild(el('p',k.lore));var s=A.stats(k);drawer.appendChild(el('p',s.hp+' KP · '+s.ang+' Angriff · '+s.tempo+' Tempo','gm-mon-stats'));
       var u=A.create([k],[k],{}).teams[0][0];
       drawer.appendChild(el('p',k.rolle+' · '+A.faehigkeit(u).name+' · '+rollenText(k.typ),'gm-mon-rolle'));
       /* Was die Faehigkeit genau tut - bei den neuen mit den Werten, die zur
@@ -265,6 +267,7 @@
       else{drawer.appendChild(el('h3','Runenstufe '+k.upgrade+'/'+X.UPGRADE_LIMIT));drawer.appendChild(el('p','+'+Math.round(k.upgrade*A.UPGRADE_BONUS*100)+' % KP und Angriff · maximal +'+Math.round(X.UPGRADE_LIMIT*A.UPGRADE_BONUS*100)+' %. Ab Stufe '+A.SCHNELL_AB+' lädt der Kraftschlag eine Runde schneller, ab Stufe '+A.LADUNG_AB+' gibt es eine dritte Ladung der Fähigkeit. Tempo bleibt gleich.'));drawer.appendChild(el('p','Jetzt: '+A.ladungen(k)+' Ladungen · Kraftschlag alle '+A.powerPause(k)+' Runden.'));drawer.appendChild(el('p','Passende Runen: '+st.runes[k.seltenheit]+' × '+D.SELTENHEITEN[k.seltenheit].name));var rune=button(k.upgrade===5?'Maximale Runenstufe':'Verbessern · '+(k.upgrade+1)+' passende Rune(n)',function(){perform('mon_upgrade',{monId:id,level:k.upgrade},'mons');},'gm-button gm-primary');rune.disabled=k.upgrade>=5||st.runes[k.seltenheit]<k.upgrade+1;drawer.appendChild(rune);planTeil(id,k);drawer.appendChild(el('h3','Ins Kampfteam stellen'));
       drawer.appendChild(el('p','Das Kampfteam greift an und hält jeden Außenposten, für den du keine eigene Besatzung gesetzt hast. Ein Mon darf zugleich im Kampfteam und in Besatzungen stehen.'));
       st.truppe.forEach(function(old,i){var b=button((i+1)+'. Platz: '+D.mon(old).name,function(){var squad=st.truppe.slice(),at=squad.indexOf(id);if(at>=0)squad[at]=old;squad[i]=id;perform('defend',{squad:squad},'mons');});b.disabled=old===id;drawer.appendChild(b);});}
+      if(zumPlan){var kopf=drawer.querySelector('.gm-plan-kopf');if(kopf&&kopf.scrollIntoView)kopf.scrollIntoView({block:'start'});}
     }
     /* Wogegen eine Rolle gut steht und wogegen nicht - ein Satz, damit man das
        Dreieck nicht erraten muss. */
@@ -428,7 +431,7 @@
     }
     function refreshDrawer(view){if(view==='bericht')showOnline();else if(stadt.views.indexOf(view)>=0)stadt.refresh(view);else if(view==='eggs')showEggs();else if(view==='posts')showOutposts();else if(view&&view.indexOf('post:')===0)showPost(Number(view.slice(5)));else if(view==='mons')showCollection();else if(view==='heute')heute.zeigen();else adventures.refresh(view);}
     function perform(op,data,view){if(!connected||busy||battle||dueling())return;view=view||drawerView;
-      requestOnline(op,data).then(function(res){if(dead)return;applyOnline(res);refreshDrawer(view);if(res.schlupf&&R.schlupfSzene){R.schlupfSzene({root:root,el:el,after:host.after,sfx:host.sfx},res,function(){if(!dead)showMon(res.monId);});}else if(res.monId){showMon(res.monId);host.sfx('win');}notify(res.message||(R.adminOverride?'In der Testzone angewendet · ungespeichert.':'Gespeichert.'));}).catch(onlineError);
+      requestOnline(op,data).then(function(res){if(dead)return;applyOnline(res);refreshDrawer(view);if(res.schlupf&&R.schlupfSzene){R.schlupfSzene({root:root,el:el,after:host.after,sfx:host.sfx},res,function(){if(!dead)showMon(res.monId);});}else if(res.monId){showMon(res.monId,op==='plan');host.sfx('win');}notify(res.message||(R.adminOverride?'In der Testzone angewendet · ungespeichert.':'Gespeichert.'));}).catch(onlineError);
     }
     /* Zurueck zum Start. Eine Positionsmeldung, die gerade unterwegs ist, wird
        erst abgewartet - kaeme sie nach dem Sprung an, stuende die Figur wieder am alten Ort. */
@@ -546,12 +549,26 @@
       if(!r.verlauf&&r.hatVerlauf){requestOnline('kampfbericht',{berichtId:r.id}).then(function(res){r.verlauf=res.verlauf||[];zeigeBericht(r);}).catch(function(err){notify((err&&err.message)||'Der Kampfbericht ließ sich nicht laden.');showOnline();});return;}
       if(!openDrawer('Kampfbericht · '+D.FELDER[(r.territoryId||1)-1].name,'bericht'))return;
       drawer.appendChild(el('p',r.text));
+      if(online&&r.defenderId===online.playerId)berichtHandeln(r);
       drawer.appendChild(el('p','Angriff: '+(r.angreifer||[]).join(', '),'gm-report-seite'));
       drawer.appendChild(el('p','Verteidigung: '+(r.verteidiger||[]).join(', '),'gm-report-seite'));
       drawer.appendChild(el('h3',r.runden+' Runden'));
-      (r.verlauf||[]).forEach(function(zeile){drawer.appendChild(el('p',zeile,'gm-report-zeile'));});
+      (r.verlauf||[]).forEach(function(zeile){drawer.appendChild(el('p',zeile,'gm-report-zeile'+(zeile.indexOf('📋')===0?' gm-report-plan':'')));});
       drawer.appendChild(button('Zurück zur Spielerwelt',showOnline,'gm-button gm-secondary'));
     }
+    /* Wer verteidigt hat, soll aus dem Bericht direkt etwas machen koennen:
+       den Plan der Mons nachschaerfen, die dort standen, und - wenn das Gebiet
+       weg ist - die Revanche holen. Sonst endet der Bericht beim Lesen. */
+    function berichtHandeln(r){
+      var box=el('div',undefined,'gm-bericht-handeln'),t=territories()[(r.territoryId||1)-1];
+      if(r.winner==='wir'&&X.revanche(st,t,now()))box.appendChild(button('🔥 Zur Revanche · +'+Math.round(X.REVANCHE_BONUS*100)+' %',function(){zurRevanche(r.territoryId);},'gm-button gm-primary'));
+      var eigene=[];
+      (r.verteidiger||[]).forEach(function(name){var k=D.KATALOG.find(function(m){return m.name===name;});if(k&&st.besitz.indexOf(k.id)>=0&&eigene.indexOf(k)<0)eigene.push(k);});
+      eigene.forEach(function(k){box.appendChild(button('📋 Plan von '+k.name+' anpassen',function(){showMon(k.id,true);},'gm-button gm-secondary'));});
+      if(box.children.length)drawer.appendChild(box);
+    }
+    function berichtOeffnen(id){var r=(online&&online.reports||[]).find(function(x){return x.id===id;});if(r)zeigeBericht(r);else notify('Diesen Kampfbericht gibt es nicht mehr.');}
+    function zurRevanche(id){closeDrawer();selectField(id,true);if(world&&world.distanceTo(id)>=10)world.walkTo(id);}
     function showOnline(){if(!openDrawer('Die Spielerwelt','online'))return;drawer.appendChild(el('p','Du teilst diese Welt mit allen Hideout-Spielern. Erobere Gebiete von Spielern und Computergegnern. Deine gespeicherten Mons verteidigen auch, wenn du offline bist.'));
       if(R.adminOverride){drawer.appendChild(el('p','GEMEINSAME TESTZONE · Andere Tester sind sichtbar und können mit dir spielen. Alles bleibt flüchtig: Kein Gold, kein Kauf und kein Kampf verändert die echte Spielerwelt.'));drawer.appendChild(button('Testzone verlassen',function(){R.adminOverride=false;saveAdmin(false);R.online.resetTest();online=null;battle=null;connectWorld();}));}/* Live-Duelle: wer gerade kämpft, und wer zusehen will. */
       var duelle=duellUi.laufend();if(duelle.length){drawer.appendChild(el('h3','Live-Duelle'));duelle.forEach(function(x){drawer.appendChild(button('👀 Zuschauen: '+x.namen[0]+' gegen '+x.namen[1]+' · Runde '+x.runde,function(){closeDrawer();duellUi.zuschauen(x.id);}));});}

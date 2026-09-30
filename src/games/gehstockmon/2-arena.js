@@ -221,7 +221,9 @@
       active: [0,0], events: [], startedAt: o.now || Date.now(), lastActionAt: o.now || Date.now() };
   };
   function active(s, side) { return s.teams[side][s.active[side]]; }
-  function record(s, text, actor, target, delta, kind) { s.events.push({ text: text, actor: actor && actor.uid, target: target && target.uid, delta: delta || 0, kind: kind || 'move', state: s.teams.map(function (team) { return team.map(function (u) { return u.hp; }); }), active: s.active.slice() }); }
+  /* Folgt ein Verteidiger seinem Plan, haengt die Regel an der ersten Zeile,
+     die er in diesem Zug schreibt (siehe attack). */
+  function record(s, text, actor, target, delta, kind) { if (s.hinweis && actor && actor.uid === s.hinweis.uid) { text += s.hinweis.text; delete s.hinweis; } s.events.push({ text: text, actor: actor && actor.uid, target: target && target.uid, delta: delta || 0, kind: kind || 'move', state: s.teams.map(function (team) { return team.map(function (u) { return u.hp; }); }), active: s.active.slice() }); }
   /* Das Rollen-Dreieck. Vorher entschieden nur KP, Angriff und Tempo - vier
      Rollen, die einander nichts anhaben konnten, und die Aufstellung war eine
      Zahlensumme. Jetzt hat jede Rolle eine, gegen die sie gut steht:
@@ -269,9 +271,10 @@
       record(s, me.name + ' blutet: ' + n + ' Schaden.', null, me, -n, 'blutung');
     }
   }
-  function attack(s, side, move) {
+  function attack(s, side, move, regel) {
     var me = active(s, side), other = active(s, 1-side); if (me.hp <= 0 || other.hp <= 0) return;
     zustaende(s, me); if (me.hp <= 0) return;
+    if (regel !== undefined && regel !== null) { zaehle(s, me, regel); s.hinweis = { uid: me.uid, text: A.regelHinweis(me, regel) }; }
     /* Gelaehmt bleiben Stockhieb und Deckung. Auch ein Plan oder die KI, die
        trotzdem zur Faehigkeit greifen, schlagen dann nur zu. */
     var gelaehmt = me.gelaehmt > 0;
@@ -300,6 +303,7 @@
       else if (f.skaliert) neueFaehigkeit(s, side, me, other, f, A.skala(me));
       else damage(s,me,other,me.ang*f.faktor,f.name);
     } else damage(s,me,other,me.ang,'Stockhieb');
+    delete s.hinweis;
   }
   function neueFaehigkeit(s, side, me, other, f, k) {
     var treffer = function () { damage(s, me, other, me.ang * A.faehigkeitFaktor(me), f.name); };
@@ -412,18 +416,26 @@
     if (f.id === 'runenraub') return other.charges > 0;
     return false;
   }
-  A.ai = function(s) {
+  /* Der Zug des Verteidigers und woher er kommt: regel ist die Planzeile
+     (0 bis 2), -1 wenn er einen Plan hat, aber keine Zeile passte, und null
+     ohne Plan. Der Kampfbericht zeigt das - sonst sieht niemand, was sein
+     Plan im Kampf wirklich tut, und niemand hat einen Grund, ihn zu aendern. */
+  A.aiWahl = function(s) {
     var me=active(s,1), other=active(s,0);
-    var moeglich = A.moves(me, s.round);
+    var moeglich = A.moves(me, s.round), mitPlan = A.planGueltig(me.plan);
     function erlaubt(id) { var m = moeglich.find(function (v) { return v.id === id; }); return m && m.enabled; }
     /* Erst der Plan des Verteidigers, Zeile fuer Zeile. */
-    if (A.planGueltig(me.plan)) {
+    if (mitPlan) {
       for (var i = 0; i < me.plan.length; i++) {
         var wenn = me.plan[i][0], dann = me.plan[i][1];
         if (wenn === 'aus' || !trifftZu(wenn, me, other, s.round)) continue;
-        if (erlaubt(dann)) return dann;
+        if (erlaubt(dann)) return { zug: dann, regel: i };
       }
     }
+    return { zug: faustregel(s, me, other, erlaubt), regel: mitPlan ? -1 : null };
+  };
+  A.ai = function(s) { return A.aiWahl(s).zug; };
+  function faustregel(s, me, other, erlaubt) {
     /* Die neuen Faehigkeiten wollen je ihren eigenen Moment - die alten
        folgen weiter der Faustregel ihrer Rolle. */
     var neu = kiNeu(A.faehigkeit(me), me, other, s);
@@ -434,24 +446,49 @@
        dieser Regel und 75 % statt 60 % Schaden sind es 48 % (27.09.2026). */
     else if(me.charges>0 && ((me.role===2 && me.hp<me.maxHp*0.65)||(me.role===1 && other.hp<other.maxHp*0.35)||(me.role===3 && (A.faehigkeit(me).id==='blendstoss'?other.charges>0:!other.weakened))||(me.role===0 && s.round%3===1)))return 'special';
     return s.round>=me.powerReady&&erlaubt('power')?'power':'strike';
+  }
+  function wennText(id) { var w = A.PLAN_WENN.find(function (v) { return v.id === id; }); return w ? w.text : id; }
+  A.regelHinweis = function (u, regel) {
+    if (regel === null || regel === undefined || !A.planGueltig(u.plan)) return '';
+    return regel < 0 ? ' (keine Regel passte - Faustregel)' : ' (Regel ' + (regel + 1) + ': ' + wennText(u.plan[regel][0]) + ')';
+  };
+  /* Je Verteidiger mit Plan: wie oft jede Zeile griff, an vierter Stelle wie
+     oft keine. Klein genug, um im Kampfstand mitzureisen. */
+  function zaehle(s, u, regel) {
+    if (!A.planGueltig(u.plan)) return;
+    s.planBilanz = s.planBilanz || {};
+    var z = s.planBilanz[u.uid] || (s.planBilanz[u.uid] = [0, 0, 0, 0]);
+    z[regel < 0 ? 3 : regel]++;
+  }
+  /* Eine Zeile je Verteidiger fuer den Kopf des Kampfberichts, etwa
+     "📋 Wärter: Regel 1 (in Runde 1) ×1 · Regel 2 (Gegner unter 40 %) ×0 · keine passte ×5".
+     Auch eine Regel, die nie griff, steht da - gerade das will man wissen. */
+  A.planBilanz = function (b) {
+    var bilanz = (b && b.planBilanz) || {};
+    return (b && b.teams ? b.teams[1] : []).filter(function (u) { return bilanz[u.uid] && A.planGueltig(u.plan); }).map(function (u) {
+      var z = bilanz[u.uid], teile = [];
+      u.plan.forEach(function (zeile, i) { if (zeile[0] !== 'aus') teile.push('Regel ' + (i + 1) + ' (' + wennText(zeile[0]) + ') ×' + z[i]); });
+      if (z[3]) teile.push('keine passte ×' + z[3]);
+      return '📋 ' + u.name + ': ' + teile.join(' · ');
+    });
   };
   A.turn = function (original, action) {
     if(!original || original.phase==='finished') throw new Error('Dieser Kampf ist bereits beendet.');
     var s=JSON.parse(JSON.stringify(original)); s.events=[]; var me=active(s,0), enemy=active(s,1);
     if(action.kind==='switch') {
       if(!Number.isInteger(action.slot)||!s.teams[0][action.slot]||s.teams[0][action.slot].hp<=0||action.slot===s.active[0]) throw new Error('Wähle ein anderes kampffähiges Mon.');
-      var forced=s.phase==='replace', enemyMove=A.ai(s); me.shield=0; s.active[0]=action.slot; s.phase='choose';
+      var forced=s.phase==='replace', enemyMove=A.aiWahl(s); me.shield=0; s.active[0]=action.slot; s.phase='choose';
       record(s,active(s,0).name+' wird in die Arena geschickt.',active(s,0),null,0,'send');
-      if(!forced){attack(s,1,enemyMove);s.round++;finish(s);}
+      if(!forced){attack(s,1,enemyMove.zug,enemyMove.regel);s.round++;finish(s);}
     } else {
       if(s.phase==='replace')throw new Error('Schicke zuerst ein neues Mon in die Arena.');
       var move=A.moves(me,s.round).find(function(m){return m.id===action.move && m.enabled;});
       if(action.kind!=='move'||!move)throw new Error('Diese Attacke ist gerade nicht verfügbar.');
-      var ai=A.ai(s), enemyUid=enemy.uid, meUid=me.uid;
+      var ai=A.aiWahl(s), enemyUid=enemy.uid, meUid=me.uid;
       var first=move.id==='guard'||me.speed>=enemy.speed?0:1;
       [first,1-first].forEach(function(side){
         var actor=active(s,side), target=active(s,1-side);
-        if(actor.hp>0 && target.hp>0 && actor.uid===(side===0?meUid:enemyUid))attack(s,side,side===0?move.id:ai);
+        if(actor.hp>0 && target.hp>0 && actor.uid===(side===0?meUid:enemyUid))attack(s,side,side===0?move.id:ai.zug,side===0?undefined:ai.regel);
       });
       [0,1].forEach(function(side){if(active(s,side).hp<=0)record(s,active(s,side).name+' ist kampfunfähig.',active(s,side),null,0,'faint');});
       s.round++;finish(s);

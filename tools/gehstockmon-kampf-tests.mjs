@@ -166,6 +166,33 @@ await test('A finished battle carries its whole course, and the server files it'
   assert.ok(bericht.runden>=1);
   assert.equal(bericht.angreifer.length,4);
   assert.ok(bericht.verlauf.length<=60,'but never more than sixty lines');
+  /* Mooswacht kaempft nach seinem Feldplan ("immer -> Stockhieb"). */
+  assert.match(bericht.verlauf[0],/^📋 .+: Regel 1 \(immer\) ×\d+$/,'the report opens with how the defenders\' plan played out');
+  assert.ok(bericht.verlauf.some(z=>z.endsWith('(Regel 1: immer)')),'and names the rule behind each defender move');
+});
+await test('A defender with a plan names the rule it followed, and the plan is summed up',()=>{
+  const plan=[['runde_1','guard'],['feind_schwach','power'],['aus','strike']];
+  let b=A.create([D.mon('klinge')],[Object.assign({},D.mon('bollwerk'),{plan})],{});
+  assert.deepEqual(A.aiWahl(b),{zug:'guard',regel:0},'round one: the first rule');
+  assert.equal(A.ai(b),'guard','A.ai still answers with the move alone');
+  b=A.turn(b,{kind:'move',move:'strike'});
+  assert.ok(b.events.some(e=>e.text==='Bollwerk geht in Deckung. (Regel 1: in Runde 1)'),'the line names the rule and its condition');
+  assert.equal(A.aiWahl(b).regel,-1,'round two: no rule fits, the rule of thumb decides');
+  b=A.turn(b,{kind:'move',move:'strike'});
+  assert.ok(b.verlauf.some(z=>z.endsWith('(keine Regel passte - Faustregel)')));
+  assert.ok(!b.verlauf.some(z=>z.startsWith('Klinge')&&z.includes('Regel')),'the attacker plays by hand and gets no rule');
+  assert.ok(!('hinweis' in b),'no hint is left behind in the battle state');
+  b=auskaempfen(b,()=>'strike');
+  const zeilen=A.planBilanz(b);
+  assert.equal(zeilen.length,1,'one line per defender with a plan');
+  assert.match(zeilen[0],/^📋 Bollwerk: Regel 1 \(in Runde 1\) ×1 · Regel 2 \(Gegner unter 40 %\) ×\d+ · keine passte ×[1-9]\d*$/);
+  assert.ok(!zeilen[0].includes('Regel 3'),'a switched-off rule is left out');
+  /* Ohne Plan bleibt alles wie bisher. */
+  let ohne=A.create([D.mon('klinge')],[D.mon('bollwerk')],{});
+  assert.equal(A.aiWahl(ohne).regel,null);
+  ohne=auskaempfen(ohne,()=>'strike');
+  assert.ok(!ohne.verlauf.some(z=>z.includes('Regel')),'without a plan no line changes');
+  assert.deepEqual(A.planBilanz(ohne),[]);
 });
 await test('Trading swaps two Mons, only within one rarity, and nothing is duplicated',async()=>{
   let time=mon;const db=store(),handler=createHandler({store:db,presenceStore:store(),now:()=>time});let serial=0;

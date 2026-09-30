@@ -69,10 +69,12 @@
       var liste = el('ul', undefined, 'gm-bericht-liste');
       b.zeilen.forEach(function (z) {
         var zeile = el('li', undefined, z.art);zeile.appendChild(el('span', z.text));
-        if (z.revanche && c.revanche) {
-          var los = button('Zur Revanche', function () { c.revanche(z.revanche); }, 'gm-button gm-secondary');
-          los.style.marginTop = '8px';zeile.appendChild(el('br'));zeile.appendChild(los);
-        }
+        var knoepfe = [];
+        if (z.revanche && c.revanche) knoepfe.push(button('Zur Revanche', function () { c.revanche(z.revanche); }, 'gm-button gm-secondary'));
+        /* Der ganze Kampf mit den Regeln deines Plans - und von dort in den Plan. */
+        if (z.bericht && c.kampfbericht) knoepfe.push(button('Kampfbericht', function () { c.kampfbericht(z.bericht); }, 'gm-button gm-secondary'));
+        if (knoepfe.length) zeile.appendChild(el('br'));
+        knoepfe.forEach(function (b) { b.style.marginTop = '8px'; b.style.marginRight = '8px'; zeile.appendChild(b); });
         liste.appendChild(zeile);
       });
       if (b.zeilen.length) drawer.appendChild(liste);

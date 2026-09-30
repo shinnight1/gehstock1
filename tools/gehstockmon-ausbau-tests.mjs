@@ -284,6 +284,7 @@ await test('Losing a territory to a player opens a revenge with a bonus, the rep
   assert.ok(r.morgenbericht,'a report after an hour away');
   const zeile=r.morgenbericht.zeilen.find(z=>/Ben hat dir Tauwiese abgenommen/.test(z.text));
   assert.ok(zeile&&zeile.revanche===6,'the report offers the revenge');
+  assert.ok(zeile.bericht&&r.reports.some(x=>x.id===zeile.bericht),'and points to the battle report she can open');
   assert.ok(r.morgenbericht.neuigkeiten.some(t=>/Ben erobert Tauwiese von Anna/.test(t)),'and tells the news');
   /* Die Revanche: dieselbe Truppe kaempft mit Zuschlag. */
   pa().besitz.push(...stark);
