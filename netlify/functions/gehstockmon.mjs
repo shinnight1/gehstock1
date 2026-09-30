@@ -618,7 +618,7 @@ export function createHandler({ store, presenceStore, now = Date.now, random = M
           if(activeDungeon(world,p)&&mutations.includes(body.op)&&!X.DUNGEON_OPS.includes(body.op))throw new GameError('Beende zuerst deine Dungeon-Expedition.',409);
           if(p.raidLock?.until>timestamp&&(['arena_start','trainer_start','raid_start','defend'].includes(body.op)||(['hatch','incubate'].includes(body.op)&&body.eggId===p.raidLock.eggId)))throw new GameError('Deine Verteidigung hält gerade einen Überfall ab. Dieses Ei bleibt bis zum Ergebnis reserviert.',409);
           if(X.DUNGEON_OPS.includes(body.op)||body.op==='mon_upgrade')Object.assign(extra,await dungeonAction({world,p,id,body,now:timestamp,presence:presenceStore||speicher('hgh-gehstockmon-presence')}));
-          else if(X.STADT_OPS.includes(body.op))Object.assign(extra,await stadtAction({world,p,id,body,now:timestamp,presence:presenceStore||speicher('hgh-gehstockmon-presence')}));
+          else if(X.STADT_OPS.includes(body.op))Object.assign(extra,await stadtAction({world,p,id,body,now:timestamp,presence:presenceStore||speicher('hgh-gehstockmon-presence'),random}));
           else if(X.ALLTAG_OPS.includes(body.op))Object.assign(extra,alltagAction({world,p,id,body,now:timestamp}));
           else if(X.WAHL_OPS.includes(body.op))Object.assign(extra,inselAction({world,p,id,body,now:timestamp}));
           else if(X.HANDEL_OPS.includes(body.op))Object.assign(extra,await handelAction({world,p,id,body,now:timestamp,presence:presenceStore||speicher('hgh-gehstockmon-presence')}));

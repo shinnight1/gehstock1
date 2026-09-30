@@ -145,6 +145,47 @@
       perle.appendChild(perleKaufen);raster.appendChild(perle);
       drawer.appendChild(raster);
     }
+    /* Der Gluecksautomat (2-automat.js). Das Ergebnis kommt vom Server; die
+       Walzen drehen erst, wenn es da ist, und halten dann von links nach
+       rechts an. Die Chance steht offen dran. */
+    var walzenZuletzt=['gold','eier','rune'],dreht=false;
+    function walzenBild(sym){var b=R.symbol&&R.symbol(sym,'gm-walze-bild');return b||el('span',sym,'gm-walze-text');}
+    function automatTeil(){
+      var s=state(),A2=X.AUTOMAT,st=X.automatStand(s,c.now()),voll=s.eggs.length>=R.wirtschaft.BAG_LIMIT;
+      var karte=el('article',undefined,'gm-quest-card gm-automat');
+      karte.appendChild(titel('Glücksautomat','truhe'));
+      karte.appendChild(el('p','Drei Eier bringen ein Ei. Chance '+String(A2.chance*100).replace('.',',')+' % je Spiel, höchstens '+A2.proTag+' Eier am Tag.'));
+      var walzen=el('div',undefined,'gm-walzen');
+      walzenZuletzt.forEach(function(sym){var f=el('div',undefined,'gm-walze');f.appendChild(walzenBild(sym));walzen.appendChild(f);});
+      karte.appendChild(walzen);
+      karte.appendChild(el('p',st.frei?'Heute noch '+st.frei+(st.frei===1?' Ei':' Eier')+' zu gewinnen.':'Für heute leergespielt. Morgen läuft er wieder.','gm-plan-hinweis'));
+      var knopf=button(!st.frei?'Leergespielt':voll?'Bruttasche voll':'Spielen · '+A2.einsatz+' Gold',spielen,'gm-button gm-primary');
+      knopf.disabled=dreht||c.busy()||!st.frei||voll||s.gold<A2.einsatz;
+      karte.appendChild(knopf);drawer.appendChild(karte);
+    }
+    function spielen(){
+      if(dreht)return;
+      var oben=drawer.scrollTop;
+      c.request('automat_spielen',{}).then(function(res){
+        c.apply(res);
+        var erg=res.automat;
+        if(!erg){if(aktuell){aktuell();drawer.scrollTop=oben;}if(res.message)c.notify(res.message);return;}
+        dreht=true;
+        if(aktuell){aktuell();drawer.scrollTop=oben;}
+        drehen(erg,res.message);
+      }).catch(function(error){c.error(error);});
+    }
+    /* Alle drei drehen, dann steht eine nach der anderen. */
+    function drehen(erg,meldung){
+      var walzen=drawer.querySelector('.gm-walzen'),felder=walzen?[].slice.call(walzen.children):[],takt=null;
+      function zeige(f,sym){f.textContent='';f.appendChild(walzenBild(sym));}
+      function ende(){dreht=false;walzenZuletzt=erg.walzen.slice();if(takt)clearInterval(takt);if(meldung)c.notify(meldung);if(aktuell&&!drawer.hidden&&drawer.contains(walzen)){var oben=drawer.scrollTop;aktuell();drawer.scrollTop=oben;var neu=drawer.querySelector('.gm-walzen');if(neu&&erg.gewonnen)neu.classList.add('gewonnen');}}
+      if(felder.length!==3){ende();return;}
+      var S=X.AUTOMAT.symbole,laeuft=[true,true,true];
+      felder.forEach(function(f){f.classList.add('dreht');});
+      takt=setInterval(function(){felder.forEach(function(f,i){if(laeuft[i])zeige(f,S[Math.floor(Math.random()*S.length)]);});},90);
+      [0,1,2].forEach(function(i){setTimeout(function(){laeuft[i]=false;felder[i].classList.remove('dreht');zeige(felder[i],erg.walzen[i]);if(i===2)setTimeout(ende,250);},700+i*450);});
+    }
     /* Runenhandel: feste Preise, 70 % Ankauf, je Woche gedeckelt (2-handel.js).
        Offen erst, wenn die Markthalle steht. */
     function runenhandelTeil(){
@@ -287,7 +328,7 @@
       chronikTeil(stand.turnier);
     });}
     function zeigeHafen(){fenster('Hafenkontor','hafen',function(){hafenTeil(stand.stadt);kontorTeil();});}
-    function zeigeHaendler(){fenster('Händler','haendler',function(){haendlerTeil();runenhandelTeil();});}
+    function zeigeHaendler(){fenster('Händler','haendler',function(){haendlerTeil();automatTeil();runenhandelTeil();});}
     function zeigeTausch(){fenster('Tauschhaus','tausch',function(){tauschTeil(stand.tausch);});}
     function zeigeSchmiede(){fenster('Runenschmiede','schmiede',function(){schmiedeTeil();});}
     var FENSTER={stadt:zeigeArena,hafen:zeigeHafen,haendler:zeigeHaendler,tausch:zeigeTausch,schmiede:zeigeSchmiede};

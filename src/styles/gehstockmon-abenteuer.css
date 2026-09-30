@@ -154,6 +154,16 @@
 .gm-projekt-symbol{width:26px;height:26px;flex:none;pointer-events:none;filter:drop-shadow(0 1px 2px #0008)}
 .gm-resource-symbol{width:18px;height:18px;vertical-align:-4px;margin-right:5px}
 .gm-waren-bild{display:block;width:72px;height:72px;margin:2px auto 8px;filter:drop-shadow(0 4px 6px #0009)}
+/* Gluecksautomat beim Haendler (2-automat.js, 2-stadt-ui.js) */
+.gm-automat{margin-top:14px}
+.gm-walzen{display:flex;gap:12px;justify-content:center;margin:12px 0}
+.gm-walze{width:78px;height:78px;border-radius:14px;background:#0b171b;border:2px solid #2f5560;display:grid;place-items:center;overflow:hidden;transition:border-color .2s,box-shadow .2s}
+.gm-walze-bild{width:58px;height:58px;object-fit:contain;filter:drop-shadow(0 3px 4px #0009)}
+.gm-walze-text{font-size:13px;color:#cfe3e7}
+.gm-walze.dreht .gm-walze-bild{animation:gm-walze-dreht .09s linear infinite;opacity:.75}
+@keyframes gm-walze-dreht{from{transform:translateY(-35%)}to{transform:translateY(35%)}}
+.gm-walzen.gewonnen .gm-walze{border-color:#f0ca80;box-shadow:0 0 18px #f0ca8088}
+@media (prefers-reduced-motion:reduce){.gm-walze.dreht .gm-walze-bild{animation:none}}
 .gm-titel-symbol{width:30px;height:30px;vertical-align:middle;margin-right:8px}
 /* Auf Tablets ist die Projektleiste schmal - dort bleibt es beim Text. */
 @media (pointer:coarse){.gm-dock button{gap:5px}.gm-dock button .gm-knopf-symbol{width:22px;height:22px}.gm-projekt-symbol{display:none}}

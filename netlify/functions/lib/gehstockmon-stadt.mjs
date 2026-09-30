@@ -176,7 +176,7 @@ export function stadtSettle(world,p,id,now){
   return true;
 }
 
-export async function stadtAction({world,p,id,body,now,presence}){
+export async function stadtAction({world,p,id,body,now,presence,random=Math.random}){
   const op=body.op,extra={};
   if(!X.STADT_OPS.includes(op))return extra;
   async function amTor(){
@@ -206,6 +206,24 @@ export async function stadtAction({world,p,id,body,now,presence}){
     E.buchen(p,-X.HAENDLER_EI_PREIS,'eier',now);p.haendlerTag=tag;
     p.eggs.push({id:'handel-'+now+'-'+(++p.eggSerial),territoryId:X.FINDELEI_FELD,producedAt:now,startedAt:null,readyAt:null,art:'handel'});
     extra.message='Der Händler gibt dir ein Ei. −'+X.HAENDLER_EI_PREIS+' Gold.';
+    return extra;
+  }
+  /* Der Gluecksautomat (2-automat.js): ein Wurf entscheidet, die Walzen
+     zeigen nur das Ergebnis. Geht von ueberall, wie der Eierkauf. */
+  if(op==='automat_spielen'){
+    const A2=X.AUTOMAT,stand=X.automatStand(p,now);
+    if(!stand.frei)fail('Der Automat hat dir heute schon '+A2.proTag+' Eier gegeben. Morgen läuft er wieder.');
+    if(p.eggs.length>=E.BAG_LIMIT)fail('Deine Bruttasche ist voll. Brüte erst ein Ei aus.');
+    if(p.gold<A2.einsatz)fail('Ein Spiel kostet '+A2.einsatz+' Gold.');
+    const zufall=E.zufallsfolge(random()),gewonnen=zufall()<A2.chance;
+    E.buchen(p,-A2.einsatz,'automat',now);
+    p.automat={tag:H.day(now),gewinne:stand.gewinne+(gewonnen?1:0),spiele:stand.spiele+1};
+    if(gewonnen){
+      p.eggs.push({id:'automat-'+now+'-'+(++p.eggSerial),territoryId:X.FINDELEI_FELD,producedAt:now,startedAt:null,readyAt:null,art:'automat'});
+      tickern(world,'🎰 '+p.name+' gewinnt am Glücksautomaten ein Ei','automat',now,id);
+    }
+    extra.automat={walzen:X.automatWalzen(gewonnen,zufall),gewonnen};
+    extra.message=gewonnen?'Drei Eier! Ein Ei liegt in deiner Bruttasche.':'Leider nichts. −'+A2.einsatz+' Gold.';
     return extra;
   }
   if(op==='runen_zerlegen'||op==='runen_verschmelzen'){
