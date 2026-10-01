@@ -777,4 +777,26 @@ await test('Ohne eingesetzten Speicher liest das Event den CEO aus der echten Ve
   assert.equal(await call(neuerCeo, 'start'), 200);
 });
 
+await test('Eine nachtraeglich auf dem Handy gesetzte PIN gilt ohne Neustart des Servers', async () => {
+  const client = speicherClient();
+  const store = _redisStore('hgh-gehstockmon', client), presence = _redisStore('hgh-gehstockmon-presence', client);
+  const verwStore = { get: async () => ({ version: 1, daten: { owner: ceo, aufsicht: '' } }) };
+  const handler = createHandler({ store, presenceStore: presence, verwStore, now: () => MITTWOCH, romDev: false });
+  let serie = 0;
+  const call = async (aktion) => {
+    const res = await handler(new Request('http://x/api/gehstockmon', { method: 'POST', body: JSON.stringify({ op: 'rom_steuern', code: ceo, aktion, aktionId: 'rom-nachgelesen-' + (++serie), pin: PIN }) }));
+    return { status: res.status, ...(await res.json()) };
+  };
+  try {
+    const vorher = await call('status');
+    assert.equal(vorher.steuerung.startbar, false);
+    assert.match(vorher.steuerung.grund, /node ~\/gehstock1\/tools\/rom-pin\.mjs/, 'der Hinweis nennt den Befehl, der auf dem Handy auch klappt');
+    assert.equal((await call('start')).status, 503);
+    process.env.GEHSTOCK_ROM_PIN_HASH = PIN_HASH;
+    assert.equal((await call('status')).steuerung.startbar, true);
+    const r = await call('start');
+    assert.equal(r.status, 200, r.error); assert.ok(r.gestartet);
+  } finally { delete process.env.GEHSTOCK_ROM_PIN_HASH; }
+});
+
 console.log(count + ' Rom-Tests bestanden.');

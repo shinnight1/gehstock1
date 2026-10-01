@@ -7,7 +7,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import net from 'node:net';
-import { serverErstellen } from './handy-server.mjs';
+import { serverErstellen, romPinNachlesen } from './handy-server.mjs';
 import { OpsOnline } from '../shooter/server/online.mjs';
 import { halloSchreiben, Schreiber, S_WILLKOMMEN, VERSION } from '../shooter/src/netz/protokoll.js';
 import { zugangPruefen, zugangSpeichern, zugangLesen, zugangSetzen, weltPruefen } from './handy-zugang.mjs';
@@ -87,6 +87,32 @@ test('Expliziter Dateizugang ersetzt auch geerbte Zugangsdaten', () => {
       if (vorher[key] === undefined) delete process.env[key]; else process.env[key] = vorher[key];
     }
   }
+});
+
+test('Die Event-PIN aus rom.env wird im Betrieb nachgelesen', async (t) => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'handy-rom-'));
+  const vorher = process.env.GEHSTOCK_ROM_PIN_HASH;
+  t.after(async () => {
+    if (vorher === undefined) delete process.env.GEHSTOCK_ROM_PIN_HASH; else process.env.GEHSTOCK_ROM_PIN_HASH = vorher;
+    await rm(dir, { recursive: true, force: true });
+  });
+  delete process.env.GEHSTOCK_ROM_PIN_HASH;
+  const datei = path.join(dir, 'rom.env');
+  await romPinNachlesen(datei);
+  assert.equal(process.env.GEHSTOCK_ROM_PIN_HASH, undefined, 'ohne Datei keine PIN');
+  const alt = 'scrypt$aa$' + 'b'.repeat(64), neu = 'scrypt$cc$' + 'd'.repeat(64);
+  await writeFile(datei, 'GEHSTOCK_ROM_PIN_HASH=' + alt + '\n');
+  await romPinNachlesen(datei);
+  assert.equal(process.env.GEHSTOCK_ROM_PIN_HASH, alt);
+  await writeFile(datei, 'GEHSTOCK_ROM_PIN_HASH=' + neu + '\n');
+  await romPinNachlesen(datei);
+  assert.equal(process.env.GEHSTOCK_ROM_PIN_HASH, neu, 'eine neue PIN gilt sofort');
+  await writeFile(datei, 'GEHSTOCK_ROM_PIN_HASH=' + alt.slice(0, 30));
+  await romPinNachlesen(datei);
+  assert.equal(process.env.GEHSTOCK_ROM_PIN_HASH, neu, 'eine halb geschriebene Datei zaehlt nicht');
+  await rm(datei);
+  await romPinNachlesen(datei);
+  assert.equal(process.env.GEHSTOCK_ROM_PIN_HASH, neu, 'eine kurz fehlende Datei nimmt die PIN nicht weg');
 });
 
 test('HTTP-Auslieferung: echte Adapter-Schnittstelle, Dateien und geschuetzte Pfade', async (t) => {

@@ -9,7 +9,8 @@
 
    Die Event-PIN des Rom-Events steht auf dem Handy in
    ~/.config/gehstock1/rom.env (anlegen mit node tools/rom-pin.mjs). Fehlt
-   die Datei, laesst sich das echte Event nicht starten. */
+   die Datei, laesst sich das echte Event nicht starten. Der Server liest sie
+   alle 15 Sekunden nach: eine neu gesetzte PIN gilt ohne Neustart. */
 import http from 'node:http';
 import { createReadStream } from 'node:fs';
 import { realpath, stat, access, readFile } from 'node:fs/promises';
@@ -50,6 +51,16 @@ function bodyLesen(req, limit) {
     req.on('error', reject);
     req.on('aborted', () => reject(new Error('aborted')));
   });
+}
+
+/* Uebernimmt den PIN-Hash aus rom.env. Fehlt die Datei oder ist sie gerade
+   erst halb geschrieben, bleibt der bisherige Stand: ohne PIN startet nur
+   das echte Rom-Event nicht. */
+export async function romPinNachlesen(datei) {
+  try {
+    const hash = parseEnv(await readFile(datei, 'utf8')).GEHSTOCK_ROM_PIN_HASH;
+    if (/^scrypt\$[0-9a-f]+\$[0-9a-f]{64}$/.test(hash || '')) process.env.GEHSTOCK_ROM_PIN_HASH = hash;
+  } catch { /* noch keine PIN gesetzt */ }
 }
 
 /* ops: das Online-Match von Gehstock Ops (shooter/server/online.mjs) -
@@ -163,10 +174,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
     }
     if (!dev) {
       delete process.env.GEHSTOCK_DEV;
-      try {
-        const rom = parseEnv(await readFile(path.join(dir, 'rom.env'), 'utf8'));
-        if (rom.GEHSTOCK_ROM_PIN_HASH) process.env.GEHSTOCK_ROM_PIN_HASH = rom.GEHSTOCK_ROM_PIN_HASH;
-      } catch { /* ohne PIN startet nur das echte Rom-Event nicht */ }
+      const romEnv = path.join(dir, 'rom.env');
+      await romPinNachlesen(romEnv);
+      /* tools/rom-pin.mjs schreibt nur die Datei; ein Neustart ist nicht noetig. */
+      setInterval(() => romPinNachlesen(romEnv), 15000).unref();
     }
     const dist = path.join(ROOT, 'dist');
     await access(path.join(dist, 'index.html'));

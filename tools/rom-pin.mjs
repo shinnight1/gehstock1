@@ -5,8 +5,8 @@
 
    Fragt zweimal nach der PIN (4 bis 12 Ziffern, wird nicht angezeigt) und
    legt ~/.config/gehstock1/rom.env an. Darin steht nur ein Hash - die PIN
-   selbst wird nirgends gespeichert. Danach den Server neu starten
-   (bash ~/gehstock1/tools/handy-aktualisieren.sh oder Neustart des Handys).
+   selbst wird nirgends gespeichert. Der laufende Server liest die Datei
+   alle 15 Sekunden nach, ein Neustart ist nicht noetig.
 
    Die PIN gehoert zum CEO-Stuhl: Wechselt der CEO, hier eine neue setzen. */
 import readline from 'node:readline';
@@ -32,4 +32,4 @@ if (eins !== zwei) { console.error('Die beiden Eingaben stimmen nicht überein. 
 const dir = path.join(os.homedir(), '.config', 'gehstock1');
 await mkdir(dir, { recursive: true });
 await writeFile(path.join(dir, 'rom.env'), 'GEHSTOCK_ROM_PIN_HASH=' + pinVerschluesseln(eins) + '\n', { mode: 0o600 });
-console.log('Gespeichert in ' + path.join(dir, 'rom.env') + '. Jetzt den Server neu starten.');
+console.log('Gespeichert in ' + path.join(dir, 'rom.env') + '. Der Server übernimmt die PIN in spätestens 15 Sekunden, ein Neustart ist nicht nötig.');

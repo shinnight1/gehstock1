@@ -24,13 +24,16 @@ ausgeblendet und die Rom-Anzeige steht an ihrer Stelle ganz oben.
 
 ## Starten (echte Seite)
 
-1. Einmalig auf dem Handy die Event-PIN setzen und den Server neu starten:
+1. Einmalig auf dem Handy in Termux die Event-PIN setzen:
    ```sh
    node ~/gehstock1/tools/rom-pin.mjs
-   bash ~/gehstock1/tools/handy-aktualisieren.sh
    ```
-   Die PIN liegt nur als Hash in `~/.config/gehstock1/rom.env`. Wechselt der CEO,
-   eine neue PIN setzen.
+   Die PIN liegt nur als Hash in `~/.config/gehstock1/rom.env`. Der laufende Server
+   liest die Datei alle 15 Sekunden nach, ein Neustart ist nicht nötig.
+   (`handy-aktualisieren.sh` hilft hier nicht: ohne neuen Stand auf GitHub startet
+   es den Server gar nicht neu.) Wechselt der CEO, eine neue PIN setzen.
+   Über die Website oder GitHub lässt sich die PIN absichtlich nicht setzen: Die
+   Zugangscodes sind im Moment für jeden lesbar, die PIN ist der eigentliche Schutz.
 2. Als CEO im Admin-Menü den Reiter **🇮🇹 Rom-Event** öffnen, **Rom-Event starten**,
    PIN eingeben. Der Reiter zeigt, warum ein Start gerade nicht geht (Insel zu,
    zu kurz vor Schluss, Event dieser Woche schon gelaufen, keine PIN).

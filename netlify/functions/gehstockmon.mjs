@@ -506,11 +506,12 @@ function settleBattle(world, p, id, now, requestId) {
 /* Each turn, egg and upgrade is authoritative and atomically persisted. */
 /* verwStore, romPin und romDev gibt es nur fuer die Tests: ohne sie
    liest das Rom-Event den CEO aus der Verwaltung auf dem Relais, die PIN aus
-   GEHSTOCK_ROM_PIN_HASH und den Entwicklungsmodus aus GEHSTOCK_DEV. */
+   GEHSTOCK_ROM_PIN_HASH und den Entwicklungsmodus aus GEHSTOCK_DEV. Die PIN
+   wird bei jeder Anfrage neu gelesen: der Handy-Server laedt sie im Betrieb nach. */
 export function createHandler({ store, presenceStore, verwStore, now = Date.now, random = Math.random, sandbox = false, romPin, romDev } = {}) {
   let sharedSandbox = null;
   const romBasis = { verwaltung: verwStore || { get: (...a) => speicher('hgh-rooms').get(...a) },
-    pin: romPin !== undefined ? romPin : (process.env.GEHSTOCK_ROM_PIN_HASH || ''), dev: romDev !== undefined ? !!romDev : entwicklung(),
+    get pin() { return romPin !== undefined ? romPin : (process.env.GEHSTOCK_ROM_PIN_HASH || ''); }, dev: romDev !== undefined ? !!romDev : entwicklung(),
     sandbox, random, rolle: roleForCode };
   const romCtx = (db, access) => ({ ...romBasis, db, access, presence: presenceStore || speicher('hgh-gehstockmon-presence') });
   /* Kurzes Gedaechtnis fuer die Anwesenheit, siehe unten bei op 'presence'. */
