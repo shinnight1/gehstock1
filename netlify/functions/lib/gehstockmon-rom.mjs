@@ -8,9 +8,10 @@
    1. Wer steuern darf. Starten und abbrechen kann nur der aktuelle CEO.
       Geprueft wird bei jeder Steueraktion neu gegen die Verwaltung auf dem
       Relais (Eintrag owner) - ein CEO-Wechsel wirkt damit sofort. Weil
-      die Zugangscodes dort im Moment fuer jeden lesbar sind, braucht der
-      echte Start zusaetzlich die Event-PIN. Deren Hash liegt nur auf dem
-      Handy (~/.config/gehstock1/rom.env, gesetzt mit tools/rom-pin.mjs).
+      die Zugangscodes dort im Moment fuer jeden lesbar sind, kann auf dem
+      Handy eine Event-PIN gesetzt werden (~/.config/gehstock1/rom.env, mit
+      tools/rom-pin.mjs); dann braucht der echte Start sie. Ohne PIN reicht
+      dem CEO der Knopf - so gewuenscht am 01.10.2026.
 
    2. Wo das Event steht. Ein kleines Dokument 'rom-event' mit den letzten
       Events, per Vergleich geschrieben: zehn gleichzeitige Starts ergeben
@@ -431,9 +432,8 @@ function steuerSicht(ctx, s, now) {
   else if (!frei && !zugang.open) grund = 'GehstockMon ist geschlossen. Das Event startet nur während der Öffnungszeiten.';
   else if (!reicht) grund = 'Bis zum Schließen um ' + uhrzeit(zugang.closesAt) + ' Uhr reicht die Zeit nicht mehr für ' + Math.round(ROM.GESAMT / 60000) + ' Minuten Rom.';
   else if (wocheBelegt) grund = 'Das Rom-Event dieser Woche ist schon gelaufen. Nächste Woche wieder!';
-  else if (!frei && !ctx.pin) grund = 'Auf dem Server ist noch keine Event-PIN gesetzt. Einmal auf dem Handy in Termux: node ~/gehstock1/tools/rom-pin.mjs';
   const lage = ev ? ROM.lage(s.alle, ev) : null;
-  return { serverTime: now, startbar: !grund, grund, dev: !!ctx.dev, vorschau: !!ctx.sandbox, pinNoetig: !frei, zeitraffer: frei ? ROM.ZEITRAFFER : [1],
+  return { serverTime: now, startbar: !grund, grund, dev: !!ctx.dev, vorschau: !!ctx.sandbox, pinNoetig: !frei && !!ctx.pin, zeitraffer: frei ? ROM.ZEITRAFFER : [1],
     gesperrtBis: s.dok.pin.bis > now ? s.dok.pin.bis : 0,
     event: ev && sichtbar(ev, now) ? { id: ev.id, start: ev.start, faktor: ROM.faktor(ev), abgebrochenAm: ev.abgebrochenAm || null, von: ev.von && ev.von.name,
       vorschau: !!ev.vorschau, teilnehmer: lage.teilnehmer, leiste: { wert: lage.leiste, ziel: lage.leisteZiel, voll: lage.leisteVoll },
@@ -461,10 +461,8 @@ export async function romSteuern(ctx, { body, code, id, name, now }) {
   if (aktion !== 'start' && aktion !== 'abbruch') fail('Diese Steueraktion gibt es nicht.');
   const aktionId = typeof body.aktionId === 'string' && body.aktionId.length >= 8 && body.aktionId.length <= 80 ? body.aktionId : fail('Aktionskennung fehlt.');
   const frei = ctx.dev || ctx.sandbox;
-  if (!frei) {
-    if (!ctx.pin) fail('Auf dem Server ist noch keine Event-PIN gesetzt. Einmal auf dem Handy in Termux: node ~/gehstock1/tools/rom-pin.mjs', 503);
-    await pinPruefen(ctx, body.pin, now);
-  }
+  /* Ohne PIN auf dem Handy reicht der Knopf (Wunsch des CEO, 01.10.2026). */
+  if (!frei && ctx.pin) await pinPruefen(ctx, body.pin, now);
   if (aktion === 'start') {
     const faktor = frei && ROM.ZEITRAFFER.includes(Number(body.faktor)) ? Number(body.faktor) : 1;
     if (!frei) {

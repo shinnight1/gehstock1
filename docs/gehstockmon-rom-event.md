@@ -24,19 +24,18 @@ ausgeblendet und die Rom-Anzeige steht an ihrer Stelle ganz oben.
 
 ## Starten (echte Seite)
 
-1. Einmalig auf dem Handy in Termux die Event-PIN setzen:
+1. Als CEO im Admin-Menü den Reiter **🇮🇹 Rom-Event** öffnen und **Rom-Event starten**
+   drücken. Eine PIN braucht es nicht (so gewünscht am 01.10.2026). Der Reiter
+   zeigt, warum ein Start gerade nicht geht (Insel zu, zu kurz vor Schluss, Event
+   dieser Woche schon gelaufen).
+2. Optional lässt sich auf dem Handy in Termux eine Event-PIN setzen:
    ```sh
    node ~/gehstock1/tools/rom-pin.mjs
    ```
-   Die PIN liegt nur als Hash in `~/.config/gehstock1/rom.env`. Der laufende Server
-   liest die Datei alle 15 Sekunden nach, ein Neustart ist nicht nötig.
-   (`handy-aktualisieren.sh` hilft hier nicht: ohne neuen Stand auf GitHub startet
-   es den Server gar nicht neu.) Wechselt der CEO, eine neue PIN setzen.
-   Über die Website oder GitHub lässt sich die PIN absichtlich nicht setzen: Die
-   Zugangscodes sind im Moment für jeden lesbar, die PIN ist der eigentliche Schutz.
-2. Als CEO im Admin-Menü den Reiter **🇮🇹 Rom-Event** öffnen, **Rom-Event starten**,
-   PIN eingeben. Der Reiter zeigt, warum ein Start gerade nicht geht (Insel zu,
-   zu kurz vor Schluss, Event dieser Woche schon gelaufen, keine PIN).
+   Ab dann verlangt der Start sie. Die PIN liegt nur als Hash in
+   `~/.config/gehstock1/rom.env`; der laufende Server liest die Datei alle
+   15 Sekunden nach, ein Neustart ist nicht nötig. Ohne PIN kann jeder starten, der
+   den CEO-Code kennt - und die Zugangscodes sind im Moment für jeden lesbar.
 3. Abbrechen geht jederzeit im selben Reiter. Bereits Verdientes wird ausgezahlt;
    im Countdown abgebrochen zählt es nicht als Event der Woche.
 

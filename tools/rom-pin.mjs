@@ -1,4 +1,5 @@
-/* Setzt die Event-PIN fuer das GehstockMon-Rom-Event.
+/* Setzt die Event-PIN fuer das GehstockMon-Rom-Event. Optional: ohne PIN
+   startet der CEO das Event mit einem Druck auf den Knopf.
 
    Auf dem Handy in Termux:
      node ~/gehstock1/tools/rom-pin.mjs

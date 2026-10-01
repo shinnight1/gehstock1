@@ -247,13 +247,18 @@ await test('Nur der aktuelle CEO mit PIN steuert - Spieler, Admins, Aufsichtsrat
   assert.equal((await f.ev()).von.id, kennung(ceo));
 });
 
-await test('Ohne CEO oder ohne PIN auf dem Server startet nichts; fuenf falsche PINs sperren', async () => {
+await test('Ohne CEO startet nichts; ohne PIN auf dem Server reicht dem CEO der Knopf; fuenf falsche PINs sperren', async () => {
   const f = await mitSpielern({ owner: '' });
   assert.equal((await f.steuern(ceo, 'start')).status, 403, 'kein CEO eingetragen');
   const g = await mitSpielern({ pin: '' });
-  const r = await g.steuern(ceo, 'start');
-  assert.equal(r.status, 503); assert.match(r.error, /rom-pin/);
+  const st = (await g.steuern(ceo, 'status')).steuerung;
+  assert.equal(st.pinNoetig, false); assert.equal(st.startbar, true, st.grund);
+  assert.equal((await g.steuern(anna, 'start', { pin: '' })).status, 403, 'Spieler auch ohne PIN nicht');
+  assert.equal((await g.steuern(admin, 'start', { pin: '' })).status, 403, 'Admins auch ohne PIN nicht');
+  const r = await g.steuern(ceo, 'start', { pin: '' });
+  assert.equal(r.status, 200, r.error); assert.ok(r.gestartet);
   const h = await mitSpielern({});
+  assert.equal((await h.steuern(ceo, 'status')).steuerung.pinNoetig, true, 'mit PIN auf dem Server wird sie verlangt');
   for (let i = 0; i < 4; i++) assert.equal((await h.steuern(ceo, 'start', { pin: '1111' })).status, 403);
   assert.equal((await h.steuern(ceo, 'start', { pin: '1111' })).status, 429, 'die fuenfte sperrt');
   assert.equal((await h.steuern(ceo, 'start')).status, 429, 'auch die richtige, solange gesperrt');
@@ -783,17 +788,16 @@ await test('Eine nachtraeglich auf dem Handy gesetzte PIN gilt ohne Neustart des
   const verwStore = { get: async () => ({ version: 1, daten: { owner: ceo, aufsicht: '' } }) };
   const handler = createHandler({ store, presenceStore: presence, verwStore, now: () => MITTWOCH, romDev: false });
   let serie = 0;
-  const call = async (aktion) => {
-    const res = await handler(new Request('http://x/api/gehstockmon', { method: 'POST', body: JSON.stringify({ op: 'rom_steuern', code: ceo, aktion, aktionId: 'rom-nachgelesen-' + (++serie), pin: PIN }) }));
+  const call = async (aktion, pin = PIN) => {
+    const res = await handler(new Request('http://x/api/gehstockmon', { method: 'POST', body: JSON.stringify({ op: 'rom_steuern', code: ceo, aktion, aktionId: 'rom-nachgelesen-' + (++serie), pin }) }));
     return { status: res.status, ...(await res.json()) };
   };
   try {
-    const vorher = await call('status');
-    assert.equal(vorher.steuerung.startbar, false);
-    assert.match(vorher.steuerung.grund, /node ~\/gehstock1\/tools\/rom-pin\.mjs/, 'der Hinweis nennt den Befehl, der auf dem Handy auch klappt');
-    assert.equal((await call('start')).status, 503);
+    assert.equal((await call('status')).steuerung.pinNoetig, false);
     process.env.GEHSTOCK_ROM_PIN_HASH = PIN_HASH;
-    assert.equal((await call('status')).steuerung.startbar, true);
+    const st = (await call('status')).steuerung;
+    assert.equal(st.pinNoetig, true); assert.equal(st.startbar, true, st.grund);
+    assert.equal((await call('start', '0000')).status, 403, 'jetzt zaehlt die PIN');
     const r = await call('start');
     assert.equal(r.status, 200, r.error); assert.ok(r.gestartet);
   } finally { delete process.env.GEHSTOCK_ROM_PIN_HASH; }
